@@ -14,9 +14,13 @@
 #   3. agent  — only if the report shows grammar gaps: one claude session per
 #      language per day (bounded spend), pointed at REPORT.md. It fixes
 #      clusters, loops on scripts/check.sh, and captures patches + ledger
-#      entries per GRAMMARS.md. It does NOT commit; changes wait in the
-#      working tree for human review.
+#      entries per GRAMMARS.md. The agent never touches git.
 #   4. re-sweep + verify — record what the agent actually achieved.
+#   5. PR — if verify passes and crates/treebank-<lang> changed, the script
+#      commits those changes on a fresh branch, pushes, and opens a PR
+#      (authorized for the treebank repo only). Merging stays human; main is
+#      never committed to directly. On verify failure the changes stay in
+#      the working tree, unpushed, flagged for review.
 #
 # Env: CLAUDE_BIN (default claude), CLAUDE_MODEL (default sonnet),
 #      TREEBANK_LIMIT (packages per ecosystem, default 100).
@@ -70,16 +74,50 @@ grammar change, skip it and say so in your final message." \
 
   # Trust nothing: re-sweep and verify to see what actually happened.
   "$TB" sweep --lang "$lang" --grammar "$grammar" 2>&1 | grep '^sweep:' | head -1
-  if scripts/verify.sh "$grammar" >/dev/null 2>&1; then
-    echo "daily: $lang verify ok"
+  if ! scripts/verify.sh "$grammar" >/dev/null 2>&1; then
+    echo "daily: $lang verify FAILED after agent — changes left in working tree, no PR"
+    overall=1
+    continue
+  fi
+  echo "daily: $lang verify ok"
+  left=$(jq .gap_files "$report")
+  [ "$left" -gt 0 ] && echo "daily: $lang still has $left gap file(s) — noted in PR / REPORT.md"
+
+  # Open a PR for whatever the agent changed in this grammar (treebank only,
+  # per standing authorization). Merging stays human.
+  if [ -z "$(git status --porcelain "crates/treebank-$lang")" ]; then
+    echo "daily: $lang agent made no grammar changes — no PR"
+    continue
+  fi
+  passed_now=$(jq .passed "$report")
+  failed_now=$(jq .failed "$report")
+  branch="grammar-fixes/$lang-$(date +%Y%m%d-%H%M)"
+  base=$(git branch --show-current)
+  git checkout -qb "$branch"
+  git add "crates/treebank-$lang"
+  git commit -qm "treebank-$lang: fix grammar gaps from daily sweep
+
+Daily sweep found $gaps gap file(s); after fixes: $passed_now passed / $failed_now failed.
+Patches and evidence are in crates/treebank-$lang/patches/ and ledger.json.
+
+Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
+  if git push -qu origin "$branch" && gh pr create --base main --head "$branch" \
+      --title "treebank-$lang: grammar fixes from daily sweep ($(date +%Y-%m-%d))" \
+      --body "Automated fix run from \`scripts/daily.sh\`.
+
+- Gap files found by today's sweep: **$gaps**
+- After fixes: **$passed_now passed / $failed_now failed**$( [ "$left" -gt 0 ] && echo " ($left gap file(s) skipped — see REPORT.md)" )
+- Patch files + ledger entries: \`crates/treebank-$lang/patches/\`, \`ledger.json\`, \`LOCAL-PATCHES.md\`
+- Agent log: \`corpus/$lang/reports/agent.log\` (local)
+- CI re-proves the reconstruction invariant, corpus tests, and negative corpus.
+
+🤖 Generated with [Claude Code](https://claude.com/claude-code)"; then
+    echo "daily: $lang PR opened from $branch"
   else
-    echo "daily: $lang verify FAILED after agent — needs human review"
+    echo "daily: $lang PR creation failed — fixes are committed on $branch locally"
     overall=1
   fi
-  left=$(jq .gap_files "$report")
-  if [ "$left" -gt 0 ]; then
-    echo "daily: $lang still has $left gap file(s) — parked for human (see REPORT.md)"
-  fi
+  git checkout -q "$base"
 done
 
 echo "=== treebank daily done ==="

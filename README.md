@@ -63,8 +63,10 @@ negative corpus — `CHECK OK` or `CHECK FAILED`.
 re-fetches the corpus (npm re-resolves latest versions, so new releases
 arrive on their own), sweeps, and — only when the report shows grammar
 gaps — launches one fix agent for that language, then re-sweeps and
-verifies to record what actually happened. Nothing is committed; changes
-wait in the working tree.
+verifies. If verify passes and the grammar changed, the script commits the
+fixes on a `grammar-fixes/<lang>-<date>` branch and opens a PR (the agent
+never touches git; merging stays human; verify failures stay in the working
+tree, unpushed).
 
 ```
 0 6 * * * cd /Users/zackmaril/powderworks/treebank && scripts/daily.sh >> daily.log 2>&1
