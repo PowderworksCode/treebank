@@ -1,0 +1,8 @@
+
+Auto publish to cargo 
+More languages
+More packages 
+Set up cron
+Adversial review? 
+Revisit design 
+Negative spaces 
