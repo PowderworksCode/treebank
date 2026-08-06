@@ -6,3 +6,5 @@ Set up cron
 Adversial review? 
 Revisit design 
 Negative spaces 
+Score card? 
+Website?
