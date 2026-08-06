@@ -32,7 +32,17 @@ echo "== 1/3 materialize (submodule @ pinned sha + patches + generate, CLI $CLI_
 "$SCRIPT_DIR/materialize.sh" "$ROOT"
 
 echo "== 2/3 grammar corpus tests"
-(cd build && $TS test 2>&1 | grep -E "^Total parses")
+# `tree-sitter test` ends with a blank line, so piping to `tail -1` printed an
+# empty line and showed nothing. Capture instead: on failure print enough of
+# the output to diagnose it, on success print the summary line (a grammar with
+# no test/corpus has none, which is not an error — `grep` finding nothing must
+# not take the whole script down under `set -e`).
+if ! TEST_OUT=$(cd build && $TS test 2>&1); then
+  echo "verify: FAIL — grammar corpus tests failed:" >&2
+  echo "$TEST_OUT" | tail -30 >&2
+  exit 1
+fi
+echo "   $(grep -E '^Total parses' <<<"$TEST_OUT" || echo '(no corpus tests in test/corpus)')"
 
 echo "== 3/3 negative corpus"
 negatives=("$ROOT"/test/negative/*)

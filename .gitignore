@@ -5,6 +5,7 @@ db-dump.tar.gz
 node_modules/
 tools/cs-oracle/bin/
 tools/cs-oracle/obj/
+/daily.log
 
 # materialized grammar trees (scripts/materialize.sh) — never committed
 crates/*/build/

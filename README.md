@@ -25,6 +25,23 @@ scripts/materialize.sh crates/treebank-java
 scripts/materialize.sh crates/treebank-csharp
 ```
 
+## Setting up a machine
+
+```sh
+# The pinned CLI. 0.25.10 exactly — see GRAMMARS.md for why this is not a
+# style choice. verify.sh and check.sh shell out to it.
+npm install -g tree-sitter-cli@0.25.10
+
+# Corpus bootstrap: ranks each ecosystem, and for rust downloads the
+# crates.io db dump (~1.7 GB, ~2.7 GB of CSVs kept). Run once per machine;
+# re-run with TREEBANK_REFRESH_DUMP=1 to pull a newer dump.
+scripts/bootstrap.sh
+```
+
+Also needed: `cargo`, `node`/`npm`, `jq`, `cc`, `git`, and `gh` authenticated
+against github.com (the daily job pushes branches through
+`gh auth git-credential`).
+
 ## The loop
 
 Every corpus command takes `--lang
@@ -94,8 +111,29 @@ never touches git; merging stays human; verify failures stay in the working
 tree, unpushed).
 
 ```
-0 6 * * * cd /Users/zackmaril/powderworks/treebank && scripts/daily.sh >> daily.log 2>&1
+0 6 * * * $HOME/treebank/scripts/daily.sh >> $HOME/treebank/daily.log 2>&1
 ```
+
+The line carries no `cd` and no `PATH`: `daily.sh` cds to its own repo root
+and prepends `~/.cargo/bin`, `~/.local/bin` and `/usr/local/bin` itself.
+That matters — cron runs with `PATH=/usr/bin:/bin`, which contains none of
+`cargo`, `node`, `npx`, `claude` or `tree-sitter`, so a line that relies on
+an interactive PATH dies on the first command.
+
+Knobs, all optional:
+
+| env | default | |
+|---|---|---|
+| `TREEBANK_LIMIT` | `100` | packages fetched per ecosystem |
+| `TREEBANK_RANK_K` | `1000` | length of the ranked package list |
+| `TREEBANK_AGENT` | `1` | `0` runs fetch/sweep only — no agent, no PR |
+| `TREEBANK_AGENT_TIMEOUT` | `3600` | wall-clock seconds per agent session |
+| `TREEBANK_AGENT_BUDGET_USD` | `10` | dollar cap per agent session |
+| `CLAUDE_BIN` / `CLAUDE_MODEL` | `claude` / `sonnet` | |
+| `TREEBANK_LOCK` | `/tmp/treebank-daily.lock` | one run at a time |
+
+Only one run happens at a time (`flock`); if yesterday's agent is somehow
+still going, today's run logs that and exits rather than racing it.
 
 Sweeps are incremental: `corpus/<lang>/sweep-cache.json` remembers which
 file hashes passed under the current grammar build (fingerprinted from the
@@ -103,7 +141,10 @@ compiled parser sources), so a daily run only parses new or changed files —
 a no-change sweep is milliseconds. Any grammar change invalidates the whole
 cache and forces a full re-sweep.
 
-## Current status (2026-08-06, top-100 packages per ecosystem)
+## Current status (2026-08-06, measured on Linux)
+
+Top-100 per ecosystem — what the daily job sweeps, and what the ledgers'
+`corpus.sweep_patched` records:
 
 | corpus | grammar | passed | failed |
 |---|---|---:|---:|
@@ -128,3 +169,8 @@ adjudicates the active `#if` branch while tree-sitter parses every branch
 into one tree. That class is inherent rather than fixable; see
 `crates/treebank-csharp/LOCAL-PATCHES.md`. The actionable queue is the other
 **2,531** files.
+
+At the daily job's default `TREEBANK_LIMIT=100` this is a regression detector:
+the fix agent fires only for a language whose top-100 sweep reports a gap, so
+a clean language costs nothing and a new package release, a new grammar, or a
+grammar change that introduces a gap is what wakes it.

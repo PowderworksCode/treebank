@@ -1,14 +1,23 @@
 #!/usr/bin/env bash
 # The daily checker. Cron runs this once a day:
 #
-#   0 6 * * * cd /Users/zackmaril/powderworks/treebank && scripts/daily.sh >> daily.log 2>&1
+#   0 6 * * * $HOME/treebank/scripts/daily.sh >> $HOME/treebank/daily.log 2>&1
+#
+# The script cds to the repo root itself and sets its own PATH, so the crontab
+# line needs neither. That PATH bootstrap is load-bearing, not tidiness: cron
+# runs with PATH=/usr/bin:/bin, and cargo, node/npm/npx, claude and
+# tree-sitter all live outside it.
 #
 # For every vendored grammar (crates/treebank-*/ledger.json):
 #
+#   0. rank   — refresh corpus/<lang>/top-k.json. typescript self-serves from
+#      npm-high-impact; rust needs the crates.io db dump CSVs in
+#      corpus/rust/db (see scripts/bootstrap.sh) and falls back to the
+#      existing list when they are absent. A language with neither a fresh
+#      rank nor an existing list is skipped loudly rather than swept empty.
 #   1. fetch  — re-resolve + download the corpus. npm resolves each package's
 #      latest version at fetch time, so new releases arrive daily; crates.io
-#      versions come from the rank list (refresh that by re-running
-#      `treebank rank --lang rust` against a fresh db dump when you care).
+#      versions come from the rank list.
 #   2. sweep  — parse everything, adjudicate failures with the reference
 #      parser, write corpus/<lang>/reports/sweep.json + REPORT.md.
 #   3. agent  — only if the report shows grammar gaps: one claude session per
@@ -23,14 +32,35 @@
 #      the working tree, unpushed, flagged for review.
 #
 # Env: CLAUDE_BIN (default claude), CLAUDE_MODEL (default sonnet),
-#      TREEBANK_LIMIT (packages per ecosystem, default 100).
+#      TREEBANK_LIMIT (packages per ecosystem, default 100),
+#      TREEBANK_RANK_K (rank list length, default 1000),
+#      TREEBANK_AGENT (1 = run the fix agent and open PRs, 0 = fetch/sweep
+#        only; default 1),
+#      TREEBANK_AGENT_TIMEOUT (wall-clock seconds per agent session, default
+#        3600), TREEBANK_AGENT_BUDGET_USD (dollar cap per session, default 10),
+#      TREEBANK_LOCK (lock file, default /tmp/treebank-daily.lock).
 set -uo pipefail
-cd "$(dirname "$0")/.."
+cd "$(dirname "$0")/.." || { echo "daily: cannot cd to the repo root"; exit 1; }
 ROOT="$PWD"
+# cron's PATH is /usr/bin:/bin; none of the toolchain lives there.
+export PATH="$HOME/.cargo/bin:$HOME/.local/bin:/usr/local/bin:$PATH"
 CLAUDE_BIN="${CLAUDE_BIN:-claude}"
 CLAUDE_MODEL="${CLAUDE_MODEL:-sonnet}"
 LIMIT="${TREEBANK_LIMIT:-100}"
+RANK_K="${TREEBANK_RANK_K:-1000}"
+RUN_AGENT="${TREEBANK_AGENT:-1}"
+AGENT_TIMEOUT="${TREEBANK_AGENT_TIMEOUT:-3600}"
+AGENT_BUDGET="${TREEBANK_AGENT_BUDGET_USD:-10}"
 TB="$ROOT/target/release/treebank"
+
+# One run at a time. Without this, a run whose agent hangs is still going when
+# tomorrow's cron fires and both would push branches.
+LOCK="${TREEBANK_LOCK:-/tmp/treebank-daily.lock}"
+exec 9>"$LOCK" || { echo "daily: cannot open lock $LOCK"; exit 1; }
+if ! flock -n 9; then
+  echo "=== treebank daily: $(date '+%Y-%m-%d %H:%M') — previous run still going, skipping ==="
+  exit 0
+fi
 
 echo "=== treebank daily: $(date '+%Y-%m-%d %H:%M') ==="
 cargo build --release --quiet || { echo "daily: cargo build failed"; exit 1; }
@@ -41,6 +71,20 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
   grammar="$ROOT/crates/treebank-$lang"
   report="$ROOT/corpus/$lang/reports/sweep.json"
   echo "--- $lang"
+
+  # fetch reads corpus/<lang>/top-k.json, so a checkout with no corpus/ needs
+  # rank first. Refresh it when the language can; fall back to the list on
+  # disk; skip the language rather than sweep nothing.
+  list="$ROOT/corpus/$lang/top-k.json"
+  if "$TB" rank --lang "$lang" --k "$RANK_K" >/dev/null 2>&1; then
+    echo "daily: $lang rank refreshed ($RANK_K packages)"
+  elif [ -f "$list" ]; then
+    echo "daily: $lang rank unavailable — reusing $list"
+  else
+    echo "daily: $lang has no package list and cannot rank — skipping (run scripts/bootstrap.sh)"
+    overall=1
+    continue
+  fi
 
   if ! "$TB" fetch --lang "$lang" --limit "$LIMIT" 2>&1 | tail -1; then
     echo "daily: $lang fetch failed, sweeping the existing corpus anyway"
@@ -62,8 +106,14 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
     continue
   fi
 
-  echo "daily: $lang has $gaps gap file(s) — launching fix agent"
-  "$CLAUDE_BIN" -p "Read corpus/$lang/reports/REPORT.md and fix ALL of its gap
+  if [ "$RUN_AGENT" != 1 ]; then
+    echo "daily: $lang has $gaps gap file(s) — agent disabled (TREEBANK_AGENT=$RUN_AGENT), see REPORT.md"
+    continue
+  fi
+
+  echo "daily: $lang has $gaps gap file(s) — launching fix agent (<=${AGENT_TIMEOUT}s, <=\$$AGENT_BUDGET)"
+  timeout --signal=INT --kill-after=60 "$AGENT_TIMEOUT" \
+    "$CLAUDE_BIN" -p "Read corpus/$lang/reports/REPORT.md and fix ALL of its gap
 clusters, one at a time, exactly per the report's instructions. Edit grammar
 sources in crates/treebank-$lang/build/ (the materialized tree — see
 GRAMMARS.md). After each fix, run ../../scripts/check.sh from
@@ -74,9 +124,15 @@ scripts/verify.sh crates/treebank-$lang from the repo root — it must pass.
 Do NOT git commit anything. If a cluster is genuinely beyond a minimal
 grammar change, skip it and say so in your final message." \
     --model "$CLAUDE_MODEL" --max-turns 200 \
+    --max-budget-usd "$AGENT_BUDGET" \
     --permission-mode bypassPermissions \
     > "$ROOT/corpus/$lang/reports/agent.log" 2>&1
-  echo "daily: agent finished (log: corpus/$lang/reports/agent.log)"
+  rc=$?
+  case "$rc" in
+    0) echo "daily: agent finished (log: corpus/$lang/reports/agent.log)" ;;
+    124|137) echo "daily: agent hit the ${AGENT_TIMEOUT}s timeout and was killed — verifying whatever it left behind" ;;
+    *) echo "daily: agent exited $rc (turn/budget cap or error) — verifying whatever it left behind" ;;
+  esac
 
   # Trust nothing: re-sweep and verify to see what actually happened.
   "$TB" sweep --lang "$lang" --grammar "$grammar/build" 2>&1 | grep '^sweep:' | head -1
@@ -99,7 +155,12 @@ grammar change, skip it and say so in your final message." \
   failed_now=$(jq .failed "$report")
   branch="grammar-fixes/$lang-$(date +%Y%m%d-%H%M)"
   base=$(git branch --show-current)
-  git checkout -qb "$branch"
+  if [ -z "$base" ]; then
+    echo "daily: $lang detached HEAD — refusing to branch, changes left in working tree"
+    overall=1
+    continue
+  fi
+  git checkout -qb "$branch" || { echo "daily: $lang could not create $branch"; overall=1; continue; }
   git add "crates/treebank-$lang"
   git commit -qm "treebank-$lang: fix grammar gaps from daily sweep
 
