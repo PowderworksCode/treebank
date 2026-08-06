@@ -28,7 +28,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        grammar: [treebank-rust, treebank-typescript]
+        grammar: [treebank-rust, treebank-typescript, treebank-javascript]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

@@ -1,0 +1,163 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index 795916d..f425ec3 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -107,7 +107,11 @@ static WhitespaceResult scan_whitespace_and_comments(TSLexer *lexer, bool *scann
+     }
+ }
+ 
+-static bool scan_automatic_semicolon(TSLexer *lexer, bool comment_condition, bool *scanned_comment) {
++// `expression_can_continue` is valid_symbols[LOGICAL_OR]: `||` is only a
++// valid next token where the parser has a complete expression that a binary
++// operator could extend. Where it is false, nothing can extend what came
++// before, which is what tells the restricted-token cases below apart.
++static bool scan_automatic_semicolon(TSLexer *lexer, bool expression_can_continue, bool *scanned_comment) {
+     lexer->result_symbol = AUTOMATIC_SEMICOLON;
+     lexer->mark_end(lexer);
+ 
+@@ -122,7 +126,7 @@ static bool scan_automatic_semicolon(TSLexer *lexer, bool comment_condition, boo
+                 return false;
+             }
+ 
+-            if (result == ACCEPT && comment_condition && lexer->lookahead != ',' && lexer->lookahead != '=') {
++            if (result == ACCEPT && !expression_can_continue && lexer->lookahead != ',' && lexer->lookahead != '=') {
+                 return true;
+             }
+         }
+@@ -162,8 +166,6 @@ static bool scan_automatic_semicolon(TSLexer *lexer, bool comment_condition, boo
+         case '>':
+         case '<':
+         case '=':
+-        case '[':
+-        case '(':
+         case '?':
+         case '^':
+         case '|':
+@@ -171,6 +173,18 @@ static bool scan_automatic_semicolon(TSLexer *lexer, bool comment_condition, boo
+         case '/':
+             return false;
+ 
++        // A subscript or a call continues an expression (`a\n[0]` is
++        // `a[0]`, `f\n(x)` is `f(x)`) — but only where an expression can be
++        // continued at all. After `let a`, `return`, or a class field name
++        // no binary operator may follow either, and there the spec inserts
++        // the semicolon: `let a\n[b] = c` declares `a` and then destructures.
++        case '[':
++        case '(':
++            if (expression_can_continue) {
++                return false;
++            }
++            break;
++
+         // Insert a semicolon before decimals literals but not otherwise.
+         case '.':
+             skip(lexer);
+@@ -344,7 +358,7 @@ bool tree_sitter_javascript_external_scanner_scan(void *payload, TSLexer *lexer,
+ 
+     if (valid_symbols[AUTOMATIC_SEMICOLON]) {
+         bool scanned_comment = false;
+-        bool ret = scan_automatic_semicolon(lexer, !valid_symbols[LOGICAL_OR], &scanned_comment);
++        bool ret = scan_automatic_semicolon(lexer, valid_symbols[LOGICAL_OR], &scanned_comment);
+         if (!ret && !scanned_comment && valid_symbols[TERNARY_QMARK] && lexer->lookahead == '?') {
+             return scan_ternary_qmark(lexer);
+         }
+diff --git a/test/corpus/semicolon_insertion.txt b/test/corpus/semicolon_insertion.txt
+index 75cca22..cf21980 100644
+--- a/test/corpus/semicolon_insertion.txt
++++ b/test/corpus/semicolon_insertion.txt
+@@ -307,3 +307,95 @@ b
+     (statement_block))))
+   (expression_statement
+     (member_expression (identifier) (comment) (property_identifier))))
++
++=====================================================
++Semicolons before `[` and `(` where nothing can continue
++=====================================================
++
++let a
++[a] = [1]
++
++var b
++(b)
++
++function f() {
++  return
++  [1]
++}
++
++class C {
++  x
++  [y] = 1
++}
++
++---
++
++(program
++  (lexical_declaration
++    (variable_declarator
++      (identifier)))
++  (expression_statement
++    (assignment_expression
++      (array_pattern
++        (identifier))
++      (array
++        (number))))
++  (variable_declaration
++    (variable_declarator
++      (identifier)))
++  (expression_statement
++    (parenthesized_expression
++      (identifier)))
++  (function_declaration
++    (identifier)
++    (formal_parameters)
++    (statement_block
++      (return_statement)
++      (expression_statement
++        (array
++          (number)))))
++  (class_declaration
++    (identifier)
++    (class_body
++      (field_definition
++        (property_identifier))
++      (field_definition
++        (computed_property_name
++          (identifier))
++        (number)))))
++
++=====================================================
++No semicolon before `[` and `(` that continue an expression
++=====================================================
++
++a
++[0] = 1
++
++let c = b
++(c)
++
++f()
++[0]
++
++---
++
++(program
++  (expression_statement
++    (assignment_expression
++      (subscript_expression
++        (identifier)
++        (number))
++      (number)))
++  (lexical_declaration
++    (variable_declarator
++      (identifier)
++      (call_expression
++        (identifier)
++        (arguments
++          (identifier)))))
++  (expression_statement
++    (subscript_expression
++      (call_expression
++        (identifier)
++        (arguments))
++      (number))))

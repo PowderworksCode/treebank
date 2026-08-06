@@ -8,12 +8,14 @@ grammars:
 
 - `crates/treebank-rust` — tree-sitter-rust 0.24.2, 4 patches
 - `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript +
-  tsx grammars), no patches yet
+  tsx grammars), 2 patches
+- `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX
+  included), 2 patches
 
 ## The loop
 
-Every corpus command takes `--lang <rust|typescript>` (default `rust`) and
-keeps its data under `corpus/<lang>/`.
+Every corpus command takes `--lang <rust|typescript|javascript>` (default
+`rust`) and keeps its data under `corpus/<lang>/`.
 
 ```sh
 cargo build --release
@@ -27,10 +29,13 @@ tb rank  --lang rust --k 1000
 tb fetch --lang rust --limit 100
 
 # Sweep: parses everything, adjudicates failures with the reference parser
-# (rust: syn; typescript: tools/ts-oracle), and writes
+# (rust: syn; typescript: tools/ts-oracle; javascript: tools/js-oracle, which
+# is V8 via node's vm plus a JSX-only babel leg — NOT the TypeScript parser,
+# which calls `const x: number = 1` valid JavaScript), and writes
 # corpus/<lang>/reports/sweep.json + an agent-ready REPORT.md.
 tb sweep --lang rust       --grammar crates/treebank-rust
 tb sweep --lang typescript --grammar crates/treebank-typescript
+tb sweep --lang javascript --grammar crates/treebank-javascript
 
 # Grammar-side verification (reconstruct + corpus tests + negative corpus).
 # One generic script, driven by each grammar's ledger.json; CI runs the same
@@ -82,7 +87,9 @@ cache and forces a full re-sweep.
 |---|---|---:|---:|
 | crates.io top-100 (4,626 files) | upstream tree-sitter-rust 0.24.2 | 4,605 | 21 |
 | crates.io top-100 (4,626 files) | treebank-rust (4 patches) | **4,613** | **13** |
-| npm top-100 (680 files) | treebank-typescript 0.23.2 | **673** | **7** |
+| npm top-100 (680 .ts files) | treebank-typescript (2 patches) | **680** | **0** |
+| npm top-100 (720 .js files) | upstream tree-sitter-javascript 0.25.0 | 718 | 2 |
+| npm top-100 (720 .js files) | treebank-javascript (2 patches) | **720** | **0** |
 
 Every remaining failure is oracle-confirmed valid code (zero corpus noise in
-both top-100s). The gap clusters are queued as jobs in `jobs/queue/`.
+all three top-100s). The gap clusters are queued as jobs in `jobs/queue/`.
