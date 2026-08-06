@@ -1,0 +1,58 @@
+diff --git a/grammar.js b/grammar.js
+index 2d1a43a..c798777 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -195,6 +195,9 @@ module.exports = grammar({
+       $.token_binding_pattern,
+       $.metavariable,
+       $._non_special_token,
++      // A bare `$` not starting a metavariable or repetition is still a
++      // token rustc matches literally (syn's `($mode:ident, $)` matchers).
++      prec(-1, '$'),
+     ),
+ 
+     token_tree_pattern: $ => choice(
+@@ -223,6 +226,7 @@ module.exports = grammar({
+       $.token_repetition,
+       $.metavariable,
+       $._non_special_token,
++      prec(-1, '$'),
+     ),
+ 
+     token_tree: $ => choice(
+diff --git a/test/corpus/macros.txt b/test/corpus/macros.txt
+index d6be001..510b33f 100644
+--- a/test/corpus/macros.txt
++++ b/test/corpus/macros.txt
+@@ -360,3 +360,31 @@ fn f() {
+           (token_tree
+             (identifier)
+             (token_tree)))))))
++
++================================================================================
++Bare dollar sign in macro token trees
++================================================================================
++
++macro_rules! m {
++    ($mode:ident, $) => { 1 };
++    [$] => { $crate::token::Dollar };
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (macro_definition
++    name: (identifier)
++    (macro_rule
++      left: (token_tree_pattern
++        (token_binding_pattern
++          name: (metavariable)
++          type: (fragment_specifier)))
++      right: (token_tree
++        (integer_literal)))
++    (macro_rule
++      left: (token_tree_pattern)
++      right: (token_tree
++        (metavariable)
++        (identifier)
++        (identifier)))))

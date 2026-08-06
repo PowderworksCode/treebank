@@ -1,0 +1,6 @@
+[workspace]
+members = ["crates/treebank-cli"]
+# treebank-rust is a vendored grammar repo (own git history, own patch
+# ledger), not a workspace member.
+exclude = ["crates/treebank-rust"]
+resolver = "2"

@@ -1,0 +1,111 @@
+diff --git a/grammar.js b/grammar.js
+index f20f5a5..e73dec4 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -287,12 +287,21 @@ module.exports = grammar({
+       ),
+     ),
+ 
+-    foreign_mod_item: $ => seq(
+-      optional('unsafe'),
+-      $.extern_modifier,
+-      choice(
+-        ';',
+-        field('body', $.declaration_list),
++    foreign_mod_item: $ => choice(
++      seq(
++        'unsafe',
++        $.extern_modifier,
++        choice(
++          ';',
++          field('body', alias($._extern_declaration_list, $.declaration_list)),
++        ),
++      ),
++      seq(
++        $.extern_modifier,
++        choice(
++          ';',
++          field('body', $.declaration_list),
++        ),
+       ),
+     ),
+ 
+@@ -302,6 +311,33 @@ module.exports = grammar({
+       '}',
+     ),
+ 
++    // Like declaration_list, but also allows the RFC 3484 `safe` safety
++    // qualifier on function signatures. `safe` is legal only inside
++    // `unsafe extern` blocks (rustc rejects it in plain `extern` blocks, see
++    // test/negative/), so it lives here rather than in function_modifiers,
++    // which function_item/function_signature_item/function_type share
++    // everywhere else.
++    _extern_declaration_list: $ => seq(
++      '{',
++      repeat(choice(
++        $._declaration_statement,
++        alias($._extern_safe_function_signature_item, $.function_signature_item),
++      )),
++      '}',
++    ),
++
++    _extern_safe_function_signature_item: $ => seq(
++      optional($.visibility_modifier),
++      'safe',
++      'fn',
++      field('name', choice($.identifier, $.metavariable)),
++      field('type_parameters', optional($.type_parameters)),
++      field('parameters', $.parameters),
++      optional(seq('->', field('return_type', $._type))),
++      optional($.where_clause),
++      ';',
++    ),
++
+     struct_item: $ => seq(
+       optional($.visibility_modifier),
+       'struct',
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index 4516115..66d1bdd 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -2670,3 +2670,29 @@ where
+               (type_identifier))))))
+     body: (block
+       (integer_literal))))
++
++================================================================================
++Safe functions in unsafe extern blocks (RFC 3484)
++================================================================================
++
++unsafe extern "C" {
++    safe fn get_random_u64() -> u64;
++    fn other() -> u32;
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (foreign_mod_item
++    (extern_modifier
++      (string_literal
++        (string_content)))
++    body: (declaration_list
++      (function_signature_item
++        name: (identifier)
++        parameters: (parameters)
++        return_type: (primitive_type))
++      (function_signature_item
++        name: (identifier)
++        parameters: (parameters)
++        return_type: (primitive_type)))))
+diff --git a/test/negative/safe-in-plain-extern.rs b/test/negative/safe-in-plain-extern.rs
+new file mode 100644
+index 0000000..9042413
+--- /dev/null
++++ b/test/negative/safe-in-plain-extern.rs
+@@ -0,0 +1,5 @@
++// RFC 3484 `safe` qualifiers are only legal inside `unsafe extern` blocks;
++// rustc hard-rejects them in a plain extern block on every edition.
++extern "C" {
++    safe fn get_random_u64() -> u64;
++}

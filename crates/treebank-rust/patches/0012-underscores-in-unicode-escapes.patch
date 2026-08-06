@@ -1,0 +1,60 @@
+diff --git a/grammar.js b/grammar.js
+index 3fb74e0..aa6bbc8 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1623,7 +1623,9 @@ module.exports = grammar({
+         seq('\\', choice(
+           /[^xu]/,
+           /u[0-9a-fA-F]{4}/,
+-          /u\{[0-9a-fA-F]+\}/,
++          // Underscores are digit separators in unicode escapes (`\u{4_e}`),
++          // but the first character must be a hex digit.
++          /u\{[0-9a-fA-F][0-9a-fA-F_]*\}/,
+           /x[0-9a-fA-F]{2}/,
+         )),
+         /[^\\']/,
+@@ -1636,7 +1638,9 @@ module.exports = grammar({
+         choice(
+           /[^xu]/,
+           /u[0-9a-fA-F]{4}/,
+-          /u\{[0-9a-fA-F]+\}/,
++          // Underscores are digit separators in unicode escapes (`\u{4_e}`),
++          // but the first character must be a hex digit.
++          /u\{[0-9a-fA-F][0-9a-fA-F_]*\}/,
+           /x[0-9a-fA-F]{2}/,
+         ),
+       )),
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index f6fa74d..5ac641f 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -231,3 +231,29 @@ false;
+     (boolean_literal))
+   (expression_statement
+     (boolean_literal)))
++
++================================================================================
++Underscore separators in unicode escapes
++================================================================================
++
++fn f() {
++    let s = "bar\u{20}\u{4_e}";
++    let c = '\u{4_e}';
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (function_item
++    name: (identifier)
++    parameters: (parameters)
++    body: (block
++      (let_declaration
++        pattern: (identifier)
++        value: (string_literal
++          (string_content)
++          (escape_sequence)
++          (escape_sequence)))
++      (let_declaration
++        pattern: (identifier)
++        value: (char_literal)))))

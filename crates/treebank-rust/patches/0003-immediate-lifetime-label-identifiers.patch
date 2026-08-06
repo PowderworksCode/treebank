@@ -1,0 +1,25 @@
+diff --git a/grammar.js b/grammar.js
+index fccc32a..841d72b 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -763,7 +763,10 @@ module.exports = grammar({
+       field('alias', $._type),
+     ),
+ 
+-    lifetime: $ => prec(1, seq('\'', $.identifier)),
++    // The identifier is immediate: rustc lexes `'a` as a single token, so
++    // `' a` is not a lifetime. This keeps the grammar as strict as the real
++    // lexer.
++    lifetime: $ => prec(1, seq('\'', alias(token.immediate(/(r#)?[_\p{XID_Start}][_\p{XID_Continue}]*/), $.identifier))),
+ 
+     array_type: $ => seq(
+       '[',
+@@ -1319,7 +1322,7 @@ module.exports = grammar({
+       '|',
+     ),
+ 
+-    label: $ => seq('\'', $.identifier),
++    label: $ => seq('\'', alias(token.immediate(/(r#)?[_\p{XID_Start}][_\p{XID_Continue}]*/), $.identifier)),
+ 
+     break_expression: $ => prec.left(seq('break', optional($.label), optional($._expression))),
+ 

@@ -1,0 +1,53 @@
+diff --git a/grammar.js b/grammar.js
+index c798777..f20f5a5 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -490,6 +490,7 @@ module.exports = grammar({
+         $.reference_type,
+         $.pointer_type,
+         $.tuple_type,
++        $.unit_type,
+         $.array_type,
+         $.higher_ranked_trait_bound,
+         alias(choice(...primitiveTypes), $.primitive_type),
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index 88259b0..4516115 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -2637,3 +2637,36 @@ pub struct Loaf<T: Sized, const N: usize = 1>([T; N]);
+       (array_type
+         (type_identifier)
+         (identifier)))))
++
++================================================================================
++Where predicate on the unit type
++================================================================================
++
++fn parse<const V: u8>() -> u8
++where
++    (): Target<V>,
++{
++    0
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (function_item
++    name: (identifier)
++    type_parameters: (type_parameters
++      (const_parameter
++        name: (identifier)
++        type: (primitive_type)))
++    parameters: (parameters)
++    return_type: (primitive_type)
++    (where_clause
++      (where_predicate
++        left: (unit_type)
++        bounds: (trait_bounds
++          (generic_type
++            type: (type_identifier)
++            type_arguments: (type_arguments
++              (type_identifier))))))
++    body: (block
++      (integer_literal))))

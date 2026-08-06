@@ -1,0 +1,307 @@
+{
+  "grammar": "rust",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-rust",
+    "sha": "77a3747266f4d621d0757825e6b11edcbf991ca5",
+    "version": "0.24.2"
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "pinned: tree-sitter-cli 0.26.x ships Unicode identifier tables that wrongly exclude XID_Start chars (e.g. U+212A KELVIN SIGN), which breaks char literals like 'K' in some parse states; 0.25.10 and earlier are correct",
+  "corpus": {
+    "source": "crates.io top-100 by all-time downloads, db dump 2026-08-06",
+    "files": 4626,
+    "sweep_upstream_committed": {
+      "passed": 4605,
+      "failed": 21
+    },
+    "sweep_patched": {
+      "passed": 4626,
+      "failed": 0
+    }
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "extern types in extern blocks",
+      "file": "patches/0001-extern-types-in-extern-blocks.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "upstream PR #281",
+      "evidence": {
+        "repro": "extern \"C\" { pub type Foo; }",
+        "first_seen": {
+          "package": "web-sys",
+          "note": "wasm-bindgen generated bindings; ~1,470 files in the wider unparse corpus"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "~ in token trees",
+      "file": "patches/0002-tilde-in-token-trees.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/macros.txt"
+      ],
+      "origin": "local; unreported upstream as of 2026-08",
+      "evidence": {
+        "repro": "macro_rules! m { (~ $x:tt) => { $x }; }",
+        "first_seen": {
+          "package": "serde_json",
+          "version": "1.0.151",
+          "path": "tests/ui/parse_expr.rs"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "immediate lifetime/label identifiers (strictness)",
+      "file": "patches/0003-immediate-lifetime-label-identifiers.patch",
+      "files": [
+        "grammar.js"
+      ],
+      "origin": "local; upstream accepts invalid code",
+      "evidence": {
+        "repro": "fn f<' a>() {} // must be REJECTED",
+        "negative_test": "test/negative/spaced-lifetime.rs"
+      }
+    },
+    {
+      "id": 4,
+      "title": "macros named like primitive types",
+      "file": "patches/0004-primitive-type-macro-names.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/macros.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "let x = str![\"hi\"];",
+        "first_seen": {
+          "package": "winnow",
+          "version": "1.0.4",
+          "note": "snapbox str! snapshots; 5 files"
+        },
+        "sweep_before": {
+          "passed": 4608,
+          "failed": 18
+        },
+        "sweep_after": {
+          "passed": 4613,
+          "failed": 13
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "negative literals in const generic arguments",
+      "file": "patches/0005-negative-literals-in-const-generic-arguments.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "type Hours = ri8<-25, 25>;",
+        "first_seen": {
+          "package": "time",
+          "version": "0.3.55",
+          "note": "deranged ranged-integer type aliases; 3 files"
+        },
+        "sweep_before": {
+          "passed": 4613,
+          "failed": 13
+        },
+        "sweep_after": {
+          "passed": 4616,
+          "failed": 10
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "try! macro invocation (2015 edition)",
+      "file": "patches/0006-try-macro-invocation.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/macros.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "let v = try!(g());",
+        "first_seen": {
+          "package": "autocfg",
+          "version": "1.5.1",
+          "note": "2015-edition crate; 2 files"
+        },
+        "sweep_before": {
+          "passed": 4616,
+          "failed": 10
+        },
+        "sweep_after": {
+          "passed": 4618,
+          "failed": 8
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "bare $ in macro token trees",
+      "file": "patches/0007-bare-dollar-in-token-trees.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/macros.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "macro_rules! m { ($mode:ident, $) => { 1 }; }",
+        "first_seen": {
+          "package": "syn",
+          "version": "3.0.3",
+          "note": "custom_punctuation.rs / token.rs dollar matchers; 2 files"
+        },
+        "sweep_before": {
+          "passed": 4618,
+          "failed": 8
+        },
+        "sweep_after": {
+          "passed": 4620,
+          "failed": 6
+        }
+      }
+    },
+    {
+      "id": 8,
+      "title": "unit type in where predicates",
+      "file": "patches/0008-unit-type-where-predicate.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "fn f() -> u8 where (): Target {}",
+        "first_seen": {
+          "package": "time",
+          "version": "0.3.55",
+          "note": "also typenum 1.20.1 uint.rs; 2 files"
+        },
+        "sweep_before": {
+          "passed": 4620,
+          "failed": 6
+        },
+        "sweep_after": {
+          "passed": 4622,
+          "failed": 4
+        }
+      }
+    },
+    {
+      "id": 9,
+      "title": "safe fn in unsafe extern blocks (RFC 3484)",
+      "file": "patches/0009-safe-fn-in-unsafe-extern-blocks.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt",
+        "test/negative/safe-in-plain-extern.rs"
+      ],
+      "origin": "local; fix sketch from the adversarial review parked at corpus/rust/reports/parked-safe-fn-analysis/ (earlier draft leaked safe into plain extern blocks)",
+      "evidence": {
+        "repro": "unsafe extern \"C\" { safe fn get_random_u64() -> u64; }",
+        "first_seen": {
+          "package": "getrandom",
+          "version": "0.4.3",
+          "note": "wasi p2/p3 backend; 1 file"
+        },
+        "sweep_before": {
+          "passed": 4622,
+          "failed": 4
+        },
+        "sweep_after": {
+          "passed": 4623,
+          "failed": 3
+        }
+      }
+    },
+    {
+      "id": 10,
+      "title": "attributes on struct pattern fields",
+      "file": "patches/0010-attributes-on-struct-pattern-fields.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/patterns.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "match t { S { #[cfg(x)] inner: a, .. } => {} }",
+        "first_seen": {
+          "package": "proc-macro2",
+          "version": "1.0.107",
+          "note": "fallback.rs cfg-gated field patterns; 1 file"
+        },
+        "sweep_before": {
+          "passed": 4623,
+          "failed": 3
+        },
+        "sweep_after": {
+          "passed": 4624,
+          "failed": 2
+        }
+      }
+    },
+    {
+      "id": 11,
+      "title": "unit struct with where clause",
+      "file": "patches/0011-unit-struct-where-clause.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "struct _Test where Error: Send + Sync;",
+        "first_seen": {
+          "package": "syn",
+          "version": "3.0.3",
+          "note": "error.rs cfg(test) assertion struct; 1 file"
+        },
+        "sweep_before": {
+          "passed": 4624,
+          "failed": 2
+        },
+        "sweep_after": {
+          "passed": 4625,
+          "failed": 1
+        }
+      }
+    },
+    {
+      "id": 12,
+      "title": "underscore separators in unicode escapes",
+      "file": "patches/0012-underscores-in-unicode-escapes.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "let s = \"\\u{4_e}\";",
+        "first_seen": {
+          "package": "time",
+          "version": "0.3.55",
+          "note": "tests/integration/macros.rs; 1 file"
+        },
+        "sweep_before": {
+          "passed": 4625,
+          "failed": 1
+        },
+        "sweep_after": {
+          "passed": 4626,
+          "failed": 0
+        }
+      }
+    }
+  ]
+}

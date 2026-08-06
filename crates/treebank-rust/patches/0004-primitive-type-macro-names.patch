@@ -1,0 +1,52 @@
+diff --git a/grammar.js b/grammar.js
+index 841d72b..4a031cf 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -986,6 +986,9 @@ module.exports = grammar({
+       field('macro', choice(
+         $.scoped_identifier,
+         $.identifier,
++        // Macros can be named like primitive types (snapbox's `str!`): the
++        // name is an identifier to rustc, same aliasing as in `_path`.
++        alias(choice(...primitiveTypes), $.identifier),
+         $._reserved_identifier,
+       )),
+       '!',
+diff --git a/test/corpus/macros.txt b/test/corpus/macros.txt
+index 1a016b3..6e82af5 100644
+--- a/test/corpus/macros.txt
++++ b/test/corpus/macros.txt
+@@ -307,3 +307,33 @@ fn main() {
+           macro: (identifier)
+           (token_tree
+             (integer_literal)))))))
++
++================================================================================
++Macros named like primitive types
++================================================================================
++
++fn main() {
++    let x = str!["hi"];
++    let y = u32![1];
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (function_item
++    name: (identifier)
++    parameters: (parameters)
++    body: (block
++      (let_declaration
++        pattern: (identifier)
++        value: (macro_invocation
++          macro: (identifier)
++          (token_tree
++            (string_literal
++              (string_content)))))
++      (let_declaration
++        pattern: (identifier)
++        value: (macro_invocation
++          macro: (identifier)
++          (token_tree
++            (integer_literal)))))))

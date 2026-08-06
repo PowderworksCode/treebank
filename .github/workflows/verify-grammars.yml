@@ -1,0 +1,43 @@
+# Reconstruction invariant, per vendored grammar:
+#
+#   upstream repo checked out at the ledger's pinned sha
+#   + patches/ applied in order
+#   (+ npm ci where generation has js deps)
+#   + tree-sitter generate with the ledger's pinned CLI version
+#   == exactly the tree vendored in crates/<grammar>/
+#
+# scripts/verify.sh implements this generically (plus the grammar's corpus
+# tests and our negative corpus), reading everything grammar-specific from
+# the grammar's ledger.json, so CI is just: build the treebank CLI, run the
+# verify script per grammar.
+name: verify-grammars
+
+on:
+  push:
+    paths:
+      - 'crates/**'
+      - '.github/workflows/verify-grammars.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - '.github/workflows/verify-grammars.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        grammar: [treebank-rust, treebank-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      # The treebank CLI is only needed for the negative-corpus check.
+      - name: Build treebank CLI
+        run: cargo build --release
+      - name: Verify ${{ matrix.grammar }}
+        run: scripts/verify.sh crates/${{ matrix.grammar }}

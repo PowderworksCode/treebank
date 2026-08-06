@@ -1,0 +1,77 @@
+{
+  "grammar": "typescript",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-typescript",
+    "sha": "f975a621f4e7f532fe322e13c4f79495e0a7b2e7",
+    "version": "0.23.2"
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as treebank-rust: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "typescript",
+    "tsx"
+  ],
+  "generate_deps": "npm ci (define-grammar.js requires tree-sitter-javascript; lockfile is upstream's, never regenerated)",
+  "corpus": {
+    "source": "npm top-100 by downloads (npm-high-impact 1.13.0), fetched 2026-08-06; .ts/.mts/.cts/.d.ts -> typescript grammar, .tsx -> tsx grammar",
+    "files": 680,
+    "sweep_patched": {
+      "passed": 680,
+      "failed": 0
+    }
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "export type * from",
+      "file": "patches/0001-export-type-star-from.patch",
+      "files": [
+        "common/define-grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "export type * from \"./primitive.d.ts\";",
+        "first_seen": {
+          "package": "type-fest",
+          "version": "5.8.0",
+          "note": "also uuid 14.0.1; 5 files"
+        },
+        "sweep_before": {
+          "passed": 673,
+          "failed": 7
+        },
+        "sweep_after": {
+          "passed": 678,
+          "failed": 2
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "abstract as a property name",
+      "file": "patches/0002-abstract-as-property-name.patch",
+      "files": [
+        "common/define-grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "origin": "local; found by top-100 sweep",
+      "evidence": {
+        "repro": "interface Foo { abstract?: boolean | null; }",
+        "first_seen": {
+          "package": "@babel/types",
+          "version": "8.0.4",
+          "note": "index.d.ts / index-legacy.d.ts; 2 files"
+        },
+        "sweep_before": {
+          "passed": 678,
+          "failed": 2
+        },
+        "sweep_after": {
+          "passed": 680,
+          "failed": 0
+        }
+      }
+    }
+  ]
+}

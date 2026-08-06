@@ -1,0 +1,9 @@
+{
+  "name": "ts-oracle",
+  "private": true,
+  "type": "module",
+  "description": "Syntax-only TypeScript reference check for the treebank oracle",
+  "dependencies": {
+    "typescript": "^5.6"
+  }
+}
