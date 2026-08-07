@@ -1,0 +1,9 @@
+{
+  "name": "js-oracle",
+  "private": true,
+  "type": "module",
+  "description": "Syntax-only JavaScript reference check for the treebank oracle (V8 via vm, plus a JSX-only babel leg)",
+  "dependencies": {
+    "@babel/parser": "^7.28"
+  }
+}
