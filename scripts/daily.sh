@@ -31,11 +31,19 @@
 #      never committed to directly. On verify failure the changes stay in
 #      the working tree, unpushed, flagged for review.
 #
+# One fix PR per language at a time. Committing on a branch and checking the
+# base back out reverts the working tree, so an unmerged PR means tomorrow's
+# sweep sees the same gaps — step 3 therefore refuses to run while a fix PR
+# for that language is outstanding, and the run starts with a fast-forward
+# pull so a merged one actually lands here.
+#
 # Env: CLAUDE_BIN (default claude), CLAUDE_MODEL (default sonnet),
 #      TREEBANK_LIMIT (packages per ecosystem, default 100),
 #      TREEBANK_RANK_K (rank list length, default 1000),
 #      TREEBANK_AGENT (1 = run the fix agent and open PRs, 0 = fetch/sweep
 #        only; default 1),
+#      TREEBANK_FORCE_AGENT (1 = run the agent even when a fix PR for that
+#        language is already outstanding; default 0),
 #      TREEBANK_AGENT_TIMEOUT (wall-clock seconds per agent session, default
 #        3600), TREEBANK_AGENT_BUDGET_USD (dollar cap per session, default 10),
 #      TREEBANK_LOCK (lock file, default /tmp/treebank-daily.lock).
@@ -63,6 +71,20 @@ if ! flock -n 9; then
 fi
 
 echo "=== treebank daily: $(date '+%Y-%m-%d %H:%M') ==="
+
+# Pull merged work in, so this checkout doesn't drift from the branch it
+# tracks. Without it a merged fix never reaches this machine: the sweep keeps
+# reporting gaps that main has already fixed, and the outstanding-PR guard
+# below never clears. Fast-forward only, and only from a clean tree — an
+# agent's unreviewed changes are never discarded to make room for a pull.
+if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
+  echo "daily: working tree is dirty — skipping the pull, leaving local changes alone"
+elif git pull --ff-only --quiet 2>/dev/null; then
+  echo "daily: at $(git rev-parse --short HEAD) on $(git rev-parse --abbrev-ref HEAD)"
+else
+  echo "daily: git pull --ff-only did not apply (diverged, no upstream, or offline) — running against $(git rev-parse --short HEAD)"
+fi
+
 cargo build --release --quiet || { echo "daily: cargo build failed"; exit 1; }
 
 overall=0
@@ -109,6 +131,38 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
   if [ "$RUN_AGENT" != 1 ]; then
     echo "daily: $lang has $gaps gap file(s) — agent disabled (TREEBANK_AGENT=$RUN_AGENT), see REPORT.md"
     continue
+  fi
+
+  # Never redo work that is already waiting on a human.
+  #
+  # Step 5 commits the agent's fix onto a branch and then checks the base back
+  # out, which reverts the working tree — so until that PR is merged AND pulled,
+  # this checkout's grammar is still unfixed and the sweep still reports the
+  # same gaps. Without this guard every unmerged day costs another agent
+  # session and produces another near-identical PR.
+  if [ "${TREEBANK_FORCE_AGENT:-0}" != 1 ]; then
+    if ! prs=$(gh pr list --state all --limit 100 --json headRefName,url,state 2>/dev/null); then
+      echo "daily: $lang cannot reach GitHub to check for an outstanding fix PR — not launching the agent"
+      overall=1
+      continue
+    fi
+    # Most recent PR whose branch is this language's; gh lists newest first.
+    prior=$(jq -c --arg p "grammar-fixes/$lang-" \
+      '[.[] | select(.headRefName | startswith($p))] | first // {}' <<<"$prs")
+    case "$(jq -r '.state // empty' <<<"$prior")" in
+      OPEN)
+        echo "daily: $lang has $gaps gap file(s) but $(jq -r .url <<<"$prior") is still open — skipping the agent until it merges"
+        continue ;;
+      CLOSED)
+        echo "daily: $lang has $gaps gap file(s); the last fix PR $(jq -r .url <<<"$prior") was closed without merging — not retrying (TREEBANK_FORCE_AGENT=1 to override)"
+        continue ;;
+    esac
+    # A push or gh failure last time leaves the fix committed locally with no PR.
+    stale=$(git branch --no-merged HEAD --list "grammar-fixes/$lang-*" | head -1 | tr -d ' *')
+    if [ -n "$stale" ]; then
+      echo "daily: $lang has an unmerged local branch $stale from an earlier failed push — skipping the agent"
+      continue
+    fi
   fi
 
   echo "daily: $lang has $gaps gap file(s) — launching fix agent (<=${AGENT_TIMEOUT}s, <=\$$AGENT_BUDGET)"
