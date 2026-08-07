@@ -63,6 +63,13 @@ TB="$ROOT/target/release/treebank"
 
 # One run at a time. Without this, a run whose agent hangs is still going when
 # tomorrow's cron fires and both would push branches.
+#
+# fd 9 is closed for every child below (the `9>&-` redirections). A flock lives
+# on the open file description, not the process, so any child that inherits fd 9
+# keeps the lock alive after this script exits — and `cargo build` spawns the
+# sccache daemon, which outlives the run. Without those redirections the first
+# run to start sccache wedges the lock and every later run prints "previous run
+# still going" and does nothing, silently, exiting 0. Observed, not theoretical.
 LOCK="${TREEBANK_LOCK:-/tmp/treebank-daily.lock}"
 exec 9>"$LOCK" || { echo "daily: cannot open lock $LOCK"; exit 1; }
 if ! flock -n 9; then
@@ -83,9 +90,9 @@ elif git pull --ff-only --quiet 2>/dev/null; then
   echo "daily: at $(git rev-parse --short HEAD) on $(git rev-parse --abbrev-ref HEAD)"
 else
   echo "daily: git pull --ff-only did not apply (diverged, no upstream, or offline) — running against $(git rev-parse --short HEAD)"
-fi
+fi 9>&-
 
-cargo build --release --quiet || { echo "daily: cargo build failed"; exit 1; }
+cargo build --release --quiet 9>&- || { echo "daily: cargo build failed"; exit 1; }
 
 overall=0
 for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
@@ -239,7 +246,7 @@ Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
     overall=1
   fi
   git checkout -q "$base"
-done
+done 9>&-
 
 echo "=== treebank daily done ==="
 exit "$overall"
