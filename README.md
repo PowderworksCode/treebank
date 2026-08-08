@@ -13,18 +13,20 @@ grammars:
   tsx grammars), 2 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX
   included), 2 grammar patches
+- `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 
 ```sh
 git clone --recurse-submodules <repo>   # or: git submodule update --init
 scripts/materialize.sh crates/treebank-rust        # -> build/ (sweeps/tests use this)
 scripts/materialize.sh crates/treebank-typescript
 scripts/materialize.sh crates/treebank-javascript
+scripts/materialize.sh crates/treebank-java
 ```
 
 ## The loop
 
-Every corpus command takes `--lang <rust|typescript|javascript>` (default
-`rust`) and keeps its data under `corpus/<lang>/`.
+Every corpus command takes `--lang <rust|typescript|javascript|java>`
+(default `rust`) and keeps its data under `corpus/<lang>/`.
 
 ```sh
 cargo build --release
@@ -40,11 +42,13 @@ tb fetch --lang rust --limit 100
 # Sweep: parses everything, adjudicates failures with the reference parser
 # (rust: syn; typescript: tools/ts-oracle; javascript: tools/js-oracle, which
 # is V8 via node's vm plus a JSX-only babel leg — NOT the TypeScript parser,
-# which calls `const x: number = 1` valid JavaScript), and writes
+# which calls `const x: number = 1` valid JavaScript; java: tools/java-oracle,
+# javac's own parser via JavacTask.parse), and writes
 # corpus/<lang>/reports/sweep.json + an agent-ready REPORT.md.
 tb sweep --lang rust       --grammar crates/treebank-rust/build
 tb sweep --lang typescript --grammar crates/treebank-typescript/build
 tb sweep --lang javascript --grammar crates/treebank-javascript/build
+tb sweep --lang java       --grammar crates/treebank-java/build
 
 # Grammar-side verification (materialize + corpus tests + negative corpus).
 # One generic script, driven by each grammar's ledger.json; CI runs the same
@@ -101,6 +105,8 @@ cache and forces a full re-sweep.
 | npm top-100 (680 .ts files) | treebank-typescript (2 patches) | **680** | **0** |
 | npm top-100 (720 .js files) | upstream tree-sitter-javascript 0.25.0 | 718 | 2 |
 | npm top-100 (720 .js files) | treebank-javascript (2 patches) | **720** | **0** |
+| Maven top-89 (21,049 files) | upstream tree-sitter-java 0.23.5 | 20,993 | 56 |
+| Maven top-89 (21,049 files) | treebank-java (2 patches) | **21,049** | **0** |
 
 Every remaining failure is oracle-confirmed valid code (zero corpus noise in
-all three top-100s). The gap clusters are queued as jobs in `jobs/queue/`.
+all four ecosystems). The gap clusters are queued as jobs in `jobs/queue/`.

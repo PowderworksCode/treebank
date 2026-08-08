@@ -3,6 +3,7 @@
 //! corpus, how files route to grammars, and what the reference parser is —
 //! lives behind this trait; rank/fetch/sweep/oracle are generic drivers.
 
+mod java;
 mod javascript;
 mod node_oracle;
 mod npm;
@@ -50,10 +51,12 @@ pub fn get(name: &str) -> Result<&'static dyn Lang> {
     static RUST: rust::Rust = rust::Rust;
     static TYPESCRIPT: typescript::TypeScript = typescript::TypeScript;
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
+    static JAVA: java::Java = java::Java;
     Ok(match name {
         "rust" => &RUST,
         "typescript" => &TYPESCRIPT,
         "javascript" => &JAVASCRIPT,
-        other => bail!("unsupported lang {other} (have: rust, typescript, javascript)"),
+        "java" => &JAVA,
+        other => bail!("unsupported lang {other} (have: rust, typescript, javascript, java)"),
     })
 }

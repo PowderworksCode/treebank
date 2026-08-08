@@ -30,7 +30,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        grammar: [treebank-rust, treebank-typescript, treebank-javascript]
+        grammar: [treebank-rust, treebank-typescript, treebank-javascript, treebank-java]
     steps:
       - uses: actions/checkout@v4
         with:

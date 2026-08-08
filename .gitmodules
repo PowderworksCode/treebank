@@ -7,3 +7,6 @@
 [submodule "crates/treebank-javascript/upstream"]
 	path = crates/treebank-javascript/upstream
 	url = https://github.com/tree-sitter/tree-sitter-javascript
+[submodule "crates/treebank-java/upstream"]
+	path = crates/treebank-java/upstream
+	url = https://github.com/tree-sitter/tree-sitter-java
