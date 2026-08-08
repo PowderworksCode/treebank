@@ -86,3 +86,12 @@ Five further invalid cases were tried and left out because they are early
 errors no context-free grammar can catch: duplicate constructors, a
 duplicated regex flag, a getter with a parameter, `if (1) let x = 1;`, and
 `a?.b = 1`.
+
+4. **Treebank crate identity** (`0004`) — packaging, not a grammar
+   change. Upstream owns `tree-sitter-javascript` on crates.io, so this publishes as
+   `treebank-grammar-javascript` with our `repository`, `homepage` and
+   `description`. `[lib] name` stays `tree_sitter_javascript` so the crate is a drop-in.
+   `include` gains `LICENSE`, `ledger.json`, `LOCAL-PATCHES.md` and
+   `patches/*` so provenance travels inside the published tarball. The
+   published version string is deliberately *not* here — it is derived from
+   crates.io at publish time. See [PUBLISHING.md](../../PUBLISHING.md).

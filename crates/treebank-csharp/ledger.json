@@ -69,6 +69,17 @@
           "failed": 7673
         }
       }
+    },
+    {
+      "id": 3,
+      "title": "treebank crate identity",
+      "file": "patches/0003-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-c-sharp name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays upstream's so the crate is a drop-in. include gains LICENSE, ledger.json, LOCAL-PATCHES.md and patches/* so provenance travels inside the published tarball. [lib] name stays tree_sitter_c_sharp \u2014 upstream's crate is tree-sitter-c-sharp while our directory is treebank-csharp. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
     }
   ]
 }

@@ -93,3 +93,12 @@ Two further invalid files were tried and left out because the grammar
 accepts them and no context-free rule would catch them: a duplicated
 modifier (`public public void f()`) and `enum` used as an identifier, which
 is a Java-5-onwards restriction rather than a syntactic one.
+
+4. **Treebank crate identity** (`0004`) — packaging, not a grammar
+   change. Upstream owns `tree-sitter-java` on crates.io, so this publishes as
+   `treebank-grammar-java` with our `repository`, `homepage` and
+   `description`. `[lib] name` stays `tree_sitter_java` so the crate is a drop-in.
+   `include` gains `LICENSE`, `ledger.json`, `LOCAL-PATCHES.md` and
+   `patches/*` so provenance travels inside the published tarball. It also fixes two defects that would otherwise ship: upstream's `include` omits `LICENSE`, which would make this an unlicensed redistribution, and the dev-dependency on `tree-sitter` 0.24 cannot load the ABI-15 parsers the pinned CLI 0.25.10 generates. The
+   published version string is deliberately *not* here — it is derived from
+   crates.io at publish time. See [PUBLISHING.md](../../PUBLISHING.md).

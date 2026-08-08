@@ -82,6 +82,17 @@
           "failed": 0
         }
       }
+    },
+    {
+      "id": 4,
+      "title": "treebank crate identity",
+      "file": "patches/0004-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; as rust's, plus two defects that would otherwise ship: upstream's include omits LICENSE (an unlicensed redistribution), and the dev-dependency on tree-sitter 0.24 cannot load the ABI-15 parsers the pinned CLI 0.25.10 generates, so the crate's own tests fail. See PUBLISHING.md."
     }
   ]
 }

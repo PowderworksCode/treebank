@@ -1,0 +1,74 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index afc4cb5..e956042 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -189,7 +189,13 @@ dependencies = [
+ ]
+ 
+ [[package]]
+-name = "tree-sitter-c-sharp"
++name = "tree-sitter-language"
++version = "0.1.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e8ddffe35a0e5eeeadf13ff7350af564c6e73993a24db62caee1822b185c2600"
++
++[[package]]
++name = "treebank-grammar-csharp"
+ version = "0.23.5"
+ dependencies = [
+  "cc",
+@@ -197,12 +203,6 @@ dependencies = [
+  "tree-sitter-language",
+ ]
+ 
+-[[package]]
+-name = "tree-sitter-language"
+-version = "0.1.2"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e8ddffe35a0e5eeeadf13ff7350af564c6e73993a24db62caee1822b185c2600"
+-
+ [[package]]
+ name = "unicode-ident"
+ version = "1.0.22"
+diff --git a/Cargo.toml b/Cargo.toml
+index 16d87c6..40d6f47 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+-name = "tree-sitter-c-sharp"
+-description = "C# grammar for tree-sitter"
++name = "treebank-grammar-csharp"
++description = "Patched redistribution of tree-sitter/tree-sitter-c-sharp: upstream at a pinned commit plus the treebank patch series. Not an upstream release."
+ version = "0.23.5"
+ authors = [
+   "Max Brunsfeld <maxbrunsfeld@gmail.com>",
+@@ -10,14 +10,26 @@ license = "MIT"
+ readme = "README.md"
+ keywords = ["incremental", "parsing", "tree-sitter", "c-sharp"]
+ categories = ["parsing", "text-editors"]
+-repository = "https://github.com/tree-sitter/tree-sitter-c-sharp"
++repository = "https://github.com/PowderworksCode/treebank"
++homepage = "https://treebank.dev"
+ edition = "2021"
+ autoexamples = false
+ 
+ build = "bindings/rust/build.rs"
+-include = ["LICENSE", "bindings/rust/*", "grammar.js", "queries/*", "src/*", "tree-sitter.json"]
++include = [
++  "LICENSE",
++  "LOCAL-PATCHES.md",
++  "bindings/rust/*",
++  "grammar.js",
++  "ledger.json",
++  "patches/*",
++  "queries/*",
++  "src/*",
++  "tree-sitter.json",
++]
+ 
+ [lib]
++name = "tree_sitter_c_sharp"
+ path = "bindings/rust/lib.rs"
+ 
+ [dependencies]
