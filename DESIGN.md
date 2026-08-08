@@ -92,10 +92,11 @@ Each repo carries a machine-readable ledger (`ledger.json`) and a human log
 }
 ```
 
-The ledger is the source of truth for reconstructing any published grammar:
-upstream `git_url` + `sha` + the `patches/` series applied in order +
-`tree-sitter generate` with the ledger's pinned `generate_cli` version must
-reproduce the vendored tree exactly (CI checks this).
+The ledger is the source of truth for materializing any grammar: the
+`upstream/` submodule (which must sit exactly at the ledger's pinned `sha`)
++ the `patches/` series applied in order + `tree-sitter generate` with the
+ledger's pinned `generate_cli` version produce the gitignored working tree
+`build/` that sweeps, tests and publishing consume (CI checks this).
 
 The CLI pin is not bookkeeping: regenerating with a different CLI version can
 silently change parsing behavior (found in practice: tree-sitter-cli 0.26.x

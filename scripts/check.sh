@@ -2,7 +2,9 @@
 # Full verification of a grammar change, one command:
 #
 #   1. tree-sitter generate (pinned CLI) in each of the ledger's
-#      generate_dirs, after npm ci if the ledger declares generate_deps
+#      generate_dirs inside build/ (run scripts/materialize.sh first; edits
+#      go in build/, and `git -C build diff` is the patch you will commit),
+#      after npm ci if the ledger declares generate_deps
 #   2. grammar corpus tests
 #   3. corpus sweep — pass count must beat $PASS_BEFORE, and if $JOB_FILE is
 #      set, every file in the job's cluster must now pass
@@ -18,6 +20,7 @@ set -uo pipefail
 cd "${1:-.}"
 [ -f ledger.json ] || { echo "agent-check: no ledger.json in $PWD"; exit 2; }
 ROOT="$PWD"
+[ -d build ] || { echo "agent-check: no build/ — run scripts/materialize.sh $PWD first"; exit 2; }
 LANG_NAME=$(jq -r .grammar ledger.json)
 CLI=$(jq -r .generate_cli ledger.json)
 NEED_DEPS=$(jq -r '.generate_deps // empty' ledger.json)
@@ -30,13 +33,13 @@ JOB_FILE="${JOB_FILE:-}"
 SWEEP_OUT=/tmp/agent-check-sweep.json
 fail=0
 
-if [ -n "$NEED_DEPS" ] && [ ! -d node_modules ]; then
-  npm ci --no-audit --no-fund >/dev/null 2>&1
+if [ -n "$NEED_DEPS" ] && [ ! -d build/node_modules ]; then
+  (cd build && npm ci --no-audit --no-fund >/dev/null 2>&1)
 fi
 
 gen_ok=1
 for d in "${GEN_DIRS[@]}"; do
-  (cd "$d" && npx -y "tree-sitter-cli@$CLI" generate) >/tmp/agent-check-generate.log 2>&1 || gen_ok=0
+  (cd "build/$d" && npx -y "tree-sitter-cli@$CLI" generate) >/tmp/agent-check-generate.log 2>&1 || gen_ok=0
 done
 if [ "$gen_ok" = 1 ]; then
   echo "generate ($CLI, ${GEN_DIRS[*]}): ok"
@@ -45,7 +48,7 @@ else
   fail=1
 fi
 
-tests_line=$(npx -y "tree-sitter-cli@$CLI" test 2>&1 | grep -E '^Total parses' || true)
+tests_line=$(cd build && npx -y "tree-sitter-cli@$CLI" test 2>&1 | grep -E '^Total parses' || true)
 tests_failed=$(sed -E 's/.*failed parses: ([0-9]+);.*/\1/' <<<"$tests_line")
 if [ -n "$tests_line" ] && [ "$tests_failed" = "0" ]; then
   echo "corpus tests: ok ($tests_line)"
@@ -58,7 +61,7 @@ fi
 
 # Run the sweep from the repo root: language oracles (e.g. tools/ts-oracle)
 # are resolved relative to the cwd.
-if (cd "$ROOT/../.." && "$TREEBANK_BIN" sweep --lang "$LANG_NAME" --grammar "$ROOT" --manifest "$MANIFEST" --out "$SWEEP_OUT") >/dev/null 2>&1; then
+if (cd "$ROOT/../.." && "$TREEBANK_BIN" sweep --lang "$LANG_NAME" --grammar "$ROOT/build" --manifest "$MANIFEST" --out "$SWEEP_OUT") >/dev/null 2>&1; then
   passed=$(jq .passed "$SWEEP_OUT")
   failed=$(jq .failed "$SWEEP_OUT")
   if [ "$passed" -gt "$PASS_BEFORE" ]; then
@@ -87,12 +90,12 @@ else
   fail=1
 fi
 
-if "$TREEBANK_BIN" negative --grammar "$ROOT/${GEN_DIRS[0]}" --dir "$ROOT/test/negative" >/dev/null 2>&1; then
+if "$TREEBANK_BIN" negative --grammar "$ROOT/build/${GEN_DIRS[0]}" --dir "$ROOT/test/negative" >/dev/null 2>&1; then
   echo "negative corpus: ok"
   negative=pass
 else
   echo "negative corpus: FAILED — the grammar now ACCEPTS invalid code:"
-  "$TREEBANK_BIN" negative --grammar "$ROOT/${GEN_DIRS[0]}" --dir "$ROOT/test/negative" 2>&1 | sed 's/^/  /' || true
+  "$TREEBANK_BIN" negative --grammar "$ROOT/build/${GEN_DIRS[0]}" --dir "$ROOT/test/negative" 2>&1 | sed 's/^/  /' || true
   negative=fail
   fail=1
 fi

@@ -22,8 +22,18 @@
   "patches": [
     {
       "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
       "title": "extern types in extern blocks",
-      "file": "patches/0001-extern-types-in-extern-blocks.patch",
+      "file": "patches/0002-extern-types-in-extern-blocks.patch",
       "files": [
         "grammar.js",
         "test/corpus/declarations.txt"
@@ -38,9 +48,9 @@
       }
     },
     {
-      "id": 2,
+      "id": 3,
       "title": "~ in token trees",
-      "file": "patches/0002-tilde-in-token-trees.patch",
+      "file": "patches/0003-tilde-in-token-trees.patch",
       "files": [
         "grammar.js",
         "test/corpus/macros.txt"
@@ -56,9 +66,9 @@
       }
     },
     {
-      "id": 3,
+      "id": 4,
       "title": "immediate lifetime/label identifiers (strictness)",
-      "file": "patches/0003-immediate-lifetime-label-identifiers.patch",
+      "file": "patches/0004-immediate-lifetime-label-identifiers.patch",
       "files": [
         "grammar.js"
       ],
@@ -69,9 +79,9 @@
       }
     },
     {
-      "id": 4,
+      "id": 5,
       "title": "macros named like primitive types",
-      "file": "patches/0004-primitive-type-macro-names.patch",
+      "file": "patches/0005-primitive-type-macro-names.patch",
       "files": [
         "grammar.js",
         "test/corpus/macros.txt"
@@ -95,9 +105,9 @@
       }
     },
     {
-      "id": 5,
+      "id": 6,
       "title": "negative literals in const generic arguments",
-      "file": "patches/0005-negative-literals-in-const-generic-arguments.patch",
+      "file": "patches/0006-negative-literals-in-const-generic-arguments.patch",
       "files": [
         "grammar.js",
         "test/corpus/types.txt"
@@ -121,9 +131,9 @@
       }
     },
     {
-      "id": 6,
+      "id": 7,
       "title": "try! macro invocation (2015 edition)",
-      "file": "patches/0006-try-macro-invocation.patch",
+      "file": "patches/0007-try-macro-invocation.patch",
       "files": [
         "grammar.js",
         "test/corpus/macros.txt"
@@ -147,9 +157,9 @@
       }
     },
     {
-      "id": 7,
+      "id": 8,
       "title": "bare $ in macro token trees",
-      "file": "patches/0007-bare-dollar-in-token-trees.patch",
+      "file": "patches/0008-bare-dollar-in-token-trees.patch",
       "files": [
         "grammar.js",
         "test/corpus/macros.txt"
@@ -173,9 +183,9 @@
       }
     },
     {
-      "id": 8,
+      "id": 9,
       "title": "unit type in where predicates",
-      "file": "patches/0008-unit-type-where-predicate.patch",
+      "file": "patches/0009-unit-type-where-predicate.patch",
       "files": [
         "grammar.js",
         "test/corpus/declarations.txt"
@@ -199,9 +209,9 @@
       }
     },
     {
-      "id": 9,
+      "id": 10,
       "title": "safe fn in unsafe extern blocks (RFC 3484)",
-      "file": "patches/0009-safe-fn-in-unsafe-extern-blocks.patch",
+      "file": "patches/0010-safe-fn-in-unsafe-extern-blocks.patch",
       "files": [
         "grammar.js",
         "test/corpus/declarations.txt",
@@ -226,9 +236,9 @@
       }
     },
     {
-      "id": 10,
+      "id": 11,
       "title": "attributes on struct pattern fields",
-      "file": "patches/0010-attributes-on-struct-pattern-fields.patch",
+      "file": "patches/0011-attributes-on-struct-pattern-fields.patch",
       "files": [
         "grammar.js",
         "test/corpus/patterns.txt"
@@ -252,9 +262,9 @@
       }
     },
     {
-      "id": 11,
+      "id": 12,
       "title": "unit struct with where clause",
-      "file": "patches/0011-unit-struct-where-clause.patch",
+      "file": "patches/0012-unit-struct-where-clause.patch",
       "files": [
         "grammar.js",
         "test/corpus/declarations.txt"
@@ -278,9 +288,9 @@
       }
     },
     {
-      "id": 12,
+      "id": 13,
       "title": "underscore separators in unicode escapes",
-      "file": "patches/0012-underscores-in-unicode-escapes.patch",
+      "file": "patches/0013-underscores-in-unicode-escapes.patch",
       "files": [
         "grammar.js",
         "test/corpus/literals.txt"
