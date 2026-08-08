@@ -61,16 +61,14 @@ pub struct FileEntry {
     pub sha256: String,
 }
 
-/// Directory name for a package (npm scopes contain '/').
+/// Directory name for a package (npm scopes contain '/', Maven
+/// group:artifact coordinates contain ':').
 pub fn pkg_dir(name: &str, version: &str) -> String {
-    format!("{}-{}", name.replace('/', "__"), version)
+    format!("{}-{}", name.replace(['/', ':'], "__"), version)
 }
 
-/// Strip the leading archive component and reject path traversal.
-fn safe_rel_path(entry_path: &Path) -> Option<PathBuf> {
-    let mut comps = entry_path.components();
-    comps.next()?;
-    let rel: PathBuf = comps.as_path().to_path_buf();
+/// Reject empty paths and anything that is not a plain relative path.
+fn safe_path(rel: &Path) -> Option<PathBuf> {
     if rel.as_os_str().is_empty()
         || rel
             .components()
@@ -78,7 +76,14 @@ fn safe_rel_path(entry_path: &Path) -> Option<PathBuf> {
     {
         return None;
     }
-    Some(rel)
+    Some(rel.to_path_buf())
+}
+
+/// Strip the leading archive component and reject path traversal.
+fn strip_root(entry_path: &Path) -> Option<PathBuf> {
+    let mut comps = entry_path.components();
+    comps.next()?;
+    safe_path(comps.as_path())
 }
 
 fn download(url: &str) -> Result<Vec<u8>> {
@@ -88,27 +93,66 @@ fn download(url: &str) -> Result<Vec<u8>> {
     Ok(buf)
 }
 
-/// Extract corpus files (per lang.classify) from a gzipped tarball.
-fn extract(lang: &dyn Lang, tarball: &Path, pkgdir: &Path) -> Result<Vec<ManifestFile>> {
+/// Write one extracted archive member into the corpus and describe it.
+fn record(
+    lang: &dyn Lang,
+    pkgdir: &Path,
+    rel: &Path,
+    buf: &[u8],
+) -> Result<Option<ManifestFile>> {
+    let Some(dialect) = lang.classify(rel) else { return Ok(None) };
+    let dest = pkgdir.join(rel);
+    std::fs::create_dir_all(dest.parent().unwrap())?;
+    std::fs::write(&dest, buf)?;
+    Ok(Some(ManifestFile {
+        path: rel.to_string_lossy().into_owned(),
+        bytes: buf.len() as u64,
+        sha256: format!("{:x}", Sha256::digest(buf)),
+        dialect,
+    }))
+}
+
+/// Extract corpus files (per lang.classify) from a package archive.
+///
+/// Registries ship two shapes. Gzipped tarballs (npm, crates.io, GitHub
+/// source archives) wrap everything in one top-level directory, which is
+/// stripped. Zips (Maven `-sources.jar`, `.nupkg`) do not: their entries are
+/// already root-relative, so stripping would drop the first path segment —
+/// the whole `com/` of `com/google/common/base/Ascii.java`.
+fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<ManifestFile>> {
     let mut files = Vec::new();
-    let gz = flate2::read::GzDecoder::new(std::fs::File::open(tarball)?);
-    let mut archive = tar::Archive::new(gz);
-    for entry in archive.entries()? {
-        let mut entry = entry?;
-        let entry_path = entry.path()?.to_path_buf();
-        let Some(rel) = safe_rel_path(&entry_path) else { continue };
-        let Some(dialect) = lang.classify(&rel) else { continue };
-        let dest = pkgdir.join(&rel);
-        let mut buf = Vec::new();
-        entry.read_to_end(&mut buf)?;
-        std::fs::create_dir_all(dest.parent().unwrap())?;
-        std::fs::write(&dest, &buf)?;
-        files.push(ManifestFile {
-            path: rel.to_string_lossy().into_owned(),
-            bytes: buf.len() as u64,
-            sha256: format!("{:x}", Sha256::digest(&buf)),
-            dialect,
-        });
+    let mut magic = [0u8; 4];
+    let is_zip = {
+        use std::io::Read as _;
+        let mut f = std::fs::File::open(archive)?;
+        f.read_exact(&mut magic).is_ok() && &magic[..2] == b"PK"
+    };
+
+    if is_zip {
+        let mut zip = zip::ZipArchive::new(std::fs::File::open(archive)?)
+            .with_context(|| format!("open zip {}", archive.display()))?;
+        for i in 0..zip.len() {
+            let mut entry = zip.by_index(i)?;
+            if !entry.is_file() {
+                continue;
+            }
+            let Some(rel) = entry.enclosed_name() else { continue };
+            let Some(rel) = safe_path(&rel) else { continue };
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            files.extend(record(lang, pkgdir, &rel, &buf)?);
+        }
+    } else {
+        let gz = flate2::read::GzDecoder::new(std::fs::File::open(archive)?);
+        let mut tar = tar::Archive::new(gz);
+        for entry in tar.entries()? {
+            let mut entry = entry?;
+            let entry_path = entry.path()?.to_path_buf();
+            let Some(rel) = strip_root(&entry_path) else { continue };
+            let mut buf = Vec::new();
+            entry.read_to_end(&mut buf)?;
+            files.extend(record(lang, pkgdir, &rel, &buf)?);
+        }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
     Ok(files)
@@ -131,12 +175,18 @@ pub fn run(lang: &dyn Lang, list: &Path, limit: usize, corpus: &Path) -> Result<
             }
         };
         let stem = pkg_dir(&c.name, &version);
+        // The extension is cosmetic — extract() sniffs the magic bytes — but
+        // a cached Maven sources.jar should not be named .tar.gz.
         // .crate/.tgz are legacy cache names from before the lang refactor.
-        let tarball = ["tar.gz", "crate", "tgz"]
+        let ext = ["jar", "zip", "nupkg"]
+            .into_iter()
+            .find(|e| tarball_url.ends_with(&format!(".{e}")))
+            .unwrap_or("tar.gz");
+        let tarball = ["tar.gz", "crate", "tgz", "jar", "zip", "nupkg"]
             .iter()
             .map(|e| cache.join(format!("{stem}.{e}")))
             .find(|p| p.exists())
-            .unwrap_or_else(|| cache.join(format!("{stem}.tar.gz")));
+            .unwrap_or_else(|| cache.join(format!("{stem}.{ext}")));
         if !tarball.exists() {
             match download(&tarball_url) {
                 Ok(buf) => {
