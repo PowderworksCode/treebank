@@ -1,10 +1,13 @@
 # treebank-javascript
 
-Vendored [tree-sitter/tree-sitter-javascript](https://github.com/tree-sitter/tree-sitter-javascript)
-at **0.25.0** (`f76aea6aa47322ea5c208c9c2e67f4a350d554f3`). One grammar; it
+Upstream [tree-sitter/tree-sitter-javascript](https://github.com/tree-sitter/tree-sitter-javascript)
+pinned at **0.25.0** (`44c892e0be055ac465d5eeddae6d3e194424e7de`, the commit
+tagged v0.25.0) as the `upstream/` git submodule; `scripts/materialize.sh`
+applies the patch series below and generates the parser into `build/`
+(gitignored). One grammar; it
 parses JSX as well as plain JavaScript, so `.jsx` needs no separate routing.
 Generation needs no npm deps (`generate_deps` is null — `grammar.js` requires
-nothing). Contract, reconstruction invariant, CLI pin rationale, and
+nothing). Contract, CLI pin rationale, and
 workflow: see [GRAMMARS.md](../../GRAMMARS.md) at the repo root.
 
 ## Reference parser
@@ -28,7 +31,13 @@ anything V8 rejects.
 
 ## Patches
 
-1. **Reserved words as exported names** (`0001`) — `export { _import as
+1. **Treebank redistribution notice** (`0001`) — prepends a warning to
+   upstream's `README.md` stating that this tree is an automatically
+   generated, patched redistribution maintained by
+   [treebank](https://treebank.dev), so the notice travels with every
+   materialized/published copy. Applied first; touches no grammar code.
+
+2. **Reserved words as exported names** (`0002`) — `export { _import as
    import }`. The exported name in an `export_specifier` (and in
    `export * as X`) is a `ModuleExportName`, i.e. an IdentifierName, so
    reserved words are legal there; it now uses the same
@@ -49,8 +58,8 @@ anything V8 rejects.
    forms that must stay reserved, so allowing them needs more than a
    reserved-context change.
 
-2. **ASI before a subscript or call that cannot continue an expression**
-   (`0002`) — `let subnamespace` followed by `[subnamespace, args] = f()` on
+3. **ASI before a subscript or call that cannot continue an expression**
+   (`0003`) — `let subnamespace` followed by `[subnamespace, args] = f()` on
    the next line. The scanner refused automatic semicolon insertion before
    `[` and `(` unconditionally, since they usually continue an expression
    (`a\n[0]` is `a[0]`, not two statements). It now refuses only where an

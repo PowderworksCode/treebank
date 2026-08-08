@@ -1,25 +1,27 @@
-# Reconstruction invariant, per vendored grammar:
+# Materialization invariant, per grammar:
 #
-#   upstream repo checked out at the ledger's pinned sha
+#   upstream/ submodule checked out exactly at the ledger's pinned sha
 #   + patches/ applied in order
 #   (+ npm ci where generation has js deps)
 #   + tree-sitter generate with the ledger's pinned CLI version
-#   == exactly the tree vendored in crates/<grammar>/
+#   -> build/ (gitignored), which must pass the grammar's corpus tests and
+#      reject every file in our negative corpus.
 #
-# scripts/verify.sh implements this generically (plus the grammar's corpus
-# tests and our negative corpus), reading everything grammar-specific from
-# the grammar's ledger.json, so CI is just: build the treebank CLI, run the
-# verify script per grammar.
+# scripts/verify.sh implements this generically (via scripts/materialize.sh),
+# reading everything grammar-specific from the grammar's ledger.json, so CI
+# is just: build the treebank CLI, run the verify script per grammar.
 name: verify-grammars
 
 on:
   push:
     paths:
       - 'crates/**'
+      - '.gitmodules'
       - '.github/workflows/verify-grammars.yml'
   pull_request:
     paths:
       - 'crates/**'
+      - '.gitmodules'
       - '.github/workflows/verify-grammars.yml'
 
 jobs:
@@ -31,6 +33,8 @@ jobs:
         grammar: [treebank-rust, treebank-typescript, treebank-javascript]
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: true
       - uses: actions/setup-node@v4
         with:
           node-version: 22

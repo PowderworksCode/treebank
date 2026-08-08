@@ -23,8 +23,18 @@
   "patches": [
     {
       "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
       "title": "export type * from",
-      "file": "patches/0001-export-type-star-from.patch",
+      "file": "patches/0002-export-type-star-from.patch",
       "files": [
         "common/define-grammar.js",
         "test/corpus/declarations.txt"
@@ -48,9 +58,9 @@
       }
     },
     {
-      "id": 2,
+      "id": 3,
       "title": "abstract as a property name",
-      "file": "patches/0002-abstract-as-property-name.patch",
+      "file": "patches/0003-abstract-as-property-name.patch",
       "files": [
         "common/define-grammar.js",
         "test/corpus/types.txt"

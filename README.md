@@ -2,15 +2,24 @@
 
 Tooling that keeps tree-sitter grammars at 100% coverage for real-world code.
 See [DESIGN.md](DESIGN.md) for the design and [GRAMMARS.md](GRAMMARS.md) for
-the vendoring contract every grammar follows (no embedded git, ledger-pinned
-upstream + CLI, `patches/` as the offer to upstream maintainers). Current
+the contract every grammar follows: upstream is a pristine `upstream/` git
+submodule pinned by `ledger.json`, our entire divergence is `patches/` (the
+offer to upstream maintainers), and `scripts/materialize.sh` produces the
+gitignored working tree `build/` that everything else consumes. Current
 grammars:
 
-- `crates/treebank-rust` — tree-sitter-rust 0.24.2, 4 patches
+- `crates/treebank-rust` — tree-sitter-rust 0.24.2, 12 grammar patches
 - `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript +
-  tsx grammars), 2 patches
+  tsx grammars), 2 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX
-  included), 2 patches
+  included), 2 grammar patches
+
+```sh
+git clone --recurse-submodules <repo>   # or: git submodule update --init
+scripts/materialize.sh crates/treebank-rust        # -> build/ (sweeps/tests use this)
+scripts/materialize.sh crates/treebank-typescript
+scripts/materialize.sh crates/treebank-javascript
+```
 
 ## The loop
 
@@ -33,11 +42,11 @@ tb fetch --lang rust --limit 100
 # is V8 via node's vm plus a JSX-only babel leg — NOT the TypeScript parser,
 # which calls `const x: number = 1` valid JavaScript), and writes
 # corpus/<lang>/reports/sweep.json + an agent-ready REPORT.md.
-tb sweep --lang rust       --grammar crates/treebank-rust
-tb sweep --lang typescript --grammar crates/treebank-typescript
-tb sweep --lang javascript --grammar crates/treebank-javascript
+tb sweep --lang rust       --grammar crates/treebank-rust/build
+tb sweep --lang typescript --grammar crates/treebank-typescript/build
+tb sweep --lang javascript --grammar crates/treebank-javascript/build
 
-# Grammar-side verification (reconstruct + corpus tests + negative corpus).
+# Grammar-side verification (materialize + corpus tests + negative corpus).
 # One generic script, driven by each grammar's ledger.json; CI runs the same
 # thing per grammar (.github/workflows/verify-grammars.yml).
 scripts/verify.sh crates/treebank-rust
@@ -88,7 +97,7 @@ cache and forces a full re-sweep.
 | corpus | grammar | passed | failed |
 |---|---|---:|---:|
 | crates.io top-100 (4,626 files) | upstream tree-sitter-rust 0.24.2 | 4,605 | 21 |
-| crates.io top-100 (4,626 files) | treebank-rust (4 patches) | **4,613** | **13** |
+| crates.io top-100 (4,626 files) | treebank-rust (12 patches) | **4,613** | **13** |
 | npm top-100 (680 .ts files) | treebank-typescript (2 patches) | **680** | **0** |
 | npm top-100 (720 .js files) | upstream tree-sitter-javascript 0.25.0 | 718 | 2 |
 | npm top-100 (720 .js files) | treebank-javascript (2 patches) | **720** | **0** |

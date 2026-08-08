@@ -3,3 +3,6 @@
 db-dump.tar.gz
 *.dylib
 node_modules/
+
+# materialized grammar trees (scripts/materialize.sh) — never committed
+crates/*/build/

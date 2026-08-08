@@ -45,7 +45,12 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
   if ! "$TB" fetch --lang "$lang" --limit "$LIMIT" 2>&1 | tail -1; then
     echo "daily: $lang fetch failed, sweeping the existing corpus anyway"
   fi
-  if ! "$TB" sweep --lang "$lang" --grammar "$grammar" 2>&1 | tail -2; then
+  if ! scripts/materialize.sh "$grammar" >/dev/null 2>&1; then
+    echo "daily: $lang materialize FAILED"
+    overall=1
+    continue
+  fi
+  if ! "$TB" sweep --lang "$lang" --grammar "$grammar/build" 2>&1 | tail -2; then
     echo "daily: $lang sweep FAILED"
     overall=1
     continue
@@ -59,9 +64,10 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
 
   echo "daily: $lang has $gaps gap file(s) — launching fix agent"
   "$CLAUDE_BIN" -p "Read corpus/$lang/reports/REPORT.md and fix ALL of its gap
-clusters, one at a time, exactly per the report's instructions. Work in
-crates/treebank-$lang. After each fix, run ../../scripts/check.sh from that
-dir until it prints CHECK OK. Capture each fix as patches/NNNN-*.patch with a
+clusters, one at a time, exactly per the report's instructions. Edit grammar
+sources in crates/treebank-$lang/build/ (the materialized tree — see
+GRAMMARS.md). After each fix, run ../../scripts/check.sh from
+crates/treebank-$lang until it prints CHECK OK. Capture each fix as patches/NNNN-*.patch with a
 ledger.json entry and a LOCAL-PATCHES.md note, per GRAMMARS.md. Update the
 ledger's corpus.sweep_patched numbers when done, and finish by running
 scripts/verify.sh crates/treebank-$lang from the repo root — it must pass.
@@ -73,7 +79,7 @@ grammar change, skip it and say so in your final message." \
   echo "daily: agent finished (log: corpus/$lang/reports/agent.log)"
 
   # Trust nothing: re-sweep and verify to see what actually happened.
-  "$TB" sweep --lang "$lang" --grammar "$grammar" 2>&1 | grep '^sweep:' | head -1
+  "$TB" sweep --lang "$lang" --grammar "$grammar/build" 2>&1 | grep '^sweep:' | head -1
   if ! scripts/verify.sh "$grammar" >/dev/null 2>&1; then
     echo "daily: $lang verify FAILED after agent — changes left in working tree, no PR"
     overall=1

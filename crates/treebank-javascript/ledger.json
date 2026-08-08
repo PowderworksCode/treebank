@@ -2,8 +2,9 @@
   "grammar": "javascript",
   "upstream": {
     "git_url": "https://github.com/tree-sitter/tree-sitter-javascript",
-    "sha": "f76aea6aa47322ea5c208c9c2e67f4a350d554f3",
-    "version": "0.25.0"
+    "sha": "44c892e0be055ac465d5eeddae6d3e194424e7de",
+    "version": "0.25.0",
+    "sha_note": "commit target of tag v0.25.0 (an earlier draft pinned the annotated tag object f76aea6aa473; submodule pointers are commits)"
   },
   "generate_cli": "0.25.10",
   "generate_cli_note": "same pin as treebank-rust and treebank-typescript: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
@@ -22,13 +23,23 @@
       "passed": 720,
       "failed": 0
     },
-    "oracle": "tools/js-oracle — V8 via node's vm (CJS wrapper / SourceTextModule, chosen by Node's own module rules), plus an @babel/parser leg with only the jsx plugin for JSX. Deliberately not the TypeScript parser: ts.createSourceFile reports no parse errors for `const x: number = 1`, which would make this grammar's correct rejection of TypeScript look like a grammar gap."
+    "oracle": "tools/js-oracle \u2014 V8 via node's vm (CJS wrapper / SourceTextModule, chosen by Node's own module rules), plus an @babel/parser leg with only the jsx plugin for JSX. Deliberately not the TypeScript parser: ts.createSourceFile reports no parse errors for `const x: number = 1`, which would make this grammar's correct rejection of TypeScript look like a grammar gap."
   },
   "patches": [
     {
       "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
       "title": "reserved words as exported names",
-      "file": "patches/0001-reserved-words-as-exported-names.patch",
+      "file": "patches/0002-reserved-words-as-exported-names.patch",
       "files": [
         "grammar.js",
         "test/corpus/statements.txt"
@@ -40,7 +51,7 @@
         "first_seen": {
           "package": "@babel/types",
           "version": "8.0.4",
-          "note": "lib/index.js — `export { _import as import }` in the generated re-export list; 1 file"
+          "note": "lib/index.js \u2014 `export { _import as import }` in the generated re-export list; 1 file"
         },
         "sweep_before": {
           "passed": 718,
@@ -53,9 +64,9 @@
       }
     },
     {
-      "id": 2,
+      "id": 3,
       "title": "automatic semicolon before a subscript or call that cannot continue an expression",
-      "file": "patches/0002-asi-before-subscript-and-call.patch",
+      "file": "patches/0003-asi-before-subscript-and-call.patch",
       "files": [
         "src/scanner.c",
         "test/corpus/semicolon_insertion.txt"
@@ -63,11 +74,11 @@
       "origin": "local; found by npm top-100 sweep",
       "evidence": {
         "repro": "let subnamespace\n[subnamespace, args] = f()",
-        "spec": "The scanner refused ASI before `[` and `(` unconditionally, because they usually continue an expression (`a\\n[0]` is `a[0]`). It now refuses only where an expression can actually be continued, which it already knows from valid_symbols[LOGICAL_OR] — the same signal it uses for comments. After a bare declarator, `return`, or a class field name no binary operator may follow either, and there the spec inserts the semicolon.",
+        "spec": "The scanner refused ASI before `[` and `(` unconditionally, because they usually continue an expression (`a\\n[0]` is `a[0]`). It now refuses only where an expression can actually be continued, which it already knows from valid_symbols[LOGICAL_OR] \u2014 the same signal it uses for comments. After a bare declarator, `return`, or a class field name no binary operator may follow either, and there the spec inserts the semicolon.",
         "first_seen": {
           "package": "argparse",
           "version": "3.0.0",
-          "note": "lib/argparse.js:1874 — `let subnamespace` then a destructuring assignment on the next line; 1 file"
+          "note": "lib/argparse.js:1874 \u2014 `let subnamespace` then a destructuring assignment on the next line; 1 file"
         },
         "also_fixes": "two silent misparses upstream produced without erroring: `return\\n[1]` parsed as returning the array rather than as a bare return, and `class C { x\\n[y] = 1 }` parsed the field name as a subscript",
         "sweep_before": {
