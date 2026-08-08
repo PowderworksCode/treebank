@@ -159,6 +159,59 @@ The last three are the classes a grammar fix would target, and each is a
 place where a careless fix would start accepting invalid C. The negative
 corpus guards all three deliberately.
 
+### How much a macro system would actually buy — measured
+
+Two independent ceilings, both sampled from this corpus. They are recorded
+here as input to whoever designs the preprocessor mechanism; nothing below is
+built in this crate.
+
+**Grammar side.** Random 299 of the 5,629 known-valid gap files, classified by
+what is at the real first-error line (from `tree-sitter parse`):
+
+| share | at the error site |
+|------:|-------------------|
+| 62.9% | a macro `#define`d **in the same package**, on the error line |
+|  7.4% | same, on the line above |
+| 20.7% | a preprocessor conditional — `#ifdef`/`__cplusplus` |
+|  9.0% | no in-package macro nearby |
+
+So **~70% of the gap queue is macro-shaped and the definitions are already in
+the corpus** — same package, no external knowledge needed. But the next 21% is
+*not* macro expansion: it is the `extern "C"` brace asymmetry, which needs
+**configuration selection** (parse one branch, as Roslyn does for C#), a
+different mechanism. Together, 91% of C's gap queue is preprocessor-shaped in
+one form or the other.
+
+Worth noting for whoever picks this up: the three fixable classes do not
+strictly *need* macro definitions in order to parse. A grammar rule for
+`IDENT(args) compound_statement` would parse `list_for_each(…) { … }` with no
+macro knowledge at all. What the macro knowledge buys is the right to do that
+without over-accepting — which is precisely what `test/negative/` exists to
+police.
+
+**Oracle side.** Random 300 of the 12,006 indeterminate files, classified by
+first unresolved `#include`:
+
+| share | what is missing |
+|------:|-----------------|
+| 28.0% | a header that **is in the package**, at a path we do not search |
+| 26.3% | a **generated** config header (`config.h`, `include/config.h`) |
+| 24.3% | **another package's** header (`glib-object.h`, …) |
+| 21.3% | nothing — indeterminate for non-include reasons |
+
+The 28% has a partial fix that needs no new machinery and was tested:
+`-idirafter` with every package header dir, which cannot shadow system headers
+because it is searched *after* them. On 60 glibc indeterminate files it cuts
+unresolved includes from **339 to 28 (-92%)** — and changes **no verdicts at
+all**, because those files stay indeterminate on their remaining
+parse-plus-semantic mix. Resolution and adjudication are not the same lever.
+It is not landed for that reason; it would pair with config-header stubs,
+which the 26% row makes the obvious first move.
+
+The 24.3% is tractable *for this corpus specifically*: Debian declares each
+source package's `Build-Depends`, and the Sources index already parsed by
+`rank()` carries that field.
+
 ## Negative corpus
 
 `test/negative/` holds nine files: every one is **rejected by the oracle**
