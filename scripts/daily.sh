@@ -106,7 +106,12 @@ cargo build --release --quiet 9>&- || { echo "daily: cargo build failed"; exit 1
 overall=0
 for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
   lang=$(jq -r .grammar "$ledger")
-  grammar="$ROOT/crates/treebank-$lang"
+  # The directory, not "treebank-$lang": the two disagree (grammar "c-sharp"
+  # lives in crates/treebank-csharp), and deriving the path from the language
+  # name sends materialize.sh at a directory that does not exist.
+  grammar=$(dirname "$ledger")
+  reldir=${grammar#"$ROOT"/}          # crates/treebank-csharp
+  crate=$(basename "$grammar")        # treebank-csharp
   report="$ROOT/corpus/$lang/reports/sweep.json"
   echo "--- $lang"
 
@@ -185,12 +190,12 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
   timeout --signal=INT --kill-after=60 "$AGENT_TIMEOUT" \
     "$CLAUDE_BIN" -p "Read corpus/$lang/reports/REPORT.md and fix ALL of its gap
 clusters, one at a time, exactly per the report's instructions. Edit grammar
-sources in crates/treebank-$lang/build/ (the materialized tree — see
+sources in $reldir/build/ (the materialized tree — see
 GRAMMARS.md). After each fix, run ../../scripts/check.sh from
-crates/treebank-$lang until it prints CHECK OK. Capture each fix as patches/NNNN-*.patch with a
+$reldir until it prints CHECK OK. Capture each fix as patches/NNNN-*.patch with a
 ledger.json entry and a LOCAL-PATCHES.md note, per GRAMMARS.md. Update the
 ledger's corpus.sweep_patched numbers when done, and finish by running
-scripts/verify.sh crates/treebank-$lang from the repo root — it must pass.
+scripts/verify.sh $reldir from the repo root — it must pass.
 Do NOT git commit anything. If a cluster is genuinely beyond a minimal
 grammar change, skip it and say so in your final message." \
     --model "$CLAUDE_MODEL" --max-turns 200 \
@@ -217,7 +222,7 @@ grammar change, skip it and say so in your final message." \
 
   # Open a PR for whatever the agent changed in this grammar (treebank only,
   # per standing authorization). Merging stays human.
-  if [ -z "$(git status --porcelain "crates/treebank-$lang")" ]; then
+  if [ -z "$(git status --porcelain "$reldir")" ]; then
     echo "daily: $lang agent made no grammar changes — no PR"
     continue
   fi
@@ -231,20 +236,20 @@ grammar change, skip it and say so in your final message." \
     continue
   fi
   git checkout -qb "$branch" || { echo "daily: $lang could not create $branch"; overall=1; continue; }
-  git add "crates/treebank-$lang"
-  git commit -qm "treebank-$lang: fix grammar gaps from daily sweep
+  git add "$reldir"
+  git commit -qm "$crate: fix grammar gaps from daily sweep
 
 Daily sweep found $gaps gap file(s); after fixes: $passed_now passed / $failed_now failed.
-Patches and evidence are in crates/treebank-$lang/patches/ and ledger.json.
+Patches and evidence are in $reldir/patches/ and ledger.json.
 
 Co-Authored-By: Claude Fable 5 <noreply@anthropic.com>"
   if git push -qu origin "$branch" && gh pr create --base main --head "$branch" \
-      --title "treebank-$lang: grammar fixes from daily sweep ($(date +%Y-%m-%d))" \
+      --title "$crate: grammar fixes from daily sweep ($(date +%Y-%m-%d))" \
       --body "Automated fix run from \`scripts/daily.sh\`.
 
 - Gap files found by today's sweep: **$gaps**
 - After fixes: **$passed_now passed / $failed_now failed**$( [ "$left" -gt 0 ] && echo " ($left gap file(s) skipped — see REPORT.md)" )
-- Patch files + ledger entries: \`crates/treebank-$lang/patches/\`, \`ledger.json\`, \`LOCAL-PATCHES.md\`
+- Patch files + ledger entries: \`$reldir/patches/\`, \`ledger.json\`, \`LOCAL-PATCHES.md\`
 - Agent log: \`corpus/$lang/reports/agent.log\` (local)
 - CI re-proves the reconstruction invariant, corpus tests, and negative corpus.
 
