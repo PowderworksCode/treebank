@@ -13,3 +13,6 @@
 [submodule "crates/treebank-csharp/upstream"]
 	path = crates/treebank-csharp/upstream
 	url = https://github.com/tree-sitter/tree-sitter-c-sharp
+[submodule "crates/treebank-c/upstream"]
+	path = crates/treebank-c/upstream
+	url = https://github.com/tree-sitter/tree-sitter-c

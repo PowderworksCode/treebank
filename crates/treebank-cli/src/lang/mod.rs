@@ -3,6 +3,7 @@
 //! corpus, how files route to grammars, and what the reference parser is —
 //! lives behind this trait; rank/fetch/sweep/oracle are generic drivers.
 
+mod c;
 mod csharp;
 mod java;
 mod javascript;
@@ -35,6 +36,15 @@ pub trait Lang: Sync {
     /// manifest; `Some(None)` means the language's default grammar.
     fn classify(&self, rel: &Path) -> Option<Option<String>>;
 
+    /// Second-stage filter, with the file's bytes in hand, for languages
+    /// where the extension does not settle which language a file even is.
+    /// C uses it to drop C++ headers: `.h` belongs to both languages and
+    /// only the content tells them apart. Default: keep what `classify` took.
+    fn admit(&self, rel: &Path, content: &[u8]) -> bool {
+        let _ = (rel, content);
+        true
+    }
+
     /// Grammar dirs to load, in routing-index order, relative to the
     /// grammar repo root. Single-grammar languages return `["."]`.
     fn grammar_dirs(&self) -> &'static [&'static str];
@@ -57,11 +67,13 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
     static CSHARP: csharp::CSharp = csharp::CSharp;
+    static C: c::C = c::C;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
         LangName::Javascript => &JAVASCRIPT,
         LangName::Java => &JAVA,
         LangName::Csharp => &CSHARP,
+        LangName::C => &C,
     }
 }
