@@ -1,0 +1,59 @@
+diff --git a/grammar.js b/grammar.js
+index f08d840..b706a0d 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1989,6 +1989,12 @@ export default grammar({
+     _reserved_identifier: _ => choice(
+       'alias',
+       'ascending',
++      // `async` is a contextual keyword: it modifies a method or lambda but
++      // is a legal identifier everywhere else — `base.Run(async)`,
++      // `Run(async: true)`, `resultCode = async`. Lower precedence than the
++      // modifier and lambda readings, so `async` only falls back to being an
++      // identifier where it cannot be a modifier.
++      prec(-2, 'async'),
+       'by',
+       'descending',
+       'equals',
+diff --git a/test/corpus/contextual-keywords.txt b/test/corpus/contextual-keywords.txt
+index d0cc02b..73d55c2 100644
+--- a/test/corpus/contextual-keywords.txt
++++ b/test/corpus/contextual-keywords.txt
+@@ -587,3 +587,37 @@ class nameof { }
+   (class_declaration
+     name: (identifier)
+     body: (declaration_list)))
++
++================================================================================
++Async keyword can be a variable
++================================================================================
++
++Run(async);
++Run(async: true);
++var resultCode = async;
++
++--------------------------------------------------------------------------------
++
++(compilation_unit
++  (global_statement
++    (expression_statement
++      (invocation_expression
++        (identifier)
++        (argument_list
++          (argument
++            (identifier))))))
++  (global_statement
++    (expression_statement
++      (invocation_expression
++        (identifier)
++        (argument_list
++          (argument
++            (identifier)
++            (boolean_literal))))))
++  (global_statement
++    (local_declaration_statement
++      (variable_declaration
++        (implicit_type)
++        (variable_declarator
++          (identifier)
++          (identifier))))))

@@ -14,6 +14,7 @@ grammars:
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX
   included), 2 grammar patches
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
+- `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
 
 ```sh
 git clone --recurse-submodules <repo>   # or: git submodule update --init
@@ -21,12 +22,14 @@ scripts/materialize.sh crates/treebank-rust        # -> build/ (sweeps/tests use
 scripts/materialize.sh crates/treebank-typescript
 scripts/materialize.sh crates/treebank-javascript
 scripts/materialize.sh crates/treebank-java
+scripts/materialize.sh crates/treebank-csharp
 ```
 
 ## The loop
 
-Every corpus command takes `--lang <rust|typescript|javascript|java>`
-(default `rust`) and keeps its data under `corpus/<lang>/`.
+Every corpus command takes `--lang
+<rust|typescript|javascript|java|csharp>` (default `rust`) and keeps its
+data under `corpus/<lang>/`.
 
 ```sh
 cargo build --release
@@ -36,6 +39,9 @@ alias tb=./target/release/treebank
 #   rust:       needs the extracted crates.io db dump CSVs in corpus/rust/db/
 #   typescript: pulls the npm-high-impact download ranking, resolves versions
 #               from the npm registry; .tsx routes to the tsx grammar
+#   csharp:     ranks NuGet by downloads, then follows each package's nuspec
+#               SourceLink metadata to the git commit it was built from —
+#               NuGet ships assemblies, not source (see the ledger)
 tb rank  --lang rust --k 1000
 tb fetch --lang rust --limit 100
 
@@ -49,6 +55,7 @@ tb sweep --lang rust       --grammar crates/treebank-rust/build
 tb sweep --lang typescript --grammar crates/treebank-typescript/build
 tb sweep --lang javascript --grammar crates/treebank-javascript/build
 tb sweep --lang java       --grammar crates/treebank-java/build
+tb sweep --lang csharp     --grammar crates/treebank-csharp/build
 
 # Grammar-side verification (materialize + corpus tests + negative corpus).
 # One generic script, driven by each grammar's ledger.json; CI runs the same
@@ -107,6 +114,17 @@ cache and forces a full re-sweep.
 | npm top-100 (720 .js files) | treebank-javascript (2 patches) | **720** | **0** |
 | Maven top-89 (21,049 files) | upstream tree-sitter-java 0.23.5 | 20,993 | 56 |
 | Maven top-89 (21,049 files) | treebank-java (2 patches) | **21,049** | **0** |
+| NuGet top-100 sources (860,590 files, 50 repos) | upstream tree-sitter-c-sharp 0.23.5 | 849,118 | 11,472 |
+| NuGet top-100 sources (860,590 files, 50 repos) | treebank-csharp (1 patch) | **852,917** | **7,673** |
 
-Every remaining failure is oracle-confirmed valid code (zero corpus noise in
-all four ecosystems). The gap clusters are queued as jobs in `jobs/queue/`.
+Every remaining rust/typescript/javascript/java failure is oracle-confirmed
+valid code (zero corpus noise). The gap clusters are queued as jobs in
+`jobs/queue/`.
+
+C# is the exception and its numbers need reading with care. Of its 7,148
+oracle-valid failures, 4,617 parse cleanly once the file is reduced to the
+configuration Roslyn actually parsed — they fail only because Roslyn
+adjudicates the active `#if` branch while tree-sitter parses every branch
+into one tree. That class is inherent rather than fixable; see
+`crates/treebank-csharp/LOCAL-PATCHES.md`. The actionable queue is the other
+**2,531** files.
