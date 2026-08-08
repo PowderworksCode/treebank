@@ -18,12 +18,13 @@
 #   1. fetch  — re-resolve + download the corpus. npm resolves each package's
 #      latest version at fetch time, so new releases arrive daily; crates.io
 #      versions come from the rank list.
-#   2. sweep  — parse everything, adjudicate failures with the reference
-#      parser, write corpus/<lang>/reports/sweep.json + REPORT.md.
+#   2. materialize + sweep — rebuild build/ from the pinned upstream submodule
+#      plus patches/, then parse everything, adjudicate failures with the
+#      reference parser, write corpus/<lang>/reports/sweep.json + REPORT.md.
 #   3. agent  — only if the report shows grammar gaps: one claude session per
 #      language per day (bounded spend), pointed at REPORT.md. It fixes
-#      clusters, loops on scripts/check.sh, and captures patches + ledger
-#      entries per GRAMMARS.md. The agent never touches git.
+#      clusters in build/, loops on scripts/check.sh, and captures patches +
+#      ledger entries per GRAMMARS.md. The agent never touches git.
 #   4. re-sweep + verify — record what the agent actually achieved.
 #   5. PR — if verify passes and crates/treebank-<lang> changed, the script
 #      commits those changes on a fresh branch, pushes, and opens a PR
@@ -91,6 +92,14 @@ elif git pull --ff-only --quiet 2>/dev/null; then
 else
   echo "daily: git pull --ff-only did not apply (diverged, no upstream, or offline) — running against $(git rev-parse --short HEAD)"
 fi 9>&-
+
+# A pull that moves an `upstream` submodule pointer does not move the submodule
+# working tree, and materialize.sh refuses to run when the checked-out sha is
+# not the one ledger.json pins — so without this every grammar fails to
+# materialize the day after a submodule bump lands. --init also covers the
+# grammar added by someone else since this checkout was made.
+git submodule update --init --quiet 9>&- \
+  || echo "daily: git submodule update failed — grammars whose upstream moved will fail to materialize"
 
 cargo build --release --quiet 9>&- || { echo "daily: cargo build failed"; exit 1; }
 
