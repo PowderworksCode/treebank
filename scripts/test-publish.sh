@@ -71,6 +71,14 @@ fi
 export CARGO_REGISTRIES_LOCAL_INDEX="file://$REG_ROOT"
 export CARGO_REGISTRIES_LOCAL_TOKEN=rehearsal-token-not-a-credential
 
+# publish.sh creates annotated tags, which need a tagger identity. A fresh CI
+# runner has none, and this is a rehearsal, so supply a throwaway one via the
+# environment rather than writing to the checkout's git config.
+export GIT_COMMITTER_NAME="${GIT_COMMITTER_NAME:-treebank rehearsal}"
+export GIT_COMMITTER_EMAIL="${GIT_COMMITTER_EMAIL:-rehearsal@localhost}"
+export GIT_AUTHOR_NAME="$GIT_COMMITTER_NAME"
+export GIT_AUTHOR_EMAIL="$GIT_COMMITTER_EMAIL"
+
 echo
 echo "== 1/4 publish every grammar to it"
 "$ROOT/scripts/publish.sh" --execute --registry "$REG_NAME" --index "$REG_ROOT" \
