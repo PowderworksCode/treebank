@@ -9,7 +9,18 @@
 #
 # scripts/verify.sh implements this generically (via scripts/materialize.sh),
 # reading everything grammar-specific from the grammar's ledger.json, so CI
-# is just: build the treebank CLI, run the verify script per grammar.
+# is just: build the treebank CLI once, run the verify script per grammar.
+#
+# Two things are shaped by a hundred grammars rather than five, both measured
+# in ROADMAP.md:
+#
+#   - The CLI is built in its own job and downloaded as an artifact. It was
+#     built identically inside every matrix job, and verify.sh only needs the
+#     binary — no cargo, so the matrix jobs carry no Rust toolchain at all.
+#   - Checkout takes no submodules. materialize.sh initializes the single one
+#     it needs, so a job fetches one upstream grammar repo instead of all of
+#     them: 2.3 s and 13 MB per grammar, previously paid in every job, which
+#     at 100 grammars is ~4 minutes and ~1.3 GB of checkout per job.
 #
 # Which grammars, though, is decided per change rather than fixed: the `changes`
 # job runs scripts/changed-grammars.sh, and the verify matrix is built from its
@@ -50,12 +61,20 @@ on:
         description: Whether a core path changed, putting every grammar in scope.
         value: ${{ jobs.changes.outputs.core }}
 
+# One verification per ref; a later push supersedes an earlier one. Nothing
+# here is irreversible, so cancelling in flight is safe — publish-grammars.yml
+# deliberately sets the opposite policy for itself.
+concurrency:
+  group: verify-grammars-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Which grammars does this change actually concern? Verifying all five for a
   # one-line patch to one of them is four wasted jobs, and the rule for deciding
   # lives in scripts/changed-grammars.sh (with a self-test) rather than in YAML.
   changes:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       grammars: ${{ steps.pick.outputs.grammars }}
       core: ${{ steps.pick.outputs.core }}
@@ -83,26 +102,80 @@ jobs:
           echo "core=$(jq -r .core <<<"$out")" >> "$GITHUB_OUTPUT"
           echo "### $(jq -r .reason <<<"$out")" >> "$GITHUB_STEP_SUMMARY"
 
-  verify:
+  # Built once, not once per matrix job.
+  build-cli:
     needs: changes
-    # An empty matrix is a workflow error, not a no-op, so guard it.
     if: needs.changes.outputs.grammars != '[]'
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        grammar: ${{ fromJson(needs.changes.outputs.grammars) }}
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: false
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build --release --bin treebank
+      - uses: actions/upload-artifact@v4
+        with:
+          name: treebank-cli
+          path: target/release/treebank
+          retention-days: 1
+          if-no-files-found: error
+
+  verify:
+    needs: [changes, build-cli]
+    # An empty matrix is a workflow error, not a no-op, so guard it.
+    if: needs.changes.outputs.grammars != '[]'
+    runs-on: ubuntu-latest
+    # Measured spread of verify.sh across the current grammars is 2.5 s (java)
+    # to 50.8 s (typescript: two generate dirs plus npm ci) — 20x. This bounds
+    # a runaway generate rather than discriminating between grammars, since
+    # even the slowest is well under a minute. If one ever approaches this,
+    # give ledger.json a timeout field instead of raising it for everyone.
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      # The org's plan allows 20 concurrent jobs across every repository. An
+      # unbounded matrix would take all of them and queue the daily fix PRs
+      # and any publish behind itself.
+      max-parallel: 10
+      matrix:
+        grammar: ${{ fromJson(needs.changes.outputs.grammars) }}
+    steps:
+      # No submodules: materialize.sh initializes the single one it needs.
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      # The treebank CLI is only needed for the negative-corpus check.
-      - name: Build treebank CLI
-        run: cargo build --release
+      # No Rust toolchain: verify.sh runs the prebuilt binary, npx and jq.
+      - uses: actions/download-artifact@v4
+        with:
+          name: treebank-cli
+          path: target/release
+      - run: chmod +x target/release/treebank
       - name: Verify ${{ matrix.grammar }}
         run: scripts/verify.sh crates/${{ matrix.grammar }}
+
+  # A single status check that is green whether the matrix ran one job, a
+  # hundred, or none. A dynamic matrix cannot be named in branch protection,
+  # and a skipped required check blocks a PR — so require this instead.
+  verified:
+    needs: [changes, verify]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: |
+          set -euo pipefail
+          if [ "${{ needs.changes.result }}" != success ]; then
+            echo "the changes job failed"; exit 1
+          fi
+          if [ "${{ needs.changes.outputs.grammars }}" = '[]' ]; then
+            echo "no grammar concerned by this change — nothing to verify"; exit 0
+          fi
+          if [ "${{ needs.verify.result }}" != success ]; then
+            echo "at least one grammar failed verification"; exit 1
+          fi
+          echo "verified: ${{ needs.changes.outputs.grammars }}"
