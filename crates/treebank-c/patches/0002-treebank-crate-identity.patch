@@ -1,0 +1,74 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index c5a1769..c53848a 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -178,7 +178,13 @@ dependencies = [
+ ]
+ 
+ [[package]]
+-name = "tree-sitter-c"
++name = "tree-sitter-language"
++version = "0.1.5"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c4013970217383f67b18aef68f6fb2e8d409bc5755227092d32efb0422ba24b8"
++
++[[package]]
++name = "treebank-grammar-c"
+ version = "0.24.2"
+ dependencies = [
+  "cc",
+@@ -186,12 +192,6 @@ dependencies = [
+  "tree-sitter-language",
+ ]
+ 
+-[[package]]
+-name = "tree-sitter-language"
+-version = "0.1.5"
+-source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c4013970217383f67b18aef68f6fb2e8d409bc5755227092d32efb0422ba24b8"
+-
+ [[package]]
+ name = "unicode-ident"
+ version = "1.0.18"
+diff --git a/Cargo.toml b/Cargo.toml
+index ba3abe6..cdef356 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+-name = "tree-sitter-c"
+-description = "C grammar for tree-sitter"
++name = "treebank-grammar-c"
++description = "Patched redistribution of tree-sitter/tree-sitter-c: upstream at a pinned commit plus the treebank patch series. Not an upstream release."
+ version = "0.24.2"
+ authors = [
+   "Max Brunsfeld <maxbrunsfeld@gmail.com>",
+@@ -10,14 +10,26 @@ license = "MIT"
+ readme = "README.md"
+ keywords = ["incremental", "parsing", "tree-sitter", "c"]
+ categories = ["parsing", "text-editors"]
+-repository = "https://github.com/tree-sitter/tree-sitter-c"
++repository = "https://github.com/PowderworksCode/treebank"
++homepage = "https://treebank.dev"
+ edition = "2021"
+ autoexamples = false
+ 
+ build = "bindings/rust/build.rs"
+-include = ["/LICENSE", "bindings/rust/*", "grammar.js", "queries/*", "src/*", "tree-sitter.json"]
++include = [
++  "/LICENSE",
++  "LOCAL-PATCHES.md",
++  "bindings/rust/*",
++  "grammar.js",
++  "ledger.json",
++  "patches/*",
++  "queries/*",
++  "src/*",
++  "tree-sitter.json",
++]
+ 
+ [lib]
++name = "tree_sitter_c"
+ path = "bindings/rust/lib.rs"
+ 
+ [dependencies]

@@ -25,5 +25,10 @@
     "cases": [
       { "label": "csharp", "language": "tree_sitter_c_sharp::LANGUAGE", "fixture": "patched.cs", "expect": "Clean" }
     ]
+  },
+  { "grammar": "treebank-c", "dep": "tree-sitter-c", "crate": "treebank-grammar-c",
+    "cases": [
+      { "label": "c", "language": "tree_sitter_c::LANGUAGE", "fixture": "patched.c", "expect": "Clean" }
+    ]
   }
 ]

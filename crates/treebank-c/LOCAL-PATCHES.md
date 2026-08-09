@@ -266,6 +266,25 @@ Packaging only, no grammar code. Prepends the standard warning to upstream's
 this tree knows it is a patched redistribution and where to report problems.
 Applies first, per the contract in `GRAMMARS.md`.
 
-**No grammar patches yet.** The pilot sweep's gap clusters are recorded above
-and in `corpus/c/reports/REPORT.md`; none has been turned into a patch, so
-this grammar is currently upstream 0.24.2 plus a README notice.
+### 0002 — treebank crate identity
+
+Packaging only, no grammar code, and the last patch in the series per
+`GRAMMARS.md`. Upstream owns `tree-sitter-c` on crates.io, so the
+redistribution publishes as `treebank-grammar-c` with its own `repository`,
+`homepage` and `description`, and `include` grows to carry `ledger.json`,
+`LOCAL-PATCHES.md` and `patches/*` inside the published tarball so provenance
+travels with it.
+
+`[lib] name` is pinned to `tree_sitter_c`. Renaming the package would
+otherwise rename the lib to `treebank_grammar_c` and break every
+`tree_sitter_c::LANGUAGE` call site; pinning it keeps the crate a drop-in
+replacement. `tools/consumer-test` asserts exactly that against
+`fixtures/patched.c`.
+
+The published version is deliberately absent — `publish.sh` derives it from
+crates.io at publish time. See [PUBLISHING.md](../../PUBLISHING.md).
+
+**No grammar patches yet.** Both patches are `"kind": "packaging"`. The pilot
+sweep's gap clusters are recorded above and in `corpus/c/reports/REPORT.md`;
+none has been turned into a parser fix, so this grammar is currently upstream
+0.24.2 plus a README notice and a crate rename.
