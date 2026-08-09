@@ -31,3 +31,14 @@ define-grammar.js imports tree-sitter-javascript).
    like `declare`/`override`/`readonly`. `abstract class` and
    `abstract` members are unaffected. Found by the npm top-100 sweep in
    @babel/types 8.0.4 (2 files).
+
+4. **Treebank crate identity** (`0004`) — packaging, not a grammar change.
+   Same shape as rust's: publishes as `treebank-grammar-typescript` with our
+   `repository`/`homepage`/`description`, keeps `[lib] name =
+   tree_sitter_typescript` so the crate stays drop-in, and ships
+   `ledger.json`, `LOCAL-PATCHES.md` and `patches/*` inside the tarball. It
+   also fixes two defects that would otherwise ship: upstream's `include`
+   omits `LICENSE`, which would make this an unlicensed redistribution, and
+   the dev-dependency on `tree-sitter` 0.24 cannot load the ABI-15 parsers
+   the pinned CLI 0.25.10 generates, so the crate's own tests fail against
+   its own parser. See [PUBLISHING.md](../../PUBLISHING.md).

@@ -1,5 +1,5 @@
 
-Auto publish to cargo 
+Auto publish to cargo — done, see PUBLISHING.md (needs CARGO_REGISTRY_TOKEN secret)
 More languages
 More packages 
 Set up cron

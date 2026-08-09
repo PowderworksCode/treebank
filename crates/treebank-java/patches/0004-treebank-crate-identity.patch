@@ -1,0 +1,244 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 6ade222..1250f97 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -13,19 +13,72 @@ dependencies = [
+ 
+ [[package]]
+ name = "cc"
+-version = "1.2.5"
++version = "1.4.2"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "c31a0499c1dc64f458ad13872de75c0eb7e3fdb0e67964610c914b034fc5956e"
++checksum = "5d262e149917187838d5b42777c8253bcb64500067342904e7d429499a6f277e"
+ dependencies = [
++ "find-msvc-tools",
+  "shlex",
+ ]
+ 
++[[package]]
++name = "equivalent"
++version = "1.0.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "877a4ace8713b0bcf2a4e7eec82529c029f1d0619886d18145fea96c3ffe5c0f"
++
++[[package]]
++name = "find-msvc-tools"
++version = "0.1.10"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "26b73573e6edcd2af0cdf47bd6cb58f0b3839491263c314eaad1ccf24430e1de"
++
++[[package]]
++name = "hashbrown"
++version = "0.17.1"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
++
++[[package]]
++name = "indexmap"
++version = "2.14.0"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "d466e9454f08e4a911e14806c24e16fba1b4c121d1ea474396f396069cf949d9"
++dependencies = [
++ "equivalent",
++ "hashbrown",
++]
++
++[[package]]
++name = "itoa"
++version = "1.0.18"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "8f42a60cbdf9a97f5d2305f08a87dc4e09308d1276d28c869c684d7777685682"
++
+ [[package]]
+ name = "memchr"
+ version = "2.7.4"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "78ca9ab1a0babb1e7d5695e3530886289c18cf2f87ec19a575a0abdce112e3a3"
+ 
++[[package]]
++name = "proc-macro2"
++version = "1.0.107"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
++dependencies = [
++ "unicode-ident",
++]
++
++[[package]]
++name = "quote"
++version = "1.0.47"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "1fbf4db142a473a8d80c26bbf18454ed458bf8d26c8219c331daecfdbd079001"
++dependencies = [
++ "proc-macro2",
++]
++
+ [[package]]
+ name = "regex"
+ version = "1.11.1"
+@@ -55,11 +108,54 @@ version = "0.8.5"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "2b15c43186be67a4fd63bee50d0303afffcef381492ebe2c5d87f324e1b8815c"
+ 
++[[package]]
++name = "serde"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "4148590afebada386688f18773da617792bf2ef03ffc1e4cbd2b1d45b023e0ba"
++dependencies = [
++ "serde_core",
++]
++
++[[package]]
++name = "serde_core"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "67dca2c9c51e58a4791a4b1ed58308b39c64224d349a935ab5039aa360942a48"
++dependencies = [
++ "serde_derive",
++]
++
++[[package]]
++name = "serde_derive"
++version = "1.0.229"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e7a5d71263a5a7d47b41f6b3f06ba276f10cc18b0931f1799f710578e2309348"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "syn",
++]
++
++[[package]]
++name = "serde_json"
++version = "1.0.151"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "c841b55ecdae098c80dcae9cf767f6f8a0c2cdb3416bbef72181df4d0fe73f14"
++dependencies = [
++ "indexmap",
++ "itoa",
++ "memchr",
++ "serde",
++ "serde_core",
++ "zmij",
++]
++
+ [[package]]
+ name = "shlex"
+-version = "1.3.0"
++version = "2.0.1"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "0fda2ff0d084019ba4d7c6f371c95d8fd75ce3524c3cb8fb653a3023f6323e64"
++checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
+ 
+ [[package]]
+ name = "streaming-iterator"
+@@ -67,21 +163,39 @@ version = "0.1.9"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+ checksum = "2b2231b7c3057d5e4ad0156fb3dc807d900806020c5ffa3ee6ff2c8c76fb8520"
+ 
++[[package]]
++name = "syn"
++version = "3.0.3"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
++dependencies = [
++ "proc-macro2",
++ "quote",
++ "unicode-ident",
++]
++
+ [[package]]
+ name = "tree-sitter"
+-version = "0.24.4"
++version = "0.25.10"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "b67baf55e7e1b6806063b1e51041069c90afff16afcbbccd278d899f9d84bca4"
++checksum = "78f873475d258561b06f1c595d93308a7ed124d9977cb26b148c2084a4a3cc87"
+ dependencies = [
+  "cc",
+  "regex",
+  "regex-syntax",
++ "serde_json",
+  "streaming-iterator",
+  "tree-sitter-language",
+ ]
+ 
+ [[package]]
+-name = "tree-sitter-java"
++name = "tree-sitter-language"
++version = "0.1.2"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "e8ddffe35a0e5eeeadf13ff7350af564c6e73993a24db62caee1822b185c2600"
++
++[[package]]
++name = "treebank-grammar-java"
+ version = "0.23.5"
+ dependencies = [
+  "cc",
+@@ -90,7 +204,13 @@ dependencies = [
+ ]
+ 
+ [[package]]
+-name = "tree-sitter-language"
+-version = "0.1.2"
++name = "unicode-ident"
++version = "1.0.24"
+ source = "registry+https://github.com/rust-lang/crates.io-index"
+-checksum = "e8ddffe35a0e5eeeadf13ff7350af564c6e73993a24db62caee1822b185c2600"
++checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
++
++[[package]]
++name = "zmij"
++version = "1.0.23"
++source = "registry+https://github.com/rust-lang/crates.io-index"
++checksum = "29666d0abbfad1e3dc4dcf6144730dd3a3ab225bbbdac83319345b1b44ccfc1b"
+diff --git a/Cargo.toml b/Cargo.toml
+index 0127a31..9024316 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+-name = "tree-sitter-java"
+-description = "Java grammar for tree-sitter"
++name = "treebank-grammar-java"
++description = "Patched redistribution of tree-sitter/tree-sitter-java: upstream at a pinned commit plus the treebank patch series. Not an upstream release."
+ version = "0.23.5"
+ authors = [
+   "Ayman Nadeem <aymannadeem@github.com>",
+@@ -11,14 +11,26 @@ license = "MIT"
+ readme = "README.md"
+ keywords = ["incremental", "parsing", "tree-sitter", "java"]
+ categories = ["parsing", "text-editors"]
+-repository = "https://github.com/tree-sitter/tree-sitter-java"
++repository = "https://github.com/PowderworksCode/treebank"
++homepage = "https://treebank.dev"
+ edition = "2021"
+ autoexamples = false
+ 
+ build = "bindings/rust/build.rs"
+-include = ["bindings/rust/*", "grammar.js", "queries/*", "src/*", "tree-sitter.json"]
++include = [
++  "LICENSE",
++  "LOCAL-PATCHES.md",
++  "bindings/rust/*",
++  "grammar.js",
++  "ledger.json",
++  "patches/*",
++  "queries/*",
++  "src/*",
++  "tree-sitter.json",
++]
+ 
+ [lib]
++name = "tree_sitter_java"
+ path = "bindings/rust/lib.rs"
+ 
+ [dependencies]
+@@ -28,4 +40,4 @@ tree-sitter-language = "0.1"
+ cc = "1.1"
+ 
+ [dev-dependencies]
+-tree-sitter = "0.24"
++tree-sitter = "0.25"

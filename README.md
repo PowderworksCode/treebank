@@ -141,6 +141,38 @@ compiled parser sources), so a daily run only parses new or changed files —
 a no-change sweep is milliseconds. Any grammar change invalidates the whole
 cache and forces a full re-sweep.
 
+## Publishing
+
+Merging a grammar change publishes that grammar's crate to crates.io. What
+ships is the materialized `build/` tree, never the repo working copy. Upstream
+owns the `tree-sitter-*` names, so these publish under our own, with upstream's
+library name kept so they stay drop-in:
+
+```toml
+tree-sitter-rust = { package = "treebank-grammar-rust", version = "0.24.2-treebank.1" }
+```
+
+Versions are upstream's plus an incrementing suffix, derived at publish time
+from crates.io rather than stored here. Note that this is a semver
+*pre-release*, so consumers must name the exact version — that and everything
+else about the setup is in [PUBLISHING.md](PUBLISHING.md), including the one
+secret a human has to add before anything can publish.
+
+Materialization gates the upload: a grammar that does not come out of
+`submodule @ sha + patches + generate`, pass its corpus and still reject the
+negative corpus is never published.
+
+```sh
+scripts/publish.sh --dry-run     # materialize and package everything, upload nothing
+scripts/test-publish.sh          # full rehearsal against a throwaway local registry
+```
+
+`test-publish.sh` is the interesting one: it publishes every grammar to a real
+registry on localhost, then has a consumer crate resolve those crates and parse
+code upstream's grammars reject — so the tag, the re-run skip, the version
+increment and the drop-in rename are all tested without anything reaching
+crates.io. CI runs it on every change.
+
 ## Current status (2026-08-06, measured on Linux)
 
 Top-100 per ecosystem — what the daily job sweeps, and what the ledgers'

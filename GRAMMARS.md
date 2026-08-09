@@ -80,6 +80,20 @@ by [treebank](https://treebank.dev) — so anyone who encounters a
 materialized or published copy knows what they are looking at and where to
 report problems. It applies first and touches no grammar code.
 
+## The crate identity patch
+
+The *last* patch of every grammar is the other packaging patch, also marked
+`"kind": "packaging"` so neither is counted as a parser fix. Upstream owns the
+`tree-sitter-<lang>` names on crates.io, so publishing requires our own name,
+`repository`, `homepage` and `description` — and it extends `include` so
+`ledger.json`, `LOCAL-PATCHES.md` and `patches/` travel inside the published
+tarball. `[lib] name` is pinned to upstream's, so the crates stay drop-in
+replacements.
+
+The published version is deliberately *not* in the tree; it is derived from
+crates.io at publish time, so nothing here can drift from what is published.
+See [PUBLISHING.md](PUBLISHING.md).
+
 ## Negative corpus
 
 `test/negative/` holds files the reference parser rejects; the grammar must

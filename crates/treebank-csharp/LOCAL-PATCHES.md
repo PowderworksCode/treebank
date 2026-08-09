@@ -122,3 +122,12 @@ language's syntax" is the cheapest way for a C# grammar to drift.
 One candidate was tried and left out: `public private void M()`, which
 Roslyn's *parser* accepts (duplicate accessibility is a later error), so it
 is not a syntactic case at all.
+
+3. **Treebank crate identity** (`0003`) — packaging, not a grammar
+   change. Upstream owns `tree-sitter-c-sharp` on crates.io, so this publishes as
+   `treebank-grammar-csharp` with our `repository`, `homepage` and
+   `description`. `[lib] name` stays `tree_sitter_c_sharp` so the crate is a drop-in.
+   `include` gains `LICENSE`, `ledger.json`, `LOCAL-PATCHES.md` and
+   `patches/*` so provenance travels inside the published tarball. The
+   published version string is deliberately *not* here — it is derived from
+   crates.io at publish time. See [PUBLISHING.md](../../PUBLISHING.md).

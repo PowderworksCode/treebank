@@ -23,6 +23,10 @@ on:
       - 'crates/**'
       - '.gitmodules'
       - '.github/workflows/verify-grammars.yml'
+  # Callable so publish-grammars.yml can gate on this exact job rather than
+  # keeping a second copy of it. Purely additive: the triggers above are
+  # unchanged.
+  workflow_call:
 
 jobs:
   verify:

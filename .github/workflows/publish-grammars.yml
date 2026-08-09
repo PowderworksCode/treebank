@@ -1,0 +1,193 @@
+# Publish changed grammar crates to crates.io.
+#
+# Publishing is irreversible: a version on crates.io can be yanked but never
+# deleted, and a name/version pair can never be reused. The shape of this
+# workflow follows from that.
+#
+#   - Materialization gates the upload. The `verify` job below *is*
+#     verify-grammars.yml, called rather than copied, so there is one
+#     definition of "this grammar is what it claims to be". scripts/publish.sh
+#     then runs scripts/verify.sh again per crate in the publish job — belt and
+#     braces on purpose, since the verify matrix is enumerated by hand and a
+#     grammar missing from it would otherwise sail through unchecked.
+#   - What ships is the materialized tree (<grammar>/build/), never the repo
+#     working copy, so the crate is the output of the same script CI verified.
+#   - Every PR runs `plan` (a full dry run) and `rehearse` (a real publish to a
+#     throwaway registry on localhost, followed by a consumer resolving those
+#     crates and parsing with them). Between them the publish path is exercised
+#     end to end before it can ever publish. `publish` cannot run on a PR.
+#   - Only crates that actually changed are published; a re-run is a no-op.
+#
+# Setup required before this can publish (see PUBLISHING.md):
+#   Settings > Secrets and variables > Actions > New repository secret
+#     CARGO_REGISTRY_TOKEN — a crates.io API token, publish-new + publish-update,
+#     scoped to treebank-grammar-*
+# Until that secret exists `plan` still passes; only `publish` needs it.
+name: publish-grammars
+
+on:
+  push:
+    branches: [main]
+    paths:
+      # treebank-cli also matches crates/treebank-*, so this is deliberately
+      # broad; publish.sh treats a crates/ subdir as a grammar only if it has a
+      # ledger.json, which treebank-cli does not. .gitmodules and the submodule
+      # pointers under crates/ are how a grammar version bump shows up at all.
+      - 'crates/**'
+      - '.gitmodules'
+      - '.github/workflows/publish-grammars.yml'
+      - 'scripts/publish.sh'
+      - 'scripts/materialize.sh'
+      - 'scripts/test-publish.sh'
+      - 'tools/consumer-test/**'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - '.gitmodules'
+      - '.github/workflows/publish-grammars.yml'
+      - 'scripts/publish.sh'
+      - 'scripts/materialize.sh'
+      - 'scripts/test-publish.sh'
+      - 'tools/consumer-test/**'
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Actually publish to crates.io (irreversible). Unchecked = dry run only.'
+        type: boolean
+        default: false
+      grammar:
+        description: 'Single grammar dir, e.g. crates/treebank-rust. Blank = all changed.'
+        type: string
+        default: ''
+      force:
+        description: 'Publish even if unchanged since the last publish tag.'
+        type: boolean
+        default: false
+
+# Never run two publishes at once, and never cancel one in flight: a cancelled
+# `cargo publish` can leave a version uploaded but untagged.
+concurrency:
+  group: publish-grammars-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify-grammars.yml
+
+  # Dry run. Runs everywhere, including PRs, and uploads nothing — this is what
+  # makes the publish path reviewable before it is live. No environment and no
+  # secrets, so it can never block on an approval or touch a credential.
+  plan:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Grammar sources are submodules; without them nothing materializes.
+          submodules: true
+          fetch-depth: 0
+          filter: tree:0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Dry run
+        env:
+          IN_GRAMMAR: ${{ inputs.grammar }}
+        run: |
+          set -euo pipefail
+          # --force so the dry run always packages: without it an unchanged
+          # crate would be skipped and this job would prove nothing.
+          # --skip-verify here only: the `verify` job above already gated this
+          # commit, so this job materializes without re-running the corpus. It
+          # cannot publish. The real publish job below re-verifies for itself.
+          args=(--dry-run --force --skip-verify)
+          if [ -n "${IN_GRAMMAR:-}" ]; then args+=("$IN_GRAMMAR"); fi
+          scripts/publish.sh "${args[@]}"
+
+  # Full rehearsal against a throwaway registry on localhost: publishes every
+  # grammar for real, then has a consumer crate resolve those crates and parse
+  # code upstream's grammars reject. This is the only job that exercises what
+  # happens *after* a successful upload — the tag, the skip on a re-run, and the
+  # suffix increment — none of which can be tested against crates.io without
+  # publishing something permanent. Uploads nothing off this runner.
+  rehearse:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          filter: tree:0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache cargo-http-registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-http-registry
+          key: cargo-http-registry-0.1.8-${{ runner.os }}
+      - name: Rehearse publish, consume, skip and increment
+        run: |
+          set -euo pipefail
+          # --skip-verify: the `verify` job above already ran the corpus for this
+          # commit. The rehearsal still materializes each grammar itself.
+          scripts/test-publish.sh --skip-verify
+
+  publish:
+    needs: [plan, rehearse]
+    # Never on a pull_request. A merge to main publishes — that is the point of
+    # the workflow — and a manual run has to tick the box, so dispatching to
+    # inspect the plan cannot upload by accident.
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.execute)
+    runs-on: ubuntu-latest
+    # Gives you one place to require a human approval before any real publish:
+    # Settings > Environments > crates-io > Required reviewers. Recommended,
+    # given that publishing cannot be undone.
+    environment: crates-io
+    permissions:
+      contents: write   # to push the <crate>-v<version> tags
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          # Full history and tags: publish.sh decides what changed by diffing
+          # each crate against the tag of its own last publish.
+          fetch-depth: 0
+          filter: tree:0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Needed by verify.sh for the negative-corpus check.
+      - name: Build treebank CLI
+        run: cargo build --release
+
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          # Inputs arrive as env vars rather than being interpolated into the
+          # script body, so a value containing shell metacharacters stays data.
+          IN_FORCE: ${{ inputs.force }}
+          IN_GRAMMAR: ${{ inputs.grammar }}
+        run: |
+          set -euo pipefail
+          args=(--execute)
+          # Written as `if` rather than `test && ...`: under `set -e` a false
+          # test as a bare statement would abort the step.
+          if [ "${IN_FORCE:-false}" = true ]; then args+=(--force); fi
+          if [ -n "${IN_GRAMMAR:-}" ]; then args+=("$IN_GRAMMAR"); fi
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          echo "scripts/publish.sh ${args[*]}"
+          scripts/publish.sh "${args[@]}"
