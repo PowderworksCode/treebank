@@ -110,26 +110,36 @@ mesa's `util/` for `<util/…>` — and those copies only stand up inside their
 own build. `-iquote` applies to the quoted form only, which is how
 package-internal headers are actually included.
 
+Final flags use **all three search paths**, each for a distinct job:
+`-iquote` over every header-bearing dir (the package's own quoted includes),
+`-I` over the package's *public* dirs only (its own API, angle-bracketed),
+and `-idirafter` over every header-bearing dir. The last one exists because
+packages angle-bracket their own internals too — glibc's `#include
+<sigsetops.h>` — and `-idirafter` is searched *after* the system directories,
+so it supplies only headers the system lacks and cannot shadow `<string.h>`.
+On 1,500 failing files, `-idirafter` is worth **372 → 453 valid** and
+**1117 → 1010 indeterminate**.
+
 ## Pilot sweep — measured
 
 20 packages, 39,928 files, tree-sitter-c 0.24.2 unpatched, no grammar patches:
 
 ```
 21,991 passed (55.1%) / 17,937 failed (44.9%), 924 clusters
-  of the failures:  5,629 gap  |  302 noise  |  12,006 indeterminate
+  of the failures:  5,502 gap  |  452 noise  |  11,983 indeterminate
 ```
 
-556 of the 924 clusters contain at least one known-valid file. The six
+538 of the 924 clusters contain at least one known-valid file. The six
 largest gap classes, and what they actually are:
 
 | valid | files | signature | class |
 |------:|------:|-----------|-------|
-| 926 | 3455 | `expression_statement > MISSING ;` | statement macro then a block: `list_for_each(li, &q->ifaces) { … }` |
-| 763 |  912 | `preproc_ifdef > MISSING #endif` | `extern "C"` brace asymmetry — preprocessor-inherent, not a grammar bug |
-| 456 | 1383 | `function_definition > ERROR(identifier)` | macro in declaration position: `_INLINE_ void __list_add(…)` |
-| 449 | 1557 | `declaration > MISSING ;` | same family |
-| 290 | 1406 | `declaration > ERROR(identifier)` | `THREAD_LOCAL int adjustment = 0;` |
-| 168 | 1782 | `argument_list > ERROR(identifier)` | type as macro argument: `list_entry(a, struct file_element, file_list)` |
+| 950 | 3455 | `expression_statement > MISSING ;` | statement macro then a block: `list_for_each(li, &q->ifaces) { … }` |
+| 765 |  912 | `preproc_ifdef > MISSING #endif` | `extern "C"` brace asymmetry — preprocessor-inherent, not a grammar bug |
+| 422 | 1383 | `function_definition > ERROR(identifier)` | macro in declaration position: `_INLINE_ void __list_add(…)` |
+| 413 | 1557 | `declaration > MISSING ;` | same family |
+| 279 | 1406 | `declaration > ERROR(identifier)` | `THREAD_LOCAL int adjustment = 0;` |
+| 164 | 1782 | `argument_list > ERROR(identifier)` | type as macro argument: `list_entry(a, struct file_element, file_list)` |
 
 Read `gap_files` as a floor: see [ORACLE.md](ORACLE.md#measured-result-on-the-20-package-pilot).
 
@@ -199,14 +209,29 @@ first unresolved `#include`:
 | 24.3% | **another package's** header (`glib-object.h`, …) |
 | 21.3% | nothing — indeterminate for non-include reasons |
 
-The 28% has a partial fix that needs no new machinery and was tested:
-`-idirafter` with every package header dir, which cannot shadow system headers
-because it is searched *after* them. On 60 glibc indeterminate files it cuts
-unresolved includes from **339 to 28 (-92%)** — and changes **no verdicts at
-all**, because those files stay indeterminate on their remaining
-parse-plus-semantic mix. Resolution and adjudication are not the same lever.
-It is not landed for that reason; it would pair with config-header stubs,
-which the 26% row makes the obvious first move.
+The 28% is fixed, by `-idirafter` over every package header dir — see the
+include-flags section above. It is now part of the standard flags.
+
+**A correction belongs here, because it changed a conclusion.** When first
+tested, `-idirafter` appeared to cut unresolved includes on glibc by 92%
+(339 → 28) while flipping *no verdicts at all*, and it was written up as
+evidence that "resolution and adjudication are not the same lever". That was
+an artifact of a bug in `c-oracle`: a fixed 128-flag cap per request silently
+dropped everything past field 128, and with glibc at 498 header-bearing dirs
+the `-idirafter` flags were precisely the ones discarded. The direct-clang
+test bypassed the oracle, which is why the two disagreed. With the cap
+removed, `-idirafter` is worth +81 valid files per 1,500 sampled.
+
+The lesson still worth keeping is the one that caught it: when two
+measurements of the same thing disagree, the disagreement is the finding.
+
+The 26% (generated config headers) remains open and is *not* addressed.
+Stubbing an empty `config.h` would resolve the include, but the macros it
+would have defined stay undefined, so a file failing on one of them would
+flip from "cannot say" to a confident **invalid** — the oracle inventing a
+syntax verdict about valid C. If it is ever done, it needs a guard that
+forbids `invalid` for any file whose includes were stubbed, so stubs can only
+promote indeterminate → valid, never indeterminate → invalid.
 
 The 24.3% is tractable *for this corpus specifically*: Debian declares each
 source package's `Build-Depends`, and the Sources index already parsed by

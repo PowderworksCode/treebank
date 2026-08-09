@@ -21,8 +21,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define MAX_FIELDS 128
-
 /* clang's category names, from its own diagnostic tables. */
 #define CAT_PARSE "Parse Issue"
 #define CAT_SEMA  "Semantic Issue"
@@ -84,18 +82,36 @@ int main(void) {
             line[--len] = '\0';
         if (len == 0) continue;
 
-        /* split on tabs: field 0 is the path, the rest are clang args */
-        char *fields[MAX_FIELDS] = {0};
+        /* Split on tabs: field 0 is the path, the rest are clang args.
+           Sized from the line, never fixed: a big package supplies one
+           include flag per header-bearing directory and glibc alone has
+           498 of them. An earlier fixed cap of 128 silently dropped the
+           rest, which quietly under-resolved the three largest packages
+           in the corpus. */
+        size_t ntabs = 0;
+        for (const char *q = line; *q; q++)
+            if (*q == '\t') ntabs++;
+        char **fields = calloc(ntabs + 2, sizeof *fields);
+        const char **argv = calloc(ntabs + 2, sizeof *argv);
+        if (!fields || !argv) {
+            fprintf(stderr, "c-oracle: out of memory\n");
+            free(fields);
+            free((void *)argv);
+            return 1;
+        }
         int nfields = 0;
-        for (char *p = line; p && nfields < MAX_FIELDS;) {
+        for (char *p = line; p;) {
             char *tab = strchr(p, '\t');
             if (tab) *tab = '\0';
             fields[nfields++] = p;
             p = tab ? tab + 1 : NULL;
         }
-        if (!fields[0] || !*fields[0]) continue;
+        if (!fields[0] || !*fields[0]) {
+            free(fields);
+            free((void *)argv);
+            continue;
+        }
         const char *path = fields[0];
-        const char *argv[MAX_FIELDS];
         int argc = 0;
         for (int i = 1; i < nfields; i++)
             if (*fields[i]) argv[argc++] = fields[i];
@@ -110,6 +126,8 @@ int main(void) {
             printf(",\"verdict\":\"error\",\"detail\":\"libclang rc=%d\"}\n", rc);
             fflush(stdout);
             if (tu) clang_disposeTranslationUnit(tu);
+            free(fields);
+            free((void *)argv);
             continue;
         }
 
@@ -173,6 +191,8 @@ int main(void) {
         }
         fputs("}\n", stdout);
         fflush(stdout);
+        free(fields);
+        free((void *)argv);
     }
     free(line);
     clang_disposeIndex(index);

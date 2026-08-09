@@ -294,11 +294,21 @@ fn package_includes(srcroot: &Path, pkgdir: &str) -> std::sync::Arc<Vec<String>>
 ///
 /// Measured on a random 1,500 of the 17,868 failing files:
 ///
-/// | include flags                   | valid | invalid | indeterminate |
-/// |---------------------------------|-------|---------|---------------|
-/// | conventional dirs, `-I`         |   389 |      13 |          1098 |
-/// | every header dir, `-I`          |   346 |      14 |          1140 |
-/// | every header dir, `-iquote`     |   483 |      20 |           997 |
+/// | include flags                          | valid | invalid | indet. |
+/// |----------------------------------------|-------|---------|--------|
+/// | conventional dirs, `-I`                |   389 |      13 |   1098 |
+/// | every header dir, `-I`                 |   346 |      14 |   1140 |
+/// | every header dir, `-iquote`            |   483 |      20 |    997 |
+///
+/// Those three rows were measured while `c-oracle` still had a fixed cap on
+/// the number of flags per request, which silently truncated the include
+/// list for the three largest packages (glibc alone has 498 header-bearing
+/// dirs). With the cap removed, on the same sample:
+///
+/// | include flags                          | valid | invalid | indet. |
+/// |----------------------------------------|-------|---------|--------|
+/// | `-iquote` + conventional `-I`          |   372 |      11 |   1117 |
+/// | the same + `-idirafter` (what we do)   |   453 |      37 |   1010 |
 ///
 /// **No build system is run** — no `./configure`, no `cmake` — so a generated
 /// `config.h` is simply absent and its absence shows up as an indeterminate
@@ -322,6 +332,15 @@ fn include_dirs(srcroot: &Path, rel: &str) -> Vec<String> {
         if d.is_dir() {
             flags.push(format!("-I{}", d.display()));
         }
+    }
+    // Packages also include their own *internal* headers with angle
+    // brackets — glibc's `#include <sigsetops.h>`, which `-iquote` will not
+    // answer. `-idirafter` is searched AFTER the system directories, so it
+    // supplies only headers the system does not have: `<string.h>` still
+    // resolves to the real one, `<sigsetops.h>` to glibc's sysdeps copy.
+    // This is the flag that makes the wide list safe; plain `-I` is not.
+    for d in package_includes(srcroot, pkgdir).iter() {
+        flags.push(format!("-idirafter{d}"));
     }
     flags
 }
