@@ -17,7 +17,7 @@
 # Env overrides (defaults work in the repo checkout):
 #   TREEBANK_BIN, MANIFEST, PASS_BEFORE, JOB_FILE (optional cluster file)
 set -uo pipefail
-cd "${1:-.}"
+cd "${1:-.}" || { echo "agent-check: cannot cd to ${1:-.}"; exit 2; }
 [ -f ledger.json ] || { echo "agent-check: no ledger.json in $PWD"; exit 2; }
 ROOT="$PWD"
 [ -d build ] || { echo "agent-check: no build/ — run scripts/materialize.sh $PWD first"; exit 2; }
