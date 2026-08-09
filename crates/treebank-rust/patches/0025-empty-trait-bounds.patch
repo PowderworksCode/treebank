@@ -1,0 +1,65 @@
+diff --git a/grammar.js b/grammar.js
+index 7cdfa17..89550ea 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -115,6 +115,9 @@ module.exports = grammar({
+     [$.visibility_modifier],
+     [$.visibility_modifier, $.scoped_identifier, $.scoped_type_identifier],
+     [$.foreign_mod_item, $.function_modifiers],
++    // An empty bound list (`where C: ,`) makes the end of trait_bounds
++    // ambiguous with the start of a lifetime bound; GLR resolves it.
++    [$.trait_bounds],
+   ],
+ 
+   word: $ => $.identifier,
+@@ -579,11 +582,13 @@ module.exports = grammar({
+ 
+     trait_bounds: $ => seq(
+       ':',
+-      sepBy1('+', choice(
++      // A bound list may be empty (`where C: ,`) and may carry a trailing
++      // `+` (`trait N: ops::ShrAssign<i32> + {}`); rustc accepts both.
++      optional(sepBy1('+', choice(
+         $._type,
+         $.lifetime,
+         $.higher_ranked_trait_bound,
+-      )),
++      ))),
+     ),
+ 
+     higher_ranked_trait_bound: $ => seq(
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index 53a5a4a..a2c1530 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -2796,3 +2796,30 @@ where
+                   (token_tree
+                     (identifier)))))))))
+     (block)))
++
++================================================================================
++Empty trait bounds
++================================================================================
++
++impl<C> Decoder<C>
++where
++    C: ,
++{
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (impl_item
++    (type_parameters
++      (type_parameter
++        (type_identifier)))
++    (generic_type
++      (type_identifier)
++      (type_arguments
++        (type_identifier)))
++    (where_clause
++      (where_predicate
++        (type_identifier)
++        (trait_bounds)))
++    (declaration_list)))
