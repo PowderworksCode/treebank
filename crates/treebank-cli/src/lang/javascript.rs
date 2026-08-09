@@ -4,13 +4,14 @@ use std::path::Path;
 use anyhow::Result;
 
 use super::{node_oracle, npm, Lang};
+use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
 pub struct JavaScript;
 
 impl Lang for JavaScript {
-    fn name(&self) -> &'static str {
-        "javascript"
+    fn name(&self) -> LangName {
+        LangName::Javascript
     }
 
     fn rank(&self, _db: &Path, k: usize) -> Result<Vec<RankedCrate>> {

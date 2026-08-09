@@ -6,6 +6,7 @@ use std::process::{Command, Stdio};
 use anyhow::{bail, Context, Result};
 
 use super::Lang;
+use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
 pub struct Java;
@@ -13,8 +14,8 @@ pub struct Java;
 const CENTRAL: &str = "https://repo1.maven.org/maven2";
 
 impl Lang for Java {
-    fn name(&self) -> &'static str {
-        "java"
+    fn name(&self) -> LangName {
+        LangName::Java
     }
 
     fn rank(&self, _db: &Path, k: usize) -> Result<Vec<RankedCrate>> {
