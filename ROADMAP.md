@@ -503,43 +503,57 @@ that unlocks the second fifty.
 
 ## 6. What breaks at 100 — CI
 
+Written against the five-grammar workflow. While this was in progress,
+`main` landed `scripts/changed-grammars.sh` (PR #9), which fixed two of the
+four problems independently — and fixed them better than the first draft of
+this branch did, by putting the rule in one self-tested script that both
+workflows share instead of inline in YAML. The table below says who fixed
+what, because the difference matters for what is left to do.
+
+### Already fixed on main (PR #9, not this branch)
+
+| # | Was | Now |
+|---|---|---|
+| 1 | matrix a hardcoded literal of 5 names | derived from `crates/*/ledger.json`; a new grammar needs no workflow edit and cannot be silently missing |
+| 2 | path filter `crates/**` ran every grammar | `scripts/changed-grammars.sh` classifies a change as concerning one grammar, all of them (a core path), or none; both workflows consume the same answer |
+
 ### Implemented on this branch
 
-`.github/workflows/verify-grammars.yml` is rewritten. All four problems are
-fixed; the logic was tested locally against seven scenarios (scope=all,
-first push, unknown before-sha, no change, one grammar, two grammars, shared
-machinery), and `scripts/verify.sh` was run end-to-end with every submodule
-deinited to prove the submodule change is safe.
+Both were still present on main after PR #9. `scripts/verify.sh` was run
+end-to-end with **every submodule deinited** to prove the second is safe.
 
 | # | Was | Now | Measured saving at 100 grammars |
 |---|---|---|---|
-| 1 | matrix a hardcoded literal of 5 names | derived from `crates/*/ledger.json` — the same definition `publish.sh` uses | no hand-editing; a grammar cannot be missing from CI |
-| 2 | path filter `crates/**` ran every grammar | a `plan` job diffs against the event base and picks only changed grammar dirs; shared machinery still fans out; anything unresolvable falls back to all | **100 jobs → 1** for a one-grammar change |
-| 3 | `cargo build --release` in every matrix job | built once, uploaded as an artifact, downloaded per job | 99 redundant builds removed |
-| 4 | `submodules: true` fetched all upstream repos into every job | `submodules: false`; `materialize.sh` already initializes only its own | **2.3 s and 13 MB per grammar per job** → ~230 s and ~1.3 GB saved *in each of* 100 jobs |
+| 3 | `cargo build --release` in every matrix job | built once in its own job, downloaded as an artifact; verify.sh needs only the binary, so the matrix jobs carry no Rust toolchain at all | 99 redundant builds removed |
+| 4 | `submodules: true` fetched every upstream repo into every job | `submodules: false`; `materialize.sh` already initializes only its own | **2.3 s and 13 MB per grammar, per job** → ~230 s and ~1.3 GB saved *in each of* 100 jobs |
 
-Also added: a `concurrency` group so superseded pushes cancel; a
+Also added, none of it touching the selection rule: a `concurrency` group so
+superseded pushes cancel; `max-parallel: 10`; per-job timeouts; and a
 `verified` roll-up status check that is green for a matrix of any size
-including zero, so branch protection need not name each leg; and the
-concurrency and timeout limits below.
+including zero — a dynamic matrix cannot be named in branch protection, and
+a skipped required check blocks a PR.
 
-Rough total: a one-grammar change went from ~100 jobs and on the order of
-7.5 hours of runner time to **1 job of about 20 seconds**.
+**Confirmed in a real run** (run 31333943195, all 8 jobs green): the
+`changes` job took 3 s, `build-cli` 74 s once, and in each verify job
+`actions/checkout@v4` completed in **1 second** with no submodules, against
+verify times of 19–94 s. Together with PR #9, a one-grammar change goes from
+~100 jobs and on the order of 7.5 hours of runner time to **one verify job
+of about 20 seconds** plus a shared build.
 
 ### Verified limits (the brief's open questions)
 
 - **Matrix cap is 256 jobs per workflow run.** Confirmed in GitHub's
   documentation. 100 grammars fits. 100 with dialect variants would not
   necessarily — typescript already needs two generate dirs, and if variants
-  ever become matrix legs rather than in-job loops the cap is reachable.
-  Keeping dialects *inside* one job per grammar (as `generate_dirs` does
-  today) is what keeps this safe, and is worth stating as a rule.
+  ever became matrix legs rather than in-job loops the cap is reachable.
+  Keeping dialects *inside* one job per grammar, as `generate_dirs` does
+  today, is what keeps this safe, and is worth stating as a rule.
 - **Concurrency is 20 jobs, and it is shared across the entire
   organization**, not per repository — GitHub Free, and public repos get no
   increase. So a 100-grammar matrix does not run 100-wide; it runs 20-wide
   in 5 waves, *and* it starves every other repo in the org while it does.
-  `max-parallel: 10` is now set so a full fan-out leaves half the org's
-  capacity for the daily fix PRs and for publishing.
+  `max-parallel: 10` now leaves half the org's capacity for the daily fix
+  PRs and for publishing.
 - **Generate time varies enough to matter.** Measured, pinned CLI 0.25.10:
   `tree-sitter generate` alone runs 1.14 s (java) to 15.35 s (csharp), a
   **13.5× spread**; full `materialize.sh` runs 1.6 s to 47.5 s, a **30×
@@ -548,60 +562,72 @@ Rough total: a one-grammar change went from ~100 jobs and on the order of
   is therefore justified *in principle* — but since even the slowest is
   under a minute, a flat `timeout-minutes: 15` bounds a runaway without
   discriminating, and that is what is implemented. **Proposed:** add an
-  optional `timeout_minutes` to `ledger.json` only when a grammar actually
+  optional `timeout_minutes` to `ledger.json` only if a grammar actually
   approaches the cap, rather than raising it for everyone.
 
 ### Proposed, not implemented
 
 - **Cache the tree-sitter CLI.** `materialize.sh` invokes
-  `npx -y tree-sitter-cli@<pinned>` once per generate dir. Warm that costs
+  `npx -y tree-sitter-cli@<pinned>` once per generate dir. Warm, that costs
   0.33 s against 0.045 s for an installed binary; cold in CI it is a
-  download per job. Install the pinned CLI once in the job and put it on
-  PATH. Small, but it is 100–200 npx resolutions per full fan-out.
-- **A scheduled full-matrix run.** Now that pushes only verify what changed,
-  nothing re-verifies untouched grammars against toolchain drift. A weekly
-  `workflow_dispatch`/`schedule` run with `scope: all` restores that, at
-  20-wide it is about 5 waves, and it is the right place to catch a
-  submodule host going away or npm yanking a generate dep.
+  download per job. Install the pinned CLI once and put it on PATH. Small,
+  but it is 100–200 npx resolutions per full fan-out.
+- **A scheduled full run.** Now that pushes only verify what a change
+  concerns, nothing re-verifies untouched grammars against toolchain drift.
+  A weekly scheduled run with every grammar in scope restores that, and is
+  the right place to catch a submodule host going away or npm yanking a
+  generate dep.
+- **Bump the pinned actions.** `checkout@v4`, `setup-node@v4` and
+  `upload/download-artifact@v4` all emit Node 20 deprecation warnings and are
+  being force-run on Node 24. Harmless today; a failure later.
 
 ---
 
 ## 7. What breaks at 100 — publishing
 
-`origin/publish-grammars` (PR #5) was read in full.
+**Neither problem this section originally reported still stands.** Both were
+fixed on main while this was being written, and the record is kept here
+because the reasoning still applies to whatever is built next.
 
-**The bug the brief feared is not there.** `scripts/publish.sh` decides what
-to publish per crate, by diffing that crate's directory against the tag of
-its own last publish (`<crate>-v<version>`), and it does that check *before*
-materializing — the expensive part. One grammar changing publishes one
-crate. That is the correct design and it needs no change.
+`scripts/publish.sh` was never the problem. It decides what to publish per
+crate, by diffing that crate's directory against the tag of its own last
+publish (`<crate>-v<version>`), *before* materializing — the expensive part.
+One grammar changing publishes one crate. That is the correct design and it
+needed no change.
 
-Two things in the *workflow around it* do not scale:
+The `plan` and `rehearse` jobs around it did package every grammar on every
+PR, serially, in one job. PR #9 fixed that too: both now take
+`needs.verify.outputs.grammars` and pass only those crate dirs to
+`publish.sh` / `test-publish.sh`. `--force` remains in `plan`, which is
+correct — it means "package even if unchanged since the tag", now applied to
+a selected set rather than to everything.
 
-1. **`plan` runs `publish.sh --dry-run --force --skip-verify`** — and
-   `--force` means it packages **every** grammar on **every** PR, serially,
-   in one job. At five grammars that is a fine rehearsal. At 100 it is 100
-   materializations plus 100 `cargo package` compiles in a single job with
-   no parallelism, which on the measured materialize times alone
-   (1.6–47.5 s, mean ~14 s) is over 20 minutes before `cargo package` is
-   counted, and it will hit the 6-hour job ceiling long before it hits 100
-   if any grammar is slow. **Proposed:** drop `--force` and dry-run only the
-   changed crates, keeping a full-force run on the weekly schedule.
-2. **`rehearse` runs `test-publish.sh`, which publishes every grammar to a
-   local registry with `--force`**, also serially, also in one job. Same
-   arithmetic. **Proposed:** rehearse the changed crates plus one fixed
-   control grammar — the rehearsal's purpose is to exercise the tag, the
-   skip-on-rerun and the suffix increment, and one crate proves all three.
-   The full rehearsal moves to the schedule.
+**What is left is narrower, and real.** When a *core* path changes —
+`scripts/`, `treebank-cli`, `tools/`, the workflows — `changed-grammars.sh`
+correctly puts every grammar back in scope, and then:
 
-Both are the same fix as CI problem #2, in a more expensive place, and
-neither risks an unwanted upload: `publish` cannot run on a `pull_request`
-at all, and the real publish job re-verifies independently.
+- `plan` runs `publish.sh --dry-run --force` over all of them **serially in
+  one job**, and
+- `rehearse` runs `test-publish.sh` over all of them, **also serially in one
+  job**,
 
-One thing to preserve: the `plan`/`rehearse` design is what makes an
+both with `submodules: true`, so each job also checks out every upstream
+grammar repo. At five grammars that is a couple of minutes. At 100, on the
+measured materialize times alone (1.6–47.5 s, mean ~14 s), `plan` is over 20
+minutes before `cargo package` is counted, and a core-path change is not
+rare — it is what every scripts/ edit does.
+
+**Proposed:** make `plan` and `rehearse` matrix jobs over the same grammar
+list rather than loops inside one job, and give them `submodules: false` as
+`verify` now has. The rehearsal's purpose — exercising the tag, the
+skip-on-rerun and the suffix increment — is proved by one crate, so a
+core-path change could also rehearse a fixed control grammar rather than all
+100. Neither risks an unwanted upload: `publish` cannot run on a
+`pull_request` at all, and the real publish job re-verifies independently.
+
+One thing to preserve: the `plan`/`rehearse` pair is what makes an
 irreversible operation reviewable, and thinning it must not become skipping
-it. Changed-crates-plus-a-control keeps the property; dropping the jobs
-would not.
+it.
 
 ---
 
@@ -696,9 +722,9 @@ seconds. That belongs in the same decision as §10.1.
    33.5% unadjudicable is a different kind of language from everything else
    in the top 20. Sweep it small, sweep it with real build metadata, or
    accept sampled coverage — but pick before it is started.
-2. **The ceiling is ~95 sweepable languages, not 100**, and the binding
-   constraint past #40 turns out to be **corpus ranking**, not oracles.
-   Generalizing the ecosyste.ms pattern is probably worth more than the next
-   ten grammars.
+2. **The ceiling is 96 sweepable languages of the top 100**, which is
+   higher than feared — so the binding constraint past #40 turns out to be
+   **corpus ranking**, not oracles. Generalizing the ecosyste.ms pattern is
+   probably worth more than the next ten grammars.
 3. **`TREEBANK_LIMIT` should become a file budget.** It is the one change
    in this document that alters existing behaviour for existing languages.
