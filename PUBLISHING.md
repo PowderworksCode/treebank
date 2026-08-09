@@ -67,8 +67,11 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-csharp` | `treebank-grammar-csharp` | `tree_sitter_c_sharp` |
 
 The crate name is **derived from the directory**, not read from the manifest.
-`publish.sh` computes the name it expects and refuses to publish a crate whose
-materialized manifest disagrees — so a grammar added without its identity patch
+That is safe to key on because `treebank ledger` (which `verify.sh` runs first)
+already refuses a grammar whose directory and `grammar` field disagree, so
+`crates/treebank-<lang>` and the ledger's language name are the same string by
+the time publishing looks at either. `publish.sh` computes the name it expects
+and refuses to publish a crate whose materialized manifest disagrees — so a grammar added without its identity patch
 fails loudly at plan time instead of trying to upload under a name we do not
 own.
 
