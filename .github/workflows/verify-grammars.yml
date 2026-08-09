@@ -10,31 +10,88 @@
 # scripts/verify.sh implements this generically (via scripts/materialize.sh),
 # reading everything grammar-specific from the grammar's ledger.json, so CI
 # is just: build the treebank CLI, run the verify script per grammar.
+#
+# Which grammars, though, is decided per change rather than fixed: the `changes`
+# job runs scripts/changed-grammars.sh, and the verify matrix is built from its
+# answer. A patch to one grammar verifies that grammar; a change to a core path
+# — scripts/, treebank-cli, tools/, the workflows — puts all of them back in
+# scope. publish-grammars.yml calls this workflow and reuses the same answer, so
+# there is one definition of "which grammars does this change concern".
 name: verify-grammars
 
 on:
   push:
     paths:
       - 'crates/**'
+      - 'scripts/**'
+      - 'tools/**'
       - '.gitmodules'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/verify-grammars.yml'
   pull_request:
     paths:
       - 'crates/**'
+      - 'scripts/**'
+      - 'tools/**'
       - '.gitmodules'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/verify-grammars.yml'
   # Callable so publish-grammars.yml can gate on this exact job rather than
-  # keeping a second copy of it. Purely additive: the triggers above are
-  # unchanged.
+  # keeping a second copy of it, and so it can reuse the same answer to "which
+  # grammars does this change concern".
   workflow_call:
+    outputs:
+      grammars:
+        description: JSON array of grammar dir names this change concerns.
+        value: ${{ jobs.changes.outputs.grammars }}
+      core:
+        description: Whether a core path changed, putting every grammar in scope.
+        value: ${{ jobs.changes.outputs.core }}
 
 jobs:
+  # Which grammars does this change actually concern? Verifying all five for a
+  # one-line patch to one of them is four wasted jobs, and the rule for deciding
+  # lives in scripts/changed-grammars.sh (with a self-test) rather than in YAML.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      grammars: ${{ steps.pick.outputs.grammars }}
+      core: ${{ steps.pick.outputs.core }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+      - id: pick
+        env:
+          # For a PR this is the base tip and the diff below is three-dot, so it
+          # is measured from the merge base. For a push it is the previous tip.
+          BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          # No usable base — a branch's first push, or a manual dispatch. Fall
+          # back to every grammar: the safe direction is to check too much.
+          if [ -z "${BASE:-}" ] || [ "$BASE" = 0000000000000000000000000000000000000000 ]              || ! git cat-file -e "$BASE^{commit}" 2>/dev/null; then
+            out=$(scripts/changed-grammars.sh --all)
+          else
+            out=$(scripts/changed-grammars.sh "$BASE")
+          fi
+          echo "$out"
+          echo "grammars=$(jq -c .grammars <<<"$out")" >> "$GITHUB_OUTPUT"
+          echo "core=$(jq -r .core <<<"$out")" >> "$GITHUB_OUTPUT"
+          echo "### $(jq -r .reason <<<"$out")" >> "$GITHUB_STEP_SUMMARY"
+
   verify:
+    needs: changes
+    # An empty matrix is a workflow error, not a no-op, so guard it.
+    if: needs.changes.outputs.grammars != '[]'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        grammar: [treebank-rust, treebank-typescript, treebank-javascript, treebank-java, treebank-csharp]
+        grammar: ${{ fromJson(needs.changes.outputs.grammars) }}
     steps:
       - uses: actions/checkout@v4
         with:

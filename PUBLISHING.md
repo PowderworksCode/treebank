@@ -143,9 +143,11 @@ It is enforced twice, on purpose:
 1. the publish workflow's `verify` job *is* `verify-grammars.yml`, called rather
    than copied, so there is one definition of the check;
 2. `publish.sh` runs `scripts/verify.sh` itself per crate before touching the
-   network. The verify matrix is enumerated by hand, so a grammar missing from
-   it would otherwise sail through unchecked — and this also makes the script
-   safe to run by hand.
+   network. The verify matrix is now derived rather than hand-written, so it can
+   no longer omit a grammar — but the two jobs also scope themselves separately
+   (one by what changed, one by publish tags), and this keeps the gate attached
+   to the thing being uploaded rather than to a job that ran beside it. It also
+   makes the script safe to run by hand.
 
 A crate also will not publish if the materialized package name is not the
 `treebank-grammar-<lang>` its directory implies, if its version disagrees with
@@ -205,6 +207,61 @@ and are drawn from the ledgers: each one is a construct that upstream's grammar
 gets wrong, so a fixture parsing correctly is positive evidence that the patch
 series survived packaging. `must-reject.rs` is the other direction — invalid
 code upstream wrongly accepts, which our grammar must still reject.
+[`grammars.json`](tools/consumer-test/grammars.json) maps each grammar to its
+dependency line and its fixtures; the consumer's `Cargo.toml` and case list are
+generated from it for exactly the grammars under test, so a one-grammar run
+builds a one-grammar consumer.
+
+The rehearsal tags under `rehearsal/`, its own namespace. It publishes at the
+same version numbers production does — both count up from an empty registry —
+so without that separation its tags would collide with the real ones, and a
+real tag would make it skip instead of publish, quietly testing nothing.
+
+## Which grammars a change is tested against
+
+Verifying five grammars for a one-line patch to one of them is four wasted jobs,
+so CI asks first. [`scripts/changed-grammars.sh`](scripts/changed-grammars.sh)
+answers it:
+
+- a change under `crates/treebank-<lang>/` concerns that grammar;
+- a change to a **core** path — `scripts/`, `crates/treebank-cli/`, `tools/`,
+  `.github/workflows/`, `.gitmodules`, the root `Cargo.toml`/`Cargo.lock` —
+  concerns all of them, because that is what builds, verifies and packages every
+  grammar;
+- anything else (docs, corpus reports) concerns none, and CI does nothing.
+
+`verify-grammars.yml` runs it in a `changes` job, builds its verify matrix from
+the answer, and exposes it as a `workflow_call` output that `publish-grammars.yml`
+reuses for `plan` and `rehearse` — so there is one definition of the rule, and it
+has a self-test:
+
+```sh
+scripts/changed-grammars.sh --self-test
+scripts/changed-grammars.sh origin/main      # what would this branch test?
+```
+
+### Publishing asks a narrower question
+
+Testing scope and publishing scope are not the same question, and conflating
+them costs real versions. What gets *published* is still decided per crate by
+`publish.sh`, by diffing the crate against the tag of its own last publish —
+plus `ARTIFACT_INPUTS`, the files outside a grammar directory that can still
+change what its crate contains:
+
+```sh
+ARTIFACT_INPUTS=(scripts/materialize.sh scripts/publish.sh)
+```
+
+`materialize.sh` builds the tree that ships and `publish.sh` stamps and packages
+it, so a change to either does put every crate up for a republish. But a change
+to `treebank-cli` or `verify.sh` does not: those decide whether a crate is
+*allowed* to ship, not what is in it, and cutting five releases for a change that
+cannot alter a byte a consumer downloads spends five version numbers that can
+never be reused.
+
+Note that this is a *change* check and not a force: once a run tags, a re-run
+skips. Widen the list if you disagree with where that line sits — it is one
+array in `publish.sh`.
 
 ## Running it by hand
 
@@ -246,13 +303,18 @@ Nothing here is per-grammar except one patch. For a new `crates/treebank-<lang>/
    Record it in `ledger.json` with `"kind": "packaging"` so it is not counted as
    a parser fix.
 
-2. Add the grammar to the matrix in `verify-grammars.yml`.
+2. Nothing to do — the verify matrix is derived from what changed, over the
+   grammars that exist, so a new `crates/treebank-<lang>/` with a `ledger.json`
+   is picked up automatically.
 
-3. Add it to the consumer test: a dependency line in
-   [`tools/consumer-test/Cargo.toml.in`](tools/consumer-test/Cargo.toml.in), a
-   fixture under `fixtures/` built from the grammar's patch repros, and a case
-   in `src/main.rs`. `test-publish.sh` fails if a grammar published without a
-   line in the template, so this cannot be silently skipped — but the fixture
-   and the case are on you.
+3. Add it to the consumer test: an entry in
+   [`tools/consumer-test/grammars.json`](tools/consumer-test/grammars.json)
+   naming its dependency alias, crate name and cases, plus the fixtures those
+   cases reference, built from the grammar's patch repros. `test-publish.sh`
+   refuses to rehearse a grammar with no entry, so this cannot be silently
+   skipped — but the fixtures themselves are on you.
+
+   Nothing needs adding to the verify matrix or to `changed-grammars.sh`: both
+   enumerate `crates/*/ledger.json`.
 
 `publish.sh` picks it up with no changes: it enumerates `crates/*/ledger.json`.

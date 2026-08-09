@@ -53,6 +53,10 @@
 #   --skip-verify   materialize but skip the tests (only when CI already gated)
 #   --no-tag        do not create a git tag
 #   --no-push       create tags but do not push them
+#   --tag-prefix P  prefix the publish tags, so a rehearsal against a throwaway
+#                   registry cannot collide with (or be misled by) the real
+#                   publish tags. Affects both the tags created and the ones the
+#                   change check reads, so the two stay consistent.
 #   --registry NAME publish to a cargo registry other than crates.io
 #   --index URL     where to enumerate existing versions; a https:// base or a
 #                   local sparse-index directory. Defaults to index.crates.io.
@@ -75,6 +79,7 @@ FORCE=0
 SKIP_VERIFY=0
 DO_TAG=1
 DO_PUSH=1
+TAG_PREFIX=""
 REGISTRY=""
 INDEX_BASE="https://index.crates.io"
 TARGETS=()
@@ -87,6 +92,7 @@ while [ $# -gt 0 ]; do
     --skip-verify) SKIP_VERIFY=1 ;;
     --no-tag)      DO_TAG=0 ;;
     --no-push)     DO_PUSH=0 ;;
+    --tag-prefix)  TAG_PREFIX=${2:?--tag-prefix needs a value}; shift ;;
     --registry)    REGISTRY=${2:?--registry needs a name}; shift ;;
     --index)       INDEX_BASE=${2:?--index needs a url or directory}; shift ;;
     -h|--help)     sed -n '2,66p' "${BASH_SOURCE[0]}"; exit 0 ;;
@@ -95,6 +101,20 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# Files outside a grammar directory that still change what its crate contains:
+# materialize.sh builds the tree that ships, and this script stamps and packages
+# it. A change to either makes every crate "changed since its own last publish",
+# which is what makes a core change publish everything — see PUBLISHING.md.
+#
+# Deliberately narrow. Widening this to all of scripts/ or crates/treebank-cli/
+# would cut five releases for a change that cannot alter a single byte a
+# consumer downloads, and a crates.io version spent is spent. Note this is a
+# *change* check, not a force: once the run tags, a re-run skips.
+ARTIFACT_INPUTS=(
+  scripts/materialize.sh
+  scripts/publish.sh
+)
 
 # A grammar crate is a crates/ subdir with a ledger.json. That is what separates
 # the grammars from treebank-cli, which this script does not publish.
@@ -212,17 +232,19 @@ for dir in "${TARGETS[@]}"; do
   # publish" actually means — refname sorting would have to reason about
   # pre-release suffixes to agree. Read rather than `head`: `head` closing the
   # pipe early surfaces as a SIGPIPE failure under `pipefail`.
-  IFS= read -r last_tag < <(git -C "$ROOT" tag --list "$name-v*" --sort=-creatordate; printf '\n') || true
+  IFS= read -r last_tag < <(git -C "$ROOT" tag --list "$TAG_PREFIX$name-v*" --sort=-creatordate; printf '\n') || true
   if [ "$FORCE" = 1 ]; then
     echo "  change check: forced"
   elif [ -z "$last_tag" ]; then
-    echo "  change check: no $name-v* tag yet — first publish"
+    echo "  change check: no $TAG_PREFIX$name-v* tag yet — first publish"
   else
     # test/ is our negative corpus: it gates the release but never ships, so
     # corpus-only work does not cut one. Everything else under the crate dir is
     # either the submodule pointer, a patch, or the provenance that ships beside
-    # the crate — all of which change what a consumer would get.
-    if git -C "$ROOT" diff --quiet "$last_tag" HEAD -- "$rel" ":(exclude)$rel/test"; then
+    # the crate — all of which change what a consumer would get. ARTIFACT_INPUTS
+    # covers the same question for files outside the directory.
+    if git -C "$ROOT" diff --quiet "$last_tag" HEAD \
+         -- "$rel" ":(exclude)$rel/test" "${ARTIFACT_INPUTS[@]}"; then
       echo "  change check: unchanged since $last_tag — skipping"
       skipped+=("$name (unchanged since $last_tag)")
       continue
@@ -346,7 +368,7 @@ PY
     if (cd "$stage/crate" && cargo "${pub_args[@]}"); then
       published+=("$name $version")
       if [ "$DO_TAG" = 1 ]; then
-        tag="$name-v$version"
+        tag="$TAG_PREFIX$name-v$version"
         git -C "$ROOT" tag -a "$tag" -m "$name $version (upstream $base @ ${sha:0:7})"
         echo "  tagged $tag"
         if [ "$DO_PUSH" = 1 ]; then

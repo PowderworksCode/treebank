@@ -8,8 +8,9 @@
 #     verify-grammars.yml, called rather than copied, so there is one
 #     definition of "this grammar is what it claims to be". scripts/publish.sh
 #     then runs scripts/verify.sh again per crate in the publish job — belt and
-#     braces on purpose, since the verify matrix is enumerated by hand and a
-#     grammar missing from it would otherwise sail through unchecked.
+#     braces on purpose, since the two jobs scope themselves separately (one by
+#     what changed, one by publish tags) and the gate belongs to the thing being
+#     uploaded, not to a job that happened to run beside it.
 #   - What ships is the materialized tree (<grammar>/build/), never the repo
 #     working copy, so the crate is the output of the same script CI verified.
 #   - Every PR runs `plan` (a full dry run) and `rehearse` (a real publish to a
@@ -17,6 +18,10 @@
 #     crates and parsing with them). Between them the publish path is exercised
 #     end to end before it can ever publish. `publish` cannot run on a PR.
 #   - Only crates that actually changed are published; a re-run is a no-op.
+#   - Only grammars the change concerns are tested. scripts/changed-grammars.sh
+#     decides, verify-grammars.yml runs it, and plan/rehearse take the answer as
+#     an input, so a one-line patch to one grammar costs one set of jobs rather
+#     than five. A change to a core path puts every grammar back in scope.
 #
 # Setup required before this can publish (see PUBLISHING.md):
 #   Settings > Secrets and variables > Actions > New repository secret
@@ -34,21 +39,21 @@ on:
       # ledger.json, which treebank-cli does not. .gitmodules and the submodule
       # pointers under crates/ are how a grammar version bump shows up at all.
       - 'crates/**'
+      - 'scripts/**'
+      - 'tools/**'
       - '.gitmodules'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/publish-grammars.yml'
-      - 'scripts/publish.sh'
-      - 'scripts/materialize.sh'
-      - 'scripts/test-publish.sh'
-      - 'tools/consumer-test/**'
   pull_request:
     paths:
       - 'crates/**'
+      - 'scripts/**'
+      - 'tools/**'
       - '.gitmodules'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
       - '.github/workflows/publish-grammars.yml'
-      - 'scripts/publish.sh'
-      - 'scripts/materialize.sh'
-      - 'scripts/test-publish.sh'
-      - 'tools/consumer-test/**'
   workflow_dispatch:
     inputs:
       execute:
@@ -79,6 +84,7 @@ jobs:
   # secrets, so it can never block on an approval or touch a credential.
   plan:
     needs: verify
+    if: needs.verify.outputs.grammars != '[]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,6 +101,7 @@ jobs:
       - name: Dry run
         env:
           IN_GRAMMAR: ${{ inputs.grammar }}
+          GRAMMARS: ${{ needs.verify.outputs.grammars }}
         run: |
           set -euo pipefail
           # --force so the dry run always packages: without it an unchanged
@@ -103,7 +110,11 @@ jobs:
           # commit, so this job materializes without re-running the corpus. It
           # cannot publish. The real publish job below re-verifies for itself.
           args=(--dry-run --force --skip-verify)
-          if [ -n "${IN_GRAMMAR:-}" ]; then args+=("$IN_GRAMMAR"); fi
+          if [ -n "${IN_GRAMMAR:-}" ]; then
+            args+=("$IN_GRAMMAR")
+          else
+            while IFS= read -r g; do args+=("crates/$g"); done < <(jq -r '.[]' <<<"$GRAMMARS")
+          fi
           scripts/publish.sh "${args[@]}"
 
   # Full rehearsal against a throwaway registry on localhost: publishes every
@@ -114,6 +125,7 @@ jobs:
   # publishing something permanent. Uploads nothing off this runner.
   rehearse:
     needs: verify
+    if: needs.verify.outputs.grammars != '[]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,11 +144,20 @@ jobs:
           path: ~/.cargo/bin/cargo-http-registry
           key: cargo-http-registry-0.1.8-${{ runner.os }}
       - name: Rehearse publish, consume, skip and increment
+        env:
+          IN_GRAMMAR: ${{ inputs.grammar }}
+          GRAMMARS: ${{ needs.verify.outputs.grammars }}
         run: |
           set -euo pipefail
           # --skip-verify: the `verify` job above already ran the corpus for this
           # commit. The rehearsal still materializes each grammar itself.
-          scripts/test-publish.sh --skip-verify
+          args=(--skip-verify)
+          if [ -n "${IN_GRAMMAR:-}" ]; then
+            args+=("$IN_GRAMMAR")
+          else
+            while IFS= read -r g; do args+=("crates/$g"); done < <(jq -r '.[]' <<<"$GRAMMARS")
+          fi
+          scripts/test-publish.sh "${args[@]}"
 
   publish:
     needs: [plan, rehearse]

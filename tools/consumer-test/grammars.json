@@ -1,0 +1,29 @@
+[
+  { "grammar": "treebank-rust", "dep": "tree-sitter-rust", "crate": "treebank-grammar-rust",
+    "cases": [
+      { "label": "rust", "language": "tree_sitter_rust::LANGUAGE", "fixture": "patched.rs", "expect": "Clean" },
+      { "label": "rust strictness (must reject)", "language": "tree_sitter_rust::LANGUAGE", "fixture": "must-reject.rs", "expect": "Error" }
+    ]
+  },
+  { "grammar": "treebank-typescript", "dep": "tree-sitter-typescript", "crate": "treebank-grammar-typescript",
+    "cases": [
+      { "label": "typescript", "language": "tree_sitter_typescript::LANGUAGE_TYPESCRIPT", "fixture": "patched.ts", "expect": "Clean" },
+      { "label": "tsx", "language": "tree_sitter_typescript::LANGUAGE_TSX", "fixture": "patched.tsx", "expect": "Clean" }
+    ]
+  },
+  { "grammar": "treebank-javascript", "dep": "tree-sitter-javascript", "crate": "treebank-grammar-javascript",
+    "cases": [
+      { "label": "javascript", "language": "tree_sitter_javascript::LANGUAGE", "fixture": "patched.js", "expect": "Clean" }
+    ]
+  },
+  { "grammar": "treebank-java", "dep": "tree-sitter-java", "crate": "treebank-grammar-java",
+    "cases": [
+      { "label": "java", "language": "tree_sitter_java::LANGUAGE", "fixture": "patched.java", "expect": "Clean" }
+    ]
+  },
+  { "grammar": "treebank-csharp", "dep": "tree-sitter-c-sharp", "crate": "treebank-grammar-csharp",
+    "cases": [
+      { "label": "csharp", "language": "tree_sitter_c_sharp::LANGUAGE", "fixture": "patched.cs", "expect": "Clean" }
+    ]
+  }
+]
