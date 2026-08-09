@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # Full verification of a grammar change, one command:
 #
+#   0. ledger.json describes the tree it claims to (`treebank ledger`) — the
+#      agent edits this file every time it captures a patch, so checking it
+#      here catches a mismatched entry in seconds rather than in CI
 #   1. tree-sitter generate (pinned CLI) in each of the ledger's
 #      generate_dirs inside build/ (run scripts/materialize.sh first; edits
 #      go in build/, and `git -C build diff` is the patch you will commit),
@@ -32,6 +35,14 @@ PASS_BEFORE="${PASS_BEFORE:-$(jq -r '.corpus.sweep_patched.passed // 0' ledger.j
 JOB_FILE="${JOB_FILE:-}"
 SWEEP_OUT=/tmp/agent-check-sweep.json
 fail=0
+
+if "$TREEBANK_BIN" ledger "$ROOT" >/tmp/agent-check-ledger.log 2>&1; then
+  echo "ledger: ok"
+else
+  echo "ledger: FAILED"
+  sed 's/^/  /' /tmp/agent-check-ledger.log
+  fail=1
+fi
 
 if [ -n "$NEED_DEPS" ] && [ ! -d build/node_modules ]; then
   (cd build && npm ci --no-audit --no-fund >/dev/null 2>&1)

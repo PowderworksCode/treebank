@@ -6,13 +6,14 @@ use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
 
 use super::Lang;
+use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
 pub struct Rust;
 
 impl Lang for Rust {
-    fn name(&self) -> &'static str {
-        "rust"
+    fn name(&self) -> LangName {
+        LangName::Rust
     }
 
     /// Top-K crates by all-time downloads from an extracted crates.io db dump.

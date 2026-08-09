@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Grammar verification (the CI stand-in — also run by verify-grammars.yml).
 #
+#   0. Ledger: `treebank ledger` — the ledger must describe the tree it
+#      claims to (known language, patches on disk matching patches in the
+#      file, full upstream sha). Cheap, and it runs first because every
+#      later step reads the ledger and would otherwise fail obscurely.
 #   1. Materialize: upstream submodule (must sit exactly at ledger.json's
 #      pinned sha, pristine) + patches/ + npm ci where declared +
 #      tree-sitter generate with the pinned CLI -> build/. Every failure
@@ -28,10 +32,13 @@ GEN_DIRS=()
 while IFS= read -r d; do GEN_DIRS+=("$d"); done < <(jq -r '(.generate_dirs // ["."])[]' ledger.json)
 TS="npx -y tree-sitter-cli@$CLI_WANT"
 
-echo "== 1/3 materialize (submodule @ pinned sha + patches + generate, CLI $CLI_WANT)"
+echo "== 1/4 ledger"
+"$TREEBANK_BIN" ledger "$ROOT"
+
+echo "== 2/4 materialize (submodule @ pinned sha + patches + generate, CLI $CLI_WANT)"
 "$SCRIPT_DIR/materialize.sh" "$ROOT"
 
-echo "== 2/3 grammar corpus tests"
+echo "== 3/4 grammar corpus tests"
 # `tree-sitter test` ends with a blank line, so piping to `tail -1` printed an
 # empty line and showed nothing. Capture instead: on failure print enough of
 # the output to diagnose it, on success print the summary line (a grammar with
@@ -44,7 +51,7 @@ if ! TEST_OUT=$(cd build && $TS test 2>&1); then
 fi
 echo "   $(grep -E '^Total parses' <<<"$TEST_OUT" || echo '(no corpus tests in test/corpus)')"
 
-echo "== 3/3 negative corpus"
+echo "== 4/4 negative corpus"
 negatives=("$ROOT"/test/negative/*)
 if [ "${#negatives[@]}" -gt 0 ]; then
   "$TREEBANK_BIN" negative --grammar "$ROOT/build/${GEN_DIRS[0]}" --dir "$ROOT/test/negative"

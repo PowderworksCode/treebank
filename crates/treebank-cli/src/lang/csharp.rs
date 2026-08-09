@@ -7,6 +7,7 @@ use std::sync::{LazyLock, Mutex};
 use anyhow::{bail, Context, Result};
 
 use super::Lang;
+use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
 pub struct CSharp;
@@ -19,8 +20,8 @@ static SEEN_SOURCES: LazyLock<Mutex<HashSet<String>>> =
     LazyLock::new(|| Mutex::new(HashSet::new()));
 
 impl Lang for CSharp {
-    fn name(&self) -> &'static str {
-        "csharp"
+    fn name(&self) -> LangName {
+        LangName::Csharp
     }
 
     fn rank(&self, _db: &Path, k: usize) -> Result<Vec<RankedCrate>> {

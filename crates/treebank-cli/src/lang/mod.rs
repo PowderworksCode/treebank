@@ -14,13 +14,14 @@ mod typescript;
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 
+use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
 pub trait Lang: Sync {
     /// Canonical name; matches `--lang` and the `corpus/<lang>/` dir.
-    fn name(&self) -> &'static str;
+    fn name(&self) -> LangName;
 
     /// Build the ranked top-K package list. `db` is `corpus/<lang>/db`
     /// (local dump data; only languages that need one read it).
@@ -48,18 +49,19 @@ pub trait Lang: Sync {
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>>;
 }
 
-pub fn get(name: &str) -> Result<&'static dyn Lang> {
+/// Total: an unsupported name cannot be constructed, because clap and serde
+/// both reject it at the boundary. Nothing here can fail.
+pub fn get(name: LangName) -> &'static dyn Lang {
     static RUST: rust::Rust = rust::Rust;
     static TYPESCRIPT: typescript::TypeScript = typescript::TypeScript;
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
     static CSHARP: csharp::CSharp = csharp::CSharp;
-    Ok(match name {
-        "rust" => &RUST,
-        "typescript" => &TYPESCRIPT,
-        "javascript" => &JAVASCRIPT,
-        "java" => &JAVA,
-        "csharp" => &CSHARP,
-        other => bail!("unsupported lang {other} (have: rust, typescript, javascript, java, csharp)"),
-    })
+    match name {
+        LangName::Rust => &RUST,
+        LangName::Typescript => &TYPESCRIPT,
+        LangName::Javascript => &JAVASCRIPT,
+        LangName::Java => &JAVA,
+        LangName::Csharp => &CSHARP,
+    }
 }
