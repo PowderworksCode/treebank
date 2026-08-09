@@ -164,7 +164,14 @@ negative corpus is never published.
 
 ```sh
 scripts/publish.sh --dry-run     # materialize and package everything, upload nothing
+scripts/test-publish.sh          # full rehearsal against a throwaway local registry
 ```
+
+`test-publish.sh` is the interesting one: it publishes every grammar to a real
+registry on localhost, then has a consumer crate resolve those crates and parse
+code upstream's grammars reject — so the tag, the re-run skip, the version
+increment and the drop-in rename are all tested without anything reaching
+crates.io. CI runs it on every change.
 
 ## Current status (2026-08-06, measured on Linux)
 

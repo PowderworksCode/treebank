@@ -12,8 +12,10 @@
 #     grammar missing from it would otherwise sail through unchecked.
 #   - What ships is the materialized tree (<grammar>/build/), never the repo
 #     working copy, so the crate is the output of the same script CI verified.
-#   - Every PR runs `plan`, a full dry run, so this workflow and publish.sh are
-#     exercised before they can ever publish. `publish` cannot run on a PR.
+#   - Every PR runs `plan` (a full dry run) and `rehearse` (a real publish to a
+#     throwaway registry on localhost, followed by a consumer resolving those
+#     crates and parsing with them). Between them the publish path is exercised
+#     end to end before it can ever publish. `publish` cannot run on a PR.
 #   - Only crates that actually changed are published; a re-run is a no-op.
 #
 # Setup required before this can publish (see PUBLISHING.md):
@@ -36,6 +38,8 @@ on:
       - '.github/workflows/publish-grammars.yml'
       - 'scripts/publish.sh'
       - 'scripts/materialize.sh'
+      - 'scripts/test-publish.sh'
+      - 'tools/consumer-test/**'
   pull_request:
     paths:
       - 'crates/**'
@@ -43,6 +47,8 @@ on:
       - '.github/workflows/publish-grammars.yml'
       - 'scripts/publish.sh'
       - 'scripts/materialize.sh'
+      - 'scripts/test-publish.sh'
+      - 'tools/consumer-test/**'
   workflow_dispatch:
     inputs:
       execute:
@@ -100,8 +106,40 @@ jobs:
           if [ -n "${IN_GRAMMAR:-}" ]; then args+=("$IN_GRAMMAR"); fi
           scripts/publish.sh "${args[@]}"
 
+  # Full rehearsal against a throwaway registry on localhost: publishes every
+  # grammar for real, then has a consumer crate resolve those crates and parse
+  # code upstream's grammars reject. This is the only job that exercises what
+  # happens *after* a successful upload — the tag, the skip on a re-run, and the
+  # suffix increment — none of which can be tested against crates.io without
+  # publishing something permanent. Uploads nothing off this runner.
+  rehearse:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: true
+          fetch-depth: 0
+          filter: tree:0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Cache cargo-http-registry
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/cargo-http-registry
+          key: cargo-http-registry-0.1.8-${{ runner.os }}
+      - name: Rehearse publish, consume, skip and increment
+        run: |
+          set -euo pipefail
+          # --skip-verify: the `verify` job above already ran the corpus for this
+          # commit. The rehearsal still materializes each grammar itself.
+          scripts/test-publish.sh --skip-verify
+
   publish:
-    needs: plan
+    needs: [plan, rehearse]
     # Never on a pull_request. A merge to main publishes — that is the point of
     # the workflow — and a manual run has to tick the box, so dispatching to
     # inspect the plan cannot upload by accident.

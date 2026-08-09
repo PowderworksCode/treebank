@@ -168,6 +168,41 @@ file in this repo does.
 `treebank-cli` is not published by this workflow. A grammar crate is recognised
 by having a `ledger.json`, which the CLI does not.
 
+## Testing it without publishing anything
+
+`publish.sh` can be checked up to the moment it uploads and no further: against
+crates.io the next step is irreversible. Everything that only happens *after* a
+successful upload — the tag, the skip on a re-run, the suffix increment, and a
+consumer actually resolving the crate — used to be untestable.
+
+[`scripts/test-publish.sh`](scripts/test-publish.sh) closes that gap. It stands
+up a real registry ([`cargo-http-registry`](https://crates.io/crates/cargo-http-registry))
+on localhost, publishes every grammar to it for real, and asserts:
+
+1. every grammar publishes and gets tagged;
+2. a consumer crate resolves those crates from the registry, links them under
+   *upstream's* names via cargo's `package = ` rename, and parses code
+   upstream's grammars reject — so what was published really is the patched
+   grammar;
+3. re-running publishes nothing, because everything is tagged;
+4. forcing a second publish lands on `-treebank.2`, not `.1` — the suffix really
+   is derived from the registry rather than assumed.
+
+```sh
+scripts/test-publish.sh                 # full: materializes and verifies first
+scripts/test-publish.sh --skip-verify   # what CI runs, since `verify` already gated
+```
+
+It never touches crates.io, never pushes, and deletes the tags it created on
+exit. CI runs it on every change as the `rehearse` job, which `publish` depends
+on.
+
+The consumer fixtures live in [`tools/consumer-test/fixtures/`](tools/consumer-test/fixtures/)
+and are drawn from the ledgers: each one is a construct that upstream's grammar
+gets wrong, so a fixture parsing correctly is positive evidence that the patch
+series survived packaging. `must-reject.rs` is the other direction — invalid
+code upstream wrongly accepts, which our grammar must still reject.
+
 ## Running it by hand
 
 ```sh
@@ -209,5 +244,12 @@ Nothing here is per-grammar except one patch. For a new `crates/treebank-<lang>/
    a parser fix.
 
 2. Add the grammar to the matrix in `verify-grammars.yml`.
+
+3. Add it to the consumer test: a dependency line in
+   [`tools/consumer-test/Cargo.toml.in`](tools/consumer-test/Cargo.toml.in), a
+   fixture under `fixtures/` built from the grammar's patch repros, and a case
+   in `src/main.rs`. `test-publish.sh` fails if a grammar published without a
+   line in the template, so this cannot be silently skipped — but the fixture
+   and the case are on you.
 
 `publish.sh` picks it up with no changes: it enumerates `crates/*/ledger.json`.

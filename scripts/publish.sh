@@ -47,14 +47,25 @@
 #   scripts/publish.sh --execute                 # real publish; needs a token
 #   scripts/publish.sh --execute --force crates/treebank-rust
 #
-#   --dry-run      package and compile the tarball; never uploads (default)
-#   --execute      actually publish, and tag
-#   --force        publish even if nothing changed since the last publish tag
-#   --skip-verify  materialize but skip the tests (only when CI already gated)
-#   --no-tag       do not create/push a git tag
+#   --dry-run       package and compile the tarball; never uploads (default)
+#   --execute       actually publish, and tag
+#   --force         publish even if nothing changed since the last publish tag
+#   --skip-verify   materialize but skip the tests (only when CI already gated)
+#   --no-tag        do not create a git tag
+#   --no-push       create tags but do not push them
+#   --registry NAME publish to a cargo registry other than crates.io
+#   --index URL     where to enumerate existing versions; a https:// base or a
+#                   local sparse-index directory. Defaults to index.crates.io.
+#
+# The last two exist so the whole path — upload, tag, and a consumer resolving
+# the result — can be rehearsed against a throwaway local registry without
+# touching crates.io. scripts/test-publish.sh does exactly that, and CI runs it
+# on every change. See PUBLISHING.md.
 #
 # Environment:
-#   CARGO_REGISTRY_TOKEN   required for --execute. Never logged.
+#   CARGO_REGISTRY_TOKEN            required for --execute against crates.io.
+#   CARGO_REGISTRIES_<NAME>_TOKEN   ... or for --execute --registry <name>.
+#   Neither is ever logged.
 set -euo pipefail
 shopt -s nullglob
 
@@ -63,6 +74,9 @@ MODE=dry-run
 FORCE=0
 SKIP_VERIFY=0
 DO_TAG=1
+DO_PUSH=1
+REGISTRY=""
+INDEX_BASE="https://index.crates.io"
 TARGETS=()
 
 while [ $# -gt 0 ]; do
@@ -72,7 +86,10 @@ while [ $# -gt 0 ]; do
     --force)       FORCE=1 ;;
     --skip-verify) SKIP_VERIFY=1 ;;
     --no-tag)      DO_TAG=0 ;;
-    -h|--help)     sed -n '2,56p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    --no-push)     DO_PUSH=0 ;;
+    --registry)    REGISTRY=${2:?--registry needs a name}; shift ;;
+    --index)       INDEX_BASE=${2:?--index needs a url or directory}; shift ;;
+    -h|--help)     sed -n '2,66p' "${BASH_SOURCE[0]}"; exit 0 ;;
     -*)            echo "publish: unknown flag $1" >&2; exit 2 ;;
     *)             TARGETS+=("$1") ;;
   esac
@@ -85,15 +102,23 @@ if [ "${#TARGETS[@]}" -eq 0 ]; then
   for l in "$ROOT"/crates/*/ledger.json; do TARGETS+=("$(dirname "$l")"); done
 fi
 
-if [ "$MODE" = execute ] && [ -z "${CARGO_REGISTRY_TOKEN:-}" ]; then
-  cat >&2 <<'MSG'
-publish: --execute needs CARGO_REGISTRY_TOKEN and it is not set.
+# cargo reads the token for a named registry from CARGO_REGISTRIES_<NAME>_TOKEN,
+# and only the default registry from CARGO_REGISTRY_TOKEN.
+if [ -n "$REGISTRY" ]; then
+  reg_upper=${REGISTRY^^}; reg_upper=${reg_upper//-/_}
+  TOKEN_VAR="CARGO_REGISTRIES_${reg_upper}_TOKEN"
+else
+  TOKEN_VAR=CARGO_REGISTRY_TOKEN
+fi
+if [ "$MODE" = execute ] && [ -z "${!TOKEN_VAR:-}" ]; then
+  cat >&2 <<MSG
+publish: --execute needs $TOKEN_VAR and it is not set.
 
   In CI:    Settings > Secrets and variables > Actions > New repository secret
             Name: CARGO_REGISTRY_TOKEN
             Value: a crates.io API token with publish-new + publish-update,
                    scoped to treebank-grammar-*
-  Locally:  CARGO_REGISTRY_TOKEN=... scripts/publish.sh --execute
+  Locally:  $TOKEN_VAR=... scripts/publish.sh --execute
 
 This is a hard failure rather than a fallback to --dry-run: a publish run that
 quietly uploads nothing looks exactly like a publish run that worked.
@@ -116,26 +141,48 @@ index_path() {
 # Highest N among published <base>-treebank.N, or 0. Yanked versions count:
 # the number is spent either way, and crates.io will not let us reuse it.
 published_suffix_max() {
-  local name=$1 base=$2 body http max=0 v n
-  body=$(curl -sS --retry 3 --retry-delay 2 -w '\n%{http_code}' \
-    "https://index.crates.io/$(index_path "$name")") || {
-    echo "publish: could not reach the crates.io index" >&2; exit 1; }
-  http=${body##*$'\n'}
-  case "$http" in
-    404) echo 0; return ;;   # crate does not exist yet -> first publish
-    200) ;;
-    *)   echo "publish: crates.io index returned HTTP $http for $name" >&2; exit 1 ;;
+  local name=$1 base=$2 body http max=0 v n path
+  path=$(index_path "$name")
+  case "$INDEX_BASE" in
+    http://*|https://*)
+      body=$(curl -sS --retry 3 --retry-delay 2 -w '\n%{http_code}' \
+        "$INDEX_BASE/$path") || {
+        echo "publish: could not reach the registry index at $INDEX_BASE" >&2; exit 1; }
+      http=${body##*$'\n'}
+      body=${body%$'\n'*}
+      case "$http" in
+        404) echo 0; return ;;   # crate does not exist yet -> first publish
+        200) ;;
+        *)   echo "publish: registry index returned HTTP $http for $name" >&2; exit 1 ;;
+      esac
+      ;;
+    *)
+      # A local sparse-index directory, as a throwaway registry serves. Same
+      # xx/xx/name layout and same JSON-lines format as crates.io.
+      local f="${INDEX_BASE#file://}/$path"
+      [ -f "$f" ] || { echo 0; return; }
+      body=$(cat "$f")
+      ;;
   esac
   while IFS= read -r v; do
     [ -n "$v" ] || continue
     n=${v#"$base-treebank."}
     [ "$n" != "$v" ] && [[ $n =~ ^[0-9]+$ ]] && [ "$n" -gt "$max" ] && max=$n
-  done < <(printf '%s' "${body%$'\n'*}" | jq -r 'select(.vers) | .vers')
+  done < <(printf '%s\n' "$body" | jq -r 'select(.vers) | .vers')
   echo "$max"
 }
 
 STAGE_ROOT=$(mktemp -d)
-trap 'rm -rf "$STAGE_ROOT"' EXIT
+# Kept on failure: the verify/materialize logs live in here, and deleting them
+# is exactly what you do not want when a publish has just refused to run.
+cleanup_stage() {
+  if [ "${overall:-0}" = 0 ]; then
+    rm -rf "$STAGE_ROOT"
+  else
+    echo "publish: logs kept in $STAGE_ROOT" >&2
+  fi
+}
+trap cleanup_stage EXIT
 
 overall=0
 published=()
@@ -192,14 +239,14 @@ for dir in "${TARGETS[@]}"; do
     echo "  materialize: scripts/materialize.sh $rel (tests skipped; caller asserts CI ran them)"
     if ! "$ROOT/scripts/materialize.sh" "$dir" > "$vlog" 2>&1; then
       echo "publish: FAIL — $rel does not materialize; refusing to publish" >&2
-      tail -20 "$vlog" >&2
+      tail -40 "$vlog" >&2
       overall=1; continue
     fi
   else
     echo "  verify: scripts/verify.sh $rel"
     if ! "$ROOT/scripts/verify.sh" "$dir" > "$vlog" 2>&1; then
       echo "publish: FAIL — $rel does not verify; refusing to publish" >&2
-      tail -20 "$vlog" >&2
+      tail -40 "$vlog" >&2
       overall=1; continue
     fi
   fi
@@ -289,16 +336,23 @@ PY
       overall=1
     fi
   else
-    echo "  publishing $name $version"
+    echo "  publishing $name $version${REGISTRY:+ to registry $REGISTRY}"
     # No --no-verify: cargo compiles the packaged tarball before uploading, which
     # is the last chance to catch a crate that packages but does not build.
-    if (cd "$stage/crate" && cargo publish); then
+    # `if`, not `[ ... ] && ...`: as a bare statement a false test returns 1 and
+    # `set -e` would abort the run for the crates.io case.
+    pub_args=(publish)
+    if [ -n "$REGISTRY" ]; then pub_args+=(--registry "$REGISTRY"); fi
+    if (cd "$stage/crate" && cargo "${pub_args[@]}"); then
       published+=("$name $version")
       if [ "$DO_TAG" = 1 ]; then
         tag="$name-v$version"
         git -C "$ROOT" tag -a "$tag" -m "$name $version (upstream $base @ ${sha:0:7})"
-        git -C "$ROOT" push origin "$tag"
         echo "  tagged $tag"
+        if [ "$DO_PUSH" = 1 ]; then
+          git -C "$ROOT" push origin "$tag"
+          echo "  pushed $tag"
+        fi
       fi
     else
       echo "publish: FAIL — $name $version did not publish" >&2

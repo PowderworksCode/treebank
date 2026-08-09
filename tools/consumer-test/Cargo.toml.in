@@ -1,0 +1,23 @@
+# Template. scripts/test-publish.sh fills in the placeholders below with the
+# versions publish.sh actually published and the registry it published to, then
+# runs this crate. (The placeholders are only written out on the dependency
+# lines, so the harness can check that every one of them was substituted.)
+#
+# The dependency lines are the point of the test: each crate is pulled in under
+# *upstream's* name via cargo's `package = ` rename, which is exactly how a
+# consumer migrates to a patched redistribution without touching their code.
+[package]
+name = "treebank-consumer-test"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+tree-sitter = "0.25"
+tree-sitter-rust       = { package = "treebank-grammar-rust",       version = "=@VERSION_RUST@",       registry = "@REGISTRY@" }
+tree-sitter-typescript = { package = "treebank-grammar-typescript", version = "=@VERSION_TYPESCRIPT@", registry = "@REGISTRY@" }
+tree-sitter-javascript = { package = "treebank-grammar-javascript", version = "=@VERSION_JAVASCRIPT@", registry = "@REGISTRY@" }
+tree-sitter-java       = { package = "treebank-grammar-java",       version = "=@VERSION_JAVA@",       registry = "@REGISTRY@" }
+tree-sitter-c-sharp    = { package = "treebank-grammar-csharp",     version = "=@VERSION_CSHARP@",     registry = "@REGISTRY@" }
+
+[workspace]
