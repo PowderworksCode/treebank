@@ -1,0 +1,82 @@
+diff --git a/grammar.js b/grammar.js
+index 89550ea..6fdbf81 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -584,11 +584,11 @@ module.exports = grammar({
+       ':',
+       // A bound list may be empty (`where C: ,`) and may carry a trailing
+       // `+` (`trait N: ops::ShrAssign<i32> + {}`); rustc accepts both.
+-      optional(sepBy1('+', choice(
+-        $._type,
+-        $.lifetime,
+-        $.higher_ranked_trait_bound,
+-      ))),
++      repeat(seq(
++        choice($._type, $.lifetime, $.higher_ranked_trait_bound),
++        '+',
++      )),
++      optional(choice($._type, $.lifetime, $.higher_ranked_trait_bound)),
+     ),
+ 
+     higher_ranked_trait_bound: $ => seq(
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index a2c1530..5475842 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -2823,3 +2823,56 @@ where
+         (type_identifier)
+         (trait_bounds)))
+     (declaration_list)))
++
++================================================================================
++Trailing plus in trait bounds
++================================================================================
++
++trait Number:
++    ops::ShrAssign<i32> +
++{
++    const ZERO: Self;
++}
++
++fn f<'a, T>(t: T)
++where
++    T: Clone + 'a,
++{
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (trait_item
++    (type_identifier)
++    (trait_bounds
++      (generic_type
++        (scoped_type_identifier
++          (identifier)
++          (type_identifier))
++        (type_arguments
++          (primitive_type))))
++    (declaration_list
++      (const_item
++        (identifier)
++        (type_identifier))))
++  (function_item
++    (identifier)
++    (type_parameters
++      (lifetime_parameter
++        (lifetime
++          (identifier)))
++      (type_parameter
++        (type_identifier)))
++    (parameters
++      (parameter
++        (identifier)
++        (type_identifier)))
++    (where_clause
++      (where_predicate
++        (type_identifier)
++        (trait_bounds
++          (type_identifier)
++          (lifetime
++            (identifier)))))
++    (block)))

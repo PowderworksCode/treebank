@@ -93,3 +93,102 @@ is committed. Contract, CLI pin rationale, and workflow: see
     manifest. The published version string is deliberately *not* here — it is
     derived from crates.io at publish time. See
     [PUBLISHING.md](../../PUBLISHING.md).
+
+15. **Turbofish in type position** (`0015`) — `Punctuated::<Ident, Token>`,
+    `*const Gray_v09::<T>`, `Result::<Vec::<Tag>, Error>::Ok(..)`: the `::`
+    before type arguments is redundant in type position but rustc accepts it,
+    and generated code emits it. `generic_type` takes an `optional('::')`
+    before its `type_arguments`, mirroring the `generic_type_with_turbofish`
+    shape already aliased to `generic_type` in expression position. Found by
+    the top-1000 sweep in aws-sdk-s3 1.140.0's `protocol_serde` shapes,
+    mockall_derive 0.15.0 and rgb 0.8.53 (37 files).
+
+16. **Multiple attributes on function parameters** (`0016`) —
+    `fn f(#[future] #[default(1)] x: u32)`: `parameters` allowed only
+    `optional($.attribute_item)` per parameter, so a second attribute landed
+    in an ERROR. Attributes on parameters have been stable since Rust 1.39 and
+    stack like any other attribute position, so the `optional` becomes a
+    `repeat`. Found by the top-1000 sweep in rstest 0.26.1's test resources
+    (15 files).
+
+17. **Attributes on tuple expression elements** (`0017`) —
+    `(a, #[cfg(unix)] b,)`: `tuple_expression` accepted attributes only ahead
+    of the *first* element, so a `#[cfg]`/`#[expect]` on any later member
+    landed in an ERROR. Every element now takes a leading `repeat($.attribute_item)`,
+    the same shape `arguments` and `array_expression` already use. Found by
+    the top-1000 sweep in opentelemetry-otlp 0.32.0, sqlx-mysql 0.9.0,
+    block2 0.6.2, zbus 5.18.0 and zerovec 0.11.6 (8 files).
+
+18. **Macro invocation on the left of a where predicate** (`0018`) —
+    `where mac!(Self): Send`: `_type` already allowed `macro_invocation`, but
+    `where_predicate` spelled its left-hand side out as an explicit type list
+    that omitted it, so a macro-generated bound subject failed. Found by the
+    top-1000 sweep in pin-project 1.1.13 and async-trait 0.1.91 (3 files).
+
+19. **Indexed fields in struct patterns** (`0019`) — `Tuple { 1: x, .. }`:
+    a tuple struct's fields can be matched by index in braced-struct pattern
+    syntax, but `field_pattern` accepted only an identifier as the name.
+    It now takes `choice($._field_identifier, $.integer_literal)`, the same
+    idiom `field_expression` already uses for `x.0`. Surfaced under the
+    where-predicate cluster: async-trait 0.1.91's `tests/test.rs` hits both
+    this and patch `0018` (1 file).
+
+20. **`<=` after a cast to a non-primitive type** (`0020`) —
+    `if a.b(c) as size_t <= length`: `type_arguments` opens with
+    `token(prec(1, '<'))`, and tree-sitter's lexer settles ties by token
+    precedence *before* match length. After `as size_t` a `type_arguments`
+    can legally start, so the high-precedence `<` beat the longer `<=` and
+    the operator was split. `<=` is now `token(prec(1, '<='))`, so the two
+    sit at the same precedence and longest-match decides. Deliberately not
+    applied to `<<`/`<<=`: `d as *mut E<<F as E>::G>` needs `<` to win there.
+    Found by the top-1000 sweep in unsafe-libyaml 0.2.11 (2 files).
+
+21. **Turbofish generics in struct patterns** (`0021`) —
+    `let Range::<Idx> { start, end } = r;`: pattern position requires the
+    turbofish (`Range<Idx> { .. }` is not valid there), but `struct_pattern`
+    accepted only a plain or scoped type identifier. It now also takes
+    `generic_type_with_turbofish` aliased to `generic_type`, the same
+    aliasing used in expression position. Found by the top-1000 sweep in
+    serde_with 3.21.0 and pyo3 0.29.2 (2 files).
+
+22. **Generic functions named like primitive types** (`0022`) —
+    `f32::<_, E>(Endianness::Big)`: `_expression`, `_path` and
+    `macro_invocation` already alias the primitive-type names to `identifier`
+    (see patch `0005`), but `generic_function` did not, so a turbofish call to a
+    function named `f32`/`u8`/`str` failed. Found by the top-1000 sweep in
+    nom 8.0.0's `tests/float.rs` (1 file).
+
+23. **Contextual keyword as a capture name** (`0023`) — `raw @ (U8 | U16)`:
+    `_pattern` already accepts `_reserved_identifier` (`default`, `union`,
+    `gen`, `raw`) as a binding, but `captured_pattern` insisted on a bare
+    `identifier`, so `raw` — a keyword only in `&raw const` — could not be
+    the name of an `@` binding. Found by the top-1000 sweep in
+    zerocopy-derive 0.8.55's `src/repr.rs` (1 file).
+
+24. **Box patterns** (`0024`) — `box _f: Box<usize>`, `box 0 => {}`: the
+    `box_patterns` feature is unstable but `box` is a reserved word, so
+    `box PAT` can never be confused with an identifier. New `box_pattern`
+    rule in `_pattern`, shaped like `ref_pattern`. Found by the top-1000
+    sweep in enum_dispatch 0.3.13's `tests/arg_patterns.rs` (1 file).
+
+25. **Empty trait bounds** (`0025`) — `where C: ,`: rustc accepts a bound
+    list with no bounds, which macro-generated `where` clauses emit. The
+    bound list in `trait_bounds` becomes `optional(...)`; that makes the end
+    of `trait_bounds` ambiguous with the start of a lifetime bound, so
+    `trait_bounds` is added to `conflicts` and GLR settles it. Found by the
+    top-1000 sweep in combine 4.6.7's `src/stream/decoder.rs` (1 file).
+
+26. **Trailing plus in trait bounds** (`0026`) — `trait N: ops::ShrAssign<i32> + {}`:
+    rustc allows a bound list to end on `+`. Spelling that as
+    `sepBy1('+', bound)` plus a trailing `optional('+')` regressed ~250 files
+    (`where T: Clone + 'a` reduced `trait_bounds` at the `+` and then read
+    `'a` as a label), so the list is written as `(bound '+')* bound?`
+    instead: every `+` is shifted as a separator and the last bound is simply
+    optional. Found by the top-1000 sweep in lexical-util 1.0.7's
+    `src/num.rs` (1 file).
+
+27. **Empty type arguments** (`0027`) — `&Thing<>`: rustc parses an empty
+    generic argument list, so the argument list inside `type_arguments`
+    becomes optional (the trailing-comma option moves inside it, so `<,>` is
+    still rejected). Found by the top-1000 sweep in cxx 1.0.198's
+    `tests/ui/self_lifetimes.rs` (1 file).

@@ -8,15 +8,15 @@
   "generate_cli": "0.25.10",
   "generate_cli_note": "pinned: tree-sitter-cli 0.26.x ships Unicode identifier tables that wrongly exclude XID_Start chars (e.g. U+212A KELVIN SIGN), which breaks char literals like 'K' in some parse states; 0.25.10 and earlier are correct",
   "corpus": {
-    "source": "crates.io top-100 by all-time downloads, db dump 2026-08-06",
-    "files": 4626,
+    "source": "crates.io top-1000 by all-time downloads, db dump 2026-08-06",
+    "files": 27307,
     "sweep_upstream_committed": {
-      "passed": 4605,
-      "failed": 21
+      "passed": 25671,
+      "failed": 1636
     },
     "sweep_patched": {
-      "passed": 4626,
-      "failed": 0
+      "passed": 27294,
+      "failed": 13
     }
   },
   "patches": [
@@ -323,6 +323,344 @@
       ],
       "kind": "packaging",
       "origin": "treebank; upstream owns the tree-sitter-rust name on crates.io, so a redistribution has to publish under its own: package name, repository, homepage and description. [lib] name stays upstream's so the crate is a drop-in. include gains LICENSE, ledger.json, LOCAL-PATCHES.md and patches/* so provenance travels inside the published tarball. Cargo.lock's stale 0.24.1 self-version is corrected to match the manifest. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 15,
+      "title": "turbofish in type position",
+      "file": "patches/0015-turbofish-in-type-position.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "type Pairs = Punctuated::<Ident, Token>;",
+        "first_seen": {
+          "package": "aws-sdk-s3",
+          "version": "1.140.0",
+          "note": "generated protocol_serde shapes write Result::<Vec::<T>, E>::Ok(..); also mockall_derive 0.15.0 collect::<Punctuated::<..>>() and rgb 0.8.53 *const Gray_v09::<T>; 37 files"
+        },
+        "sweep_before": {
+          "passed": 27221,
+          "failed": 86
+        },
+        "sweep_after": {
+          "passed": 27258,
+          "failed": 49
+        }
+      }
+    },
+    {
+      "id": 16,
+      "title": "multiple attributes on function parameters",
+      "file": "patches/0016-multiple-attributes-on-parameters.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "fn f(#[future] #[default(1)] x: u32) {}",
+        "first_seen": {
+          "package": "rstest",
+          "version": "0.26.1",
+          "note": "tests/resources fixtures stack #[future]/#[default]/#[files]/#[exclude] on one parameter; 15 files"
+        },
+        "sweep_before": {
+          "passed": 27258,
+          "failed": 49
+        },
+        "sweep_after": {
+          "passed": 27273,
+          "failed": 34
+        }
+      }
+    },
+    {
+      "id": 17,
+      "title": "attributes on tuple expression elements",
+      "file": "patches/0017-attributes-on-tuple-elements.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "let t = (a, #[cfg(unix)] b,);",
+        "first_seen": {
+          "package": "opentelemetry-otlp",
+          "version": "0.32.0",
+          "note": "cfg-gated tuple members; also sqlx-mysql 0.9.0, block2 0.6.2, zbus 5.18.0 and zerovec 0.11.6 #[expect(..)]; 8 files"
+        },
+        "sweep_before": {
+          "passed": 27273,
+          "failed": 34
+        },
+        "sweep_after": {
+          "passed": 27281,
+          "failed": 26
+        }
+      }
+    },
+    {
+      "id": 18,
+      "title": "macro invocation on the left of a where predicate",
+      "file": "patches/0018-macro-invocation-in-where-predicate.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "fn f() where mac!(Self): Send {}",
+        "first_seen": {
+          "package": "pin-project",
+          "version": "1.1.13",
+          "note": "tests exercising macro-generated types in bounds; also async-trait 0.1.91; 3 files"
+        },
+        "sweep_before": {
+          "passed": 27281,
+          "failed": 26
+        },
+        "sweep_after": {
+          "passed": 27283,
+          "failed": 24
+        }
+      }
+    },
+    {
+      "id": 19,
+      "title": "tuple struct fields named by index in struct patterns",
+      "file": "patches/0019-indexed-fields-in-struct-patterns.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/patterns.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "fn f(Tuple { 1: _int, .. }: Tuple<A, B>) {}",
+        "first_seen": {
+          "package": "async-trait",
+          "version": "0.1.91",
+          "note": "tests/test.rs DotDotPattern; second gap in the same file as patch 0018; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27283,
+          "failed": 24
+        },
+        "sweep_after": {
+          "passed": 27284,
+          "failed": 23
+        }
+      }
+    },
+    {
+      "id": 20,
+      "title": "<= after a cast to a non-primitive type",
+      "file": "patches/0020-le-operator-after-cast.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "fn f() { if a.b(c) as size_t <= length { g(); } }",
+        "first_seen": {
+          "package": "unsafe-libyaml",
+          "version": "0.2.11",
+          "note": "c2rust output comparing pointer offsets cast to size_t/c_long; 2 files"
+        },
+        "sweep_before": {
+          "passed": 27284,
+          "failed": 23
+        },
+        "sweep_after": {
+          "passed": 27286,
+          "failed": 21
+        }
+      }
+    },
+    {
+      "id": 21,
+      "title": "turbofish generics in struct patterns",
+      "file": "patches/0021-turbofish-generics-in-struct-patterns.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/patterns.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "fn f() { let Range::<Idx> { start, end } = r; }",
+        "first_seen": {
+          "package": "serde_with",
+          "version": "3.21.0",
+          "note": "src/de/impls.rs destructuring Range::<DeserializeAsWrap<..>>; also pyo3 0.29.2 capsule.rs; 2 files"
+        },
+        "sweep_before": {
+          "passed": 27286,
+          "failed": 21
+        },
+        "sweep_after": {
+          "passed": 27288,
+          "failed": 19
+        }
+      }
+    },
+    {
+      "id": 22,
+      "title": "generic functions named like primitive types",
+      "file": "patches/0022-primitive-type-generic-function-names.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "let g = |s| f32::<_, E>(Endianness::Big)(s);",
+        "first_seen": {
+          "package": "nom",
+          "version": "8.0.0",
+          "note": "tests/float.rs calls nom's number::complete::f32 parser with a turbofish; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27288,
+          "failed": 19
+        },
+        "sweep_after": {
+          "passed": 27289,
+          "failed": 18
+        }
+      }
+    },
+    {
+      "id": 23,
+      "title": "contextual keyword as a capture name",
+      "file": "patches/0023-reserved-identifier-capture-name.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/patterns.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "match r { raw @ (U8 | U16) => {} _ => {} }",
+        "first_seen": {
+          "package": "zerocopy-derive",
+          "version": "0.8.55",
+          "note": "src/repr.rs binds `raw @ (..)` over the primitive repr variants; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27289,
+          "failed": 18
+        },
+        "sweep_after": {
+          "passed": 27290,
+          "failed": 17
+        }
+      }
+    },
+    {
+      "id": 24,
+      "title": "box patterns",
+      "file": "patches/0024-box-patterns.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/patterns.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "fn format(box _f: Box<usize>) {}",
+        "first_seen": {
+          "package": "enum_dispatch",
+          "version": "0.3.13",
+          "note": "tests/arg_patterns.rs under #![feature(box_patterns)]; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27290,
+          "failed": 17
+        },
+        "sweep_after": {
+          "passed": 27291,
+          "failed": 16
+        }
+      }
+    },
+    {
+      "id": 25,
+      "title": "empty trait bounds",
+      "file": "patches/0025-empty-trait-bounds.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "impl<C> D<C> where C: , {}",
+        "first_seen": {
+          "package": "combine",
+          "version": "4.6.7",
+          "note": "src/stream/decoder.rs emits a macro-generated `C: ,` predicate; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27291,
+          "failed": 16
+        },
+        "sweep_after": {
+          "passed": 27292,
+          "failed": 15
+        }
+      }
+    },
+    {
+      "id": 26,
+      "title": "trailing plus in trait bounds",
+      "file": "patches/0026-trailing-plus-in-trait-bounds.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "trait N: ops::ShrAssign<i32> + { const ZERO: Self; }",
+        "first_seen": {
+          "package": "lexical-util",
+          "version": "1.0.7",
+          "note": "src/num.rs ends its long supertrait list with a dangling `+`; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27292,
+          "failed": 15
+        },
+        "sweep_after": {
+          "passed": 27293,
+          "failed": 14
+        }
+      }
+    },
+    {
+      "id": 27,
+      "title": "empty type arguments",
+      "file": "patches/0027-empty-type-arguments.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "origin": "local; found by top-1000 sweep",
+      "evidence": {
+        "repro": "extern \"C++\" { fn zero(self: &Thing<>); }",
+        "first_seen": {
+          "package": "cxx",
+          "version": "1.0.198",
+          "note": "tests/ui/self_lifetimes.rs, a trybuild fixture that is syntactically valid; 1 file"
+        },
+        "sweep_before": {
+          "passed": 27293,
+          "failed": 14
+        },
+        "sweep_after": {
+          "passed": 27294,
+          "failed": 13
+        }
+      }
     }
   ]
 }

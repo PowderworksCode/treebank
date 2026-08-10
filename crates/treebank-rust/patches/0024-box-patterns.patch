@@ -1,0 +1,85 @@
+diff --git a/grammar.js b/grammar.js
+index 2cf6354..7cdfa17 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1449,6 +1449,7 @@ module.exports = grammar({
+       $.struct_pattern,
+       $._reserved_identifier,
+       $.ref_pattern,
++      $.box_pattern,
+       $.slice_pattern,
+       $.captured_pattern,
+       $.reference_pattern,
+@@ -1565,6 +1566,13 @@ module.exports = grammar({
+       $._pattern,
+     ),
+ 
++    // `box PAT` — the box_patterns feature. `box` is a reserved word, so it
++    // can never be an identifier here.
++    box_pattern: $ => seq(
++      'box',
++      $._pattern,
++    ),
++
+     captured_pattern: $ => seq(
+       // Contextual keywords bind like any other name: `raw @ (A | B)`.
+       choice($.identifier, $._reserved_identifier),
+diff --git a/test/corpus/patterns.txt b/test/corpus/patterns.txt
+index 5950572..489438c 100644
+--- a/test/corpus/patterns.txt
++++ b/test/corpus/patterns.txt
+@@ -697,3 +697,54 @@ fn f(r: T) {
+             (match_arm
+               (match_pattern)
+               (block))))))))
++
++================================================================================
++Box patterns
++================================================================================
++
++fn format(box _f: Box<usize>) {}
++
++fn g(v: Box<u8>) {
++    match v {
++        box 0 => {}
++        box _ => {}
++    }
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++  (function_item
++    (identifier)
++    (parameters
++      (parameter
++        (box_pattern
++          (identifier))
++        (generic_type
++          (type_identifier)
++          (type_arguments
++            (primitive_type)))))
++    (block))
++  (function_item
++    (identifier)
++    (parameters
++      (parameter
++        (identifier)
++        (generic_type
++          (type_identifier)
++          (type_arguments
++            (primitive_type)))))
++    (block
++      (expression_statement
++        (match_expression
++          (identifier)
++          (match_block
++            (match_arm
++              (match_pattern
++                (box_pattern
++                  (integer_literal)))
++              (block))
++            (match_arm
++              (match_pattern
++                (box_pattern))
++              (block))))))))
