@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
 use anyhow::{bail, Result};
@@ -36,6 +36,15 @@ pub struct Cluster {
     /// removed. Excluded from `valid_paths`: no grammar change fixes these.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub config_paths: Vec<String>,
+    /// Gap files that parse cleanly once the package's macros are expanded.
+    /// These ARE still gaps — a grammar could parse them — but the failure is
+    /// caused by an unexpanded macro rather than by unsupported syntax.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macro_paths: Vec<String>,
+    /// Macros expanded at the error site, most common first: the shapes a fix
+    /// has to support, and the ones to test it against.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub macros: Vec<String>,
     pub paths: Vec<String>,
 }
 
@@ -264,6 +273,67 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
         }
     };
 
+    // Macro expansion, for diagnosis only. Unlike the conditional case above
+    // this never changes a verdict: `THREAD_LOCAL int x;` is something a
+    // grammar could parse, so it stays a gap. What it adds is WHICH macro,
+    // which is what writing a minimal rule — and judging whether that rule
+    // over-accepts — actually requires.
+    let mut macro_clean: std::collections::HashSet<String> = Default::default();
+    let mut macro_names: HashMap<String, Vec<String>> = HashMap::new();
+    if lang.preprocessing().is_some() {
+        // One macro census per package, from the files already in the corpus.
+        let mut by_pkg: BTreeMap<String, Vec<&crate::fetch::FileEntry>> = BTreeMap::new();
+        for f in &files {
+            by_pkg.entry(f.pkgdir.clone()).or_default().push(f);
+        }
+        let gap_by_pkg: BTreeMap<String, Vec<&Failure>> =
+            failures.iter().filter(|f| validity.get(&f.path).copied().unwrap_or(false))
+                .filter(|f| !config_inherent.contains(&f.path))
+                .fold(BTreeMap::new(), |mut acc, f| {
+                    let pkg = f.path.split('/').next().unwrap_or("").to_string();
+                    acc.entry(pkg).or_default().push(f);
+                    acc
+                });
+        for (pkg, gaps) in &gap_by_pkg {
+            let Some(entries) = by_pkg.get(pkg) else { continue };
+            let mut macros = treebank_preprocessing::Macros::new();
+            for e in entries {
+                if let Ok(src) = std::fs::read_to_string(corpus_src.join(&e.pkgdir).join(&e.rel)) {
+                    macros.add_source(&src);
+                }
+            }
+            let found: Vec<(String, Vec<String>)> = gaps
+                .par_iter()
+                .filter_map(|f| {
+                    let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
+                    let e = treebank_preprocessing::expand(&src, &macros);
+                    if !e.changed() {
+                        return None;
+                    }
+                    let mut parser = Parser::new();
+                    parser.set_language(&languages[lang.route(&None, &f.path)]).ok()?;
+                    let tree = parser.parse(e.text.as_bytes(), None)?;
+                    if tree.root_node().has_error() {
+                        return None;
+                    }
+                    let names: Vec<String> =
+                        e.near(f.line).into_iter().map(str::to_string).collect();
+                    Some((f.path.clone(), names))
+                })
+                .collect();
+            let hit = found.len();
+            for (path, names) in found {
+                macro_clean.insert(path.clone());
+                macro_names.insert(path, names);
+            }
+            eprintln!(
+                "macros: {pkg} — {} definitions, {hit} of {} gap files parse once expanded",
+                macros.len(),
+                gaps.len()
+            );
+        }
+    }
+
     let mut by_sig: BTreeMap<String, Vec<Failure>> = BTreeMap::new();
     for f in &failures {
         by_sig.entry(f.signature.clone()).or_default().push(f.clone());
@@ -283,6 +353,24 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
             } else {
                 "noise"
             };
+            let macro_paths: Vec<String> = valid_paths
+                .iter()
+                .filter(|p| macro_clean.contains(*p))
+                .cloned()
+                .collect();
+            let mut tally: BTreeMap<&str, usize> = BTreeMap::new();
+            for p in &macro_paths {
+                for name in macro_names.get(p).into_iter().flatten() {
+                    *tally.entry(name.as_str()).or_default() += 1;
+                }
+            }
+            let mut ranked: Vec<(&str, usize)> = tally.into_iter().collect();
+            ranked.sort_by(|a, b| b.1.cmp(&a.1).then(a.0.cmp(b.0)));
+            let macros: Vec<String> = ranked
+                .into_iter()
+                .take(8)
+                .map(|(name, n)| format!("{name} ({n})"))
+                .collect();
             Cluster {
                 signature,
                 verdict: verdict.into(),
@@ -291,6 +379,8 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
                 examples: fs.iter().take(5).cloned().collect(),
                 valid_paths,
                 config_paths,
+                macro_paths,
+                macros,
                 paths: fs.iter().map(|f| f.path.clone()).collect(),
             }
         })
@@ -411,10 +501,23 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
     for (i, c) in gaps.iter().enumerate() {
         let _ = write!(
             md,
-            "\n### {}. `{}` — {} valid file(s)\n\nExamples:\n",
+            "\n### {}. `{}` — {} valid file(s)\n{}\nExamples:\n",
             i + 1,
             c.signature,
-            c.valid
+            c.valid,
+            if c.macro_paths.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    "\n**{} of these parse cleanly once macros are expanded**, so the \
+                     grammar is meeting an unexpanded macro rather than unfamiliar \
+                     syntax. Most common at the error site: {}. Expand one to see the \
+                     shape a rule has to accept — and use the others to check it does \
+                     not accept more than that.\n",
+                    c.macro_paths.len(),
+                    c.macros.join(", ")
+                )
+            }
         );
         for e in c.examples.iter().filter(|e| c.valid_paths.contains(&e.path)).take(3) {
             let _ = write!(md, "- `{}:{}`  `{}`\n", e.path, e.line, e.snippet);

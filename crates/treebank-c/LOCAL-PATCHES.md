@@ -171,6 +171,13 @@ files the oracle calls valid are this class — see
 names them in their own section and keeps them out of the fix instructions, so
 the agent does not spend its attempts on the one cluster it cannot win.
 
+Of the 4,593 gaps, **1,102 (24.0%) parse cleanly once the package's macros are
+expanded** — the grammar was meeting an unexpanded macro, not unfamiliar
+syntax. That does not excuse them: unlike the `extern "C"` case, `THREAD_LOCAL
+int x;` is something a grammar *could* parse. So they stay gaps, and each
+cluster is annotated with the macros responsible, which is what writing a
+minimal rule — and checking it does not over-accept — actually requires.
+
 The six largest *gap* classes, and what they actually are:
 
 | valid | files | signature | class |

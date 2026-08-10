@@ -52,9 +52,11 @@
 //!
 //! # What it deliberately does not do
 //!
-//! It does not expand macros. `list_for_each(x, y) { ... }` needs to know
-//! what `list_for_each` expands to; that is a different and much larger
-//! problem, and it is the majority of the remaining gap queue.
+//! It does not expand macros *here*. That lives in [`expand`], and it is a
+//! deliberately different kind of operation: reduction only ever removes code
+//! a compiler would not have seen, while expansion fabricates text, so a bug
+//! in it invents parse successes. Reduction changes a verdict; expansion only
+//! ever annotates one.
 //!
 //! It does not evaluate comparisons: `#if __cplusplus >= 201103L` is left
 //! alone even though it is decidable. That is a deliberate omission with a
@@ -66,6 +68,10 @@
 //! the worst has 819 — enumeration is impossible on exactly the files that
 //! matter most. Only conditionals that are *decidable* from the declared
 //! symbols are touched; everything else is left exactly as written.
+
+pub mod expand;
+
+pub use expand::{expand, Expansion, Macro, Macros};
 
 use std::collections::{HashMap, HashSet};
 
