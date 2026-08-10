@@ -18,7 +18,10 @@ binding because for some languages a per-file reference parser does not
 exist, and no amount of money makes one.
 
 That splits every candidate language into three tiers, and the tiers — not
-grammar popularity — are what the ranking is built on:
+grammar popularity — are what the ranking is built on. Grammar maintenance
+is the second axis, now measured across all 307 grammar repos (§3): it does
+**not** move the top 20, but 21 of the top 100 have had no upstream push in
+over a year.
 
 | Tier | What the oracle can say | Measured cost / 1000 files | Gap counts are |
 |---|---|---|---|
@@ -169,12 +172,83 @@ taken from one:
 editor sets, and 266 are in at least two. That is the pool the hundred comes
 from.
 
+### Grammar maintenance, measured
+
+The first version of this document ranked on oracle and popularity and left
+the grammar-health axis as an assertion. It is now measured: GitHub metadata
+for **all 307 distinct grammar repositories** in the nvim-treesitter list,
+as of 2026-08-10. The raw table is committed at
+`docs/data/grammar-health-2026-08-10.tsv` so the ranking can be re-derived
+or re-collected later rather than taken on trust.
+
+| last push to the grammar repo | grammars |
+|---|---|
+| under 90 days | 102 |
+| 90 days – 1 year | 96 |
+| 1–2 years | 53 |
+| over 2 years | 53 |
+| archived outright | 3 (`djot`, `hack`, `systemtap`) |
+
+**The top 20 survives this check.** Only `toml` is over a year stale (395
+days, 17 stars, 5 open issues — a small grammar for a stable spec, so it is
+a mild flag, not a blocker). Everything else in the twenty was pushed within
+a year, most within three months: kotlin 7 d, scala and swift within a day,
+erlang 9 d, elixir 20 d, php 20 d, lua 51 d. So the ranking did not move —
+which is the useful result, since it was the axis with the least evidence
+behind it.
+
+**The back half of the hundred does not survive it.** 21 of the 100 have had
+no upstream push in over a year:
+
+| grammar | stale | stars | repo |
+|---|---|---|---|
+| scss | **1469 d** | 33 | `serenadeai/tree-sitter-scss` |
+| wgsl | 911 d | 61 | `szebniok/tree-sitter-wgsl` |
+| thrift | 841 d | 8 | `tree-sitter-grammars/tree-sitter-thrift` |
+| capnp | 841 d | 5 | `tree-sitter-grammars/tree-sitter-capnp` |
+| mermaid | 839 d | 46 | `monaqa/tree-sitter-mermaid` |
+| graphql | 793 d | 33 | `bkegley/tree-sitter-graphql` |
+| luau, puppet, kconfig | 595 d | 6–8 | `tree-sitter-grammars/*` |
+| jsonnet | 576 d | 21 | `sourcegraph/tree-sitter-jsonnet` |
+| glsl, odin, objc, starlark, kdl, bitbake, svelte, bicep, toml | 395–450 d | 10–50 | `tree-sitter-grammars/*` |
+| purescript | 418 d | 23 | `postsolar/tree-sitter-purescript` |
+| dockerfile | 368 d | 105 | `camdencheek/tree-sitter-dockerfile` |
+
+`scss` is the one that should actually move: four years untouched, on a
+33-star personal repo, while CSS's own grammar sits in the `tree-sitter` org
+and was pushed 315 days ago. Its popularity (63 K npm/month) is not evidence
+about the grammar behind it.
+
+### The counter-intuitive finding: where a grammar lives predicts its health, backwards
+
+| host | grammars | median days since push | >1y stale | archived |
+|---|---|---|---|---|
+| `tree-sitter/` (official) | 22 | **244** | 0 (0%) | 0 |
+| `tree-sitter-grammars/` (community org) | 75 | **389** | **41 (55%)** | 0 |
+| everything else (personal, vendor) | 210 | **170** | 66 (31%) | 3 |
+
+`tree-sitter-grammars/` is the *worst*-maintained of the three, not the
+best. More than half its grammars have had no push in a year, and its median
+is the oldest of any host. It is where grammars are collected, not where
+they are maintained — an adoption signal, not a health one.
+
+The `tree-sitter/` org is the only host with **zero** grammars over a year
+stale. Everything else is bimodal: a good median dragged by a long dead
+tail, which is why a median alone is the wrong statistic and the >1y count
+is quoted beside it.
+
+**How this should feed the ranking:** treat `tree-sitter/` membership as a
+positive, `tree-sitter-grammars/` membership as neutral-to-negative, and a
+personal repo as requiring the staleness check individually. Do not treat
+"it is in the tree-sitter-grammars org" as a quality signal, which is the
+intuitive reading and is measurably wrong.
+
 ---
 
 ## 4. The next 20
 
 Ordered so the early ones de-risk the later ones. Six languages are already
-done (rust, typescript, javascript, java, csharp, and c on `add-c-grammar`),
+done and on `main` (rust, typescript, javascript, java, csharp, c),
 so these are #7 through #26.
 
 ### Wave 1 — free wins that prove the new CI at scale (all Tier A, all verified here)
@@ -397,7 +471,7 @@ The six already done are excluded. The top 20 are marked ★.
 | 26 | r | 640 K | 2 K | 3 | A | `parse(keep.source=)` | — |
 | 27 | ocaml | 524 K | 12 K | 3 | A | `compiler-libs` Parse | 2 grammars (impl + intf) |
 | 28 | xml | 518 K | — | 3 | A | libxml2 (well-formedness) | — |
-| 29 | scss | 22 K | 63 K | 3 | A | `sass` / `lightningcss` | as css |
+| 29 | scss | 22 K | 63 K | 3 | A | `sass` / `lightningcss` | **grammar: 4 years stale**, 33-star personal repo |
 | 30 | proto | 465 K | — | 3 | A | `protoc --descriptor_set_out` | syntax 2 vs 3 |
 | 31 | julia | 305 K | 17 K | 3 | A | `JuliaSyntax.jl` | — |
 | 32★ | erlang | 299 K | — | 3 | A | `epp_dodger` | — |
@@ -700,13 +774,18 @@ seconds. That belongs in the same decision as §10.1.
   startup cost, then subtract. Every oracle here is startup-dominated at
   1000 files (java 0.40 s of its 1.63 s; typescript 0.34 s of 0.57 s), so
   quoting a per-file rate without separating the two is misleading.
-- **C / C++ adjudicability.** `tools/c-oracle` from `origin/add-c-grammar`,
+- **C / C++ adjudicability.** `tools/c-oracle` (now on `main`),
   built with `TREEBANK_LLVM_DIR=/usr/lib/llvm-20`. Feed
   `<path>\t-xc++\t-std=gnu++20\t-ferror-limit=0\t-w\t-iquote<dir>\t-I<pkg>`
   per line; count `.verdict`.
 - **CI.** `git submodule deinit -f --all`, then `scripts/verify.sh
   crates/treebank-<lang>` — it passes, initializing only its own submodule,
   which is what makes `submodules: false` safe.
+- **Grammar health.** `gh api repos/<slug>` for each of the 307 distinct
+  GitHub repos in nvim-treesitter's `parsers.lua`, reading `pushed_at`,
+  `archived`, `stargazers_count` and `open_issues_count`. Quote the >1y
+  count alongside any median: every host group is bimodal, so a median alone
+  hides the dead tail.
 - **Popularity.** crates.io `?q=tree-sitter&sort=downloads` (8 pages, 2308
   hits), npm `api.npmjs.org/downloads/point/last-month/<comma-list>`,
   `nvim-treesitter/lua/nvim-treesitter/parsers.lua`, Helix `languages.toml`,
@@ -728,3 +807,11 @@ seconds. That belongs in the same decision as §10.1.
    probably worth more than the next ten grammars.
 3. **`TREEBANK_LIMIT` should become a file budget.** It is the one change
    in this document that alters existing behaviour for existing languages.
+4. **Twenty-one of the top 100 grammars are over a year stale**, and the
+   `tree-sitter-grammars` org — the intuitive place to look for a good
+   grammar — is the worst-maintained host of the three (§3). For most of
+   those the answer is "vendor it and carry the patches", which is exactly
+   what treebank is for. But `scss` in particular is popular on a
+   four-year-dead 33-star repo, and is ranked at #29 on popularity that says
+   nothing about the grammar. It should probably drop or be re-pointed
+   before anyone works through the list that far.
