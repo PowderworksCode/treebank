@@ -148,32 +148,47 @@ separately: assignments, conditions, parameter lists, return expressions,
 implicit string concatenation and attribute chains all still parse. 5 → 3
 gap files.
 
+## 0008 — f-string format specifier beginning with an equals sign
+
+`=` is sign-aware zero padding, so a specifier starting with it is ordinary
+formatting code:
+
+```python
+a = f"{v:=>10}"
+b = f"{num:=.2Uf}"
+```
+
+The ordinary lexer takes `:=` — one token, longer than `:` — so the
+specifier never started and the interpolation came back as an `ERROR`.
+
+The fix adds an **external token** for that colon. The scanner emits it only
+when `valid_symbols` says a format specifier may start here *and* the next
+character is `=`, which is the sole case the ordinary lexer gets wrong.
+`format_specifier` accepts either that token or a plain `':'`, so every other
+specifier lexes exactly as before. No new scanner state, so
+serialize/deserialize are untouched.
+
+Three alternatives were measured and rejected:
+
+- **Raising the colon's lexical precedence** fixes the same files, but
+  tree-sitter merges tokens with the same lexeme so the bump is global. It
+  broke `{1, x := 2, 3}` in a set literal — **+4 gap files**.
+- **Restricting the f-string expression rules** so a top-level
+  `named_expression` is unreachable does not fix it at all, and cascades into
+  unresolved conflicts: f-string interpolations share lex states with set and
+  dict literals.
+- **Emitting the external colon for every `:`**, not just before `=`, steals
+  the colons belonging to slices, dicts and lambdas in the same replacement
+  field — **+6 gap files**.
+
+3 → 2 gap files.
+
 ## Known gaps, not fixed
 
-Three files remain. Each is a distinct problem in the external scanner or the
-lexer rather than in `grammar.js`, and each was attempted and reverted rather
-than left unexamined.
+Two files remain, both indentation problems in the external scanner. Both
+were investigated to a conclusion rather than left open.
 
-### 1. f-string format specifier beginning with `=` (mpmath)
-
-`f"{v:=>10}"`, `f"{num:=.2Uf}"` — `=` is sign-aware zero padding, so this is
-ordinary formatting code. `:=` is lexed as the walrus before
-`format_specifier`'s `:` is considered.
-
-Two approaches were measured and both rejected:
-
-- **Raising the colon's lexical precedence works** — but tree-sitter merges
-  tokens with the same lexeme, so the bump is global. It broke
-  `{1, x := 2, 3}` in a set literal, adding 4 new gap files. Net worse.
-- **Restricting the f-string expression rules** so a top-level
-  `named_expression` is unreachable does *not* fix it on its own, and
-  produces a cascade of unresolved conflicts, because f-string
-  interpolations share lex states with set and dict literals.
-
-The fix is an external-scanner token for the format-spec colon. The scanner
-already tracks `inside_interpolated_string`, so it has the context it needs.
-
-### 2. Bracketed continuation at column zero (ruff `fmt_on_off/indent.py`)
+### 1. Bracketed continuation at column zero (ruff `fmt_on_off/indent.py`)
 
 ```python
 def test():
@@ -182,17 +197,28 @@ c
    )
 ```
 
-Python ignores indentation inside brackets, so this is valid. The scanner's
-dedent decision bypasses its own `within_brackets` guard whenever `DEDENT` is
-a valid symbol. Moving the guard to cover the whole decision does not help:
-at the start of a continuation line the parser is mid-expression, so no
-closing bracket is a valid next token and `within_brackets` is false. A real
-fix needs bracket-depth tracking in the scanner, with the serialization that
-implies.
+Python ignores indentation inside brackets, so this is valid.
 
-### 3. Pathological backslash indentation (`executing`)
+**Measured, and this is the useful part:** at the moment the scanner decides,
+a legitimate dedent (`def f():` / `  a` / `b`) and this case are
+*indistinguishable*. Both present as `indent=0 cur=2 DEDENT=1 NEWLINE=0
+within_brackets=0`. The parser genuinely asks for a dedent in both, so **no
+refinement of the existing heuristic can separate them** — the scanner has to
+know the bracket depth itself.
+
+Tracking it exactly means the scanner must *emit* the brackets: merely
+observing `lexer->lookahead` double-counts, because the scanner is invoked
+repeatedly at one position. Declaring `'('`, `'['`, `'{'` as externals and
+emitting them with a depth counter (serialization included) **fixes this file
+and breaks 33 of upstream's 123 corpus tests**, because external tokens do not
+carry the same conflict behaviour as internal ones. Reverted.
+
+This needs an upstream redesign of how indentation and brackets interact, not
+a patch.
+
+### 2. Pathological backslash indentation (`executing`)
 
 Deliberately awkward continuations at *decreasing* indentation. No contiguous
 window of the file is both oracle-valid and grammar-failing, so there is no
-minimal repro to work from — it needs the whole file's accumulated indent
-stack. Not attempted blind.
+minimal repro — it depends on the whole file's accumulated indent stack. Not
+attempted blind.

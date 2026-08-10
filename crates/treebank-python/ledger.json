@@ -32,13 +32,13 @@
       "clusters": 296
     },
     "sweep_patched": {
-      "passed": 69810,
-      "failed": 613,
-      "gap_files": 3,
+      "passed": 69811,
+      "failed": 612,
+      "gap_files": 2,
       "noise_files": 610,
-      "clusters": 282
+      "clusters": 281
     },
-    "remaining_gaps_note": "3 gap files remain, each a distinct problem in the external scanner or the lexer rather than in grammar.js, and each attempted and reverted rather than left unexamined. (1) mpmath test_format.py \u2014 an f-string format specifier beginning with '=' (f\"{v:=>10}\", f\"{num:=.2Uf}\"). ':=' is lexed as the walrus before format_specifier's ':' is considered. Raising the colon's lexical precedence DOES fix it but is global \u2014 tree-sitter merges tokens with the same lexeme \u2014 and measurably breaks '{1, x := 2, 3}' in a set literal (4 new gap files). Restricting the f-string expression rules so a top-level named_expression is unreachable does not fix it on its own and produces a cascade of unresolved conflicts, because f-string interpolations share lex states with set and dict literals. The fix is an external-scanner token for the format-spec colon; the scanner already tracks inside_interpolated_string. (2) ruff fmt_on_off/indent.py \u2014 a parenthesised expression whose continuation line starts at column 0, below the enclosing block. Python ignores indentation inside brackets, but the scanner's dedent decision bypasses its within_brackets guard whenever DEDENT is a valid symbol. Guarding the whole decision does not help: at the start of a continuation line the parser is mid-expression, so no closing bracket is a valid next token and within_brackets is false. A real fix needs bracket-depth tracking in the scanner, with the serialization that implies. (3) executing tests/test_main.py \u2014 deliberately pathological backslash continuations at decreasing indentation. No contiguous window of the file is both oracle-valid and grammar-failing, so there is no minimal repro to work from; it needs the whole file's indent stack. Not attempted blind.",
+    "remaining_gaps_note": "2 gap files remain, both indentation problems in the external scanner, and both investigated to a conclusion rather than left open. (1) ruff fmt_on_off/indent.py \u2014 a parenthesised expression whose continuation line starts at column 0, below the enclosing block. MEASURED: at the moment the scanner decides, the legitimate dedent `def f():/  a/b` and this case are INDISTINGUISHABLE in valid_symbols \u2014 both present as indent=0 cur=2 DEDENT=1 NEWLINE=0 within_brackets=0. The parser genuinely asks for a dedent in both, so no refinement of the existing heuristic can separate them; the scanner would have to know the bracket depth itself. Tracking it exactly requires the scanner to EMIT the brackets (merely observing lookahead double-counts across repeated invocations at one position), and doing that \u2014 declaring '(', '[', '{' as externals and emitting them with a depth counter, serialization included \u2014 fixes this file and breaks 33 of upstream's 123 corpus tests, because external tokens do not carry the same conflict behaviour as internal ones. Reverted. This needs an upstream redesign of how indentation and brackets interact, not a patch. (2) executing tests/test_main.py \u2014 deliberately pathological backslash continuations at decreasing indentation. No contiguous window of the file is both oracle-valid and grammar-failing, so there is no minimal repro; it depends on the whole file's accumulated indent stack. Not attempted blind.",
     "oracle_note": "Deliberately compile() and not ast.parse(). CPython enforces a set of rules AFTER the parser that are still SyntaxErrors and still make a file unusable as a module: `return`/`await` outside a function, `_ = *[42]` (\"can't use starred expression here\"), a bare `except:` that is not last, duplicate parameter names. ast.parse accepts all of them. Measured: 11 of the 30 files the first sweep called grammar gaps were files CPython would refuse to run \u2014 fragments and deliberately-invalid fixtures shipped as test data by ruff, black, pylint and parso. The cost, stated plainly: a file that is compile-invalid for one reason AND has a real grammar gap for another is now noise rather than a gap, so gap_files can under-report. Same direction as C's indeterminate collapse, and the safe one \u2014 the sweep can miss a grammar bug, it can never invent one.",
     "oracle_cost": "1.23 s per 1000 files (ast.parse was 0.97 s); still firmly Tier A"
   },
@@ -221,6 +221,39 @@
           "gap_files": 3
         },
         "evidence_note": "Two files, zero regressions. Ordinary continuations were regression-tested separately: line continuations in assignments, conditions, parameter lists, return expressions, implicit string concatenation, and attribute chains all still parse."
+      }
+    },
+    {
+      "id": 8,
+      "title": "f-string format specifier beginning with an equals sign",
+      "file": "patches/0008-f-string-format-specifier-beginning-with-an-equals-sign.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 PyPI sweep",
+      "evidence": {
+        "repro": "a = f\"{v:=>10}\"\nb = f\"{num:=.2Uf}\"\n",
+        "diagnosis": "'=' is sign-aware zero padding, so a format specifier starting with it is ordinary formatting code. The ordinary lexer takes ':=' \u2014 one token, longer than ':' \u2014 so the specifier never started and the interpolation came back as an ERROR. The fix adds an external token for that colon: the scanner emits it only when valid_symbols says a format specifier may start here AND the next character is '=', which is the sole case the ordinary lexer gets wrong. format_specifier accepts either that token or a plain ':', so every other specifier lexes exactly as before.",
+        "rejected_alternatives": "Raising the colon's lexical precedence fixes the same files but is global \u2014 tree-sitter merges tokens with the same lexeme \u2014 and broke '{1, x := 2, 3}' in a set literal, adding 4 gap files. Restricting the f-string expression rules so a top-level named_expression is unreachable does not fix it at all and cascades into unresolved conflicts, because f-string interpolations share lex states with set and dict literals. Emitting the external colon for EVERY ':' rather than only before '=' steals the colons belonging to slices, dicts and lambdas inside the same replacement field: measured, 6 extra gap files.",
+        "first_seen": {
+          "package": "mpmath",
+          "version": "1.4.1",
+          "path": "mpmath/tests/test_format.py"
+        },
+        "sweep_before": {
+          "passed": 69810,
+          "failed": 613,
+          "gap_files": 3
+        },
+        "sweep_after": {
+          "passed": 69811,
+          "failed": 612,
+          "gap_files": 2
+        },
+        "evidence_note": "No new scanner state, so serialize/deserialize are untouched."
       }
     }
   ]
