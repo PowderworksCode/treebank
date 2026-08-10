@@ -1,0 +1,101 @@
+{
+  "grammar": "c",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-c",
+    "sha": "b780e47fc780ddc8da13afa35a3f4ed5c157823d",
+    "version": "0.24.2",
+    "sha_note": "commit target of tag v0.24.2 (also the default branch head at pin time); submodule pointers are commits, not annotated tag objects"
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "corpus": {
+    "source": "Debian sid, source packages ranked by popcon (popularity-contest) installs aggregated per source package, filtered to packages whose sources.debian.org SLOC is >=2000 ansic and ansic >= cpp; upstream .orig.tar.* only (never the .debian.tar.* patch tarball); .c and .h files, C++ headers excluded by content",
+    "source_note": "C has no registry, so popularity is borrowed. popcon counts machines, which is closer in kind to crates.io downloads than Java's dependent-repos proxy. The bias is explicit and it is the point: this corpus is the C that ships in a distribution \u2014 system libraries, daemons, autotools trees, GNU extensions \u2014 NOT trending C on GitHub, which is a different corpus and would give different gap numbers. The SLOC filter exists because popcon ranks everything Debian ships: without it the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc-16 (no C at all).",
+    "oracle": "tools/c-oracle \u2014 libclang 20.1.2, parse-only, verdict from clang's own diagnostic categories. THREE-VALUED: valid / invalid / indeterminate. See crates/treebank-c/ORACLE.md for what it does and does not claim; the short version is 'no syntax error, in GNU C, given these include paths', NOT 'this compiles'. Lang::validate collapses indeterminate to false, so gap_files is a FLOOR and noise_files mixes 'reference rejected it' with 'could not tell'; the full split is in corpus/c/oracle-verdicts.json and on the sweep's stderr.",
+    "fetched": "2026-08-08 (popcon + sid Sources snapshot of that date)",
+    "packages": 20,
+    "files": 39928,
+    "files_note": ".c and .h from the top 20 C source packages by popcon; 365 of 12,767 headers dropped as C++ (unguarded namespace/template/class, comments and __cplusplus-guarded regions excluded from the scan)",
+    "sweep_upstream": {
+      "passed": 21991,
+      "failed": 17937,
+      "gap_files": 5502,
+      "noise_files": 12435,
+      "clusters": 924
+    },
+    "oracle_split": {
+      "valid": 5502,
+      "invalid": 452,
+      "indeterminate": 11983,
+      "note": "of the 17,937 failing files. INDETERMINATE OUTNUMBERS VALID 2.2:1, so gap_files is a floor and noise_files (12,435) mixes 'reference rejected it' (452) with 'could not tell' (11,983). ~79% of indeterminates carry an unresolved include; the largest remaining class is the configure-generated config.h, which no static include path can supply."
+    },
+    "oracle_flags": "-std=gnu17 -ferror-limit=0 -w, -iquote<every header-bearing dir in the package and its ancestors>, -I<package root, include/, inc/, src/, lib/>, -idirafter<every header-bearing dir>",
+    "oracle_flags_note": "Three search paths, each doing a distinct job. -iquote answers the package's own quoted includes. -I is limited to the package's PUBLIC dirs on purpose: it is searched before the system dirs, so a wide -I list lets a package's private replacements for system headers shadow the real ones (glibc string/string.h answering <string.h>) and resolution gets WORSE (measured: 4578 -> 4060 valid). -idirafter carries the wide list instead; being searched AFTER the system dirs it can only supply headers the system lacks, which is what glibc's <sigsetops.h> needs. Measured on 1,500 failing files: -iquote+public -I alone = 372 valid / 11 invalid / 1117 indeterminate; adding -idirafter = 453 / 37 / 1010.",
+    "top_gap_clusters": [
+      {
+        "signature": "expression_statement > MISSING ;",
+        "valid": 950,
+        "files": 3455,
+        "class": "statement macro followed by a block, e.g. list_for_each(li, &q->ifaces) { ... }"
+      },
+      {
+        "signature": "preproc_ifdef > MISSING #endif",
+        "valid": 765,
+        "files": 912,
+        "class": "extern \"C\" brace asymmetry: `{` inside one #ifdef __cplusplus and `}` inside another. Preprocessor-inherent, same shape as the C# asymmetry; not a fixable grammar bug"
+      },
+      {
+        "signature": "function_definition > ERROR(identifier)",
+        "valid": 422,
+        "files": 1383,
+        "class": "undefined macro in declaration position, e.g. _INLINE_ void __list_add(...)"
+      },
+      {
+        "signature": "declaration > MISSING ;",
+        "valid": 413,
+        "files": 1557,
+        "class": "same family"
+      },
+      {
+        "signature": "declaration > ERROR(identifier)",
+        "valid": 279,
+        "files": 1406,
+        "class": "macro in declaration position, e.g. THREAD_LOCAL int adjustment = 0;"
+      },
+      {
+        "signature": "argument_list > ERROR(identifier)",
+        "valid": 164,
+        "files": 1782,
+        "class": "type as a macro argument, e.g. list_entry(a, struct file_element, file_list)"
+      }
+    ],
+    "oracle_correction": "The first published numbers for this corpus (gap 5629, invalid 302, indeterminate 12006) were computed while c-oracle had a fixed 128-flag cap per request, which silently truncated the include list for the three largest packages \u2014 glibc alone has 498 header-bearing dirs. The cap is gone; the numbers above are the corrected ones. The truncation also made -idirafter look inert, because its flags were the ones being dropped."
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-c name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_c so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    }
+  ]
+}

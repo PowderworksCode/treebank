@@ -43,6 +43,9 @@ pub enum LangName {
     #[serde(rename = "csharp")]
     #[value(name = "csharp")]
     Csharp,
+    #[serde(rename = "c")]
+    #[value(name = "c")]
+    C,
 }
 
 impl LangName {
@@ -53,6 +56,7 @@ impl LangName {
             LangName::Javascript => "javascript",
             LangName::Java => "java",
             LangName::Csharp => "csharp",
+            LangName::C => "c",
         }
     }
 }

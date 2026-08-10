@@ -101,6 +101,9 @@ fn record(
     buf: &[u8],
 ) -> Result<Option<ManifestFile>> {
     let Some(dialect) = lang.classify(rel) else { return Ok(None) };
+    if !lang.admit(rel, buf) {
+        return Ok(None);
+    }
     let dest = pkgdir.join(rel);
     std::fs::create_dir_all(dest.parent().unwrap())?;
     std::fs::write(&dest, buf)?;
@@ -112,18 +115,37 @@ fn record(
     }))
 }
 
+/// Tar compression, by magic bytes. Registry tarballs are gzip, but Debian
+/// ships whatever upstream released: measured over sid main, 60674 `.orig.tar.gz`,
+/// 22708 `.orig.tar.xz` and 2384 `.orig.tar.bz2` — and all three appear inside
+/// the top 25 C sources by popcon, so all three have to work.
+fn decompress(archive: &Path) -> Result<Box<dyn Read>> {
+    let mut magic = [0u8; 6];
+    {
+        use std::io::Read as _;
+        let mut f = std::fs::File::open(archive)?;
+        let _ = f.read(&mut magic)?;
+    }
+    let file = std::fs::File::open(archive)?;
+    Ok(match magic {
+        [0xfd, b'7', b'z', b'X', b'Z', 0x00] => Box::new(liblzma::read::XzDecoder::new(file)),
+        [b'B', b'Z', b'h', ..] => Box::new(bzip2::read::BzDecoder::new(file)),
+        _ => Box::new(flate2::read::GzDecoder::new(file)),
+    })
+}
+
 /// Extract corpus files (per lang.classify) from a package archive.
 ///
-/// Registries ship two shapes. Gzipped tarballs (npm, crates.io, GitHub
-/// source archives) wrap everything in one top-level directory, which is
-/// stripped. Zips (Maven `-sources.jar`, `.nupkg`) do not: their entries are
-/// already root-relative, so stripping would drop the first path segment —
-/// the whole `com/` of `com/google/common/base/Ascii.java`.
+/// Registries ship two shapes. Compressed tarballs (npm, crates.io, GitHub
+/// source archives, Debian `.orig.tar.*`) wrap everything in one top-level
+/// directory, which is stripped. Zips (Maven `-sources.jar`, `.nupkg`) do not:
+/// their entries are already root-relative, so stripping would drop the first
+/// path segment — the whole `com/` of `com/google/common/base/Ascii.java`.
 fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<ManifestFile>> {
     let mut files = Vec::new();
-    let mut magic = [0u8; 4];
     let is_zip = {
         use std::io::Read as _;
+        let mut magic = [0u8; 4];
         let mut f = std::fs::File::open(archive)?;
         f.read_exact(&mut magic).is_ok() && &magic[..2] == b"PK"
     };
@@ -143,8 +165,7 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
             files.extend(record(lang, pkgdir, &rel, &buf)?);
         }
     } else {
-        let gz = flate2::read::GzDecoder::new(std::fs::File::open(archive)?);
-        let mut tar = tar::Archive::new(gz);
+        let mut tar = tar::Archive::new(decompress(archive)?);
         for entry in tar.entries()? {
             let mut entry = entry?;
             let entry_path = entry.path()?.to_path_buf();
@@ -178,11 +199,11 @@ pub fn run(lang: &dyn Lang, list: &Path, limit: usize, corpus: &Path) -> Result<
         // The extension is cosmetic — extract() sniffs the magic bytes — but
         // a cached Maven sources.jar should not be named .tar.gz.
         // .crate/.tgz are legacy cache names from before the lang refactor.
-        let ext = ["jar", "zip", "nupkg"]
+        let ext = ["jar", "zip", "nupkg", "tar.xz", "tar.bz2"]
             .into_iter()
             .find(|e| tarball_url.ends_with(&format!(".{e}")))
             .unwrap_or("tar.gz");
-        let tarball = ["tar.gz", "crate", "tgz", "jar", "zip", "nupkg"]
+        let tarball = ["tar.gz", "tar.xz", "tar.bz2", "crate", "tgz", "jar", "zip", "nupkg"]
             .iter()
             .map(|e| cache.join(format!("{stem}.{e}")))
             .find(|p| p.exists())
