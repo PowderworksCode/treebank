@@ -7,6 +7,8 @@ use std::sync::LazyLock;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
+use treebank_preprocessing::Symbols;
+
 use super::Lang;
 use crate::ledger::LangName;
 use crate::rank::RankedCrate;
@@ -106,6 +108,17 @@ impl Lang for C {
             return false;
         }
         !looks_like_cxx(content)
+    }
+
+    /// `__cplusplus` is not a symbol we are uncertain about: compiling C, it
+    /// is *always* undefined. Declaring that one fact is what lets the sweep
+    /// recognise the `extern "C" { ... }`-split-across-`#ifdef` class, which
+    /// no grammar patch can fix and which would otherwise sit near the top of
+    /// the fix queue forever.
+    fn preprocessing(&self) -> Option<&'static Symbols> {
+        static SYMBOLS: LazyLock<Symbols> =
+            LazyLock::new(|| Symbols::new().undefined("__cplusplus"));
+        Some(&SYMBOLS)
     }
 
     fn grammar_dirs(&self) -> &'static [&'static str] {

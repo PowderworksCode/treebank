@@ -18,6 +18,8 @@ use std::path::Path;
 
 use anyhow::Result;
 
+use treebank_preprocessing::Symbols;
+
 use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
@@ -44,6 +46,20 @@ pub trait Lang: Sync {
     fn admit(&self, rel: &Path, content: &[u8]) -> bool {
         let _ = (rel, content);
         true
+    }
+
+    /// What this language knows for certain about its own preprocessor, if
+    /// it has one. `None` — the default — means the source is parsed exactly
+    /// as written, which is right for every language without conditional
+    /// compilation.
+    ///
+    /// A grammar parses all `#if` branches at once; a compiler parses only
+    /// the live ones. Where that difference makes a file unparseable *as
+    /// written* but fine as compiled, the failure is a property of the
+    /// preprocessor, not a grammar bug, and the sweep says so rather than
+    /// filing it as a gap. See `treebank_preprocessing`.
+    fn preprocessing(&self) -> Option<&'static Symbols> {
+        None
     }
 
     /// Grammar dirs to load, in routing-index order, relative to the

@@ -983,9 +983,14 @@ dependencies = [
  "syn 2.0.119",
  "tar",
  "tree-sitter",
+ "treebank-preprocessing",
  "ureq",
  "zip",
 ]
+
+[[package]]
+name = "treebank-preprocessing"
+version = "0.1.0"
 
 [[package]]
 name = "typenum"

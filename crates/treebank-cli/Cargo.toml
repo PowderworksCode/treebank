@@ -22,5 +22,6 @@ sha2 = "0.10"
 syn = { version = "2", features = ["full"] }
 tar = "0.4"
 tree-sitter = "0.26"
+treebank-preprocessing = { path = "../treebank-preprocessing" }
 ureq = { version = "2", features = ["json"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

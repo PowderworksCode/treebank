@@ -24,6 +24,7 @@ set -euo pipefail
 CORE=(
   'scripts/'
   'crates/treebank-cli/'
+  'crates/treebank-preprocessing/'
   'tools/'
   '.github/workflows/'
   '.gitmodules'

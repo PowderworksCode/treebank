@@ -158,16 +158,24 @@ On 1,500 failing files, `-idirafter` is worth **372 → 453 valid** and
 
 ```
 21,991 passed (55.1%) / 17,937 failed (44.9%), 924 clusters
-  of the failures:  5,502 gap  |  452 noise  |  11,983 indeterminate
+  of the failures:  4,593 gap  |  909 config-inherent  |  12,435 noise
+  oracle split:     5,502 valid | 452 invalid | 11,983 indeterminate
 ```
 
-538 of the 924 clusters contain at least one known-valid file. The six
-largest gap classes, and what they actually are:
+**config-inherent** is a third verdict, added once C arrived: valid files the
+grammar rejects that **no grammar patch can fix**, because a preprocessor
+conditional splits a construct the parser must see whole. They parse cleanly
+once the branches a compiler would have dropped are removed. 909 of the 5,502
+files the oracle calls valid are this class — see
+[treebank-preprocessing](../treebank-preprocessing/src/lib.rs). `REPORT.md`
+names them in their own section and keeps them out of the fix instructions, so
+the agent does not spend its attempts on the one cluster it cannot win.
+
+The six largest *gap* classes, and what they actually are:
 
 | valid | files | signature | class |
 |------:|------:|-----------|-------|
 | 950 | 3455 | `expression_statement > MISSING ;` | statement macro then a block: `list_for_each(li, &q->ifaces) { … }` |
-| 765 |  912 | `preproc_ifdef > MISSING #endif` | `extern "C"` brace asymmetry — preprocessor-inherent, not a grammar bug |
 | 422 | 1383 | `function_definition > ERROR(identifier)` | macro in declaration position: `_INLINE_ void __list_add(…)` |
 | 413 | 1557 | `declaration > MISSING ;` | same family |
 | 279 | 1406 | `declaration > ERROR(identifier)` | `THREAD_LOCAL int adjustment = 0;` |
