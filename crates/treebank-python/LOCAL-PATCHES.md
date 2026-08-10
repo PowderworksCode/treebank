@@ -53,3 +53,85 @@ been seen yet) is unchanged.
 Found by the first top-500 PyPI sweep, in a pydantic mypy fixture. One file
 in 70,423, with zero regressions — before and after were measured over the
 identical corpus with only this patch removed and restored.
+
+## 0004 — slices in a generic type application
+
+`generic_type` took `$.type_parameter`, whose elements are `$.type`, and
+`$.type` has no slice. Because `generic_type` carries `prec(1)` it also
+shadowed the plain subscript reading, so an annotation like `int[:]` had no
+path at all:
+
+```python
+a: int32_t[:] = f()
+foo: Bar[:, :, :]
+def to_chars(s) -> char_type[:]: ...
+def compute(x: my_type[:, ::1]): ...
+```
+
+A slice inside a subscript is ordinary valid Python — `Subscript(Name,
+Slice())` — and Cython's pure-Python mode leans on it for memoryviews.
+
+`generic_type` now has its own argument list that admits `$.slice`, aliased
+back to the `type_parameter` node name so the tree shape consumers query is
+unchanged. The PEP 695 *declaration* sites (`def f[T]`, `class C[T]`) keep
+the strict `$.type_parameter`: `def f[:](): ...` is still rejected.
+
+7 files, all Cython. 19 → 12 gap files.
+
+## 0005 — PEP 646 unpacking beyond a bare name
+
+Two halves of one feature:
+
+```python
+def foo(*args: *(int or str)): ...
+data[*(x := y)]
+u = tuple[*Ts]
+```
+
+`splat_type` accepted only a bare `$.identifier`. It now also takes a
+parenthesized expression or a generic. Listing alternatives rather than
+widening to `$.type` is deliberate: widening wrapped the identifier case in
+a `type` node and broke two upstream corpus tests, which is a tree-shape
+change consumers' queries would feel.
+
+Separately, `subscript` admitted only an expression or a slice, so `data[*x]`
+had no path; it now also takes `$.list_splat`. `data[*]` and
+`def f(*args: *): ...` are still rejected.
+
+12 → 7 gap files.
+
+## 0006 — starred expressions in bare tuples and targets
+
+`$.list_splat` is not an `$.expression`, so an element of a bare tuple could
+never be a starred expression:
+
+```python
+a = *[1],
+*[], b = (1,)
+```
+
+`a = *b,` only *appeared* to work, because a bare name is also a valid
+assignment-target pattern and the parser took the pattern branch. `a = *[1],`
+had no path at all. `expression_list` now takes
+`choice($.expression, $.list_splat)`, matching CPython's `star_expressions`.
+
+Separately `list_splat_pattern` accepted only identifier/subscript/attribute,
+so the legal target `*[], b = (1,)` failed; it now also takes `list_pattern`
+and `tuple_pattern`, matching CPython's `target_with_star_atom`.
+
+7 → 5 gap files.
+
+## Known gaps, not fixed
+
+Five files remain, in two families. Both live in the external scanner and the
+lexer rather than in `grammar.js`, neither reproduces in a small isolated
+snippet — both need the surrounding indentation state — and the blast radius
+of a change there is every Python file. Left for a focused pass:
+
+1. **An f-string format specifier beginning with `=`** (1 file):
+   `f"{num:=.2Uf}"`, `f"{v:=>10}"`. `:=` is lexed as the walrus operator
+   before `format_specifier`'s `:` is considered.
+2. **Backslash continuations interacting with indentation** (4 files):
+   `else:\` followed by an indented body, and an attribute access split as
+   `tester.x. \` across lines. All four are parser/formatter test fixtures
+   from ruff and executing.
