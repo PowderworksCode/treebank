@@ -113,6 +113,32 @@ if [ "${1:-}" = "--self-test" ]; then
   t "$(all_grammars | jq -R . | jq -sc .)" true '.gitmodules'
   # core wins even when a single grammar also changed
   t "$(all_grammars | jq -R . | jq -sc .)" true 'crates/treebank-rust/ledger.json' 'scripts/verify.sh'
+  # The diff FORM, not just the classification. This is the part that cannot
+  # be checked by reading: two-dot and three-dot agree until the base moves,
+  # so a regression here is invisible except while other work is landing.
+  scratch=$(mktemp -d)
+  (
+    cd "$scratch"
+    git init -q .
+    git config user.email t@t; git config user.name t
+    mkdir -p crates/treebank-rust crates/treebank-java
+    echo a > crates/treebank-rust/ledger.json
+    echo a > crates/treebank-java/ledger.json
+    git add -A && git commit -qm base
+    git checkout -qb feature
+    echo b > crates/treebank-rust/ledger.json
+    git commit -qam rust
+    git checkout -q master 2>/dev/null || git checkout -q main
+    echo b > crates/treebank-java/ledger.json      # main moves on, elsewhere
+    git commit -qam java
+    three=$(git diff --name-only "HEAD...feature")
+    two=$(git diff --name-only "HEAD" "feature")
+    [ "$three" = "crates/treebank-rust/ledger.json" ] || { echo "  FAIL three-dot got: $three" >&2; exit 1; }
+    case "$two" in *treebank-java*) ;; *) echo "  FAIL two-dot no longer differs; this test is not testing anything" >&2; exit 1;; esac
+    echo "  ok   three-dot ignores base-side changes; two-dot would have added treebank-java"
+  ) || fail=1
+  rm -rf "$scratch"
+
   [ "$fail" = 0 ] && echo "changed-grammars: self-test ok" || { echo "changed-grammars: self-test FAILED" >&2; exit 1; }
   exit 0
 fi
@@ -128,4 +154,12 @@ fi
 
 BASE=${1:?usage: changed-grammars.sh <base-ref> [head-ref] | --all | --self-test}
 HEAD=${2:-HEAD}
-git diff --name-only "$BASE" "$HEAD" | classify
+# Three-dot: what HEAD changed *since it diverged from* BASE.
+#
+# Two-dot compares the two tips directly and is symmetric, so it also reports
+# everything BASE has that HEAD lacks. For a pull request BASE is the base
+# branch's current tip, which means the moment main gains a change to another
+# grammar, every open PR starts verifying that grammar too — not because the PR
+# touched it, but because the PR is missing it. Selective CI would look like it
+# had silently regressed, and only while other work was landing.
+git diff --name-only "$BASE...$HEAD" | classify

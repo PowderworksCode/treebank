@@ -20,7 +20,14 @@
 name: verify-grammars
 
 on:
+  # push only on the trunk. A branch's `pull_request` run already covers it,
+  # and the push run cannot do better: on a branch's FIRST push there is no
+  # previous tip to diff against, so it falls back to every grammar, and after
+  # a force-push the before→after span covers whatever lies between two
+  # divergent histories — which is every stacked PR, every time a lower layer
+  # merges and the ones above it are rebased.
   push:
+    branches: [main]
     paths:
       - 'crates/**'
       - 'scripts/**'
