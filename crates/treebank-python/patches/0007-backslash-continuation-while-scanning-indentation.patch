@@ -1,0 +1,52 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index 2a619c5..24136a5 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -253,6 +253,16 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer, con
+             }
+             if (lexer->lookahead == '\n' || lexer->eof(lexer)) {
+                 skip(lexer);
++                // A backslash-newline joins two physical lines into one
++                // logical line. The logical line's indentation is the one we
++                // have already counted; whatever leading whitespace the
++                // continuation line carries is content, not indentation.
++                // Without this break the loop keeps adding to indent_length,
++                // so `    \` + `        1` is read as indent 12 rather
++                // than 4 and the block structure comes out wrong.
++                if (found_end_of_line) {
++                    break;
++                }
+             } else {
+                 return false;
+             }
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index 23f8d19..ca8f8be 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -1669,3 +1669,26 @@ a = *[1],
+     (assignment
+       left: (pattern_list (list_splat_pattern (list_pattern)) (identifier))
+       right: (tuple (integer)))))
++
++==================================
++Backslash continuation while scanning indentation
++==================================
++
++if True:
++    \
++        1
++else:\
++    2
++
++---
++
++(module
++  (if_statement
++    condition: (true)
++    (line_continuation)
++    consequence: (block
++      (expression_statement (integer)))
++    alternative: (else_clause
++      (line_continuation)
++      body: (block
++        (expression_statement (integer))))))

@@ -121,17 +121,78 @@ and `tuple_pattern`, matching CPython's `target_with_star_atom`.
 
 7 → 5 gap files.
 
+## 0007 — backslash continuation while scanning indentation
+
+A backslash-newline joins two physical lines into one logical line, so the
+logical line's indentation is whatever was counted *before* the backslash;
+the continuation line's leading whitespace is content, not indentation.
+
+The scanner's indentation loop consumed the backslash and newline and then
+kept adding to `indent_length`, so this was read as indent 12 rather than 4
+and the block structure came out wrong:
+
+```python
+if True:
+    \
+        1
+else:\
+    2
+```
+
+The loop now stops counting once a continuation has been consumed, and only
+when an end of line has already been seen — a backslash mid-line, which is
+the ordinary `x = 1 + \` case, is untouched.
+
+2 files, zero regressions. Ordinary continuations were regression-tested
+separately: assignments, conditions, parameter lists, return expressions,
+implicit string concatenation and attribute chains all still parse. 5 → 3
+gap files.
+
 ## Known gaps, not fixed
 
-Five files remain, in two families. Both live in the external scanner and the
-lexer rather than in `grammar.js`, neither reproduces in a small isolated
-snippet — both need the surrounding indentation state — and the blast radius
-of a change there is every Python file. Left for a focused pass:
+Three files remain. Each is a distinct problem in the external scanner or the
+lexer rather than in `grammar.js`, and each was attempted and reverted rather
+than left unexamined.
 
-1. **An f-string format specifier beginning with `=`** (1 file):
-   `f"{num:=.2Uf}"`, `f"{v:=>10}"`. `:=` is lexed as the walrus operator
-   before `format_specifier`'s `:` is considered.
-2. **Backslash continuations interacting with indentation** (4 files):
-   `else:\` followed by an indented body, and an attribute access split as
-   `tester.x. \` across lines. All four are parser/formatter test fixtures
-   from ruff and executing.
+### 1. f-string format specifier beginning with `=` (mpmath)
+
+`f"{v:=>10}"`, `f"{num:=.2Uf}"` — `=` is sign-aware zero padding, so this is
+ordinary formatting code. `:=` is lexed as the walrus before
+`format_specifier`'s `:` is considered.
+
+Two approaches were measured and both rejected:
+
+- **Raising the colon's lexical precedence works** — but tree-sitter merges
+  tokens with the same lexeme, so the bump is global. It broke
+  `{1, x := 2, 3}` in a set literal, adding 4 new gap files. Net worse.
+- **Restricting the f-string expression rules** so a top-level
+  `named_expression` is unreachable does *not* fix it on its own, and
+  produces a cascade of unresolved conflicts, because f-string
+  interpolations share lex states with set and dict literals.
+
+The fix is an external-scanner token for the format-spec colon. The scanner
+already tracks `inside_interpolated_string`, so it has the context it needs.
+
+### 2. Bracketed continuation at column zero (ruff `fmt_on_off/indent.py`)
+
+```python
+def test():
+  (b +
+c
+   )
+```
+
+Python ignores indentation inside brackets, so this is valid. The scanner's
+dedent decision bypasses its own `within_brackets` guard whenever `DEDENT` is
+a valid symbol. Moving the guard to cover the whole decision does not help:
+at the start of a continuation line the parser is mid-expression, so no
+closing bracket is a valid next token and `within_brackets` is false. A real
+fix needs bracket-depth tracking in the scanner, with the serialization that
+implies.
+
+### 3. Pathological backslash indentation (`executing`)
+
+Deliberately awkward continuations at *decreasing* indentation. No contiguous
+window of the file is both oracle-valid and grammar-failing, so there is no
+minimal repro to work from — it needs the whole file's accumulated indent
+stack. Not attempted blind.

@@ -32,13 +32,13 @@
       "clusters": 296
     },
     "sweep_patched": {
-      "passed": 69808,
-      "failed": 615,
-      "gap_files": 5,
+      "passed": 69810,
+      "failed": 613,
+      "gap_files": 3,
       "noise_files": 610,
-      "clusters": 283
+      "clusters": 282
     },
-    "remaining_gaps_note": "5 gap files remain, in two families, both in the external scanner / lexer rather than in grammar.js, and both left deliberately. (a) An f-string format specifier that begins with '=' \u2014 f\"{num:=.2Uf}\", f\"{v:=>10}\" \u2014 because ':=' is lexed as the walrus operator before format_specifier's ':' is considered (1 file). (b) Backslash line continuations interacting with indentation, e.g. `else:\\` followed by an indented body, and an attribute access split as `tester.x. \\` across lines (4 files, all parser/formatter test fixtures from ruff and executing). Neither reproduces in a small isolated snippet \u2014 both need the surrounding indentation state \u2014 and both sit in scanner.c, where the blast radius is every Python file. They are the next fix agent's queue, with repros recorded in LOCAL-PATCHES.md.",
+    "remaining_gaps_note": "3 gap files remain, each a distinct problem in the external scanner or the lexer rather than in grammar.js, and each attempted and reverted rather than left unexamined. (1) mpmath test_format.py \u2014 an f-string format specifier beginning with '=' (f\"{v:=>10}\", f\"{num:=.2Uf}\"). ':=' is lexed as the walrus before format_specifier's ':' is considered. Raising the colon's lexical precedence DOES fix it but is global \u2014 tree-sitter merges tokens with the same lexeme \u2014 and measurably breaks '{1, x := 2, 3}' in a set literal (4 new gap files). Restricting the f-string expression rules so a top-level named_expression is unreachable does not fix it on its own and produces a cascade of unresolved conflicts, because f-string interpolations share lex states with set and dict literals. The fix is an external-scanner token for the format-spec colon; the scanner already tracks inside_interpolated_string. (2) ruff fmt_on_off/indent.py \u2014 a parenthesised expression whose continuation line starts at column 0, below the enclosing block. Python ignores indentation inside brackets, but the scanner's dedent decision bypasses its within_brackets guard whenever DEDENT is a valid symbol. Guarding the whole decision does not help: at the start of a continuation line the parser is mid-expression, so no closing bracket is a valid next token and within_brackets is false. A real fix needs bracket-depth tracking in the scanner, with the serialization that implies. (3) executing tests/test_main.py \u2014 deliberately pathological backslash continuations at decreasing indentation. No contiguous window of the file is both oracle-valid and grammar-failing, so there is no minimal repro to work from; it needs the whole file's indent stack. Not attempted blind.",
     "oracle_note": "Deliberately compile() and not ast.parse(). CPython enforces a set of rules AFTER the parser that are still SyntaxErrors and still make a file unusable as a module: `return`/`await` outside a function, `_ = *[42]` (\"can't use starred expression here\"), a bare `except:` that is not last, duplicate parameter names. ast.parse accepts all of them. Measured: 11 of the 30 files the first sweep called grammar gaps were files CPython would refuse to run \u2014 fragments and deliberately-invalid fixtures shipped as test data by ruff, black, pylint and parso. The cost, stated plainly: a file that is compile-invalid for one reason AND has a real grammar gap for another is now noise rather than a gap, so gap_files can under-report. Same direction as C's indeterminate collapse, and the safe one \u2014 the sweep can miss a grammar bug, it can never invent one.",
     "oracle_cost": "1.23 s per 1000 files (ast.parse was 0.97 s); still firmly Tier A"
   },
@@ -190,6 +190,37 @@
           "failed": 615,
           "gap_files": 5
         }
+      }
+    },
+    {
+      "id": 7,
+      "title": "backslash continuation while scanning indentation",
+      "file": "patches/0007-backslash-continuation-while-scanning-indentation.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 PyPI sweep",
+      "evidence": {
+        "repro": "if True:\n    \\\n        1\nelse:\\\n    2\n",
+        "diagnosis": "A backslash-newline joins two physical lines into one logical line, so the logical line's indentation is whatever was counted before the backslash and the continuation line's leading whitespace is content. The scanner's indentation loop consumed the backslash and newline and then kept adding to indent_length, so `    \\` followed by `        1` was read as indent 12 rather than 4 and the block structure came out wrong. The loop now stops counting once a continuation has been consumed, but only when an end of line has already been seen \u2014 a backslash mid-line, which is the ordinary `x = 1 + \\` case, is untouched.",
+        "first_seen": {
+          "package": "ruff",
+          "version": "0.16.2",
+          "path": "crates/ruff_python_parser/resources/inline/ok/backslash_continuation_indentation.py"
+        },
+        "sweep_before": {
+          "passed": 69808,
+          "failed": 615,
+          "gap_files": 5
+        },
+        "sweep_after": {
+          "passed": 69810,
+          "failed": 613,
+          "gap_files": 3
+        },
+        "evidence_note": "Two files, zero regressions. Ordinary continuations were regression-tested separately: line continuations in assignments, conditions, parameter lists, return expressions, implicit string concatenation, and attribute chains all still parse."
       }
     }
   ]
