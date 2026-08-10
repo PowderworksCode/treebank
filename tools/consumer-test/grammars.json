@@ -1,34 +1,111 @@
 [
-  { "grammar": "treebank-rust", "dep": "tree-sitter-rust", "crate": "treebank-grammar-rust",
+  {
+    "grammar": "treebank-rust",
+    "dep": "tree-sitter-rust",
+    "crate": "treebank-grammar-rust",
     "cases": [
-      { "label": "rust", "language": "tree_sitter_rust::LANGUAGE", "fixture": "patched.rs", "expect": "Clean" },
-      { "label": "rust strictness (must reject)", "language": "tree_sitter_rust::LANGUAGE", "fixture": "must-reject.rs", "expect": "Error" }
+      {
+        "label": "rust",
+        "language": "tree_sitter_rust::LANGUAGE",
+        "fixture": "patched.rs",
+        "expect": "Clean"
+      },
+      {
+        "label": "rust strictness (must reject)",
+        "language": "tree_sitter_rust::LANGUAGE",
+        "fixture": "must-reject.rs",
+        "expect": "Error"
+      }
     ]
   },
-  { "grammar": "treebank-typescript", "dep": "tree-sitter-typescript", "crate": "treebank-grammar-typescript",
+  {
+    "grammar": "treebank-typescript",
+    "dep": "tree-sitter-typescript",
+    "crate": "treebank-grammar-typescript",
     "cases": [
-      { "label": "typescript", "language": "tree_sitter_typescript::LANGUAGE_TYPESCRIPT", "fixture": "patched.ts", "expect": "Clean" },
-      { "label": "tsx", "language": "tree_sitter_typescript::LANGUAGE_TSX", "fixture": "patched.tsx", "expect": "Clean" }
+      {
+        "label": "typescript",
+        "language": "tree_sitter_typescript::LANGUAGE_TYPESCRIPT",
+        "fixture": "patched.ts",
+        "expect": "Clean"
+      },
+      {
+        "label": "tsx",
+        "language": "tree_sitter_typescript::LANGUAGE_TSX",
+        "fixture": "patched.tsx",
+        "expect": "Clean"
+      }
     ]
   },
-  { "grammar": "treebank-javascript", "dep": "tree-sitter-javascript", "crate": "treebank-grammar-javascript",
+  {
+    "grammar": "treebank-javascript",
+    "dep": "tree-sitter-javascript",
+    "crate": "treebank-grammar-javascript",
     "cases": [
-      { "label": "javascript", "language": "tree_sitter_javascript::LANGUAGE", "fixture": "patched.js", "expect": "Clean" }
+      {
+        "label": "javascript",
+        "language": "tree_sitter_javascript::LANGUAGE",
+        "fixture": "patched.js",
+        "expect": "Clean"
+      }
     ]
   },
-  { "grammar": "treebank-java", "dep": "tree-sitter-java", "crate": "treebank-grammar-java",
+  {
+    "grammar": "treebank-java",
+    "dep": "tree-sitter-java",
+    "crate": "treebank-grammar-java",
     "cases": [
-      { "label": "java", "language": "tree_sitter_java::LANGUAGE", "fixture": "patched.java", "expect": "Clean" }
+      {
+        "label": "java",
+        "language": "tree_sitter_java::LANGUAGE",
+        "fixture": "patched.java",
+        "expect": "Clean"
+      }
     ]
   },
-  { "grammar": "treebank-csharp", "dep": "tree-sitter-c-sharp", "crate": "treebank-grammar-csharp",
+  {
+    "grammar": "treebank-csharp",
+    "dep": "tree-sitter-c-sharp",
+    "crate": "treebank-grammar-csharp",
     "cases": [
-      { "label": "csharp", "language": "tree_sitter_c_sharp::LANGUAGE", "fixture": "patched.cs", "expect": "Clean" }
+      {
+        "label": "csharp",
+        "language": "tree_sitter_c_sharp::LANGUAGE",
+        "fixture": "patched.cs",
+        "expect": "Clean"
+      }
     ]
   },
-  { "grammar": "treebank-c", "dep": "tree-sitter-c", "crate": "treebank-grammar-c",
+  {
+    "grammar": "treebank-c",
+    "dep": "tree-sitter-c",
+    "crate": "treebank-grammar-c",
     "cases": [
-      { "label": "c", "language": "tree_sitter_c::LANGUAGE", "fixture": "patched.c", "expect": "Clean" }
+      {
+        "label": "c",
+        "language": "tree_sitter_c::LANGUAGE",
+        "fixture": "patched.c",
+        "expect": "Clean"
+      }
+    ]
+  },
+  {
+    "grammar": "treebank-python",
+    "dep": "tree-sitter-python",
+    "crate": "treebank-grammar-python",
+    "cases": [
+      {
+        "label": "python",
+        "language": "tree_sitter_python::LANGUAGE",
+        "fixture": "patched.py",
+        "expect": "Clean"
+      },
+      {
+        "label": "python strictness (must reject)",
+        "language": "tree_sitter_python::LANGUAGE",
+        "fixture": "must-reject.py",
+        "expect": "Error"
+      }
     ]
   }
 ]

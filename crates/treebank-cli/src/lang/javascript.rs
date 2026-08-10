@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::{node_oracle, npm, Lang};
+use super::{npm, stdin_oracle, Lang};
 use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
@@ -49,7 +49,7 @@ impl Lang for JavaScript {
     /// 1` valid, which would turn this grammar's correct rejection of
     /// TypeScript into a reported grammar gap.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        node_oracle::run(
+        stdin_oracle::run_node(
             Path::new("tools/js-oracle"),
             &["--experimental-vm-modules", "--no-warnings"],
             srcroot,

@@ -1,8 +1,15 @@
-//! Shared driver for the node-based reference parsers under `tools/`.
+//! Shared driver for the line-oriented reference parsers under `tools/`.
 //!
 //! Each oracle is a script that reads one path per line on stdin and writes
-//! "<path>\tvalid|invalid" per line on stdout. Deps are installed with
-//! `npm ci` on first use, from the lockfile committed next to the script.
+//! "<path>\tvalid|invalid" per line on stdout. That contract is the same
+//! whichever interpreter runs it, so the pumping — feed stdin from a thread
+//! so a large batch cannot deadlock against a full stdout pipe, then parse
+//! the verdicts back — lives here once.
+//!
+//! `node` oracles additionally need their deps installed with `npm ci` on
+//! first use, from the lockfile committed next to the script; `run_node`
+//! wraps that. `run` is the bare form, for interpreters that need nothing
+//! installed.
 
 use std::collections::HashMap;
 use std::io::Write;
@@ -11,9 +18,8 @@ use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result};
 
-/// Run `tool/check.mjs` over `paths` (relative to `srcroot`), returning the
-/// reference parser's verdict per path.
-pub fn run(
+/// Run `tool/check.mjs` under node, installing its deps on first use.
+pub fn run_node(
     tool: &Path,
     node_args: &[&str],
     srcroot: &Path,
@@ -30,13 +36,35 @@ pub fn run(
         anyhow::ensure!(ok, "npm ci failed in {}", tool.display());
     }
     let script = tool.join("check.mjs");
-    let mut child = Command::new("node")
-        .args(node_args)
-        .arg(&script)
+    let mut args: Vec<&str> = node_args.to_vec();
+    let script_str = script.to_string_lossy().into_owned();
+    args.push(&script_str);
+    run(
+        "node",
+        &args,
+        &format!("spawn node {}", script.display()),
+        srcroot,
+        paths,
+    )
+}
+
+/// Run `program args...` as an oracle over `paths` (relative to `srcroot`),
+/// returning the reference parser's verdict per path. `hint` is the context
+/// shown if the process cannot be spawned at all, which is where a missing
+/// interpreter surfaces.
+pub fn run(
+    program: &str,
+    args: &[&str],
+    hint: &str,
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<HashMap<String, bool>> {
+    let mut child = Command::new(program)
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
-        .with_context(|| format!("spawn node {}", script.display()))?;
+        .with_context(|| hint.to_string())?;
 
     // Feed stdin from a thread: a large batch's output would otherwise fill
     // the stdout pipe and deadlock us before we finish writing.
@@ -56,7 +84,9 @@ pub fn run(
     // A closed pipe here just means the oracle exited early; the status
     // check below is the real error report.
     let _ = writer.join().map_err(|_| anyhow::anyhow!("oracle stdin thread panicked"))?;
-    anyhow::ensure!(output.status.success(), "{} failed", script.display());
+    // stderr is inherited rather than piped, so the oracle's own diagnostics
+    // have already reached the terminal; only the status is news here.
+    anyhow::ensure!(output.status.success(), "{program} oracle exited with {}", output.status);
 
     let mut map = HashMap::new();
     for line in String::from_utf8_lossy(&output.stdout).lines() {

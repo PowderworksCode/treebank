@@ -1,0 +1,104 @@
+{
+  "grammar": "python",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-python",
+    "sha": "293fdc02038ee2bf0e2e206711b69c90ac0d413f",
+    "version": "0.25.0",
+    "sha_note": "commit target of the annotated tag v0.25.0; submodule pointers are commits, not tag objects"
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "corpus": {
+    "source": "PyPI source distributions (sdist) of the top packages by download count. Wheels are never used as a fallback: a wheel is build output, so for anything with a build step it is not the tree the author wrote. Packages publishing no sdist are skipped by the fetch driver, as Java skips artifacts with no sources jar.",
+    "ranking": "hugovk/top-pypi-packages (top-pypi-packages.min.json), the standard published extract of the public PyPI download dataset",
+    "ranking_note": "PyPI's own API exposes no download counts; the numbers live in the public BigQuery/ClickHouse dataset. This is therefore the same KIND of metric as crates.io and npm downloads \u2014 traffic \u2014 unlike Java's dependent-repos proxy. The dataset's own last_update is printed by `treebank rank` and belongs in any sweep write-up.",
+    "files_note": ".py only, the single extension tree-sitter-python's tree-sitter.json claims. .pyi stubs are also Python and this same grammar parses them; they are excluded for now so classify() matches what the grammar advertises, and adding them would be a deliberate change with its own sweep evidence. Paths containing a _vendor/ or _vendored/ component are excluded for the reason javascript excludes bundles: pip and others vendor whole dependency sets, so a failure there is attributed to the wrong package and the same code is already in the corpus under its real owner.",
+    "oracle": "tools/py-oracle/check.py \u2014 CPython's own parser via ast.parse. TWO-VALUED: valid / invalid. ast.parse parses and stops \u2014 no import, no execution, no name resolution \u2014 so a missing dependency is not an error and each file is judged entirely on its own text.",
+    "oracle_version": "CPython 3.12.3",
+    "oracle_version_note": "The interpreter version IS the language version and is load-bearing exactly as generate_cli is: `match` is 3.10+, the walrus 3.8+, parenthesised context managers 3.10 in practice. A file needing syntax newer than this interpreter is recorded as corpus noise, which is the honest answer. Bumping it is treated like a patch: full sweep, before/after numbers, ledger entry.",
+    "fetched": "2026-08-10 (top-pypi-packages last_update 2026-08-01)",
+    "packages": 492,
+    "packages_note": "500 requested; 492 resolved. The rest publish no sdist, which the fetch driver skips rather than falling back to a wheel.",
+    "files": 70423,
+    "sweep_upstream": {
+      "passed": 69788,
+      "failed": 635,
+      "gap_files": 31,
+      "noise_files": 604,
+      "clusters": 296
+    },
+    "sweep_patched": {
+      "passed": 69789,
+      "failed": 634,
+      "gap_files": 30,
+      "noise_files": 604,
+      "clusters": 295
+    },
+    "remaining_gaps_note": "30 gap files remain, in 295 clusters of 1-3 files each; none is a large cluster. Two classes dominate and both are corpus composition rather than mainstream Python. (a) Cython pure-Python-mode files under cython/docs/examples: `int[:, :]` memoryview annotations are syntactically valid Python (a slice inside a subscript is legal in an annotation) so ast.parse accepts them, while the grammar does not. (b) ruff ships its entire Python-parser test suite inside its sdist, including deliberately adversarial fixtures and an inline/err/ tree of files ruff itself considers errors. This is the Python analogue of the C# corpus carrying repository tests, and it is the reason the residual gap list is dominated by two packages rather than by the language."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "tree-sitter-python deliberately parses Python 2 as well as Python 3; the oracle (CPython 3.12) rejects Python 2. So for this language the grammar accepts a strict superset of what the oracle calls valid \u2014 the reverse of the usual relationship, and it needs stating because it changes what the negative corpus can contain.",
+    "evidence": "grammar.js carries print_statement (line 204) and exec_statement (line 443) rules, and upstream ships examples/python2-grammar.py and examples/mixed-spaces-tabs.py as fixtures. Measured: the grammar accepts `print \"hello\"`, `exec \"x = 1\"`, `except IOError, e:`, a tab/space indent mix, `class A:` with an unindented body, and an inconsistent dedent \u2014 all six of which CPython 3.12 rejects.",
+    "why_this_is_safe": "A sweep gap is 'grammar rejected it AND the oracle accepted it'. This asymmetry runs the other way \u2014 grammar accepts, oracle rejects \u2014 so it can never manufacture a gap, and gap_files stays exact. It is not the accepts-invalid-code drift GRAMMARS.md warns about, because it is upstream's deliberate design rather than an optimization artifact.",
+    "cost": "The negative corpus cannot contain Python 2 constructs or indentation errors, because the grammar will not reject them and by upstream's design should not. test/negative/ is therefore restricted to syntax that is invalid in BOTH Python 2 and 3 \u2014 12 files, each verified rejected by the oracle and by the grammar."
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-python name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_python so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else \u2014 dependency versions stay upstream's. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "comment at column zero inside a block",
+      "file": "patches/0003-comment-at-column-zero-inside-a-block.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the first top-500 PyPI sweep",
+      "evidence": {
+        "repro": "class C:\n    @property\n# a comment, unindented\n    def f(self):\n        return 1\n",
+        "diagnosis": "The external scanner only treats a '#' as a comment when INDENT, DEDENT, NEWLINE or EXCEPT is a valid symbol. After a decorator the parser expects only another decorator or a def/class, so none of those is valid, the comment line is not consumed as a comment, and its column-0 indentation is taken as the line's indentation - which dedents out of the class body and puts the decorator in an ERROR. CPython's tokenizer ignores comment-only lines entirely for indentation, at any column, so this is valid Python that the grammar rejected. The fix adds found_end_of_line to that condition: once an end of line has been seen, a '#' always starts a comment line. Behaviour before an end of line - the trailing `foo = bar # comment` case the condition was written for - is unchanged.",
+        "first_seen": {
+          "package": "pydantic",
+          "version": "2.13.4",
+          "path": "tests/mypy/outputs/mypy-plugin_ini/frozen_field.py"
+        },
+        "sweep_before": {
+          "passed": 69788,
+          "failed": 635,
+          "gap_files": 31
+        },
+        "sweep_after": {
+          "passed": 69789,
+          "failed": 634,
+          "gap_files": 30
+        },
+        "evidence_note": "One file in 70,423, and zero regressions: the before/after sweeps were run over the identical corpus with only this patch removed and restored. A small number, stated as measured rather than dressed up - the value is that it is a real correctness fix with a five-line repro, two lines of scanner change, a corpus test, and no cost anywhere else.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
+    }
+  ]
+}

@@ -7,9 +7,10 @@ mod c;
 mod csharp;
 mod java;
 mod javascript;
-mod node_oracle;
 mod npm;
+mod python;
 mod rust;
+mod stdin_oracle;
 mod typescript;
 
 use std::collections::HashMap;
@@ -68,6 +69,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static JAVA: java::Java = java::Java;
     static CSHARP: csharp::CSharp = csharp::CSharp;
     static C: c::C = c::C;
+    static PYTHON: python::Python = python::Python;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -75,5 +77,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Java => &JAVA,
         LangName::Csharp => &CSHARP,
         LangName::C => &C,
+        LangName::Python => &PYTHON,
     }
 }

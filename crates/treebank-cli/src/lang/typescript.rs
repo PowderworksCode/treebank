@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::Result;
 
-use super::{node_oracle, npm, Lang};
+use super::{npm, stdin_oracle, Lang};
 use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
@@ -45,6 +45,6 @@ impl Lang for TypeScript {
     /// tools/ts-oracle: ts.createSourceFile parseDiagnostics — syntax-only,
     /// and .d.ts-safe (ts.transpileModule throws on declaration files).
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        node_oracle::run(Path::new("tools/ts-oracle"), &[], srcroot, paths)
+        stdin_oracle::run_node(Path::new("tools/ts-oracle"), &[], srcroot, paths)
     }
 }
