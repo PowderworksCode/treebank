@@ -1,0 +1,2 @@
+interface Foo {
+  a: string;

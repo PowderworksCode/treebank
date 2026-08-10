@@ -1,0 +1,72 @@
+diff --git a/common/define-grammar.js b/common/define-grammar.js
+index a9d4b97..0f57f45 100644
+--- a/common/define-grammar.js
++++ b/common/define-grammar.js
+@@ -333,6 +333,11 @@ module.exports = function defineGrammar(dialect) {
+         ),
+         seq('export', '=', $.expression, $._semicolon),
+         seq('export', 'as', 'namespace', $.identifier, $._semicolon),
++        seq(
++          'export',
++          'default',
++          field('declaration', alias($._anonymous_function_signature, $.function_signature)),
++        ),
+       ),
+ 
+       non_null_expression: $ => prec.left('unary', seq(
+@@ -396,6 +401,16 @@ module.exports = function defineGrammar(dialect) {
+         choice($._semicolon, $._function_signature_automatic_semicolon),
+       ),
+ 
++      // `export default function (): void;` — a default-exported function
++      // signature has no name. Only reachable from `export default`, so
++      // `declare function (): void;` stays an error.
++      _anonymous_function_signature: $ => seq(
++        optional('async'),
++        'function',
++        $._call_signature,
++        choice($._semicolon, $._function_signature_automatic_semicolon),
++      ),
++
+       decorator: $ => seq(
+         '@',
+         choice(
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index d6d25a6..b67a8df 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -1486,3 +1486,34 @@ export type * as ns from './x.d.ts';
+       (identifier))
+     source: (string
+       (string_fragment))))
++
++==================================
++Anonymous default-exported function signature
++==================================
++
++export default function (): Promise<void>;
++export default async function <T>(x: T): T;
++
++---
++
++(program
++  (export_statement
++    declaration: (function_signature
++      parameters: (formal_parameters)
++      return_type: (type_annotation
++        (generic_type
++          name: (type_identifier)
++          type_arguments: (type_arguments
++            (predefined_type))))))
++  (export_statement
++    declaration: (function_signature
++      type_parameters: (type_parameters
++        (type_parameter
++          name: (type_identifier)))
++      parameters: (formal_parameters
++        (required_parameter
++          pattern: (identifier)
++          type: (type_annotation
++            (type_identifier))))
++      return_type: (type_annotation
++        (type_identifier)))))

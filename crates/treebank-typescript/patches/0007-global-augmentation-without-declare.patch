@@ -1,0 +1,69 @@
+diff --git a/common/define-grammar.js b/common/define-grammar.js
+index 0f57f45..c7f8daa 100644
+--- a/common/define-grammar.js
++++ b/common/define-grammar.js
+@@ -485,6 +485,11 @@ module.exports = function defineGrammar(dialect) {
+         field('body', $.statement_block),
+       )),
+ 
++      statement: ($, previous) => choice(
++        previous,
++        $.global_augmentation,
++      ),
++
+       declaration: ($, previous) => choice(
+         previous,
+         $.function_signature,
+@@ -558,6 +563,12 @@ module.exports = function defineGrammar(dialect) {
+         ),
+       ),
+ 
++      // A global augmentation nested in an ambient module body: the enclosing
++      // `declare` is implicit, so `global { ... }` stands alone. It is a
++      // statement rather than a declaration so that `declare global { ... }`
++      // keeps its single `ambient_declaration` parse.
++      global_augmentation: $ => seq('global', $.statement_block),
++
+       class: $ => prec('literal', seq(
+         repeat(field('decorator', $.decorator)),
+         'class',
+@@ -1096,6 +1107,7 @@ module.exports = function defineGrammar(dialect) {
+ 
+       _reserved_identifier: (_, previous) => choice(
+         'declare',
++        'global',
+         'namespace',
+         'type',
+         'abstract',
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index b67a8df..b337015 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -1517,3 +1517,27 @@ export default async function <T>(x: T): T;
+             (type_identifier))))
+       return_type: (type_annotation
+         (type_identifier)))))
++
++==================================
++Global augmentation without declare
++==================================
++
++declare module "m" {
++    global {
++        interface I {}
++    }
++}
++
++---
++
++(program
++  (ambient_declaration
++    (module
++      name: (string
++        (string_fragment))
++      body: (statement_block
++        (global_augmentation
++          (statement_block
++            (interface_declaration
++              name: (type_identifier)
++              body: (interface_body))))))))
