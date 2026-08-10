@@ -33,6 +33,11 @@ const MIRROR: &str = "https://deb.debian.org/debian";
 /// corpus should be the newest C the distro carries.
 const SUITE: &str = "sid";
 const SOURCES: &str = "https://deb.debian.org/debian/dists/sid/main/source/Sources.gz";
+/// How long a cached Sources index may be reused. Shorter than the daily
+/// cron's period so an unattended run always sees the day's versions;
+/// `TREEBANK_REFRESH_SOURCES=1` forces a refresh, as
+/// `TREEBANK_REFRESH_DUMP` does for the rust dump in `bootstrap.sh`.
+const SOURCES_MAX_AGE_HOURS: u64 = 12;
 
 /// Debian pool coordinates for one source package, resolved at rank time.
 /// `resolve()` gets no `db` path, so `rank()` leaves this index behind at a
@@ -466,39 +471,96 @@ fn rank_debian(db: &Path, k: usize) -> Result<Vec<RankedCrate>> {
     eprintln!("rank: sid index has {} sources with an orig tarball", pool.len());
 
     // 3. Walk popcon top-down, keeping the ones that are really C.
+    //
+    // Batched rather than one-at-a-time: each batch resolves its cache misses
+    // concurrently, then the batch is consumed IN POPCON ORDER, so the result
+    // is identical to a sequential walk and does not depend on which lookup
+    // finished first. Batches also mean we stop early — reaching k costs no
+    // lookups beyond the batch that reached it.
+    const BATCH: usize = 64;
+    let mut sloc = load_sloc_cache(db);
+    let cached_at_start = sloc.len();
     let mut out = Vec::new();
     let mut index: HashMap<String, Pool> = HashMap::new();
     let (mut not_in_sid, mut not_c) = (0usize, 0usize);
-    for (name, inst) in &ranked {
-        if out.len() >= k {
-            break;
-        }
-        let Some(p) = pool.get(name) else {
-            not_in_sid += 1;
-            continue;
-        };
-        match is_c_package(name, &p.version) {
-            Ok(true) => {}
-            Ok(false) => {
-                not_c += 1;
-                continue;
+    let (mut queried, mut reused, mut failed) = (0usize, 0usize, 0usize);
+    let candidates: Vec<&(String, u64)> = ranked.iter().collect();
+    'outer: for batch in candidates.chunks(BATCH) {
+        // Anything absent from the index cannot be fetched at all; skip it
+        // before spending a lookup on it.
+        let present: Vec<&(String, u64)> = batch
+            .iter()
+            .copied()
+            .filter(|(name, _)| pool.contains_key(name))
+            .collect();
+        // A cached entry measured at a different version is refetched: that is
+        // the only case where the language mix can have moved.
+        let want: Vec<(String, String)> = present
+            .iter()
+            .filter_map(|(name, _)| {
+                let version = &pool.get(name)?.version;
+                match sloc.get(name) {
+                    Some(hit) if hit.version == *version => {
+                        reused += 1;
+                        None
+                    }
+                    _ => Some((name.clone(), version.clone())),
+                }
+            })
+            .collect();
+        queried += want.len();
+        for (name, result) in fetch_sloc(&want) {
+            match result {
+                Ok(entry) => {
+                    sloc.insert(name, entry);
+                }
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("rank: skipping {name}: {e:#}");
+                }
             }
-            Err(e) => {
-                eprintln!("rank: skipping {name}: {e:#}");
+        }
+        // Consumed in popcon order over the WHOLE batch, so the skip counts
+        // describe exactly the prefix of the list the walk actually reached
+        // rather than the batch it happened to be reading when it hit k.
+        for (name, inst) in batch.iter().copied() {
+            let Some(p) = pool.get(name) else {
+                not_in_sid += 1;
                 continue;
+            };
+            match sloc.get(name) {
+                Some(entry) if entry.is_c() => {}
+                Some(_) => {
+                    not_c += 1;
+                    continue;
+                }
+                None => continue, // lookup failed; already reported
+            }
+            out.push(RankedCrate {
+                rank: out.len() + 1,
+                name: name.clone(),
+                version: p.version.clone(),
+                downloads: *inst,
+            });
+            index.insert(name.clone(), p.clone());
+            if out.len() >= k {
+                break 'outer;
             }
         }
-        out.push(RankedCrate {
-            rank: out.len() + 1,
-            name: name.clone(),
-            version: p.version.clone(),
-            downloads: *inst,
-        });
-        index.insert(name.clone(), p.clone());
-        if out.len() % 25 == 0 {
-            eprintln!("rank: {} C sources kept (at popcon rank {})", out.len(), out.len() + not_in_sid + not_c);
-        }
+        eprintln!(
+            "rank: {} of {k} C sources kept ({} looked up so far)",
+            out.len(),
+            queried
+        );
     }
+    // The cache is written even on a short or failed run: lookups already paid
+    // for should not be paid for twice.
+    std::fs::write(db.join("sloc.json"), serde_json::to_string(&sloc)?)?;
+    eprintln!(
+        "rank: sloc cache {cached_at_start} -> {} entries \
+         ({queried} looked up, {reused} reused from cache, {failed} failed)",
+        sloc.len()
+    );
     if out.is_empty() {
         bail!("debian rank list came out empty");
     }
@@ -514,7 +576,25 @@ fn rank_debian(db: &Path, k: usize) -> Result<Vec<RankedCrate>> {
 /// cached under `db/`. 16 MB gzipped, one download.
 fn load_sources(db: &Path) -> Result<HashMap<String, Pool>> {
     let cached = db.join("Sources.gz");
-    if !cached.exists() {
+    // The index carries every package's VERSION, so a permanently cached copy
+    // freezes the corpus: `resolve()` would keep returning the same tarballs,
+    // the sweep cache would skip them all, and the "new version of a top-K
+    // package" event this whole loop is built around could never fire for C.
+    // Refreshed on any run older than the daily cron's period.
+    let stale = match std::fs::metadata(&cached).and_then(|m| m.modified()) {
+        Ok(modified) => modified
+            .elapsed()
+            .map(|age| age > std::time::Duration::from_secs(SOURCES_MAX_AGE_HOURS * 3600))
+            .unwrap_or(true),
+        Err(_) => true,
+    };
+    let forced = std::env::var_os("TREEBANK_REFRESH_SOURCES").is_some();
+    if !cached.exists() || stale || forced {
+        if cached.exists() {
+            eprintln!(
+                "rank: sid index is stale (>{SOURCES_MAX_AGE_HOURS}h) — refreshing"
+            );
+        }
         eprintln!("rank: GET {SOURCES}");
         let mut body = Vec::new();
         ureq::get(SOURCES)
@@ -605,11 +685,112 @@ fn deb_version_lt(a: &str, b: &str) -> bool {
     chunks(a) < chunks(b)
 }
 
+/// One package's language census, as measured at a specific version.
+#[derive(Serialize, Deserialize, Clone)]
+struct Sloc {
+    version: String,
+    ansic: i64,
+    cpp: i64,
+}
+
+impl Sloc {
+    /// Enough C to be worth a download, and more C than C++ so that the C++
+    /// giants (Qt, LibreOffice) do not enter on their C fringe.
+    fn is_c(&self) -> bool {
+        self.ansic >= 2000 && self.ansic >= self.cpp
+    }
+}
+
+/// The language census for every package we have ever asked about, keyed by
+/// name and stamped with the version measured.
+///
+/// This exists because `daily.sh` re-ranks every day: without it, a run at the
+/// default `TREEBANK_RANK_K=1000` makes ~1,250 sequential requests to
+/// sources.debian.org for facts that change only when a package does. With it,
+/// the daily run queries exactly the packages whose version moved since
+/// yesterday — which is precisely the set whose language mix could have
+/// changed — and reuses the rest.
+fn load_sloc_cache(db: &Path) -> HashMap<String, Sloc> {
+    std::fs::read_to_string(db.join("sloc.json"))
+        .ok()
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+/// Look up every miss in `want` at once. Concurrency is bounded and modest:
+/// this is someone else's public API, and the cache means a healthy run makes
+/// almost no requests at all.
+fn fetch_sloc(want: &[(String, String)]) -> Vec<(String, Result<Sloc>)> {
+    use rayon::prelude::*;
+    let pool = rayon::ThreadPoolBuilder::new().num_threads(8).build();
+    let run = || {
+        want.par_iter()
+            .map(|(name, version)| (name.clone(), sloc_of(name, version)))
+            .collect::<Vec<_>>()
+    };
+    match pool {
+        Ok(p) => p.install(run),
+        Err(_) => run(),
+    }
+}
+
 /// Is this source package actually C? popcon ranks everything Debian ships,
 /// so without this the top of the list spends its downloads on LibreOffice
 /// (4.4M lines of C++, 34k of C) and gcc-16 (no C at all). sources.debian.org
 /// publishes per-language SLOC, which answers it in one small request.
-fn is_c_package(name: &str, version: &str) -> Result<bool> {
+///
+/// **sources.debian.org lags the archive.** The Sources index is refreshed
+/// daily, so on any day Debian has just accepted an upload the newest version
+/// is in the index but not yet indexed for SLOC — measured the first time this
+/// ran after a refresh, glibc 2.43-3 and mesa 26.1.6-1 both had no info. A
+/// package silently dropped for that reason would take the two largest C
+/// sources in the corpus with it, so a failure falls back to the newest
+/// version sources.debian.org actually holds. A warm cache also covers this
+/// (the previous entry survives a failed lookup), which is why the fallback
+/// matters most on a cold start — a fresh machine has no cache at all.
+fn sloc_of(name: &str, version: &str) -> Result<Sloc> {
+    match sloc_at(name, version) {
+        Ok(s) => Ok(s),
+        Err(first) => {
+            for fallback in indexed_versions(name)?.into_iter().take(3) {
+                if fallback == version {
+                    continue;
+                }
+                if let Ok(mut s) = sloc_at(name, &fallback) {
+                    eprintln!(
+                        "rank: {name} {version} not yet indexed by sources.debian.org — \
+                         measured {fallback} instead"
+                    );
+                    // Stamped with what was actually measured, so the next run
+                    // re-queries once the archive version is indexed.
+                    s.version = fallback;
+                    return Ok(s);
+                }
+            }
+            Err(first)
+        }
+    }
+}
+
+/// Versions sources.debian.org holds for a package, newest first as the API
+/// returns them.
+fn indexed_versions(name: &str) -> Result<Vec<String>> {
+    let url = format!("https://sources.debian.org/api/src/{name}/");
+    let doc: serde_json::Value = ureq::get(&url)
+        .call()
+        .with_context(|| format!("GET {url}"))?
+        .into_json()?;
+    Ok(doc["versions"]
+        .as_array()
+        .map(|vs| {
+            vs.iter()
+                .filter_map(|v| v["version"].as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default())
+}
+
+fn sloc_at(name: &str, version: &str) -> Result<Sloc> {
     let url = format!("https://sources.debian.org/api/info/package/{name}/{version}/");
     let doc: serde_json::Value = ureq::get(&url)
         .call()
@@ -627,7 +808,5 @@ fn is_c_package(name: &str, version: &str) -> Result<bool> {
             _ => {}
         }
     }
-    // Enough C to be worth a download, and more C than C++ so that the
-    // C++ giants (Qt, LibreOffice) do not enter on their C fringe.
-    Ok(ansic >= 2000 && ansic >= cpp)
+    Ok(Sloc { version: version.to_string(), ansic, cpp })
 }

@@ -43,6 +43,38 @@ three compressions are real: measured across sid main, 60,674 `.orig.tar.gz`,
 22,708 `.orig.tar.xz`, 2,384 `.orig.tar.bz2` — and all three occur inside the
 top 25 C sources, so `fetch.rs` learned xz and bzip2 for this grammar.
 
+### Keeping the corpus fresh
+
+`daily.sh` re-ranks every day, and two things about that were wrong at first.
+
+The Debian `Sources` index was cached forever. It carries every package's
+*version*, so a permanent cache **froze the corpus**: `resolve()` would return
+the same tarballs indefinitely, the sweep cache would skip every one of them,
+and the "new version of a top-K package" event the whole loop is built around
+could never fire for C. It is now refreshed on any run where the cached copy
+is over 12 hours old, `TREEBANK_REFRESH_SOURCES=1` forcing it.
+
+The SLOC filter made one request per candidate, every day — about 1,250 of
+them at the default `TREEBANK_RANK_K=1000`, for facts that change only when a
+package does. Verdicts now persist in `corpus/c/db/sloc.json`, keyed by name
+and stamped with the version measured, so a daily run queries exactly the
+packages whose version moved. Measured at k=200: 227 lookups in 9s cold
+(~25/sec, 8 at a time), then 2 lookups and 1.9s warm.
+
+Fixing the first exposed something worse. **sources.debian.org lags the
+archive**: on any day Debian has just accepted an upload, the new version is
+in the index but has no SLOC record yet. The first refreshed run hit exactly
+that on glibc 2.43-3 and mesa 26.1.6-1 — and dropped both, silently removing
+the two largest C sources from the corpus. A failed lookup now falls back to
+the newest version sources.debian.org actually holds, stamped with what was
+really measured so the next run re-queries once the archive catches up.
+
+Lookups are batched (64) and resolved concurrently, but each batch is consumed
+in popcon order, so the list is identical to a sequential walk and does not
+depend on which request finished first. Verified: the k=20 list is a prefix of
+the k=100 list, and both agree with the pre-batching implementation's skip
+counts.
+
 ### The `.h` filter, and why it is content-based
 
 A C++ header does **not** come back cleanly `invalid` from the oracle; it
