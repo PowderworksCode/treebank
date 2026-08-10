@@ -21,14 +21,21 @@ pub struct Failure {
 #[derive(Serialize, Deserialize)]
 pub struct Cluster {
     pub signature: String,
-    /// "gap" (valid code the grammar rejects — fix the grammar) or "noise"
-    /// (the reference parser rejects these files too — ignore).
+    /// "gap" (valid code the grammar rejects — fix the grammar), "config"
+    /// (valid code the grammar cannot represent AS WRITTEN, because a
+    /// preprocessor conditional splits a construct; not a grammar bug — see
+    /// `treebank_preprocessing`) or "noise" (the reference parser rejects
+    /// these files too — ignore).
     pub verdict: String,
     pub count: usize,
     pub valid: usize,
     pub examples: Vec<Failure>,
     /// Failing files the reference parser says are VALID — the fix targets.
     pub valid_paths: Vec<String>,
+    /// Valid files that parse cleanly once dead preprocessor branches are
+    /// removed. Excluded from `valid_paths`: no grammar change fixes these.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub config_paths: Vec<String>,
     pub paths: Vec<String>,
 }
 
@@ -40,6 +47,11 @@ pub struct Report {
     pub passed: usize,
     pub failed: usize,
     pub gap_files: usize,
+    /// Valid files whose only problem is that a preprocessor conditional
+    /// splits a construct the grammar must see whole. Counted apart from
+    /// both gaps and noise because neither name is true of them.
+    #[serde(default)]
+    pub config_files: usize,
     pub noise_files: usize,
     pub clusters: Vec<Cluster>,
 }
@@ -217,6 +229,41 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     let failing_paths: Vec<String> = failures.iter().map(|f| f.path.clone()).collect();
     let validity = lang.validate(&corpus_src, &failing_paths)?;
 
+    // A grammar sees every #if branch at once; a compiler sees only the live
+    // ones. Where removing the branches a compiler would have dropped makes a
+    // file parse cleanly, the rejection is a property of the preprocessor and
+    // no grammar patch can fix it — so it must not be filed as a gap, where it
+    // would sit at the top of the queue absorbing a fix agent's attempts.
+    let config_inherent: std::collections::HashSet<String> = match lang.preprocessing() {
+        None => Default::default(),
+        Some(symbols) => {
+            let hits: Vec<String> = failures
+                .par_iter()
+                .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
+                .filter_map(|f| {
+                    let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
+                    let reduced = treebank_preprocessing::reduce(&src, symbols);
+                    if !reduced.changed() {
+                        return None;
+                    }
+                    let mut parser = Parser::new();
+                    let index = lang.route(&None, &f.path);
+                    parser.set_language(&languages[index]).ok()?;
+                    let tree = parser.parse(reduced.text.as_bytes(), None)?;
+                    (!tree.root_node().has_error()).then(|| f.path.clone())
+                })
+                .collect();
+            if !hits.is_empty() {
+                eprintln!(
+                    "preprocessing: {} valid file(s) parse cleanly once dead branches are \
+                     removed — counted as configuration-inherent, not grammar gaps",
+                    hits.len()
+                );
+            }
+            hits.into_iter().collect()
+        }
+    };
+
     let mut by_sig: BTreeMap<String, Vec<Failure>> = BTreeMap::new();
     for f in &failures {
         by_sig.entry(f.signature.clone()).or_default().push(f.clone());
@@ -224,26 +271,35 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     let mut clusters: Vec<Cluster> = by_sig
         .into_iter()
         .map(|(signature, fs)| {
-            let valid_paths: Vec<String> = fs
+            let (config_paths, valid_paths): (Vec<String>, Vec<String>) = fs
                 .iter()
                 .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
                 .map(|f| f.path.clone())
-                .collect();
+                .partition(|p| config_inherent.contains(p));
+            let verdict = if !valid_paths.is_empty() {
+                "gap"
+            } else if !config_paths.is_empty() {
+                "config"
+            } else {
+                "noise"
+            };
             Cluster {
                 signature,
-                verdict: if valid_paths.is_empty() { "noise" } else { "gap" }.into(),
+                verdict: verdict.into(),
                 count: fs.len(),
                 valid: valid_paths.len(),
                 examples: fs.iter().take(5).cloned().collect(),
                 valid_paths,
+                config_paths,
                 paths: fs.iter().map(|f| f.path.clone()).collect(),
             }
         })
         .collect();
     clusters.sort_by(|a, b| (b.valid, b.count).cmp(&(a.valid, a.count)));
 
-    let gap_files = clusters.iter().map(|c| c.valid).sum();
-    let noise_files = failures.len() - gap_files;
+    let gap_files: usize = clusters.iter().map(|c| c.valid).sum();
+    let config_files: usize = clusters.iter().map(|c| c.config_paths.len()).sum();
+    let noise_files = failures.len() - gap_files - config_files;
     let report = Report {
         lang: lang.name().to_string(),
         grammar: grammar_dir.display().to_string(),
@@ -251,6 +307,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
         passed: files.len() - failures.len(),
         failed: failures.len(),
         gap_files,
+        config_files,
         noise_files,
         clusters,
     };
@@ -260,11 +317,13 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     std::fs::write(&report_md, markdown(&report, corpus_root))?;
 
     println!(
-        "sweep: {} files — {} passed, {} failed ({} grammar-gap, {} noise), {} clusters",
+        "sweep: {} files — {} passed, {} failed ({} grammar-gap, {} config-inherent, \
+         {} noise), {} clusters",
         report.files,
         report.passed,
         report.failed,
         report.gap_files,
+        report.config_files,
         report.noise_files,
         report.clusters.len()
     );
@@ -288,7 +347,8 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
          - Grammar: `{}`\n\
          - Corpus: `{}` ({} files)\n\
          - Result: **{} passed, {} failed** — {} files are valid {} the \
-         grammar rejects (grammar gaps), {} are invalid (corpus noise, ignore)\n\n",
+         grammar rejects (grammar gaps), {} are invalid (corpus noise, \
+         ignore){}\n\n",
         report.lang,
         report.grammar,
         corpus_root.display(),
@@ -298,10 +358,53 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         report.gap_files,
         report.lang,
         report.noise_files,
+        if report.config_files > 0 {
+            format!(
+                ", and {} are valid but **cannot be represented as written** \
+                 because a preprocessor conditional splits a construct — see \
+                 the note at the end; do not try to fix those",
+                report.config_files
+            )
+        } else {
+            String::new()
+        },
     );
+    let mut config: Vec<&Cluster> =
+        report.clusters.iter().filter(|c| c.verdict == "config").collect();
+    // Report order is by gap size; these have none, so order them by the
+    // count this section actually prints.
+    config.sort_by_key(|c| std::cmp::Reverse(c.config_paths.len()));
+    let config_note = |md: &mut String| {
+        if config.is_empty() {
+            return;
+        }
+        let _ = write!(
+            md,
+            "\n## Not grammar bugs: {} file(s) the preprocessor splits\n\n\
+             These are valid {}, and the grammar rejects them, but **no grammar \
+             change can fix them and you should not try**. Each one parses \
+             cleanly once the branches a compiler would have dropped are \
+             removed, so the rejection is a property of conditional \
+             compilation, not of the parser.\n\n\
+             The canonical case is a C header opening `extern \"C\" {{` inside \
+             one `#ifdef __cplusplus` and closing `}}` inside another: the \
+             braces cross conditional boundaries, so no single tree can \
+             represent both configurations. Making the grammar accept it would \
+             mean accepting unbalanced braces generally, which is how a parser \
+             starts accepting broken code.\n\n\
+             Clusters, largest first:\n\n",
+            report.config_files,
+            report.lang,
+        );
+        for c in &config {
+            let _ = write!(md, "- `{}` — {} file(s)\n", c.signature, c.config_paths.len());
+        }
+    };
+
     let gaps: Vec<&Cluster> = report.clusters.iter().filter(|c| c.verdict == "gap").collect();
     if gaps.is_empty() {
         md.push_str("No grammar gaps — nothing to fix.\n");
+        config_note(&mut md);
         return md;
     }
     md.push_str("## Grammar gaps, largest first\n");
@@ -341,6 +444,7 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         lang = report.lang,
         passed = report.passed,
     );
+    config_note(&mut md);
     md
 }
 

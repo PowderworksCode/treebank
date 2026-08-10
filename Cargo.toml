@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/treebank-cli"]
+members = ["crates/treebank-cli", "crates/treebank-preprocessing"]
 # Grammar dirs are not workspace members: upstream/ is a git submodule and
 # build/ is a materialized (gitignored) tree; excluding the parent dirs keeps
 # cargo from claiming any Cargo.toml under them for this workspace.

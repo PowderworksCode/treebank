@@ -1,0 +1,5 @@
+[package]
+name = "treebank-preprocessing"
+version = "0.1.0"
+edition = "2021"
+description = "Dead-branch elimination for languages with a C-style preprocessor, so a parse failure can be judged against the configuration a compiler actually saw."
