@@ -88,7 +88,7 @@ Worth knowing when sizing a bad day, but nothing here changes a decision.
 
 | Lang | Oracle | Verified property | **s / 1000** |
 |---|---|---|---|
-| python | `ast.parse` | 1000 files, no package context, 0 false rejects | **0.97** |
+| python | `compile(…, 'exec')` | 1000 files, no package context, 0 false rejects | **1.23** |
 | go | `go/parser.ParseFile` (`SkipObjectResolution`) | 790 files, no package context, 0 false rejects | **1.94** |
 | ruby | `RubyVM::AbstractSyntaxTree.parse` | 441 files, 0 false rejects | **0.29** |
 | lua | `luac -p` | missing `require` is not an error | **1.7** |
@@ -254,7 +254,8 @@ so these are #7 through #26.
 ### Wave 1 — free wins that prove the new CI at scale (all Tier A, all verified here)
 
 **1. Python** · crates.io 12.8 M · npm 4.1 M · all 3 editors
-Oracle `ast.parse`, **0.97 s/1000, measured**. PyPI sdists ship source.
+Oracle `compile(src, path, 'exec')`, **1.23 s/1000, measured**. PyPI sdists
+ship source.
 *Blocker: none.* *Teaches: nothing new — that is the point.* It is the
 control that proves a 7th grammar flows through the derived matrix without
 anyone editing a workflow. The largest language treebank does not cover.
@@ -443,7 +444,7 @@ The six already done are excluded. The top 20 are marked ★.
 
 | # | Language | crates.io | npm/mo | ed | Oracle | Named oracle | Blocker |
 |---|---|---|---|---|---|---|---|
-| 1★ | python | 12.8 M | 4.1 M | 3 | **A** ✓ | `ast.parse` | — |
+| 1★ | python | 12.8 M | 4.1 M | 3 | **A** ✓ | `compile(…, 'exec')` | — |
 | 2★ | go | 10.6 M | 2.4 M | 3 | **A** ✓ | `go/parser` | — |
 | 3★ | bash | 8.9 M | 13.3 M | 3 | **A** ✓ | `bash -n` | corpus |
 | 4★ | ruby | 5.5 M | 779 K | 3 | **A** ✓ | `RubyVM::AbstractSyntaxTree` | — |
@@ -770,6 +771,13 @@ seconds. That belongs in the same decision as §10.1.
   fixed while producing this document: relative paths make every oracle
   report "invalid" very fast, and `grep -c 'valid$'` also matches
   `invalid` — count with `grep -c $'\tinvalid$'`.
+- **Parse-only is not always strict enough.** Python's first sweep used
+  `ast.parse`, and 11 of the 30 files it called grammar gaps were files
+  CPython would refuse to run: `return`/`await` outside a function, starred-
+  expression misuse, a bare `except:` not last. Those are SyntaxErrors raised
+  *after* the parse stage. `compile(src, path, 'exec')` catches them at a
+  27% throughput cost, and the same question is worth asking of every oracle
+  in §5 before its numbers are believed.
 - **Fixed vs marginal cost.** Run each oracle with empty stdin to get its
   startup cost, then subtract. Every oracle here is startup-dominated at
   1000 files (java 0.40 s of its 1.63 s; typescript 0.34 s of 0.57 s), so

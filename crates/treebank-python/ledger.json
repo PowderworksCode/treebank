@@ -17,7 +17,7 @@
     "ranking": "hugovk/top-pypi-packages (top-pypi-packages.min.json), the standard published extract of the public PyPI download dataset",
     "ranking_note": "PyPI's own API exposes no download counts; the numbers live in the public BigQuery/ClickHouse dataset. This is therefore the same KIND of metric as crates.io and npm downloads \u2014 traffic \u2014 unlike Java's dependent-repos proxy. The dataset's own last_update is printed by `treebank rank` and belongs in any sweep write-up.",
     "files_note": ".py only, the single extension tree-sitter-python's tree-sitter.json claims. .pyi stubs are also Python and this same grammar parses them; they are excluded for now so classify() matches what the grammar advertises, and adding them would be a deliberate change with its own sweep evidence. Paths containing a _vendor/ or _vendored/ component are excluded for the reason javascript excludes bundles: pip and others vendor whole dependency sets, so a failure there is attributed to the wrong package and the same code is already in the corpus under its real owner.",
-    "oracle": "tools/py-oracle/check.py \u2014 CPython's own parser via ast.parse. TWO-VALUED: valid / invalid. ast.parse parses and stops \u2014 no import, no execution, no name resolution \u2014 so a missing dependency is not an error and each file is judged entirely on its own text.",
+    "oracle": "tools/py-oracle/check.py \u2014 CPython's own front end via compile(src, path, 'exec'), the exact call Python makes to turn a module's text into code. TWO-VALUED: valid / invalid. It never imports, executes or resolves a name, so a missing dependency is not an error and each file is judged entirely on its own text.",
     "oracle_version": "CPython 3.12.3",
     "oracle_version_note": "The interpreter version IS the language version and is load-bearing exactly as generate_cli is: `match` is 3.10+, the walrus 3.8+, parenthesised context managers 3.10 in practice. A file needing syntax newer than this interpreter is recorded as corpus noise, which is the honest answer. Bumping it is treated like a patch: full sweep, before/after numbers, ledger entry.",
     "fetched": "2026-08-10 (top-pypi-packages last_update 2026-08-01)",
@@ -32,13 +32,15 @@
       "clusters": 296
     },
     "sweep_patched": {
-      "passed": 69789,
-      "failed": 634,
-      "gap_files": 30,
-      "noise_files": 604,
-      "clusters": 295
+      "passed": 69808,
+      "failed": 615,
+      "gap_files": 5,
+      "noise_files": 610,
+      "clusters": 283
     },
-    "remaining_gaps_note": "30 gap files remain, in 295 clusters of 1-3 files each; none is a large cluster. Two classes dominate and both are corpus composition rather than mainstream Python. (a) Cython pure-Python-mode files under cython/docs/examples: `int[:, :]` memoryview annotations are syntactically valid Python (a slice inside a subscript is legal in an annotation) so ast.parse accepts them, while the grammar does not. (b) ruff ships its entire Python-parser test suite inside its sdist, including deliberately adversarial fixtures and an inline/err/ tree of files ruff itself considers errors. This is the Python analogue of the C# corpus carrying repository tests, and it is the reason the residual gap list is dominated by two packages rather than by the language."
+    "remaining_gaps_note": "5 gap files remain, in two families, both in the external scanner / lexer rather than in grammar.js, and both left deliberately. (a) An f-string format specifier that begins with '=' \u2014 f\"{num:=.2Uf}\", f\"{v:=>10}\" \u2014 because ':=' is lexed as the walrus operator before format_specifier's ':' is considered (1 file). (b) Backslash line continuations interacting with indentation, e.g. `else:\\` followed by an indented body, and an attribute access split as `tester.x. \\` across lines (4 files, all parser/formatter test fixtures from ruff and executing). Neither reproduces in a small isolated snippet \u2014 both need the surrounding indentation state \u2014 and both sit in scanner.c, where the blast radius is every Python file. They are the next fix agent's queue, with repros recorded in LOCAL-PATCHES.md.",
+    "oracle_note": "Deliberately compile() and not ast.parse(). CPython enforces a set of rules AFTER the parser that are still SyntaxErrors and still make a file unusable as a module: `return`/`await` outside a function, `_ = *[42]` (\"can't use starred expression here\"), a bare `except:` that is not last, duplicate parameter names. ast.parse accepts all of them. Measured: 11 of the 30 files the first sweep called grammar gaps were files CPython would refuse to run \u2014 fragments and deliberately-invalid fixtures shipped as test data by ruff, black, pylint and parso. The cost, stated plainly: a file that is compile-invalid for one reason AND has a real grammar gap for another is now noise rather than a gap, so gap_files can under-report. Same direction as C's indeterminate collapse, and the safe one \u2014 the sweep can miss a grammar bug, it can never invent one.",
+    "oracle_cost": "1.23 s per 1000 files (ast.parse was 0.97 s); still firmly Tier A"
   },
   "grammar_is_broader_than_the_oracle": {
     "summary": "tree-sitter-python deliberately parses Python 2 as well as Python 3; the oracle (CPython 3.12) rejects Python 2. So for this language the grammar accepts a strict superset of what the oracle calls valid \u2014 the reverse of the usual relationship, and it needs stating because it changes what the negative corpus can contain.",
@@ -98,6 +100,96 @@
         },
         "evidence_note": "One file in 70,423, and zero regressions: the before/after sweeps were run over the identical corpus with only this patch removed and restored. A small number, stated as measured rather than dressed up - the value is that it is a real correctness fix with a five-line repro, two lines of scanner change, a corpus test, and no cost anywhere else.",
         "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 4,
+      "title": "slices in a generic type application",
+      "file": "patches/0004-slices-in-a-generic-type-application.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 PyPI sweep",
+      "evidence": {
+        "repro": "a: int32_t[:] = f()\nfoo: Bar[:, :, :]\ndef to_chars(s) -> char_type[:]: ...\ndef compute(x: my_type[:, ::1]): ...\n",
+        "diagnosis": "generic_type took $.type_parameter, whose elements are $.type, and $.type has no slice. Since generic_type carries prec(1) it also shadowed the plain subscript reading, so `int[:]` had no path at all. A slice inside a subscript is ordinary valid Python \u2014 Subscript(Name, Slice()) \u2014 and Cython's pure-Python mode uses it heavily for memoryviews. Fixed by giving generic_type its own argument list that admits $.slice, aliased back to the type_parameter node name so the tree shape consumers query is unchanged. The PEP 695 declaration sites (def f[T], class C[T]) keep the strict $.type_parameter, verified by `def f[:](): ...` still being rejected.",
+        "first_seen": {
+          "package": "cython",
+          "version": "3.2.9",
+          "path": "docs/examples/userguide/memoryviews/cython_array.py"
+        },
+        "sweep_before": {
+          "passed": 69789,
+          "failed": 634,
+          "gap_files": 19
+        },
+        "sweep_after": {
+          "passed": 69796,
+          "failed": 627,
+          "gap_files": 12
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "PEP 646 unpacking beyond a bare name",
+      "file": "patches/0005-pep-646-unpacking-beyond-a-bare-name.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 PyPI sweep",
+      "evidence": {
+        "repro": "def foo(*args: *(int or str)): ...\ndata[*(x := y)]\nu = tuple[*Ts]\n",
+        "diagnosis": "Two halves of the same feature. splat_type accepted only a bare $.identifier, so `*(int or str)` and `*tuple[int, ...]` failed; it now also takes a parenthesized_expression or a generic_type. Listing alternatives rather than widening to $.type is deliberate \u2014 widening wrapped the identifier case in a `type` node and broke two upstream corpus tests, which is a tree-shape change consumers' queries would feel. Separately, subscript admitted only expression or slice, so `data[*x]` had no path; it now also takes $.list_splat. `data[*]` and `def f(*args: *): ...` are still rejected.",
+        "first_seen": {
+          "package": "ruff",
+          "version": "0.16.2",
+          "path": "crates/ruff_python_parser/resources/inline/ok/param_with_star_annotation.py"
+        },
+        "sweep_before": {
+          "passed": 69796,
+          "failed": 627,
+          "gap_files": 12
+        },
+        "sweep_after": {
+          "passed": 69801,
+          "failed": 622,
+          "gap_files": 7
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "starred expressions in bare tuples and targets",
+      "file": "patches/0006-starred-expressions-in-bare-tuples-and-targets.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 PyPI sweep",
+      "evidence": {
+        "repro": "a = *[1],\n*[], b = (1,)\n",
+        "diagnosis": "$.list_splat is not an $.expression, so an element of a bare tuple could never be a starred expression. `a = *b,` appeared to work only because a bare name is also a valid assignment-target pattern and the parser took the pattern branch; `a = *[1],` had no path at all. expression_list now takes choice($.expression, $.list_splat), matching CPython's star_expressions. Separately list_splat_pattern accepted only identifier/subscript/attribute, so the legal target `*[], b = (1,)` failed; it now also takes list_pattern and tuple_pattern, matching CPython's target_with_star_atom.",
+        "first_seen": {
+          "package": "ruff",
+          "version": "0.16.2",
+          "path": "crates/ruff_python_parser/resources/inline/ok/assign_stmt_starred_expr_value.py"
+        },
+        "sweep_before": {
+          "passed": 69801,
+          "failed": 622,
+          "gap_files": 7
+        },
+        "sweep_after": {
+          "passed": 69808,
+          "failed": 615,
+          "gap_files": 5
+        }
       }
     }
   ]
