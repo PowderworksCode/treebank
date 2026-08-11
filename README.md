@@ -15,6 +15,8 @@ grammars:
   included), 2 grammar patches
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 - `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
+- `crates/treebank-php` — tree-sitter-php 0.24.2 (php + php_only grammars),
+  2 grammar patches
 
 ```sh
 git clone --recurse-submodules <repo>   # or: git submodule update --init
@@ -23,6 +25,7 @@ scripts/materialize.sh crates/treebank-typescript
 scripts/materialize.sh crates/treebank-javascript
 scripts/materialize.sh crates/treebank-java
 scripts/materialize.sh crates/treebank-csharp
+scripts/materialize.sh crates/treebank-php
 ```
 
 ## Setting up a machine
@@ -45,7 +48,7 @@ against github.com (the daily job pushes branches through
 ## The loop
 
 Every corpus command takes `--lang
-<rust|typescript|javascript|java|csharp>` (default `rust`) and keeps its
+<rust|typescript|javascript|java|csharp|c|python|php>` (default `rust`) and keeps its
 data under `corpus/<lang>/`.
 
 ```sh
@@ -59,6 +62,8 @@ alias tb=./target/release/treebank
 #   csharp:     ranks NuGet by downloads, then follows each package's nuspec
 #               SourceLink metadata to the git commit it was built from —
 #               NuGet ships assemblies, not source (see the ledger)
+#   php:        Packagist's own popularity ranking; dist URLs are rewritten
+#               from api.github.com (60 req/hr unauthenticated) to codeload
 tb rank  --lang rust --k 1000
 tb fetch --lang rust --limit 100
 
@@ -66,13 +71,16 @@ tb fetch --lang rust --limit 100
 # (rust: syn; typescript: tools/ts-oracle; javascript: tools/js-oracle, which
 # is V8 via node's vm plus a JSX-only babel leg — NOT the TypeScript parser,
 # which calls `const x: number = 1` valid JavaScript; java: tools/java-oracle,
-# javac's own parser via JavacTask.parse), and writes
+# javac's own parser via JavacTask.parse; php: `php -l`, which needs PHP 8.4
+# or newer — see crates/treebank-php/ledger.json, or run
+# tools/php-oracle/fetch.sh on a machine without root), and writes
 # corpus/<lang>/reports/sweep.json + an agent-ready REPORT.md.
 tb sweep --lang rust       --grammar crates/treebank-rust/build
 tb sweep --lang typescript --grammar crates/treebank-typescript/build
 tb sweep --lang javascript --grammar crates/treebank-javascript/build
 tb sweep --lang java       --grammar crates/treebank-java/build
 tb sweep --lang csharp     --grammar crates/treebank-csharp/build
+tb sweep --lang php        --grammar crates/treebank-php/build
 
 # Grammar-side verification (materialize + corpus tests + negative corpus).
 # One generic script, driven by each grammar's ledger.json; CI runs the same

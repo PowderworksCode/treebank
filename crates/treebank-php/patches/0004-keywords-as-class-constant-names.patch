@@ -1,0 +1,72 @@
+diff --git a/common/define-grammar.js b/common/define-grammar.js
+index ab0e461..6f5b315 100644
+--- a/common/define-grammar.js
++++ b/common/define-grammar.js
+@@ -658,7 +658,31 @@ module.exports = function defineGrammar(dialect) {
+       _return_type: $ => seq(':', field('return_type', choice($.type, $.bottom_type))),
+ 
+       _const_element: $ => seq($.name, '=', $.expression),
+-      _class_const_element: $ => seq(reserved('nothing', $.name), '=', $.expression),
++      // A class constant may be named with any keyword: PHP accepts
++      // `const mixed`, `const namespace`, `const callable` and the rest.
++      // (`const class` is the one PHP rejects, and the grammar wrongly
++      // accepts it both before and after this change -- upstream behaviour,
++      // recorded in ledger.json rather than silently absorbed here.)
++      //
++      // `reserved('nothing', ...)` already lifts the parser-level reserved
++      // word restriction, but it cannot help with the type keywords,
++      // because those never reach $.name in the first place: PHP keywords
++      // are case-insensitive, so keyword('mixed') compiles to /mixed/i and
++      // wins the lexer race against $.name for `MIXED`, `Mixed` and `mixed`
++      // alike. The token is then read as the constant's TYPE -- typed class
++      // constants are PHP 8.3 -- and the declaration has no name left
++      // before `=`. Admitting primitive_type here, aliased back to `name`
++      // so the tree shape is unchanged, gives the parser the second reading
++      // it needs; `const mixed MIXED = 1;` still parses as type + name.
++      _class_const_element: $ => seq(
++        choice(
++          reserved('nothing', $.name),
++          alias($.primitive_type, $.name),
++          alias(keyword('namespace', false), $.name),
++        ),
++        '=',
++        $.expression,
++      ),
+ 
+       echo_statement: $ => seq(keyword('echo'), $._expressions, $._semicolon),
+ 
+diff --git a/test/corpus/class.txt b/test/corpus/class.txt
+index f4700c8..3dde5db 100644
+--- a/test/corpus/class.txt
++++ b/test/corpus/class.txt
+@@ -1128,3 +1128,30 @@ class User {
+             (primitive_type)
+             (variable_name (name))))
+         (compound_statement)))))
++
++=========================================
++Class constants named with type keywords
++=========================================
++
++<?php
++
++class C {
++    const mixed = 1;
++    const MIXED = 2;
++    const namespace = 3;
++    const callable = 4;
++    const mixed TYPED = 5;
++}
++
++---
++
++(program
++  (php_tag)
++  (class_declaration
++    name: (name)
++    body: (declaration_list
++      (const_declaration (const_element (name) (integer)))
++      (const_declaration (const_element (name) (integer)))
++      (const_declaration (const_element (name) (integer)))
++      (const_declaration (const_element (name) (integer)))
++      (const_declaration type: (primitive_type) (const_element (name) (integer))))))

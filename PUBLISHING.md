@@ -65,6 +65,7 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-javascript` | `treebank-grammar-javascript` | `tree_sitter_javascript` |
 | `crates/treebank-java` | `treebank-grammar-java` | `tree_sitter_java` |
 | `crates/treebank-csharp` | `treebank-grammar-csharp` | `tree_sitter_c_sharp` |
+| `crates/treebank-php` | `treebank-grammar-php` | `tree_sitter_php` |
 
 The crate name is **derived from the directory**, not read from the manifest.
 That is safe to key on because `treebank ledger` (which `verify.sh` runs first)
@@ -75,7 +76,12 @@ and refuses to publish a crate whose materialized manifest disagrees — so a gr
 fails loudly at plan time instead of trying to upload under a name we do not
 own.
 
-The **library** name stays upstream's, deliberately, so these are drop-in:
+The **library** name stays upstream's, deliberately, so these are drop-in.
+For php that pin is load-bearing rather than cosmetic: upstream's manifest
+declares no `[lib] name`, so Cargo derives one from the package name, and
+renaming the package alone would have silently renamed the library to
+`treebank_grammar_php` and broken every consumer's `tree_sitter_php::LANGUAGE_PHP`.
+Patch 0002 sets it explicitly for that reason.
 
 ```toml
 tree-sitter-rust = { package = "treebank-grammar-rust", version = "0.24.2-treebank.1" }

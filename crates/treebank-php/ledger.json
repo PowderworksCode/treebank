@@ -1,0 +1,149 @@
+{
+  "grammar": "php",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-php",
+    "sha": "5b5627faaa290d89eb3d01b9bf47c3bb9e797dea",
+    "version": "0.24.2",
+    "sha_note": "commit target of the annotated tag v0.24.2; submodule pointers are commits, not tag objects. Deliberately NOT master, and the reason is narrower than it first looks. Master parses fine under our pinned CLI 0.25.10 -- it generates cleanly and correctly parses both features it added past the tag (asymmetric visibility in constructor promotion, and partial function application), which the tag rejects. What master cannot do under 0.25.10 is RUN ITS CORPUS TESTS: `tree-sitter test` emits zero bytes and exits 0, silently executing none of them. Measured with both trees generated identically by the same CLI, same resulting ABI (15), and the shared parser cache cleared between runs: the tag runs 142 parses, master runs 0. That would make verify.sh's step 3 pass VACUOUSLY -- green while testing nothing -- which is worse than a red test, so the tag is pinned until upstream tags again or the CLI pin moves. The cost is recorded honestly: pinning the tag gives up the 8.4 constructor-promotion fix and a scanner heredoc UB fix."
+  },
+  "generate_cli": "0.25.10",
+  "generate_dirs": [
+    "php",
+    "php_only"
+  ],
+  "generate_deps": null,
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-php name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_php so the crate is a drop-in replacement (upstream has no explicit [lib] name, so it would otherwise be derived from the renamed package). include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "NUL bytes in single-quoted strings",
+      "file": "patches/0003-nul-bytes-in-single-quoted-strings.patch",
+      "files": [
+        "common/scanner.h",
+        "common/define-grammar.js",
+        "test/corpus/string.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the first top-500 Packagist sweep",
+      "evidence": {
+        "repro": "<?php\n$a = '\\x00';\n$b = 'before\\x00after';\n",
+        "diagnosis": "A single-quoted PHP string may contain any byte, NUL included, and symfony/polyfill-iconv's generated charset tables are full of them ('\\x00' => '\\x00'). tree-sitter reserves codepoint 0 for end-of-input, so NO grammar.js character class can ever match a literal NUL -- verified by trying: rewriting string_content's regex as /(\\\\?[^'\\\\]|\\x00)+/ regenerates cleanly and still fails. Only lexer->eof() distinguishes a NUL byte from real EOF, and only an external scanner may call it. Upstream had already solved this for the contexts its scanner owns, which is why a NUL parses fine inside a double-quoted string, a heredoc and a nowdoc, and fails only in the three grammar.js-regex contexts: single-quoted strings, comments and inline HTML. The fix adds a STRING_NUL_CHARS external that consumes a run of NUL bytes, admitted inside string_content's repeat1 rather than beside it in `string`, so 'a\\x00b' remains a single string_content node and the tree shape consumers query is unchanged.",
+        "scope_note": "Only the single-quoted string context is fixed. The same root cause makes a NUL in a comment or in inline HTML fail, and neither occurs in the 86,308-file corpus, so neither is patched blind -- each would need its own external token and its own evidence.",
+        "first_seen": {
+          "package": "symfony/polyfill-iconv",
+          "version": "v1.37.0",
+          "path": "Resources/charset/from.cp037.php"
+        },
+        "sweep_before": {
+          "passed": 86223,
+          "failed": 85,
+          "gap_files": 81
+        },
+        "sweep_after": {
+          "passed": 86288,
+          "failed": 20,
+          "gap_files": 16
+        },
+        "evidence_note": "65 files, zero regressions: all 143 upstream corpus tests pass, and the before/after sweeps ran over the identical corpus with only this patch removed and restored.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 4,
+      "title": "keywords as class constant names",
+      "file": "patches/0004-keywords-as-class-constant-names.patch",
+      "files": [
+        "common/define-grammar.js",
+        "test/corpus/class.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the first top-500 Packagist sweep",
+      "evidence": {
+        "repro": "<?php\nclass C {\n    const mixed = 1;\n    const MIXED = 2;\n    const namespace = 3;\n    const mixed TYPED = 5;\n}\n",
+        "diagnosis": "PHP accepts any keyword as a class constant name. Upstream already intends this -- _class_const_element uses reserved('nothing', $.name), which lifts the parser-level reserved-word restriction -- but that cannot help the type keywords, because they never reach $.name. PHP keywords are case-insensitive, so the grammar's keyword() helper compiles them to case-insensitive regexes, and /mixed/i beats $.name in the lexer for `mixed`, `Mixed` and `MIXED` alike. The token is then read as the constant's TYPE (typed class constants are PHP 8.3) and the declaration has no name left before `=`. The fix admits primitive_type and the namespace keyword in the name position, aliased back to $.name so the tree shape is unchanged; `const mixed MIXED = 1;` still parses as type + name.",
+        "measured_scope": "The corpus only surfaced the SHOUTING_CASE spellings, because that is how constants are named, but the gap is general: before this patch every one of array bool callable false float int iterable mixed null object string true void namespace failed as a class constant name in lowercase too. Verified against php -l at both declaration levels, which differ -- in a class every keyword except `class` is a legal constant name, while at top level array/callable/false/null/true/static/namespace/list/print/echo/function are all rejected. Only the class-level rule is widened here; the top-level rule is left alone, so `const mixed = 1;` outside a class remains a (correctly narrower, though not exactly right) rejection and no corpus file needs it.",
+        "first_seen": {
+          "package": "rector/rector",
+          "version": "2.6.1",
+          "path": "src/PHPStanStaticTypeMapper/TypeMapper/StrictMixedTypeMapper.php"
+        },
+        "sweep_before": {
+          "passed": 86288,
+          "failed": 20,
+          "gap_files": 16
+        },
+        "sweep_after": {
+          "passed": 86298,
+          "failed": 10,
+          "gap_files": 6
+        },
+        "evidence_note": "10 files, zero regressions: all 144 corpus tests pass (143 upstream + this patch's), and namespace declarations, `use` statements, relative names (namespace\\Foo::bar()), enum cases, property types, return types and parameter types were each regression-tested against php -l.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
+    }
+  ],
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). For php this pin also decides the upstream sha -- see upstream.sha_note.",
+  "generate_dirs_note": "both dialects are generated because both ship in the published crate, but only 'php' is loaded for sweeps (see the Lang impl): 'php' claims file-types ['php'] in tree-sitter.json and 'php_only' claims none, because php_only parses a region already known to be code, for injection into a host language.",
+  "corpus": {
+    "source": "Packagist dist archives of the top packages by Packagist's own popularity ranking. The dist archive is the published source tree Composer itself downloads, so there is no source/build-output choice to make the way PyPI's sdist-vs-wheel forces one.",
+    "ranking": "packagist.org/explore/popular.json, paginated at 100/page",
+    "ranking_note": "Packagist's 'popular' order is Packagist's own and is NOT a plain sort by the download count it returns alongside each package (symfony/deprecation-contracts at 914M ranks above symfony/polyfill-mbstring at 1254M). The download number is recorded per package as reported; the ORDER is Packagist's ranking, which is the same kind of editorial-traffic blend npm's is, and unlike crates.io's raw counts. Stated here so nobody reads rank as a download sort.",
+    "url_note": "Packagist states dist URLs as api.github.com/repos/<o>/<r>/zipball/<ref>, which allows 60 unauthenticated requests an hour - a 500-package fetch exhausts that in the first minute. resolve() rewrites them to codeload.github.com/<o>/<r>/tar.gz/<ref>, which needs no token and serves the single-top-level-directory tarball the fetch driver already strips. Measured over a sample of the top 500, every dist URL was on api.github.com; anything else passes through untouched.",
+    "files_note": ".php only, the single extension tree-sitter-php's tree-sitter.json claims for the grammar we load. .phtml/.php4 are the same syntax and this grammar would parse them; they are excluded so classify() matches what the grammar advertises. Paths containing a vendor/ component are excluded for the reason javascript excludes bundles: it is Composer's install directory, so a failure there is attributed to the wrong package and the same code is already in the corpus under its real owner.",
+    "oracle": "php -n -d short_open_tag=0 -l - the reference implementation's own syntax-check mode. TWO-VALUED: valid / invalid. Verified parse-only and non-executing: a file whose top level writes to disk and echoes produced no side effect, no output and exit 0; a missing require, an undefined base class and an undefined interface are all accepted, so each file is judged entirely on its own text.",
+    "oracle_flags_note": "-n ignores php.ini so the box's configuration cannot move a verdict. short_open_tag genuinely can: with it on, '<? function f( { ?>' is a parse error; with it off the same bytes are inline HTML and the file is valid. It is pinned explicitly to the language default rather than left unset so a future change to that default cannot move the numbers. Measured bonus: -n also skips loading the ini's extensions, 35% of per-file cost (0.94 -> 0.61 ms/file), with zero verdict changes across 1703 files.",
+    "oracle_exit_note": "255 is 'syntax error'; 1 is 'could not open input file'. exec_oracle::run is told 255 explicitly and treats any other non-zero status as an ORACLE FAILURE rather than a verdict, because collapsing them would let a mistyped corpus root mark every file invalid, record every failure as noise, drop gap_files to zero and report a flawless grammar.",
+    "oracle_version": "PHP 8.5.9 (minimum enforced in code: PHP_VERSION_ID >= 80400)",
+    "oracle_version_note": "The interpreter version IS the language version, exactly as generate_cli is the CLI version, and for PHP it is not a formality. Measured on 1703 files from the top 40 packages: PHP 8.3.6 rejects 7 of them and PHP 8.4.23 and 8.5.8 reject none. All 7 are current Symfony, which declares 'php: >=8.4.1' and uses property hooks, asymmetric visibility and new-without-parentheses. On 8.3 those become corpus noise, so a grammar gap in 8.4 syntax would be silently discarded on the most-downloaded package family in the ecosystem. The Lang impl therefore REFUSES to run on anything older than 8.4 rather than answering dishonestly. Confirmed end to end once php8.5-cli was installed: the same 1000-file sample that returned 994 valid under PHP 8.3 returns 1000 under 8.5.9. The pinned static 8.5.8 used before the install was an honest stand-in -- it agreed with the distribution 8.5.9 on all 1703 corpus files plus the 22-file adversarial battery, zero disagreements.",
+    "oracle_version_choice_note": "Newest stable rather than a per-package version manager, because the choice does not exist: every one of the top 40's composer.json 'require.php' constraints is a FLOOR ('>=7.2', '^7.4 || ^8.0', '>=5.6') and not one names a ceiling, so the single interpreter satisfying all of them at once is the newest. Verified monotone within 8.x by probing 15 constructs across 8.3/8.4/8.5: each version accepts everything the previous one did and adds more; the only constructs all three reject ($s{0}, (real), (unset)) were removed at the 7->8 boundary, before every version in play.",
+    "oracle_cost": "13.8-14.5 s per 1000 files serially -- roughly 20x the next-worst Tier-A oracle, because php -l has no batch mode and forks an interpreter per file. Parallelized by exec_oracle at the machine's core count: 0.66-0.68 s per 1000 on 16 cores, a 21x speedup, flat past the core count (32 workers measured no better than 16) and degrading gently rather than sharply under load, because each unit of work is a fork that exits rather than a thread holding a core. Measured on a distribution php8.5 at ~15 ms per fork; a static build costs ~71 ms per fork for identical verdicts, which is why tools/php-oracle/fetch.sh is the fallback and not the default.",
+    "oracle_batch_note": "A batch oracle was built and REJECTED. opcache_compile_file() is non-executing, throws catchable ParseError/CompileError, survives duplicate declarations across files, and ran the whole corpus at 0.19 ms/file - 80x faster than php -l, and it agreed with php -l on all 1703 files. It is nevertheless WRONG: on a 22-file adversarial battery it silently accepted ten classes of invalid PHP (break/continue outside a loop, duplicate function, duplicate parameter, goto to an undefined label, reserved class name, misplaced strict_types, non-public interface method, duplicate default clause, new in a const expression), because the engine raises those as E_COMPILE_ERROR, which surfaces neither in the return value nor as a throwable nor in error_get_last(). Agreement on 1703 files of clean library code was worthless as evidence - only the negative battery caught it. A variant that scrapes the engine's own error log does match php -l on all 22, but it depends on diagnostic message text and buys a speedup the sweep does not need: validate() only ever runs on files the grammar already failed, which is tens to hundreds of files, where the parallelized php -l is already under a second. Recorded here so this is not rediscovered and quietly adopted.",
+    "fetched": "2026-08-11",
+    "packages": 499,
+    "packages_note": "500 requested; 499 resolved. roave/security-advisories publishes no tagged release (it is a metapackage of dev branches only) and the fetch driver skips it.",
+    "files": 86308,
+    "sweep_upstream": {
+      "passed": 86223,
+      "failed": 85,
+      "gap_files": 81,
+      "noise_files": 4,
+      "clusters": 25
+    },
+    "sweep_patched": {
+      "passed": 86298,
+      "failed": 10,
+      "gap_files": 6,
+      "noise_files": 4,
+      "clusters": 9
+    },
+    "remaining_gaps_note": "6 gap files remain, in 5 distinct causes, each examined rather than left unnamed. (1) friendsofphp/php-cs-fixer PhpUnitTestAnnotationFixer.php and one other, failing at the very top of the file (<root> > ERROR(php_tag declare_statement comment namespace_definition ...)). (2) proxy-manager-lts Autoloader.php: `return (bool) require_once $file;` - a cast applied to a require expression, which the grammar's cast_expression does not admit. (3) league/uri-interfaces Converter.php: `return (string) match (true) { ... };` - a cast applied to a match expression; reported as a MISSING ';', which is the same cast-operand gap seen from the other side. (4) symfony/var-dumper Data.php: \"\\0$item->class\\0$key\" - the property name `class` accessed inside string interpolation, the interpolation-context twin of patch 0004's problem. (5) symfony/cache ValueWrapper.php: a class name containing a non-ASCII byte. None was patched blind: (2) and (3) are one fix and want a considered widening of cast_expression's operand rather than a quick alternation, and (4) needs the same reserved-word treatment inside the scanner-owned interpolation path.",
+    "noise_note": "All 4 noise files are jetbrains/phpstorm-stubs, which describes PHP's own internals and therefore declares things no PHP file may declare: `class object`, `interface iterable`, `function clone(...)`, and a property on a class the stub redeclares. php -l rejects them and so does the grammar, which is the oracle agreeing with the parser rather than a gap - a useful sanity check that the adjudication is working."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "tree-sitter-php parses syntax that PHP 8 removed, so for the cast case the grammar accepts a strict superset of what the oracle calls valid -- the same relationship treebank-python records for Python 2, and it needs stating because it decides what test/negative/ can contain.",
+    "evidence": "cast_type (common/define-grammar.js) still lists `real` and `unset`, both removed in PHP 8.0. Measured against php -l 8.5: `(real) 1` and `(unset) $y` are rejected by the oracle and accepted by the grammar. The other legacy spellings in that list -- binary, double, integer, boolean -- are still valid PHP 8 and agree. Separately, the grammar accepts `class C { const class = 1; }`, which php -l rejects because C::class is class-name resolution; this was verified against the pristine v0.24.2 tree, so it predates every treebank patch, and patch 0004 neither causes nor fixes it.",
+    "why_this_is_safe": "A sweep gap is 'grammar rejected it AND the oracle accepted it'. This asymmetry runs the other way -- grammar accepts, oracle rejects -- so it can never manufacture a gap and gap_files stays exact. For the casts it is upstream's deliberate support for older PHP rather than an optimization artifact; `const class` is simply an upstream bug.",
+    "cost": "test/negative/ cannot contain these three constructs, because the corpus asserts the grammar KEEPS rejecting a file and the grammar accepts all three. A (real) cast was written as a negative candidate, measured, and removed for exactly this reason. The 9 files that remain were each verified rejected by BOTH the oracle and the grammar."
+  },
+  "measurement_hazard": "`tree-sitter parse` and `tree-sitter test` cache the compiled parser at ~/.cache/tree-sitter/lib/<name>.so, keyed by GRAMMAR NAME ONLY. Two different checkouts of tree-sitter-php therefore share one php.so, and a comparison of two trees run through the CLI can silently measure the same parser twice. That produced a wrong result here: the pin was first set to the v0.24.2 tag on the strength of a CLI run that appeared to show master failing two of its own corpus tests under CLI 0.25.10. Re-measured with `treebank negative`, which compiles to a path fingerprinted by grammar CONTENT, master passes. Any tree-to-tree grammar comparison in this repo should go through the treebank binary, or clear that cache between runs."
+}
