@@ -4,9 +4,8 @@ Upstream:
 [tree-sitter-grammars/tree-sitter-lua](https://github.com/tree-sitter-grammars/tree-sitter-lua)
 pinned at `10fe0054734eec83049514ea2e718b2a56acd0c9` (v0.5.0).
 
-Both patches here are packaging, not grammar. **The grammar itself is
-unmodified**, which is the measured result recorded in `ledger.json` rather
-than an assumption — see *The dialect question* below for what was checked.
+Three patches: two packaging, and one grammar fix taken from an open
+upstream PR whose base commit is exactly the sha pinned above.
 
 ## 0001 — treebank redistribution notice
 
@@ -33,7 +32,65 @@ would apply cleanly upstream and is worth offering as a standalone PR.
 The published version string is deliberately absent: `publish.sh` derives it
 from crates.io at publish time. See `PUBLISHING.md`.
 
-## Why there is no 0003
+## 0003 — long comment opener at the start of a quoted string
+
+Taken from **[upstream PR #80](https://github.com/tree-sitter-grammars/tree-sitter-lua/pull/80)**
+(open, by `notpeter`, opened against
+[zed-extensions/lua#54](https://github.com/zed-extensions/lua/issues/54)).
+Found independently by this crate's first LuaRocks sweep and diagnosed to the
+same repro before the PR was discovered. **Retire this patch when it merges.**
+
+```lua
+x = "--[["
+```
+
+Ten characters, valid in 5.1/5.4/LuaJIT, and the grammar rejected it.
+`comment` is in `extras`, so the external scanner's `_block_comment_start`
+stays valid at the *start* of string content; `scan_comment_start` eats `--`
+and then `[[`, and the string's content is lexed as the beginning of a long
+comment. It is specific to that position and to the *external* token —
+`x = "a--[[b"`, `x = "-- [["` and `x = "--foo"` all parsed before the fix,
+and the last of those is the tell: the *internal* comment extra is correctly
+not valid there.
+
+The fix moves quoted-string content into the scanner as two new external
+tokens, checked *before* the comment branch, so the contest is settled by
+scanner order rather than by token immediacy.
+
+Recorded because it cost time: the obvious grammar-side fix — make the
+closing quote `token.immediate`, so the state after the opening quote admits
+no extras — was tried first, verified to have reached the generated
+`grammar.json`, and **does not work**. An internal token loses to any valid
+external one regardless of immediacy, which is exactly why the fix has to be
+scanner-side.
+
+Only `grammar.js`, `src/scanner.c` and the two test files are carried. The
+PR's regenerated `src/parser.c`, `src/grammar.json` and
+`src/tree_sitter/array.h` are not: `materialize.sh` regenerates those with
+the pinned CLI, and committing a patch to generated files would defeat the
+point.
+
+| | passed | failed | gaps | clusters |
+|---|---|---|---|---|
+| before | 8,545 | 37 | 3 | 31 |
+| after | **8,546** | **36** | **2** | **28** |
+
+One file in 8,582 and zero regressions, measured over the identical corpus
+with only this patch removed and restored. Because the patch changes how
+*every* quoted string is lexed, it was regression-tested well past the sweep:
+
+- the 2,606-file external corpus (neovim, nvim-treesitter, awesome,
+  lua-resty-core, koreader, luvit) fails exactly the same 3 files as before,
+  and no others;
+- upstream's corpus tests stay 42/42, with highlight assertions rising
+  58 → 76;
+- the 16-file negative corpus is still fully rejected;
+- the oracle's 20-file adversarial battery still agrees 20/20;
+- the **tree shape is unchanged** — `string_content` still wraps
+  `escape_sequence` children, which is what consumers' queries depend on and
+  the thing a lexer change breaks most easily.
+
+## Why there is no 0004
 
 The upstream grammar is chosen, not settled for. All three editors that ship
 a Lua grammar pin **the same commit** this crate pins — nvim-treesitter,
@@ -42,51 +99,18 @@ with any current maintenance: the alternatives (`tjdevries/tree-sitter-lua`,
 131 stars, last pushed 2024-10; `Azganoth/tree-sitter-lua`, 53 stars, 2022)
 are dormant.
 
-Measured on the top-500 LuaRocks corpus — 383 packages, 8,582 `.lua` files:
+After 0003, **2 gap files remain out of 8,582 (99.58% pass)**, and both are
+the same cause: **a literal NUL byte**, one inside a string literal
+(net-url's `query_test.lua`) and one inside a comment (openssl's
+`root_ca.lua`). Lua reads source as a length-delimited buffer and accepts
+embedded NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token
+ends there and the rest of the file is `ERROR`. Minimal: `x = "a<NUL>b"` is
+valid to `luac 5.4` and fails to parse.
 
-| | files |
-|---|---|
-| passed | **8,545** (99.57%) |
-| failed | 37 |
-| — grammar gaps | **3** |
-| — corpus noise | 34 |
-
-The three gaps fall into two classes, and **neither is a `grammar.js` bug**,
-which is why no patch ships. Both are diagnosed to a minimal repro rather
-than left as a cluster signature.
-
-**1. A quoted string whose content begins with a long-comment opener.**
-Repro, ten characters, valid in 5.1/5.4/LuaJIT and rejected by the grammar:
-
-```lua
-x = "--[["
-```
-
-`comment` is in `extras`, so the external scanner's `_block_comment_start`
-stays valid at the start of a string's content; `scan_comment_start` eats
-`--` and then `[[` before the content token is tried. It is specific to that
-position and to the *external* token — `x = "a--[[b"`, `x = "-- [["` and
-`x = "--foo"` all parse, the last of which shows the *internal* comment extra
-is correctly not valid there.
-
-Attempted and reverted: making the closing quote `token.immediate`, so the
-state after the opening quote admits no extras, is the obvious fix and does
-not work — confirmed in the generated `grammar.json`, the gap survives. A
-real fix is scanner-side and needs an understanding of why an external extra
-outranks immediacy where an internal one does not. Shipping a
-half-understood `scanner.c` patch is exactly the accepts-invalid-code drift
-`GRAMMARS.md` warns about, so nothing was shipped. The repro is ten
-characters and is worth reporting upstream.
-
-**2. Files containing a literal NUL byte** (2 files: net-url's
-`query_test.lua`, one inside a string; openssl's `root_ca.lua`, one inside a
-comment). Lua reads source as a length-delimited buffer and accepts embedded
-NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token ends
-there and the rest of the file is `ERROR`. Minimal: `x = "a<NUL>b"` is valid
-to `luac 5.4` and fails to parse. This is a **tree-sitter core limitation**,
-not something `grammar.js` or `scanner.c` can express, and it is recorded as
-such rather than counted as a grammar gap it is not. Incidence: 2 of 8,582
-files (0.02%).
+This is a **tree-sitter core limitation**, not something `grammar.js` or
+`scanner.c` can express, and it is recorded as such rather than counted as a
+grammar gap it is not. Note that 0003 does not help here and was never going
+to: its `scan_quote_string_content` loop also terminates on `0`.
 
 ## The dialect question, and why it is settled the way it is
 

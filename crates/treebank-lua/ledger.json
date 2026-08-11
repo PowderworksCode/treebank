@@ -61,9 +61,17 @@
       "gap_files": 3,
       "noise_files": 34,
       "clusters": 31,
-      "note": "99.57% of files parse. There is no sweep_patched line because there is no grammar patch: see remaining_gaps. Run against upstream 10fe0054 + the two packaging patches only."
+      "note": "upstream 10fe0054 with the two packaging patches only, i.e. before patch 0003."
     },
-    "remaining_gaps_note": "3 gap files, in TWO classes, neither of which is a grammar.js bug and both diagnosed to a minimal repro rather than left as a signature. (1) luacheck spec/lexer_spec.lua - a quoted string whose content BEGINS with a long-comment opener. Minimal repro: `x = \"--[[\"`, ten characters, valid in 5.1/5.4/LuaJIT and rejected by the grammar. Cause: `comment` is in `extras`, so the external scanner's _block_comment_start stays valid at the start of a string's content, and scan_comment_start consumes `--` then `[[` before the content token is ever tried. It is specific to that position and to the external token: `x = \"a--[[b\"` parses, `x = \"-- [[\"` parses, and `x = \"--foo\"` parses (the INTERNAL comment extra is correctly not valid there) - only the external scanner's path fires. Attempted and reverted: making the closing quote token.immediate, so the state after the opening quote admits no extras, is the obvious fix and does NOT work - verified in the generated grammar.json, the gap survives. A real fix is scanner-side and needs an understanding of why an external extra outranks immediacy where an internal one does not; shipping a half-understood scanner.c patch is exactly the accepts-invalid-code drift GRAMMARS.md warns about, so it was not shipped. Worth reporting upstream: the repro is ten characters. (2) net-url tests/query_test.lua and openssl test/root_ca.lua - files containing a literal NUL byte, one inside a string literal and one inside a comment. Lua reads source as a length-delimited buffer and accepts embedded NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token ends at the NUL and everything after it is ERROR. Verified minimal: `x = \"a<NUL>b\"` is valid to luac 5.4 and fails to parse. This is a tree-sitter CORE limitation, not something grammar.js or scanner.c can express, and it is recorded as such rather than as a grammar gap. Measured incidence: 2 of 8582 files (0.02%) after excluding the 7 __MACOSX resource forks that also open with a NUL."
+    "remaining_gaps_note": "2 gap files remain, both the SAME cause and neither a grammar.js bug: a literal NUL byte, one inside a string literal (net-url tests/query_test.lua) and one inside a comment (openssl test/root_ca.lua). Lua reads source as a length-delimited buffer and accepts embedded NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token ends at the NUL and the remainder of the file is ERROR. Verified minimal: `x = \"a<NUL>b\"` is valid to luac 5.4 and fails to parse. This is a tree-sitter CORE limitation, not something grammar.js or scanner.c can express, and it is recorded as such rather than counted as a grammar gap it is not. Patch 0003 does not help and was never going to: its scan_quote_string_content loop also terminates on 0. Incidence 2 of 8582 (0.02%), after excluding the 7 __MACOSX resource forks which also open with a NUL. The third gap the first sweep found - a quoted string beginning with a long-comment opener - is fixed by patch 0003.",
+    "sweep_patched": {
+      "passed": 8546,
+      "failed": 36,
+      "gap_files": 2,
+      "noise_files": 34,
+      "clusters": 28,
+      "note": "with patch 0003. 99.58% of files parse."
+    }
   },
   "patches": [
     {
@@ -87,6 +95,44 @@
       "kind": "packaging",
       "origin": "treebank; upstream owns the tree-sitter-lua name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_lua so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md.",
       "note": "Also corrects upstream's include list from \"/LICENSE\" to \"/LICENSE.md\": the file in the tree is LICENSE.md, so as written the MIT licence text never reached the published tarball at all. A redistribution has to ship its licence, so this is fixed here rather than left for upstream. Worth offering upstream as a standalone one-line fix."
+    },
+    {
+      "id": 3,
+      "title": "long comment opener at the start of a quoted string",
+      "file": "patches/0003-long-comment-opener-at-the-start-of-a-quoted-string.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/comments.txt",
+        "test/highlight/string.lua"
+      ],
+      "kind": "grammar",
+      "origin": "upstream PR #80 (tree-sitter-grammars/tree-sitter-lua), open at time of writing, by notpeter; opened against zed-extensions/lua#54. Its base commit is EXACTLY this ledger's pinned sha, so it applies to the pin unchanged. Taken as-is for grammar.js, src/scanner.c and the two test files; its regenerated src/parser.c, src/grammar.json and src/tree_sitter/array.h are deliberately NOT carried, because materialize.sh regenerates those with the pinned CLI. Found independently by this crate's first sweep and diagnosed to the same repro before the PR was discovered; retire this patch when it merges upstream.",
+      "evidence": {
+        "repro": "x = \"--[[\"\n",
+        "diagnosis": "A quoted string whose content BEGINS with a long-comment opener. `comment` is in `extras`, so the external scanner's _block_comment_start stays valid at the start of string content; scan_comment_start consumes `--` and then scan_block_start consumes `[[`, and the string's content is lexed as the start of a long comment. Specific to that position and to the EXTERNAL token: `x = \"a--[[b\"`, `x = \"-- [[\"` and `x = \"--foo\"` all parsed before the fix, the last of which shows the INTERNAL comment extra is correctly not valid there. The fix moves quoted-string content into the scanner as two new external tokens checked BEFORE the comment branch, so the contest is decided by scanner order rather than by token immediacy. Attempted first and reverted: making the closing quote token.immediate, so the state after the opening quote admits no extras, was verified to reach the generated grammar.json and did NOT fix it - an internal token loses to any valid external one regardless of immediacy, which is why the fix has to be scanner-side.",
+        "first_seen": {
+          "package": "lunarmodules/luacheck",
+          "version": "1.2.0-1",
+          "path": "luacheck/spec/lexer_spec.lua"
+        },
+        "sweep_before": {
+          "passed": 8545,
+          "failed": 37,
+          "gap_files": 3,
+          "noise_files": 34,
+          "clusters": 31
+        },
+        "sweep_after": {
+          "passed": 8546,
+          "failed": 36,
+          "gap_files": 2,
+          "noise_files": 34,
+          "clusters": 28
+        },
+        "evidence_note": "One file in 8,582 and zero regressions, both measured over the identical corpus with only this patch removed and restored. Regression-tested well beyond the sweep, because the patch changes how EVERY quoted string is lexed: the 2,606-file external corpus (neovim, nvim-treesitter, awesome, lua-resty-core, koreader, luvit) fails exactly the same 3 files as before and no others; upstream's own corpus tests stay 42/42 with highlight assertions rising 58 -> 76; the 16-file negative corpus is still fully rejected; the oracle's 20-file adversarial battery still agrees 20/20; and the tree SHAPE is unchanged - string_content still wraps escape_sequence children, which is what consumers' queries depend on and the thing a lexer change most easily breaks.",
+        "upstream_status": "open as PR #80 against the pinned sha; retire this patch on merge"
+      }
     }
   ]
 }
