@@ -1,0 +1,6 @@
+# Built per toolchain by build.sh; the oracle is source, the binaries are not.
+check-*
+explain-*
+*.o
+zig-cache/
+.zig-cache/
