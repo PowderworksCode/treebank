@@ -79,10 +79,13 @@ fn safe_path(rel: &Path) -> Option<PathBuf> {
     Some(rel.to_path_buf())
 }
 
-/// Strip the leading archive component and reject path traversal.
-fn strip_root(entry_path: &Path) -> Option<PathBuf> {
+/// Strip the archive's own wrapper components and reject path traversal.
+/// How many to strip is the language's call — see `Lang::archive_strip`.
+fn strip_root(lang: &dyn Lang, entry_path: &Path, is_zip: bool) -> Option<PathBuf> {
     let mut comps = entry_path.components();
-    comps.next()?;
+    for _ in 0..lang.archive_strip(entry_path, is_zip) {
+        comps.next()?;
+    }
     safe_path(comps.as_path())
 }
 
@@ -159,7 +162,7 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
                 continue;
             }
             let Some(rel) = entry.enclosed_name() else { continue };
-            let Some(rel) = safe_path(&rel) else { continue };
+            let Some(rel) = strip_root(lang, &rel, true) else { continue };
             let mut buf = Vec::new();
             entry.read_to_end(&mut buf)?;
             files.extend(record(lang, pkgdir, &rel, &buf)?);
@@ -169,7 +172,7 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
         for entry in tar.entries()? {
             let mut entry = entry?;
             let entry_path = entry.path()?.to_path_buf();
-            let Some(rel) = strip_root(&entry_path) else { continue };
+            let Some(rel) = strip_root(lang, &entry_path, false) else { continue };
             let mut buf = Vec::new();
             entry.read_to_end(&mut buf)?;
             files.extend(record(lang, pkgdir, &rel, &buf)?);

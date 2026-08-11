@@ -52,6 +52,9 @@ pub enum LangName {
     #[serde(rename = "php")]
     #[value(name = "php")]
     Php,
+    #[serde(rename = "go")]
+    #[value(name = "go")]
+    Go,
 }
 
 impl LangName {
@@ -65,6 +68,7 @@ impl LangName {
             LangName::C => "c",
             LangName::Python => "python",
             LangName::Php => "php",
+            LangName::Go => "go",
         }
     }
 }
