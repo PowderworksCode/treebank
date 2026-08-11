@@ -196,5 +196,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-ruby",
+    "dep": "tree-sitter-ruby",
+    "crate": "treebank-grammar-ruby",
+    "cases": [
+      {
+        "label": "ruby",
+        "language": "tree_sitter_ruby::LANGUAGE",
+        "fixture": "patched.rb",
+        "expect": "Clean"
+      },
+      {
+        "label": "ruby strictness (must reject)",
+        "language": "tree_sitter_ruby::LANGUAGE",
+        "fixture": "must-reject.rb",
+        "expect": "Error"
+      }
+    ]
   }
 ]
