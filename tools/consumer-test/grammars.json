@@ -139,5 +139,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-bash",
+    "dep": "tree-sitter-bash",
+    "crate": "treebank-grammar-bash",
+    "cases": [
+      {
+        "label": "bash",
+        "language": "tree_sitter_bash::LANGUAGE",
+        "fixture": "patched.sh",
+        "expect": "Clean"
+      },
+      {
+        "label": "bash strictness (must reject)",
+        "language": "tree_sitter_bash::LANGUAGE",
+        "fixture": "must-reject.sh",
+        "expect": "Error"
+      }
+    ]
   }
 ]

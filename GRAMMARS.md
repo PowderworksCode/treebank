@@ -100,6 +100,17 @@ See [PUBLISHING.md](PUBLISHING.md).
 KEEP rejecting them. Sweeps only catch rejects-valid-code; this catches
 accepts-invalid-code, the direction agents drift when optimizing pass rates.
 
+## Consumer test
+
+Every grammar also needs an entry in `tools/consumer-test/grammars.json`
+(`dep`, `crate`, and one case per fixture) plus its fixtures under
+`fixtures/`: a `patched.<ext>` exercising one construct per grammar patch,
+which must parse Clean, and a `must-reject.<ext>`, which must Error. That
+pair is what proves a *published* crate still carries the patch series and
+still rejects what it should — `scripts/test-publish.sh` fails outright on a
+grammar with no entry, so this is not optional, and it is easy to miss when
+adding a language because nothing else in the layout mentions it.
+
 ## Changing a grammar
 
 ```sh
