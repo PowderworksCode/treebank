@@ -1,0 +1,301 @@
+{
+  "grammar": "ruby",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-ruby",
+    "sha": "ad907a69da0c8a4f7a943a7fe012712208da6dee",
+    "version": "0.23.1",
+    "sha_note": "master head, 4 commits past tag v0.23.1 (71bd32fb7607035768799732addba884a37a6210). Pinned past the tag deliberately: ad907a6 'scanner: fix heredoc serialization buffer overflows' is a correctness fix in the external scanner, and heredocs are pervasive in real Ruby. The other three commits are Rust/wasm binding and LICENSE packaging changes that do not touch the parser. Upstream has published no release since; version stays 0.23.1 because that is what tree-sitter.json and Cargo.toml still say."
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "oracle": {
+    "tool": "tools/rb-oracle/check.rb — CRuby's own parser via RubyVM::AbstractSyntaxTree.parse_file",
+    "version": "CRuby 3.2.3 (2024-01-18 revision 52bb2ac0a6) [x86_64-linux-gnu]",
+    "dialect": "Ruby 3.2",
+    "flags": [],
+    "note": "The interpreter version IS the language version, and for Ruby that is load-bearing rather than incidental: `it` as an implicit block parameter is 3.4+, hash shorthand {x:} and anonymous block forwarding are 3.1+, endless methods and rightward assignment are 3.0+. A file needing syntax newer than this interpreter is not valid Ruby HERE, and recording it as corpus noise is the honest answer — but it is an answer about our toolchain, which is why the version sits beside the verdicts. Measured on 3.2.3: everything from 1.9 through 3.2 parses, and the 3.4-era forms probed (`it`, `**nil`, anonymous forwarding inside a block) are not syntax errors on 3.2 either, since they parse as ordinary constructs. The gate that does bite is genuinely removed syntax — `when 1: puts 2`, dropped in 1.9 — which is correctly invalid. `flags` is empty because the interpreter version settles the dialect; `error_tolerant:` is deliberately not passed, since it exists to return a tree for broken input, which is the verdict this oracle is here to give.",
+    "unreadable_note": "An unreadable file is NOT an invalid file: check.rb writes the path and reason to stderr and exits 2 rather than emitting a verdict, so a mistyped corpus root fails the sweep instead of turning every grammar failure into noise and reporting a flawless grammar. Found here the hard way before main adopted the same rule everywhere: an early batch resolved against the wrong directory came back 604 of 604 'invalid' and looked like a clean result."
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-ruby name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_ruby so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else — dependency versions stay upstream's. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "endless method with a command call body",
+      "file": "patches/0003-endless-method-with-a-command-call-body.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "treebank; Ruby 3.1 language change the grammar had not caught up with",
+      "evidence": {
+        "repro": "def compile(**options) = raise NotImplementedError, 'x'",
+        "first_seen": {
+          "package": "mustermann",
+          "version": "4.0.0"
+        },
+        "sweep_before": {
+          "passed": 25542,
+          "failed": 62
+        },
+        "sweep_after": {
+          "passed": 25549,
+          "failed": 55
+        },
+        "note": "Ruby 3.1 allows a command call (unparenthesised arguments) as an endless method body; parse.y calls it `endless_command`. Scoped to parse.y's productions rather than all of `expr`, verified against CRuby 3.2.3 in both directions: `def a = b and c` parses as `(def a = b) and c` and `def a = not b` is a syntax error, so neither was admitted. The cost is four precedence declarations, not one: allowing a command body makes the end of the body coincide with points where the command could still be extended, so _body_expr takes prec(-1) and _chained_command_call, alternative_pattern and the two-sided _pattern_range each take prec.left(1) to keep extending. Each was added only after tree-sitter reported the specific conflict it resolves."
+      }
+    },
+    {
+      "id": 4,
+      "title": "block argument with a space, or on its own line",
+      "file": "patches/0004-block-argument-with-a-space-or-on-its-own-line.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "new(args).execute(& block)",
+        "first_seen": {
+          "package": "rest-client",
+          "version": "2.1.0"
+        },
+        "sweep_before": {
+          "passed": 25549,
+          "failed": 55
+        },
+        "sweep_after": {
+          "passed": 25554,
+          "failed": 50
+        },
+        "note": "Two shapes, one cause: the external `_block_ampersand` fires only when `&` is followed immediately by a non-space, so `foo(& block)` and a bare `&` on its own line before the closing paren (Ruby 3.1 anonymous block forwarding, as dry-schema and dry-core write it) both failed. Relaxing the scanner's whitespace test was tried first and rejected: it turned `a & b` into a call with a block argument, which the grammar's own `bitwise and` corpus test caught. The scanner runs before the parser state is consulted and cannot tell an argument-start `&` from a binary one; the LR automaton can, so the plain `&` token is offered as a second alternative at prec(-1), leaving binary to win wherever both readings exist."
+      }
+    },
+    {
+      "id": 5,
+      "title": "self and super as method names",
+      "file": "patches/0005-self-and-super-as-method-names.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "def super(times = 1); end",
+        "first_seen": {
+          "package": "pry",
+          "version": "0.16.0"
+        },
+        "sweep_before": {
+          "passed": 25554,
+          "failed": 50
+        },
+        "sweep_after": {
+          "passed": 25557,
+          "failed": 47
+        },
+        "note": "Ruby's `fname` admits every reserved word. Measured against CRuby 3.2.3 across all 40 reserved words: `self` and `super` were the only two the grammar rejected, because each has its own rule the lexer prefers over `identifier`. prec(-1) keeps `def self.foo` a singleton_method."
+      }
+    },
+    {
+      "id": 6,
+      "title": "symbols for punctuation globals and non-ASCII names",
+      "file": "patches/0006-symbols-for-punctuation-globals-and-non-ascii-names.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "alias_method :☠, :exit  /  h = {:$: => [:$LOAD_PATH]}",
+        "first_seen": {
+          "package": "sidekiq",
+          "version": "8.1.6"
+        },
+        "sweep_before": {
+          "passed": 25557,
+          "failed": 47
+        },
+        "sweep_after": {
+          "passed": 25560,
+          "failed": 44
+        },
+        "note": "Two scanner bugs. (1) `is_iden_char` took a `char`, truncating the codepoint to its low byte, so any character whose low byte collided with one of NON_IDENTIFIER_CHARS was wrongly rejected: U+2620 SKULL AND CROSSBONES ends in 0x20, the byte for a space. It now takes the codepoint and treats everything above U+007F as an identifier character, which is what Ruby and grammar.js's own IDENTIFIER_CHARS both do. (2) Of Ruby's one-character global variables only those that are also operators ($!, $&, $~) reached scan_operator; $:, $; and $' did not, so `:$:` and `:$'` failed to lex. parse.y's set is now checked explicitly, before the operator path, which also stops scan_operator reading `:$<` as `<<` or `<=`."
+      }
+    },
+    {
+      "id": 7,
+      "title": "character literal with an escaped control character",
+      "file": "patches/0007-character-literal-with-an-escaped-control-character.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "?\\C-\\] != \"\\u001D\"",
+        "first_seen": {
+          "package": "ruby_parser",
+          "version": "3.22.0"
+        },
+        "sweep_before": {
+          "passed": 25560,
+          "failed": 44
+        },
+        "sweep_after": {
+          "passed": 25561,
+          "failed": 43
+        },
+        "note": "The character escaped by \\C-, \\c- or \\M- may itself be an escape. The old `-\\S` consumed only the backslash of `\\]` and left the `]` to close whatever bracket was open around it."
+      }
+    },
+    {
+      "id": 8,
+      "title": "defined? as a hash key",
+      "file": "patches/0008-defined-as-a-hash-key.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "h = {defined?: DefinedNode}",
+        "first_seen": {
+          "package": "rubocop-ast",
+          "version": "1.50.0"
+        },
+        "sweep_before": {
+          "passed": 25561,
+          "failed": 43
+        },
+        "sweep_after": {
+          "passed": 25562,
+          "failed": 42
+        },
+        "note": "`defined?` is the only reserved word ending in `?`, so it is the only one `identifier_suffix` cannot supply as a hash key: at equal length the literal keyword token outranks the identifier regex. Every other reserved word already worked."
+      }
+    },
+    {
+      "id": 9,
+      "title": "embedded document ends at a line starting with =end",
+      "file": "patches/0009-embedded-document-ends-at-a-line-starting-with-end.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/comments.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "=begin ... parse_subtree([\"=begin\\n\", \"<<< #{basename}\\n\", \"=end\\n\"]) ... =end",
+        "first_seen": {
+          "package": "rdoc",
+          "version": "8.0.0"
+        },
+        "sweep_before": {
+          "passed": 25562,
+          "failed": 42
+        },
+        "sweep_after": {
+          "passed": 25563,
+          "failed": 41
+        },
+        "note": "The token scanned for `=end` anywhere, so an embedded document ended at the first mention of the string wherever it sat — rdoc has one inside a string inside an embedded document and lost the rest of the file to it. Rewritten line by line to CRuby's rule: the terminator is a line that BEGINS with `=end` and has whitespace or a line ending after it. This also FIXES AN ACCEPTS-INVALID CASE in the other direction: the old `[\\s*]*=end` let an indented `=end` close a document, which CRuby treats as unterminated and rejects. Both directions are now in test/negative (embedded-doc-indented-end.rb, embedded-doc-unterminated.rb)."
+      }
+    },
+    {
+      "id": 10,
+      "title": "call with a line break before the dot arguments",
+      "file": "patches/0010-call-with-a-line-break-before-the-dot-arguments.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "Collect[*bin.fns].\\n  (represented, {doc: doc})",
+        "first_seen": {
+          "package": "representable",
+          "version": "3.2.0"
+        },
+        "sweep_before": {
+          "passed": 25563,
+          "failed": 41
+        },
+        "sweep_after": {
+          "passed": 25564,
+          "failed": 40
+        },
+        "note": "`argument_list` opens with token.immediate('(') so that `foo (1)` stays a command call whose argument is parenthesised. After a call operator with no method name — the `foo.(args)` call sugar — there is no such ambiguity and Ruby allows a line break, so that position gets an argument list without the immediacy constraint. `foo (1)` is still a command call, which the new corpus test asserts."
+      }
+    }
+  ],
+  "corpus": {
+    "source": "RubyGems `.gem` files for the top gems by download count; `.rb` files from the inner data.tar.gz. The `ruby` platform is required, never a platform gem: `nokogiri-1.19.4-x86_64-linux-gnu.gem` ships precompiled native extensions and a pruned tree, which is build output rather than the tree the author wrote — the same rule that makes python refuse to fall back to a wheel.",
+    "source_note": "A .gem is a NESTED archive: an uncompressed tar holding metadata.gz, checksums.yaml.gz and data.tar.gz, with every source file inside that last one. Every other registry wired up so far ships one layer. The fetch driver handles this generically — Lang::nested_archive names the member that is really the payload and the driver recurses into it, sniffing the inner format the same way it sniffs the outer, so a nested .zip or .tar.xz is already free. Naming the member rather than sniffing every entry is deliberate: packages legitimately ship .tar.gz files as test fixtures, and recursing into those would attribute someone else's code to this package.",
+    "ranking": "ecosyste.ms index of rubygems.org, sorted by downloads",
+    "ranking_note": "RubyGems publishes real per-gem download counts but no top-N endpoint of its own — the numbers are queryable one gem at a time. ecosyste.ms indexes the registry and can sort by them, which makes this the same KIND of metric as crates.io, npm and PyPI: traffic, not Java's dependent-repos proxy, even though it arrives through the same ecosyste.ms API java uses.",
+    "files_note": ".rb only, the single extension tree-sitter-ruby's tree-sitter.json claims, following python and javascript. Ruby has plenty of other files this grammar also parses (.rake, .gemspec, Rakefile, Gemfile, config.ru); they are left out so classify() matches what the grammar advertises, and adding them would be a deliberate change with its own sweep evidence. Paths containing a `vendor` component are excluded for the reason python excludes _vendor/: a gem that vendors a dependency ships someone else's source, so a failure there is attributed to the wrong package.",
+    "fetched": "2026-08-11",
+    "packages": 500,
+    "packages_note": "500 requested, 500 resolved — no gem in the top 500 lacked a ruby-platform release.",
+    "files": 25604,
+    "sweep_upstream": {
+      "passed": 25542,
+      "failed": 62,
+      "gap_files": 22,
+      "noise_files": 40,
+      "clusters": 28
+    },
+    "sweep_patched": {
+      "passed": 25564,
+      "failed": 40,
+      "gap_files": 0,
+      "noise_files": 40,
+      "clusters": 11
+    },
+    "sweep_note": "Zero grammar gaps remain. noise_files was 40 before the first patch and 40 after every one of the eight — measured at each patch level, not just the ends — so no patch bought a passing file by accepting something the reference parser rejects. The 40 are ERB templates: .rb files under generators/templates/ in rspec-rails, devise, geocoder and friends, whose contents are `class <%= @scope_prefix %>Controller`. They are not Ruby, CRuby rejects them, and they are correctly recorded as corpus noise.",
+    "oracle": {
+      "tool": "tools/rb-oracle/check.rb — CRuby's own parser via RubyVM::AbstractSyntaxTree.parse_file",
+      "version": "CRuby 3.2.3 (2024-01-18 revision 52bb2ac0a6) [x86_64-linux-gnu]",
+      "dialect": "the CRuby dialect at that version; no dialect switch is passed and none exists",
+      "values": "two-valued: valid / invalid",
+      "note": "The interpreter version IS the language version, and for Ruby that is load-bearing rather than incidental: `it` as an implicit block parameter is 3.4+, hash shorthand {x:} and anonymous block forwarding are 3.1+, endless methods and rightward assignment are 3.0+. A file needing syntax newer than this interpreter is not valid Ruby HERE, and recording it as corpus noise is the honest answer — but it is an answer about our toolchain, which is why the version sits next to the verdict. Measured on 3.2.3: everything from 1.9 through 3.2 parses, and the 3.4-era forms probed (`it`, `**nil`, anonymous forwarding inside a block) are not syntax errors on 3.2 either, since they parse as ordinary constructs. The gate that does bite is genuinely removed syntax — `when 1: puts 2`, dropped in 1.9 — which is correctly invalid. This is the same `oracle: {tool, version, dialect}` field the roadmap specifies for lua, used here rather than inventing a second mechanism; it supersedes the flat oracle/oracle_version strings the earlier grammars carry.",
+      "parse_only": "Verified, not assumed. A file whose body is `File.write(\"/tmp/x\", \"boom\"); raise \"ran\"` parses valid and writes nothing; `require 'no_such_gem'` is valid; neither `BEGIN { }` nor `at_exit { }` fires. `error_tolerant:` is deliberately not passed — it exists to return a tree for broken input, which is the verdict this oracle is here to give.",
+      "cost": "0.25-0.35 s per 1000 files (0.35 on 1000 CRuby stdlib files averaging 7.3 KB, 0.25 on 604 real gem files averaging 4.3 KB, including a 0.05-0.07 s interpreter startup). Reproduces the roadmap's measured 0.29 s/1000. The reject path is CHEAPER, not dearer — 0.22 s/1000 on the same 1000 files truncated to 60% — because the parser bails at the first error, like rust's syn. That is the path that matters, since validate() is only ever called on files the grammar already failed.",
+      "cross_check": "Agreed with `ruby -c`, forked per file, on 600 files spanning both directions (300 clean stdlib, 300 truncated garbage): zero disagreements.",
+      "unreadable_files": "A file the oracle cannot read is NOT reported invalid: it prints to stderr and exits 2, which the driver surfaces as a failure. Saying 'invalid' there would erase a candidate grammar gap, and it is silent — an early run against relative paths from the wrong directory returned 604 of 604 'invalid' and looked like a clean result."
+    }
+  },
+  "grammar_looseness": {
+    "summary": "Four constructs CRuby 3.2.3 rejects that this grammar accepts. All predate the treebank patches — each was checked against the unpatched pin — and none is reachable from a sweep gap, because a gap requires the grammar to REJECT. They are recorded because they are the only things test/negative could not cover.",
+    "cases": [
+      "`def foo; end` followed by a stray `end`",
+      "`def foo(**a, **b); end` — duplicate double-splat parameter",
+      "`def a = not b` — `not` is not an `endless_command` in parse.y; the grammar reaches it through `unary`, which is an `_arg`",
+      "`def super.foo; end` — `super` is in `_variable`, so it can stand as a singleton-method object"
+    ],
+    "why_this_is_safe": "A sweep gap is 'grammar rejected it AND the oracle accepted it'. These run the other way — grammar accepts, oracle rejects — so they can never manufacture a gap and gap_files stays exact. They are also why test/negative holds 17 files rather than 21: a negative-corpus file must be one the grammar actually rejects."
+  }
+}

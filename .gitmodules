@@ -34,3 +34,6 @@
 [submodule "crates/treebank-lua/upstream"]
 	path = crates/treebank-lua/upstream
 	url = https://github.com/tree-sitter-grammars/tree-sitter-lua
+[submodule "crates/treebank-ruby/upstream"]
+	path = crates/treebank-ruby/upstream
+	url = https://github.com/tree-sitter/tree-sitter-ruby

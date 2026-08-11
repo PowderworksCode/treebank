@@ -64,6 +64,9 @@ pub enum LangName {
     #[serde(rename = "lua")]
     #[value(name = "lua")]
     Lua,
+    #[serde(rename = "ruby")]
+    #[value(name = "ruby")]
+    Ruby,
 }
 
 impl LangName {
@@ -81,6 +84,7 @@ impl LangName {
             LangName::Bash => "bash",
             LangName::Zig => "zig",
             LangName::Lua => "lua",
+            LangName::Ruby => "ruby",
         }
     }
 }

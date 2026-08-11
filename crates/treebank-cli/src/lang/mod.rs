@@ -16,6 +16,7 @@ mod lua;
 mod npm;
 mod php;
 mod python;
+mod ruby;
 mod rust;
 mod stdin_oracle;
 mod typescript;
@@ -141,6 +142,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static BASH: bash::Bash = bash::Bash;
     static ZIG: zig::Zig = zig::Zig;
     static LUA: lua::Lua = lua::Lua;
+    static RUBY: ruby::Ruby = ruby::Ruby;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -154,5 +156,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Bash => &BASH,
         LangName::Zig => &ZIG,
         LangName::Lua => &LUA,
+        LangName::Ruby => &RUBY,
     }
 }
