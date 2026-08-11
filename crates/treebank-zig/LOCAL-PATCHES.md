@@ -44,3 +44,45 @@ is unaffected, because it patches the working tree and not the index, so
 `verify.sh` reconstructs the file correctly. Anyone adding a third patch that
 touches `Cargo.lock` needs to know this; anyone adding one that does not can
 use `git -C build diff` as usual.
+
+## 0003 — Zig 0.15: async/await as identifiers, and struct-literal asm clobbers
+
+Two halves of one release. Zig 0.15 removed `async` and `await` as keywords,
+so from that release on they are ordinary identifiers and may name a
+declaration, a struct field, an enum member, an initializer field or a value.
+Separately, 0.15 changed `asm` clobbers from a string list to a struct
+literal: `::: "memory"` became `::: .{ .memory = true }`.
+
+**The keyword rules are kept.** `async_expression` and `await_expression` are
+untouched, so `async g()` and `await frame` still parse to their own nodes.
+The lexer decides on lookahead — an operand follows, it is the keyword form;
+nothing follows, it is a name — so no conflict declaration is needed, and a
+corpus test pins both readings.
+
+Keeping them is the whole point of the patch, and the reason is worth
+recording because the alternative *scores better*. Deleting the `async` and
+`await` keywords outright — what a grammar targeting only 0.15+ would do —
+measured over the same 45,242 files gives **113 gap files against this
+patch's 119**. It was rejected anyway: `gap_files` fell by 31 while
+`noise_files` **rose by 27**. Those 27 are files the grammar previously
+parsed correctly that now produce error trees, and because the 0.16.0 oracle
+also rejects pre-0.15 async source, every one is booked as corpus noise
+rather than a regression. `lithdew/pike`'s `await self.frame;` is real Zig
+that real repositories are still written in.
+
+The pinned-oracle metric cannot see that class of regression. A sweep that
+only ever asks "did gap_files go down" would take the change.
+
+232 files closed, `noise_files` unchanged at 136.
+
+## 0004 — a pointer to an if type expression
+
+`pointer_type` admitted only `$.type_expression` as its pointee, and
+`if_type_expression` is a sibling of that rule rather than a member of it. So
+`*if (builtin.link_libc) c_int else u32` — ordinary conditional-type code,
+used in std and ghostty for platform-varying fields — had no path, and the
+parser fell through to a range expression looking for `..`.
+
+One file, zero regressions, and reported as measured: the
+`range_expression > MISSING ..` cluster it came from is heterogeneous, and
+the 22 files still under that signature are a different shape.
