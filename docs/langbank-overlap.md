@@ -66,6 +66,7 @@ same size:
 | csharp | 1 | 5 |
 | c | 2 (`c`, `h`) | 5 |
 | python | 1 (`py`) | 17 |
+| php | 1 (`php`) | 10 |
 
 Adopting langbank's sets would add `.pyi`, `.spec`, `.wsgi`, `.gyp`, `.cgi` to
 the Python corpus and `.es6`, `.jsm`, `.pac`, `.jss` to JavaScript's. Every
@@ -83,9 +84,15 @@ The two tables answer different questions, and both are right:
   `classify()` matches what the grammar advertises, and adding them is a
   deliberate change with its own sweep evidence rather than a silent widening."
 
+PHP, which landed mid-survey, is the eighth language and fits the pattern
+exactly: `classify()` takes `.php` alone where langbank claims ten, and excludes
+`vendor/` for the attribution reason in row B. langbank resolves `.php` to `php`
+over Hack's competing claim, so it agrees here too — one more verdict treebank
+depends on and does not know it depends on.
+
 So the right relationship is **conformance, not delegation**. A test that asserts
 `langbank::language_profile_for_extension(e) == expected_lang` for each of the
-14 extensions treebank classifies:
+15 extensions treebank classifies:
 
 - costs zero behaviour change (it is a test),
 - pins treebank's corpus vocabulary to the fleet's,
@@ -113,6 +120,11 @@ pub fn langbank_id(name: LangName) -> &'static str {
     }
 }
 ```
+
+**Confirmed since:** PHP merged to `main` (#25) while this was being written,
+and its commit touches both `lang/mod.rs` *and* `ledger.rs` — a `LangName`
+variant, an `as_str()` arm, a `get()` arm and a `mod` line. Four of the five
+language sessions are still to land.
 
 **Correction to the brief's hazard section:** `lang/mod.rs` is not the only
 contended file. `LangName` lives in `crates/treebank-cli/src/ledger.rs`, and all
