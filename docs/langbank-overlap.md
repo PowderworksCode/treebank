@@ -128,10 +128,10 @@ is the tbbash session's call, not mine, but the id map is where it surfaces.
 Two of the brief's "where the overlap probably is" guesses do not survive
 contact with the data:
 
-- **There is no `data/registries/` in langbank.** `data/ecosystems/` exists —
-  five entries, cargo/npm/pnpm/yarn/bun — and carries manifests, lockfiles,
-  gitignore patterns, pin policy and traversal dirs. **It carries no URL.** The
-  only `https://` in all of langbank's data is linguist's pinned source digest.
+- ~~**There is no `data/registries/` in langbank.**~~ **Retracted — see
+  "Superseded by langbank #7" below.** True of `origin/main` at `e803f05`, and
+  wrong about where langbank is going: an open PR adds exactly that directory.
+  The brief was describing the in-flight state and I surveyed the merged one.
 - **`data/artifacts.toml` is not archive shapes.** It is what a *build produces*
   — `binary`, `napi`, `site`, `tauri` — used to say what a tool's command
   emits. A `.gem` being a tar containing `data.tar.gz` has no home in it, and
@@ -169,6 +169,60 @@ Caveat that governs how it lands: this function feeds `looks_like_cxx()` →
 `admit()` → corpus membership. It drops 365 of 12,767 headers today. A
 langbank-driven rewrite must reproduce that count exactly before it lands, or it
 is a behaviour change wearing a refactor's clothes.
+
+## Superseded by langbank #7 — read this first
+
+**[langbank#7 `purl-registries`](https://github.com/PowderworksCode/langbank/pull/7)
+is open and does the structural half of what the section below proposes.** It
+was opened before this survey began; I found it by listing open PRs, which I
+should have done before writing a line, in a week whose whole hazard is that
+everything is in flight.
+
+It adds `data/registries/` carrying **all 42 purl types**, a
+`src/package_registry.rs` with a `PackageRegistry` struct, and a `registry`
+pointer on `EcosystemProfile` — and it makes the same argument this survey
+made independently, that npm/pnpm/yarn/bun are four managers over one registry.
+It reaches that split from package *identity* (purl, SBOM tooling) where this
+survey reached it from package *fetching*, which is why the two are
+complementary rather than competing.
+
+| fact | langbank#7 | this proposal |
+|---|---|---|
+| registry exists as its own axis | **yes, 42 of them** | yes, 6 |
+| ids | **purl — `cargo`, `maven`, `deb`, `gem`, `golang`, `composer`** | invented — `crates-io`, `maven-central`, `debian` |
+| ecosystem → registry pointer | **yes** | no |
+| namespace/name/version rules, case sensitivity | **yes** | no |
+| canonical host | `default-repository` (a host) | endpoint templates (a URL you can fetch) |
+| kept current against upstream | **`tools/sync-purl.py`, in CI** | no |
+| **archive shapes** | **no** | yes — container, strip-root, nested member, source-vs-build |
+| **popularity source + metric + first-party** | **no** | yes |
+| **metadata/download endpoints** | **no** | yes |
+| **source-availability (NuGet SourceLink)** | **no** | yes |
+
+**What this changes about the proposal below:**
+
+1. **The directory question is settled.** `data/registries/` — theirs. My
+   `data/package-registries/` was invented to dodge a name collision that a
+   merged #7 makes moot; drop it.
+2. **The ids are settled, and mine were wrong.** purl says `cargo`, `maven`,
+   `deb`. Not `crates-io`, `maven-central`, `debian`. Following purl also means
+   treebank inherits registry ids for every language the five sibling sessions
+   are adding — `golang`, `gem`, `composer`, `luarocks` all already exist in #7.
+3. **`src/package_registry.rs` must merge into theirs, not sit beside it.** Both
+   patches create that file with a `PackageRegistry` struct and a
+   `package_registry(id)` lookup. Mine has to become added fields on their
+   struct.
+4. **Three things survive intact, because #7 carries none of them:** archive
+   shapes, the popularity/metric distinction, and fetchable endpoints.
+   `default-repository = "https://pypi.org"` is a host; it is not
+   `https://pypi.org/pypi/{name}/json`, and no amount of purl gets you from one
+   to the other.
+
+So the contribution to make is **a follow-up to #7, rebased onto its branch** —
+roughly `data/archives.toml` unchanged, plus per-registry `[popularity]`,
+`[[artifacts]]` and endpoint fields on the six purl registries treebank uses.
+`docs/langbank-package-registries.patch` in this directory is the pre-#7 form:
+still the right content, wrong shape, and it will not apply once #7 lands.
 
 ## What would need to be added to langbank
 
@@ -303,6 +357,8 @@ including `c-sharp` resolving to NuGet and NuGet correctly reporting that it
 serves no source archive at all.
 
 ### Three decisions that are langbank's owner's to make
+
+*(The first is now answered by #7: use `data/registries/`.)*
 
 1. **The directory is `data/package-registries/`, not `data/registries/`.**
    "Registries" is already langbank's word for its own inventory registries —
