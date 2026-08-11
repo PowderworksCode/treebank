@@ -1,0 +1,85 @@
+diff --git a/grammar.js b/grammar.js
+index 513f485..37a1e2c 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1091,13 +1091,17 @@ module.exports = grammar({
+       ')',
+     ),
+ 
+-    _extglob_blob: $ => choice(
++    _extglob_blob: $ => seq(
+       $.extglob_pattern,
+-      seq(
++      repeat(choice(
++        $.string,
++        $.raw_string,
++        $.expansion,
++        $.simple_expansion,
++        $.command_substitution,
+         $.extglob_pattern,
+-        choice($.string, $.expansion, $.command_substitution),
+-        optional($.extglob_pattern),
+-      ),
++        $.word,
++      )),
+     ),
+ 
+     comment: _ => token(prec(-10, /#.*/)),
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index a00eb94..612f80f 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -1889,3 +1889,53 @@ while (echo $BASHPID; true); do echo $BASHPID; break; done
+       (command
+         (command_name
+           (word))))))
++
++================================================================================
++Case patterns with more than three concatenated parts
++================================================================================
++
++case $ac_user_opts in
++  *"
++"enable_$ac_useropt"
++"*) ;;
++esac
++
++case $x in
++  *"a"b) ;;
++  *"a"b"c"* | pre$(cmd)post*) ;;
++esac
++
++--------------------------------------------------------------------------------
++
++(program
++  (case_statement
++    (simple_expansion
++      (variable_name))
++    (case_item
++      (extglob_pattern)
++      (string)
++      (extglob_pattern)
++      (string)
++      (extglob_pattern)))
++  (case_statement
++    (simple_expansion
++      (variable_name))
++    (case_item
++      (extglob_pattern)
++      (string
++        (string_content))
++      (word))
++    (case_item
++      (extglob_pattern)
++      (string
++        (string_content))
++      (word)
++      (string
++        (string_content))
++      (extglob_pattern)
++      (extglob_pattern)
++      (command_substitution
++        (command
++          (command_name
++            (word))))
++      (extglob_pattern))))

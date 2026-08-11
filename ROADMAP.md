@@ -92,7 +92,7 @@ Worth knowing when sizing a bad day, but nothing here changes a decision.
 | go | `go/parser.ParseFile` (`SkipObjectResolution`) | 790 files, no package context, 0 false rejects | **1.94** |
 | ruby | `RubyVM::AbstractSyntaxTree.parse` | 441 files, 0 false rejects | **0.29** |
 | lua | `luac -p` | missing `require` is not an error | **1.7** |
-| bash | `bash -n` | does not execute; `source /absent/file` still valid | **3.6** |
+| bash | `bash -n` | does not execute; `source /absent/file` still valid | **3.6** → **2.4** |
 | php | `php -l` | **does not execute**; missing class is not an error | **18.3** → **0.71** |
 
 PHP is the interesting one. `php -l` has no batch mode, so it forks an
@@ -101,6 +101,22 @@ every other Tier-A oracle. Running it under `xargs -P16` takes it to
 **0.71 s per thousand**, a 25× speedup. This generalizes: an oracle that
 must fork per file is not disqualified, it just has to be parallelized. Only
 the Rust oracle is parallel today.
+
+Bash belongs in that class too, which the 3.6 above did not say. Re-measured
+by the bash session on its own machine over 963 real shell scripts: **2.4 s
+per thousand**, decomposed as 0.7 ms of bare process spawn, 1.6 ms to start
+bash at all, 2.0 ms for `bash -n` on an *empty* file, and only **~0.4 ms of
+actual parsing** — 83% of the cost is the fork. Both figures are therefore
+mostly a measurement of `fork+exec` on their own hardware, and the part that
+belongs to bash agrees. There is no batch escape (`set -n` inside a
+long-lived shell stops it executing the `source` that would read the next
+file), so the php lever is the answer, and bash now
+pulls it by *inheriting* php's `exec_oracle` rather than reimplementing it:
+**0.11 s per thousand** at this box's core count. It contributed one
+generalization back — `reject_status` became a list, because `bash -n` exits
+2 for a syntax error nearly everywhere but **1** inside an array-assignment
+word list, which one real corpus file does. See
+`crates/treebank-bash/ORACLE.md`.
 
 ### Where Tier A ends
 
@@ -277,8 +293,10 @@ version decides what is valid.
 
 **4. Bash** · npm **13.3 M/month, the single most-downloaded tree-sitter
 grammar on npm** · all 3 editors
-Oracle `bash -n`, **3.6 s/1000 forked, measured; does not execute** —
-verified that `source /absent/file` and `rm -rf` in a script are not run.
+Oracle `bash -n`, **2.4 s/1000 forked, re-measured; 0.12 s/1000 at -P16;
+does not execute** — verified that `source /absent/file` and `rm -rf` in a
+script are not run, along with command and process substitution, heredoc
+bodies, `eval` and `BASH_ENV`.
 *Blocker: **corpus source**, not oracle.* Bash has no package registry at
 all. *Teaches: the artifact corpus.* This is the first language whose corpus
 must come from artifacts (Debian packages, GitHub repos) rather than a

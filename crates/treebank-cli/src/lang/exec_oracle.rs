@@ -61,23 +61,32 @@ fn jobs() -> usize {
 /// Run `program args… <file>` once per path, `jobs()` at a time, and read
 /// each verdict off the child's exit status.
 ///
-/// `reject_status` is the status the tool uses to say **this file is not
-/// valid**, and it is a parameter rather than "any non-zero" on purpose.
-/// `php -l` exits 255 for a syntax error but 1 for *could not open input
-/// file*; `luac -p` and `bash -n` use different numbers again. Collapsing
-/// every non-zero status into "invalid" would mean a mistyped corpus root
-/// makes every file invalid, every failing file gets recorded as corpus
-/// noise, `gap_files` falls to zero and the sweep reports a flawless
+/// `reject_statuses` are the statuses the tool uses to say **this file is
+/// not valid**, and they are a parameter rather than "any non-zero" on
+/// purpose. `php -l` exits 255 for a syntax error but 1 for *could not open
+/// input file*; `luac -p` and `bash -n` use different numbers again.
+/// Collapsing every non-zero status into "invalid" would mean a mistyped
+/// corpus root makes every file invalid, every failing file gets recorded as
+/// corpus noise, `gap_files` falls to zero and the sweep reports a flawless
 /// grammar. A broken oracle must fail loudly, never quietly agree with us —
-/// so any status that is neither 0 nor `reject_status` is an error, and it
-/// carries the child's own output so the cause is on screen.
+/// so any status outside the list is an error, and it carries the child's
+/// own output so the cause is on screen.
+///
+/// It is a *list* because one tool can spell rejection more than one way.
+/// Measured, not anticipated: `bash -n` exits 2 for a syntax error almost
+/// everywhere, but **1** when the error is inside an array-assignment word
+/// list (`x=( a+([0-9]) )`), which is a real construct in a real corpus file
+/// — linux's `tools/testing/selftests/wireguard/netns.sh`. Passing `&[1, 2]`
+/// keeps the property that matters: 126 (bash refuses a binary or a
+/// directory) and 127 (no such file) are still outside the list, so a
+/// mistyped root still fails loudly instead of scoring every file invalid.
 ///
 /// `hint` is shown when the process cannot be spawned at all, which is where
 /// a missing interpreter surfaces.
 pub fn run(
     program: &str,
     args: &[&str],
-    reject_status: i32,
+    reject_statuses: &[i32],
     hint: &str,
     srcroot: &Path,
     paths: &[String],
@@ -114,10 +123,10 @@ pub fn run(
                             .with_context(|| hint.to_string())?;
                         let valid = match output.status.code() {
                             Some(0) => true,
-                            Some(c) if c == reject_status => false,
+                            Some(c) if reject_statuses.contains(&c) => false,
                             Some(c) => bail!(
-                                "{program} exited with {c} on {} (expected 0 or \
-                                 {reject_status}); this is an oracle failure, not a \
+                                "{program} exited with {c} on {} (expected 0 or one of \
+                                 {reject_statuses:?}); this is an oracle failure, not a \
                                  verdict:\n{}{}",
                                 full.display(),
                                 String::from_utf8_lossy(&output.stdout).trim_end(),

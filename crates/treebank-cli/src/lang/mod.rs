@@ -3,9 +3,12 @@
 //! corpus, how files route to grammars, and what the reference parser is —
 //! lives behind this trait; rank/fetch/sweep/oracle are generic drivers.
 
+mod bash;
 mod c;
 mod csharp;
+mod debian;
 mod exec_oracle;
+mod github;
 mod go;
 mod java;
 mod javascript;
@@ -82,6 +85,20 @@ pub trait Lang: Sync {
         usize::from(!is_zip)
     }
 
+    /// Largest artifact this language will download, if it has a limit.
+    ///
+    /// Registry tarballs are bounded by what an author publishes. Artifacts
+    /// are not: a distribution's source archive is as big as the project it
+    /// packages, and for a *guest* language — one that never owns a package,
+    /// only rides inside them — the size is set by the host language while
+    /// the yield is not. Bash measured 11.5 GB for its top 500 Debian
+    /// sources, of which 7.6 GB was eight packages (three TeX
+    /// distributions, two browsers, two Qt WebEngines, LibreOffice).
+    /// `None` — the default — keeps every existing language's behaviour.
+    fn max_artifact_bytes(&self) -> Option<u64> {
+        None
+    }
+
     /// Grammar dirs to load, in routing-index order, relative to the
     /// grammar repo root. Single-grammar languages return `["."]`.
     fn grammar_dirs(&self) -> &'static [&'static str];
@@ -108,6 +125,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static PYTHON: python::Python = python::Python;
     static PHP: php::Php = php::Php;
     static GO: go::Go = go::Go;
+    static BASH: bash::Bash = bash::Bash;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -118,5 +136,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Python => &PYTHON,
         LangName::Php => &PHP,
         LangName::Go => &GO,
+        LangName::Bash => &BASH,
     }
 }
