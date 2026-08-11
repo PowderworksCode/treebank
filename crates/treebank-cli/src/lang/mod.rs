@@ -5,9 +5,11 @@
 
 mod c;
 mod csharp;
+mod exec_oracle;
 mod java;
 mod javascript;
 mod npm;
+mod php;
 mod python;
 mod rust;
 mod stdin_oracle;
@@ -86,6 +88,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static CSHARP: csharp::CSharp = csharp::CSharp;
     static C: c::C = c::C;
     static PYTHON: python::Python = python::Python;
+    static PHP: php::Php = php::Php;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -94,5 +97,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Csharp => &CSHARP,
         LangName::C => &C,
         LangName::Python => &PYTHON,
+        LangName::Php => &PHP,
     }
 }
