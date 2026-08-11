@@ -1,7 +1,8 @@
 # Treebank ↔ langbank: the overlap
 
 Survey only. No behaviour is changed by this document, and nothing below has
-been landed. Written against langbank `e803f05` (`origin/main`) and treebank
+been landed. Surveyed against langbank `e803f05`; the proposal in it is rebased
+onto `355a7be`, which is `origin/main` since langbank#7 merged. Treebank side is
 `use-langbank` off `origin/main`.
 
 ## The boundary, as both repos state it
@@ -26,7 +27,7 @@ questions* with the same-looking table.
 | A | Which extensions belong to a language's corpus | `classify()` in each `lang/*.rs` | **Partly — same answers, wider sets** | **Assert against langbank, do not adopt it.** Add a conformance test. | No |
 | B | Corpus exclusions: `.min.js`, `_vendor/`, C++ `.h` | `classify()`/`admit()` | No | Stays in treebank — corpus policy, and the C case needs file content | No |
 | C | Canonical language spelling (`csharp`) | `LangName`, `ledger.rs` | **Conflicts — langbank says `c-sharp`** | Keep `LangName`; add a fallback-arm id map in a **new file** | No (but see contention note) |
-| D | Registry endpoints — crates.io, npm, PyPI, Maven Central, NuGet, Debian pool, sources.debian.org, ecosyste.ms | 16 URLs across `lang/*.rs` | **No** | **Contribute to langbank** as `data/package-registries/`; treebank keeps the fetching | No |
+| D | Registry endpoints — crates.io, npm, PyPI, Maven Central, NuGet, Debian pool, sources.debian.org, ecosyste.ms | 16 URLs across `lang/*.rs` | **No** | **Contribute to langbank** as fetch fields on its purl registries; treebank keeps the fetching | No |
 | E | Archive shapes: which cache extension, zip-vs-tar, strip-root-or-not | `fetch.rs` | **No — `artifacts.toml` is a different concept** | Contribute as `data/archives.toml`; **do not rewire `extract()`** | No |
 | F | C comment/string lexical syntax | `strip_comments_and_strings()` in `c.rs` | **Yes, exactly** | **Look up the table, keep the scanner** | No |
 | G | npm serves both JavaScript and TypeScript corpora | `lang/npm.rs` | Partly — npm implies `javascript` only | No action; langbank's "implied language" answers a different question | No |
@@ -123,15 +124,16 @@ One open question for whoever lands this: `bash` maps to langbank's `shell`
 (there is no `bash` profile — `.bash` and `.sh` both resolve to `shell`). That
 is the tbbash session's call, not mine, but the id map is where it surfaces.
 
-### D & E. Registries and archives — langbank does not carry these yet
+### D & E. Registries and archives — what langbank carries, and what it does not
 
 Two of the brief's "where the overlap probably is" guesses do not survive
 contact with the data:
 
-- ~~**There is no `data/registries/` in langbank.**~~ **Retracted — see
-  "Superseded by langbank #7" below.** True of `origin/main` at `e803f05`, and
-  wrong about where langbank is going: an open PR adds exactly that directory.
-  The brief was describing the in-flight state and I surveyed the merged one.
+- ~~**There is no `data/registries/` in langbank.**~~ **Retracted — see "Rebased
+  onto langbank #7" below.** True of `origin/main` at `e803f05`, and wrong about
+  where langbank was going: an open PR added exactly that directory and has
+  since merged. The brief described the in-flight state and I surveyed the
+  merged one.
 - **`data/artifacts.toml` is not archive shapes.** It is what a *build produces*
   — `binary`, `napi`, `site`, `tauri` — used to say what a tool's command
   emits. A `.gem` being a tar containing `data.tar.gz` has no home in it, and
@@ -145,10 +147,11 @@ langbank**, which is exactly where langbank's own README points:
 > npm, Maven Central, NuGet, Debian popcon, `packages.ecosyste.ms` — which is
 > `rank`/`resolve` today and is plainly data."
 
-The concrete proposal is **`docs/langbank-package-registries.patch`** in this
-directory — 839 lines against langbank `e803f05`, verified to apply cleanly and
-to build, test, `fmt` and `clippy` clean there. It is not committed to langbank.
-See "What would need to be added to langbank" below.
+`data/artifacts.toml` still is not archive shapes, and #7 did not change that:
+langbank carries registries now, and carries nothing about what a download
+arrives in. The concrete proposal is **`docs/langbank-registry-fetch.patch`** —
+692 lines against langbank `355a7be`, verified to apply cleanly and to build,
+test, `fmt` and `clippy` clean there. It is not committed to langbank.
 
 ### F. Comment syntax — the one real duplicate
 
@@ -170,211 +173,145 @@ Caveat that governs how it lands: this function feeds `looks_like_cxx()` →
 langbank-driven rewrite must reproduce that count exactly before it lands, or it
 is a behaviour change wearing a refactor's clothes.
 
-## Superseded by langbank #7 — read this first
+## Rebased onto langbank #7
 
 **[langbank#7 `purl-registries`](https://github.com/PowderworksCode/langbank/pull/7)
-is open and does the structural half of what the section below proposes.** It
-was opened before this survey began; I found it by listing open PRs, which I
-should have done before writing a line, in a week whose whole hazard is that
-everything is in flight.
+merged as `355a7be`.** It did the structural half of what this survey proposed,
+from the other end: it split registry from ecosystem via package *identity*
+(purl, SBOM tooling) where this survey reached the same split via package
+*fetching*. It carries `data/registries/` with all 42 purl types, a
+`PackageRegistry` struct, and a `registry` pointer on `EcosystemProfile`.
 
-It adds `data/registries/` carrying **all 42 purl types**, a
-`src/package_registry.rs` with a `PackageRegistry` struct, and a `registry`
-pointer on `EcosystemProfile` — and it makes the same argument this survey
-made independently, that npm/pnpm/yarn/bun are four managers over one registry.
-It reaches that split from package *identity* (purl, SBOM tooling) where this
-survey reached it from package *fetching*, which is why the two are
-complementary rather than competing.
+It was open before this survey began and I did not look for it — I read
+`origin/main` and not the open PRs, in a week whose entire hazard is that
+everything is in flight. The earlier draft of this document "corrected" the
+brief on `data/registries/`; the brief was right and the correction is
+withdrawn.
 
-| fact | langbank#7 | this proposal |
+The contribution is therefore a **follow-up on top of #7**, not a parallel
+model: `docs/langbank-registry-fetch.patch`, 692 lines against `355a7be`.
+
+### What #7 settled, and what it left
+
+| fact | #7 | this |
 |---|---|---|
-| registry exists as its own axis | **yes, 42 of them** | yes, 6 |
-| ids | **purl — `cargo`, `maven`, `deb`, `gem`, `golang`, `composer`** | invented — `crates-io`, `maven-central`, `debian` |
-| ecosystem → registry pointer | **yes** | no |
-| namespace/name/version rules, case sensitivity | **yes** | no |
-| canonical host | `default-repository` (a host) | endpoint templates (a URL you can fetch) |
-| kept current against upstream | **`tools/sync-purl.py`, in CI** | no |
-| **archive shapes** | **no** | yes — container, strip-root, nested member, source-vs-build |
-| **popularity source + metric + first-party** | **no** | yes |
-| **metadata/download endpoints** | **no** | yes |
-| **source-availability (NuGet SourceLink)** | **no** | yes |
+| registry as its own axis, 42 purl types | **yes** | — |
+| ecosystem → registry pointer | **yes** | — |
+| namespace/name/version rules and case sensitivity | **yes** | — |
+| kept current against upstream in CI (`sync-purl.py`) | **yes** | — |
+| canonical host (`default-repository`) | **yes** | — |
+| archive shapes | no | **yes** |
+| popularity source, metric, first-party | no | **yes** |
+| fetchable endpoints | no | **yes** |
+| source availability (NuGet SourceLink) | no | **yes** |
+| language → registry | no | **yes** |
 
-**What this changes about the proposal below:**
+Three fields the pre-#7 draft carried are **dropped**, because #7 makes them
+unnecessary or wrong:
 
-1. **The directory question is settled.** `data/registries/` — theirs. My
-   `data/package-registries/` was invented to dodge a name collision that a
-   merged #7 makes moot; drop it.
-2. **The ids are settled, and mine were wrong.** purl says `cargo`, `maven`,
-   `deb`. Not `crates-io`, `maven-central`, `debian`. Following purl also means
-   treebank inherits registry ids for every language the five sibling sessions
-   are adding — `golang`, `gem`, `composer`, `luarocks` all already exist in #7.
-3. **`src/package_registry.rs` must merge into theirs, not sit beside it.** Both
-   patches create that file with a `PackageRegistry` struct and a
-   `package_registry(id)` lookup. Mine has to become added fields on their
-   struct.
-4. **Three things survive intact, because #7 carries none of them:** archive
-   shapes, the popularity/metric distinction, and fetchable endpoints.
-   `default-repository = "https://pypi.org"` is a host; it is not
-   `https://pypi.org/pypi/{name}/json`, and no amount of purl gets you from one
-   to the other.
+- `coordinate = "{group}:{artifact}"` — #7 already says Maven's namespace is
+  required. The `group:artifact` spelling is a treebank-side detail.
+- `name-case = "lower"` for NuGet — #7 says NuGet names are case-sensitive,
+  which is true of *identity*. Lowercasing is a property of one URL, so
+  treebank keeps its `to_lowercase()` rather than langbank asserting two
+  contradictory-looking things about case.
+- `sloc-url` for Debian — sources.debian.org's per-language SLOC endpoint is
+  how treebank *measures* whether a package is really C. Measurement belongs to
+  whoever measures; it stays in `c.rs`.
 
-So the contribution to make is **a follow-up to #7, rebased onto its branch** —
-roughly `data/archives.toml` unchanged, plus per-registry `[popularity]`,
-`[[artifacts]]` and endpoint fields on the six purl registries treebank uses.
-`docs/langbank-package-registries.patch` in this directory is the pre-#7 form:
-still the right content, wrong shape, and it will not apply once #7 lands.
+`RegistryRole` is dropped too: `default_repository` and an empty `languages`
+already say what "Debian is a distribution" needed to say.
 
-## What would need to be added to langbank
+### The thing #7 makes visible: an endpoint is not a host
 
-Written as a patch rather than a sketch, because a schema argues better when it
-compiles. `docs/langbank-package-registries.patch` — apply with
-`git apply` from a langbank checkout at `e803f05`.
+purl's `default-repository` is where a package is *named*. The host that serves
+the artifacts is routinely a different one, which is why these endpoints are
+carried whole rather than as paths appended to a repository:
 
-### Two new registries, in langbank's existing shape
-
-**`data/archives.toml`** — 10 archive shapes. What a registry *serves*, kept
-separate from `artifacts.toml`, which is what a build *produces*. Four fields,
-each one a fact a consumer cannot reliably guess from a filename:
-
-| field | why it cannot be inferred |
-|---|---|
-| `container` | `.crate`, `.tgz`, `.gem` and `.orig.tar.xz` are all tar; `.nupkg`, `.jar` and `.whl` are all zip |
-| `strip-root` | tarballs wrap entries in one directory, zips do not — stripping a `-sources.jar` drops the whole `com/` of a Java coordinate |
-| `member` | a `.gem` is a tar whose payload is `data.tar.gz` *inside* it |
-| `carries` | source, or build output. An sdist and a wheel are both Python packages and only one is the tree the author wrote |
-
-**`data/package-registries/`** — 6 files: crates.io, npm, PyPI, Maven Central,
-NuGet, Debian. Endpoints, the archives each serves, and where its popularity
-number comes from.
-
-A registry is a separate axis from an ecosystem, and the npm entry is the
-argument for that: **four of langbank's five ecosystems — npm, pnpm, yarn, bun —
-resolve against one registry.** Modelling the registry as a property of the
-ecosystem would state that fact four times and let it drift four ways. This is
-the same separation langbank already makes between a language and the ecosystem
-that publishes it.
-
-### The field that is worth more than the endpoints
-
-```toml
-[popularity]
-source = "https://packages.ecosyste.ms/api/v1/registries/repo1.maven.org/packages"
-publisher = "packages.ecosyste.ms"
-first-party = false
-metric = "dependent-repos"
-```
-
-Treebank ranks six languages by six numbers that are **not the same kind of
-number**, and today that fact survives only as prose in four separate doc
-comments:
-
-| registry | metric | who publishes it |
+| registry | `default-repository` (#7) | where the artifact actually is |
 |---|---|---|
-| crates.io | downloads | crates.io — its own db dump |
-| npm | downloads | wooorm/npm-high-impact (third party; npm has no top-N endpoint) |
-| PyPI | downloads | hugovk/top-pypi-packages (third party; PyPI serves no counts) |
-| Maven Central | **dependent repos** | packages.ecosyste.ms (third party; Central publishes no counts) |
-| NuGet | downloads | NuGet's own search service |
-| Debian | **installs** | popcon.debian.org |
+| maven | `repo.maven.apache.org/maven2/` | `repo1.maven.org/maven2/` |
+| nuget | `www.nuget.org` | `api.nuget.org/v3-flatcontainer/` |
+| npm | `registry.npmjs.org/` | **not derivable** — `dist.tarball` inside the metadata |
 
-Two of those six are not traffic at all. A consumer that ranks by
-`dependent-repos` while calling it "downloads" is publishing a wrong claim, not
-an imprecise one — and every fleet repo that ranks anything needs this
-distinction, not just treebank. `first-party` is the second half of it: a
-third-party index can lag, change shape, or stop, and four of six here are third
-party.
+That last row is the load-bearing one. A schema that assumed every registry has
+a templatable download URL would be wrong about the largest registry there is.
 
-### The other facts the patch carries
+### The five sibling languages get their ids for free
 
-- **`source-availability = "source-link"`** on NuGet. A `.nupkg` ships
-  assemblies — there is not one `.cs` file in any of the top twenty packages —
-  and the repository and commit it was built from are in the `.nuspec`. That is
-  why treebank's C# corpus is repository source rather than the published
-  artifact, and it is a static fact about NuGet, not a treebank decision.
-- **npm has no derivable download URL.** The tarball is `dist.tarball` in the
-  metadata document, so `download-url` is `None` and `metadata-accept` records
-  the abbreviated-metadata header. A schema that assumed every registry has a
-  templatable download URL would be wrong about the largest one.
-- **Debian claims no language.** A distribution ships all of them, and which one
-  a source package actually contains is measured (`sloc-url`), not static. The
-  `role` field keeps it in the registry with an honest label rather than forcing
-  it into a package-registry shape.
-- **`compression = ["gzip", "xz", "bzip2"]`** on Debian tarballs — the measured
-  reason `fetch.rs` sniffs magic bytes instead of trusting a name.
+Because #7 followed purl, the registries the other sessions need already exist
+with the right ids — `golang`, `gem`, `composer`, `luarocks` — carrying identity
+rules and, where purl knows one, a default repository. What none of them carries
+yet is the fetch half, which is exactly the per-language work those sessions are
+doing. `archives.toml` already holds `gem` with its nested `data.tar.gz` member,
+because treebank's ROADMAP knows that fact and nothing else in the fleet does.
 
 ### What treebank deletes when it lands
 
-Precisely, and it is not much:
-
 | file | what goes | lines |
 |---|---|---|
-| `lang/c.rs` | `POPCON`, `MIRROR`, `SOURCES` consts, two sources.debian.org URLs | ~7 |
+| `lang/c.rs` | `POPCON`, `MIRROR`, `SOURCES` consts | ~5 |
 | `lang/csharp.rs` | flat-container URL, search URL | ~6 |
 | `lang/java.rs` | `CENTRAL`, metadata and sources-jar URLs, ecosyste.ms URL | ~6 |
 | `lang/npm.rs` | two registry URLs, the Accept header | 3 |
 | `lang/python.rs` | JSON API URL, top-pypi-packages URL | 2 |
 | `lang/rust.rs` | static.crates.io URL | 3 |
 | `scripts/bootstrap.sh` | `DUMP_URL` default | 1 |
-| **total** | | **~28 lines, replaced by ~28 lookups** |
+| **total** | | **~26 lines, replaced by ~26 lookups** |
 
-**839 lines added to langbank to delete 28 from treebank is not a line-count
-argument, and it should not be sold as one.** The case is:
+Down from the pre-#7 estimate of 28, because the two sources.debian.org URLs
+now stay in `c.rs` on purpose.
 
-1. Three repos need these facts and exactly one has them. entl and propbank
-   cannot reach treebank's `lang/*.rs` and should not have to.
-2. The metric/first-party distinction stops being prose that only holds while
-   someone re-reads four doc comments. `ledger.json` could then state a corpus's
-   metric mechanically instead of by hand — which is the failure mode
-   `ledger.rs` already exists to prevent.
-3. Every language the five sibling sessions are adding needs a registry entry
-   anyway. Go's module proxy, Packagist, RubyGems and the `.gem` shape are
-   already designed for here — `gem` is in `archives.toml` with its nested
-   `data.tar.gz` member, because treebank's own ROADMAP knows that fact and
-   nothing else in the fleet does.
+**692 lines added to langbank to delete 26 from treebank is not a line-count
+argument and is not offered as one.** The case is that three repos need these
+facts and one has them; that `ledger.json` could then state a corpus's metric
+mechanically rather than by hand, which is the failure mode `ledger.rs` exists
+to prevent; and that the metric distinction — two of six numbers are installs
+and dependent-repos rather than traffic, and four of six come from a third
+party — survives today only as prose in four doc comments.
 
-**What does not move, and is why the deletion is small:** every response parser
-(`doc["info"]["version"]`, `<repository url=…>`, popcon's column layout,
-`Sources.gz` stanza parsing), all caching, the SLOC threshold that decides a
-Debian source is really C, the NuGet monorepo dedup, and `fetch.rs`'s magic-byte
-sniffing. Endpoints are data; reading what comes back is not.
+**What does not move:** every response parser (`doc["info"]["version"]`,
+`<repository url=…>`, popcon's columns, `Sources.gz` stanzas), all caching, the
+SLOC threshold and the endpoint behind it, the NuGet monorepo dedup, and
+`fetch.rs`'s magic-byte sniffing. Endpoints are data; reading what comes back is
+not.
 
 ### Verified, not asserted
 
-Everything above was run, in a throwaway copy of langbank — the `langbank/`
-worktree was never written to:
+Everything above was run, in a throwaway copy of langbank at `355a7be` — the
+`langbank/` worktree was never written to:
 
 ```
 cargo build         clean
-cargo test          45 tests pass (8 new, in tests/package_registries.rs)
+cargo test          50 tests pass (8 new, in tests/registries_fetch.rs)
 cargo fmt --check   clean
 cargo clippy        clean, under langbank's unwrap/expect/panic/print denials
-git apply --check   applies cleanly to langbank e803f05
+git apply --check   applies cleanly to langbank 355a7be
 ```
+
+One of the new tests exists only to prove the follow-up is additive: all 42
+purl registries still resolve with no language, no archive and no popularity
+source declared. Only the six treebank fetches from say anything.
 
 A consumer crate outside langbank was then pointed at the result and made to
 print what treebank's `rank`/`resolve` would look up for all six languages,
 including `c-sharp` resolving to NuGet and NuGet correctly reporting that it
 serves no source archive at all.
 
-### Three decisions that are langbank's owner's to make
+### Two decisions that are langbank's owner's to make
 
-*(The first is now answered by #7: use `data/registries/`.)*
+*(The directory question is answered by #7: `data/registries/`, theirs.)*
 
-1. **The directory is `data/package-registries/`, not `data/registries/`.**
-   "Registries" is already langbank's word for its own inventory registries —
-   `OUT_DIR/registries.rs`, `tests/generated_registries.rs`, "the registries are
-   the expected size". A second meaning in the same tree would be confusing in
-   exactly the place clarity is cheapest. Easy to rename if the owner disagrees.
-2. **Are URL templates data?** They are strings with `{name}`-shaped holes, and
+1. **Are URL templates data?** They are strings with `{name}`-shaped holes, and
    nothing in langbank substitutes into them or opens a socket — the same
    standing as the pinned linguist URL already in `data/sources/`. But it is the
    closest this crate comes to describing *how to fetch*, and it is worth an
    explicit yes rather than an assumed one.
-3. **How much of a coordinate to model.** Maven's `{group}:{artifact}` and
-   NuGet's lowercased ids are in; npm's scope separator and treebank's
-   `pkg_dir()` sanitisation are not. That line is drawn where a fact stops
-   describing the registry and starts describing what a consumer does about it,
-   and it is a judgement rather than a rule.
+2. **Whether `languages` belongs on a registry at all.** #7 reaches a language
+   through the ecosystem, but PyPI, Maven, NuGet and Debian have no ecosystem in
+   langbank, so `python -> pypi` is otherwise underivable. The alternative is an
+   ecosystem per registry, which would be inventing managers that do not exist
+   here to carry one edge.
 
 ## What must not move, and is not being proposed
 
@@ -397,7 +334,7 @@ considered:
 ## Cost of the dependency itself
 
 - Langbank is **not published** (`version = "0.0.0"`). Consuming it means a git
-  dependency pinned to a rev — `e803f05` today — and treebank's `Cargo.lock`
+  dependency pinned to a rev — `355a7be` today — and treebank's `Cargo.lock`
   gains langbank plus `inventory`; `toml` enters as a build-dependency of
   langbank only.
 - Langbank is `edition = "2024"`, `rust-version = "1.85"`. Treebank has no
@@ -422,13 +359,14 @@ Ordered by value per unit of risk:
 2. **F — comment syntax lookup in `c.rs`.** Contained, deletes a genuine
    duplicate, must be proven against the 365-header count.
 3. **D/E/H — the langbank contribution.** Written and verified as
-   `docs/langbank-package-registries.patch`; it needs a decision from langbank's
-   owner and a merge there before treebank can look anything up. Blocked on
-   langbank, not on the five branches.
+   `docs/langbank-registry-fetch.patch`, rebased onto the merged #7; it needs a
+   review and a merge in langbank before treebank can look anything up. Blocked
+   on langbank, not on the five branches.
 
 The honest summary of the whole survey: **the overlap is real but shallow.**
 The biggest-looking overlap (extensions) is one treebank must not take, because
 the two repos are answering different questions; the overlaps where langbank
-should plainly win (registry endpoints, archive shapes) are ones langbank does
-not carry yet. What is available today is one duplicate fact worth deleting, one
+should plainly win (registry endpoints, archive shapes) are ones langbank did
+not carry when this began, and now half-carries: #7 brought the registries, and
+the fetch half is the follow-up written here. What is available today is one duplicate fact worth deleting, one
 vocabulary worth binding to, and one data contribution worth writing up.
