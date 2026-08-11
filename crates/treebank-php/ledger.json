@@ -33,6 +33,73 @@
       ],
       "kind": "packaging",
       "origin": "treebank; upstream owns the tree-sitter-php name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_php so the crate is a drop-in replacement (upstream has no explicit [lib] name, so it would otherwise be derived from the renamed package). include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "NUL bytes in single-quoted strings",
+      "file": "patches/0003-nul-bytes-in-single-quoted-strings.patch",
+      "files": [
+        "common/scanner.h",
+        "common/define-grammar.js",
+        "test/corpus/string.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the first top-500 Packagist sweep",
+      "evidence": {
+        "repro": "<?php\n$a = '\\x00';\n$b = 'before\\x00after';\n",
+        "diagnosis": "A single-quoted PHP string may contain any byte, NUL included, and symfony/polyfill-iconv's generated charset tables are full of them ('\\x00' => '\\x00'). tree-sitter reserves codepoint 0 for end-of-input, so NO grammar.js character class can ever match a literal NUL -- verified by trying: rewriting string_content's regex as /(\\\\?[^'\\\\]|\\x00)+/ regenerates cleanly and still fails. Only lexer->eof() distinguishes a NUL byte from real EOF, and only an external scanner may call it. Upstream had already solved this for the contexts its scanner owns, which is why a NUL parses fine inside a double-quoted string, a heredoc and a nowdoc, and fails only in the three grammar.js-regex contexts: single-quoted strings, comments and inline HTML. The fix adds a STRING_NUL_CHARS external that consumes a run of NUL bytes, admitted inside string_content's repeat1 rather than beside it in `string`, so 'a\\x00b' remains a single string_content node and the tree shape consumers query is unchanged.",
+        "scope_note": "Only the single-quoted string context is fixed. The same root cause makes a NUL in a comment or in inline HTML fail, and neither occurs in the 86,308-file corpus, so neither is patched blind -- each would need its own external token and its own evidence.",
+        "first_seen": {
+          "package": "symfony/polyfill-iconv",
+          "version": "v1.37.0",
+          "path": "Resources/charset/from.cp037.php"
+        },
+        "sweep_before": {
+          "passed": 86223,
+          "failed": 85,
+          "gap_files": 81
+        },
+        "sweep_after": {
+          "passed": 86288,
+          "failed": 20,
+          "gap_files": 16
+        },
+        "evidence_note": "65 files, zero regressions: all 143 upstream corpus tests pass, and the before/after sweeps ran over the identical corpus with only this patch removed and restored.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 4,
+      "title": "keywords as class constant names",
+      "file": "patches/0004-keywords-as-class-constant-names.patch",
+      "files": [
+        "common/define-grammar.js",
+        "test/corpus/class.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the first top-500 Packagist sweep",
+      "evidence": {
+        "repro": "<?php\nclass C {\n    const mixed = 1;\n    const MIXED = 2;\n    const namespace = 3;\n    const mixed TYPED = 5;\n}\n",
+        "diagnosis": "PHP accepts any keyword as a class constant name. Upstream already intends this -- _class_const_element uses reserved('nothing', $.name), which lifts the parser-level reserved-word restriction -- but that cannot help the type keywords, because they never reach $.name. PHP keywords are case-insensitive, so the grammar's keyword() helper compiles them to case-insensitive regexes, and /mixed/i beats $.name in the lexer for `mixed`, `Mixed` and `MIXED` alike. The token is then read as the constant's TYPE (typed class constants are PHP 8.3) and the declaration has no name left before `=`. The fix admits primitive_type and the namespace keyword in the name position, aliased back to $.name so the tree shape is unchanged; `const mixed MIXED = 1;` still parses as type + name.",
+        "measured_scope": "The corpus only surfaced the SHOUTING_CASE spellings, because that is how constants are named, but the gap is general: before this patch every one of array bool callable false float int iterable mixed null object string true void namespace failed as a class constant name in lowercase too. Verified against php -l at both declaration levels, which differ -- in a class every keyword except `class` is a legal constant name, while at top level array/callable/false/null/true/static/namespace/list/print/echo/function are all rejected. Only the class-level rule is widened here; the top-level rule is left alone, so `const mixed = 1;` outside a class remains a (correctly narrower, though not exactly right) rejection and no corpus file needs it.",
+        "first_seen": {
+          "package": "rector/rector",
+          "version": "2.6.1",
+          "path": "src/PHPStanStaticTypeMapper/TypeMapper/StrictMixedTypeMapper.php"
+        },
+        "sweep_before": {
+          "passed": 86288,
+          "failed": 20,
+          "gap_files": 16
+        },
+        "sweep_after": {
+          "passed": 86298,
+          "failed": 10,
+          "gap_files": 6
+        },
+        "evidence_note": "10 files, zero regressions: all 144 corpus tests pass (143 upstream + this patch's), and namespace declarations, `use` statements, relative names (namespace\\Foo::bar()), enum cases, property types, return types and parameter types were each regression-tested against php -l.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
     }
   ],
   "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). For php this pin also decides the upstream sha - see upstream.sha_note.",
@@ -54,6 +121,28 @@
     "fetched": "2026-08-11",
     "packages": 499,
     "packages_note": "500 requested; 499 resolved. roave/security-advisories publishes no tagged release (it is a metapackage of dev branches only) and the fetch driver skips it.",
-    "files": 86308
+    "files": 86308,
+    "sweep_upstream": {
+      "passed": 86223,
+      "failed": 85,
+      "gap_files": 81,
+      "noise_files": 4,
+      "clusters": 25
+    },
+    "sweep_patched": {
+      "passed": 86298,
+      "failed": 10,
+      "gap_files": 6,
+      "noise_files": 4,
+      "clusters": 9
+    },
+    "remaining_gaps_note": "6 gap files remain, in 5 distinct causes, each examined rather than left unnamed. (1) friendsofphp/php-cs-fixer PhpUnitTestAnnotationFixer.php and one other, failing at the very top of the file (<root> > ERROR(php_tag declare_statement comment namespace_definition ...)). (2) proxy-manager-lts Autoloader.php: `return (bool) require_once $file;` - a cast applied to a require expression, which the grammar's cast_expression does not admit. (3) league/uri-interfaces Converter.php: `return (string) match (true) { ... };` - a cast applied to a match expression; reported as a MISSING ';', which is the same cast-operand gap seen from the other side. (4) symfony/var-dumper Data.php: \"\\0$item->class\\0$key\" - the property name `class` accessed inside string interpolation, the interpolation-context twin of patch 0004's problem. (5) symfony/cache ValueWrapper.php: a class name containing a non-ASCII byte. None was patched blind: (2) and (3) are one fix and want a considered widening of cast_expression's operand rather than a quick alternation, and (4) needs the same reserved-word treatment inside the scanner-owned interpolation path.",
+    "noise_note": "All 4 noise files are jetbrains/phpstorm-stubs, which describes PHP's own internals and therefore declares things no PHP file may declare: `class object`, `interface iterable`, `function clone(...)`, and a property on a class the stub redeclares. php -l rejects them and so does the grammar, which is the oracle agreeing with the parser rather than a gap - a useful sanity check that the adjudication is working."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "tree-sitter-php parses syntax that PHP 8 removed, so for the cast case the grammar accepts a strict superset of what the oracle calls valid -- the same relationship treebank-python records for Python 2, and it needs stating because it decides what test/negative/ can contain.",
+    "evidence": "cast_type (common/define-grammar.js) still lists `real` and `unset`, both removed in PHP 8.0. Measured against php -l 8.5: `(real) 1` and `(unset) $y` are rejected by the oracle and accepted by the grammar. The other legacy spellings in that list -- binary, double, integer, boolean -- are still valid PHP 8 and agree. Separately, the grammar accepts `class C { const class = 1; }`, which php -l rejects because C::class is class-name resolution; this was verified against the pristine v0.24.2 tree, so it predates every treebank patch, and patch 0004 neither causes nor fixes it.",
+    "why_this_is_safe": "A sweep gap is 'grammar rejected it AND the oracle accepted it'. This asymmetry runs the other way -- grammar accepts, oracle rejects -- so it can never manufacture a gap and gap_files stays exact. For the casts it is upstream's deliberate support for older PHP rather than an optimization artifact; `const class` is simply an upstream bug.",
+    "cost": "test/negative/ cannot contain these three constructs, because the corpus asserts the grammar KEEPS rejecting a file and the grammar accepts all three. A (real) cast was written as a negative candidate, measured, and removed for exactly this reason. The 9 files that remain were each verified rejected by BOTH the oracle and the grammar."
   }
 }

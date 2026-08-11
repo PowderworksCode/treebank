@@ -9,3 +9,4 @@ tools/cs-oracle/obj/
 
 # materialized grammar trees (scripts/materialize.sh) — never committed
 crates/*/build/
+tools/php-oracle/php-*

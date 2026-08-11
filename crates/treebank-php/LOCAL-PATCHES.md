@@ -57,3 +57,36 @@ Cargo derives it from the package name. Renaming the package alone would have
 silently renamed the library to `treebank_grammar_php` and broken every
 consumer's `tree_sitter_php::LANGUAGE_PHP`. `Cargo.lock` carries the matching
 rename and nothing else; dependency versions stay upstream's.
+
+### 0003 — NUL bytes in single-quoted strings (grammar)
+
+A single-quoted PHP string may hold any byte, and symfony/polyfill-iconv's
+generated charset tables hold NULs (`'\0' => '\0'`). tree-sitter reserves
+codepoint 0 for end-of-input, so no `grammar.js` character class can ever
+match a literal NUL — writing the regex as `/(\\?[^'\\]|\x00)+/` regenerates
+cleanly and still fails. Only `lexer->eof()` separates a NUL byte from real
+EOF, and only an external scanner may call it.
+
+Upstream had already solved this for the contexts its scanner owns, which is
+why a NUL parses fine in a double-quoted string, a heredoc and a nowdoc, and
+fails only in the three `grammar.js`-regex contexts: single-quoted strings,
+comments, and inline HTML. This adds a `STRING_NUL_CHARS` external for the
+one context the corpus exercises. **65 files; 81 gaps → 16.**
+
+### 0004 — keywords as class constant names (grammar)
+
+PHP takes any keyword as a class constant name. Upstream already intends
+this — `_class_const_element` uses `reserved('nothing', $.name)` — but that
+cannot help the type keywords, because they never reach `$.name`. PHP
+keywords are case-insensitive, so `keyword('mixed')` compiles to `/mixed/i`
+and beats `$.name` in the lexer for `MIXED`, `Mixed` and `mixed` alike; the
+token is then read as the constant's *type* (typed class constants are PHP
+8.3) and nothing is left to be the name before `=`.
+
+The corpus only showed the SHOUTING_CASE spellings, because that is how
+constants are named, but the gap is general: every one of `array bool
+callable false float int iterable mixed null object string true void
+namespace` failed in lowercase too. Only the class-level rule is widened —
+measured against `php -l`, the two levels genuinely differ, and at top level
+`array`, `callable`, `false`, `null`, `true`, `static` and `namespace` are
+all rejected. **10 files; 16 gaps → 6.**

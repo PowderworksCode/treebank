@@ -163,15 +163,23 @@ fn codeload_url(dist: &str) -> String {
 /// Pick the PHP the oracle runs, and refuse one that is too old to answer
 /// honestly.
 ///
-/// `TREEBANK_PHP` wins if set; otherwise the first of `php8.5`, `php8.4`,
-/// `php` that exists and is new enough. Distributions install versioned
-/// binaries side by side (`/usr/bin/php8.5`), so preferring those finds the
-/// right interpreter without disturbing whatever `php` points at.
+/// `TREEBANK_PHP` wins if set. Otherwise, in order: `php8.5` and `php8.4`,
+/// the versioned binaries distributions install side by side, which are the
+/// fastest to fork and are preferred for that reason; then whatever
+/// `tools/php-oracle/fetch.sh` has fetched, so a machine without root still
+/// sweeps; then plain `php`, which is only accepted if it happens to be new
+/// enough.
 fn oracle_php() -> Result<String> {
     let mut tried = Vec::new();
     let candidates: Vec<String> = match std::env::var("TREEBANK_PHP") {
         Ok(p) if !p.is_empty() => vec![p],
-        _ => ["php8.5", "php8.4", "php"].iter().map(|s| s.to_string()).collect(),
+        _ => {
+            let mut c: Vec<String> =
+                ["php8.5", "php8.4"].iter().map(|s| s.to_string()).collect();
+            c.extend(fetched_php());
+            c.push("php".to_string());
+            c
+        }
     };
     for candidate in candidates {
         match version_id(&candidate) {
@@ -189,6 +197,29 @@ fn oracle_php() -> Result<String> {
         human(MIN_VERSION_ID),
         tried.join(", ")
     )
+}
+
+/// Whatever `tools/php-oracle/fetch.sh` has put in place, newest first. The
+/// binary is named for its version and gitignored, so this is a directory
+/// listing rather than a hardcoded path — bumping the pin in the script does
+/// not need a matching edit here.
+fn fetched_php() -> Vec<String> {
+    let Ok(entries) = std::fs::read_dir("tools/php-oracle") else {
+        return Vec::new();
+    };
+    let mut found: Vec<String> = entries
+        .filter_map(|e| e.ok())
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("php-"))
+        })
+        .map(|p| p.to_string_lossy().into_owned())
+        .collect();
+    found.sort();
+    found.reverse();
+    found
 }
 
 fn version_id(program: &str) -> Result<u32> {
