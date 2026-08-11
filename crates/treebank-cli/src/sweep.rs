@@ -293,6 +293,31 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     let failing_paths: Vec<String> = failures.iter().map(|f| f.path.clone()).collect();
     let validity = lang.validate(&corpus_src, &failing_paths)?;
 
+    // The oracle must answer every question it was asked. A path with no
+    // verdict reads as `false` at all three use sites below — that is, as
+    // "the reference parser rejected it" — so it is filed as corpus noise
+    // and gap_files drops, silently and in the direction that flatters the
+    // grammar. The ways to get here are unglamorous and real: an oracle that
+    // exits 0 after answering half a batch, or a path that does not survive
+    // the round trip through the oracle and back (stdin_oracle re-derives
+    // the key with strip_prefix, so a symlinked or otherwise renormalised
+    // path silently fails to match). exec_oracle cannot hit this because it
+    // builds its map from the input list; the stdin oracles can.
+    let missing: Vec<&str> = failing_paths
+        .iter()
+        .filter(|p| !validity.contains_key(*p))
+        .map(|p| p.as_str())
+        .collect();
+    anyhow::ensure!(
+        missing.is_empty(),
+        "oracle returned no verdict for {} of {} failing files. This is an \
+         oracle failure, not a verdict: counting them invalid would file them \
+         as corpus noise and understate gap_files. First few: {:?}",
+        missing.len(),
+        failing_paths.len(),
+        &missing[..missing.len().min(5)],
+    );
+
     // A grammar sees every #if branch at once; a compiler sees only the live
     // ones. Where removing the branches a compiler would have dropped makes a
     // file parse cleanly, the rejection is a property of the preprocessor and
