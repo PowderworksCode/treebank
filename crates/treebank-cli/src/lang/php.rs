@@ -130,14 +130,14 @@ impl Lang for Php {
     ///
     /// 255 is the status `php -l` uses for a syntax error, and it is passed
     /// explicitly because 1 means *could not open input file* — see
-    /// `exec_oracle::run`, which treats any other status as an oracle
-    /// failure rather than as a verdict.
+    /// `exec_oracle::run`, which treats any status outside the list as an
+    /// oracle failure rather than as a verdict.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
         let php = oracle_php()?;
         exec_oracle::run(
             &php,
             &["-n", "-d", "short_open_tag=0", "-l"],
-            255,
+            &[255],
             &format!("spawn {php} -l — is PHP installed?"),
             srcroot,
             paths,

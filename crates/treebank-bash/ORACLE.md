@@ -68,19 +68,38 @@ from a distribution contains files that are not scripts:
 | a directory | exit 126, `Is a directory` |
 | a path that does not exist | exit **127** |
 
-## Exit codes are the verdict, and there are more than two
+## Exit codes are the verdict, and there are more than two of them
 
 | exit | meaning | verdict |
 |---|---|---|
 | 0 | parsed | valid |
-| 2 | syntax error | invalid |
-| 126 | bash refuses the file (NUL byte, directory) | invalid — bash will not run it, so it is not a valid script |
-| 127 | file does not exist | **not a verdict** — a harness bug |
+| 2 | syntax error, almost everywhere | invalid |
+| **1** | **syntax error inside an array-assignment word list** | invalid |
+| 126 | bash refuses the file (NUL byte, directory) | **not a verdict** |
+| 127 | file does not exist | **not a verdict** |
 
-`check.sh` tests for a readable regular file first and complains on stderr,
-so a 127 can never be silently recorded as "invalid". 126 is kept as a real
-verdict; `lang/bash.rs`'s `admit()` drops NUL-bearing files at corpus-build
-time anyway, so it should be unreachable from a sweep.
+The `1` row is the one worth knowing about, and it was measured rather than
+anticipated. `x=( a+([0-9]) )` exits **1**; the same extglob pattern outside
+an array (`echo a+([0-9])`, `case $y in a+([0-9])) ;; esac`) exits **2**. So
+does every other syntax error probed — an unterminated string, a stray
+`esac`, a missing `then`. Any error inside the parentheses of an array
+assignment takes the other exit: `x=( ;; )` and `x=( a` also exit 1.
+
+This is not a curiosity in a test file. linux ships
+`tools/testing/selftests/wireguard/netns.sh`, which is exactly that
+construct, and it is the *only* file in 67,586 across both corpora that
+exits 1 — one file, which with `2` alone in the reject list would abort the
+entire sweep.
+
+126 and 127 are deliberately **not** verdicts. That is the property
+`exec_oracle` is built around: if every non-zero status meant "invalid", a
+mistyped corpus root would score every file invalid, every failing file
+would be recorded as corpus noise, `gap_files` would fall to zero and the
+sweep would report a flawless grammar. A broken oracle has to fail loudly
+rather than quietly agree with us. `lang/bash.rs`'s `admit()` scans the
+**whole** file for a NUL — not a leading window — precisely so that a 126
+cannot reach the oracle; measured over both corpora, no admitted file
+contains one.
 
 ## Dialect
 
@@ -123,9 +142,26 @@ The consequential correction is the classification, not the digit.
 with the batch oracles it is tabled beside. There is no batch escape: bash
 cannot syntax-check a file from inside a long-lived shell, because `set -n`
 stops that shell from executing the very `source` that would read the next
-file. So the fix is the one the ROADMAP already prescribes for php — run the
-forks in parallel — and `check.sh` does, which is why it is the second
-parallel oracle in the repo after rust's.
+file. So the fix is the one the ROADMAP already prescribes for php — run the forks
+in parallel — and this oracle does not implement that itself. It calls
+`lang::exec_oracle`, the shared fork-per-file driver the PHP session landed,
+whose own note says "the next fork-per-file oracle should inherit it by
+calling it". Bash is that next one. It contributed one generalization back:
+`reject_status` became `reject_statuses`, a list, because of the exit-1 row
+above.
+
+Measured through the sweep on the GitHub corpus, 2,205 files adjudicated,
+`TREEBANK_ORACLE_JOBS` varied:
+
+| workers | whole sweep |
+|---|---|
+| 1 | 7.30 s |
+| 4 | 3.28 s |
+| 16 (this box's core count, the default) | 2.25 s |
+
+The sweep's own parsing is a fixed ~2.0 s of that, so the oracle itself goes
+from ~5.3 s to ~0.25 s — the same 2.4 → 0.11 s per thousand as the table
+above, now with no shell script and no `xargs` in the path.
 
 ## Honesty: 0 false rejects
 

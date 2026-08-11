@@ -110,8 +110,13 @@ actual parsing** — 83% of the cost is the fork. Both figures are therefore
 mostly a measurement of `fork+exec` on their own hardware, and the part that
 belongs to bash agrees. There is no batch escape (`set -n` inside a
 long-lived shell stops it executing the `source` that would read the next
-file), so the php lever is the answer: at `-P16` the oracle runs at
-**0.12 s per thousand**. See `crates/treebank-bash/ORACLE.md`.
+file), so the php lever is the answer, and bash now
+pulls it by *inheriting* php's `exec_oracle` rather than reimplementing it:
+**0.11 s per thousand** at this box's core count. It contributed one
+generalization back — `reject_status` became a list, because `bash -n` exits
+2 for a syntax error nearly everywhere but **1** inside an array-assignment
+word list, which one real corpus file does. See
+`crates/treebank-bash/ORACLE.md`.
 
 ### Where Tier A ends
 

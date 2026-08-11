@@ -3,7 +3,7 @@ use std::path::Path;
 
 use anyhow::{bail, Result};
 
-use super::{debian, github, Lang};
+use super::{debian, exec_oracle, github, Lang};
 use crate::ledger::LangName;
 use crate::rank::RankedCrate;
 
@@ -158,12 +158,15 @@ impl Lang for Bash {
     /// right bucket but not a free one.
     fn admit(&self, rel: &Path, content: &[u8]) -> bool {
         // A NUL means bash itself refuses the file ("cannot execute binary
-        // file"), so it can never be valid; dropping it here keeps it out of
-        // the noise count rather than in it.
-        let head = &content[..content.len().min(8192)];
-        if head.contains(&0) {
+        // file", exit 126), so it can never be valid. The whole file is
+        // scanned, not a leading window: 126 is deliberately NOT one of the
+        // oracle's reject statuses, so a NUL that got past this check would
+        // abort the sweep rather than be miscounted. Measured over both
+        // corpora, no admitted file contains one.
+        if content.contains(&0) {
             return false;
         }
+        let head = &content[..content.len().min(8192)];
         let named = rel
             .file_name()
             .and_then(|n| n.to_str())
@@ -201,24 +204,37 @@ impl Lang for Bash {
         &["."]
     }
 
-    /// `tools/bash-oracle/check.sh`: bash's own parser via `bash -n`, which
-    /// reads the whole script and executes nothing. That property is the
-    /// entire safety case for running a shell over thousands of strangers'
-    /// scripts and it was verified on this machine before the first sweep —
-    /// `source /absent/file` is not an error, a `rm -rf` in a scanned script
-    /// does not run, and neither do command substitutions, process
-    /// substitutions, heredoc bodies, `eval` arguments or `BASH_ENV`. See
+    /// `bash -n`: bash's own parser, which reads the whole script and
+    /// executes nothing. That property is the entire safety case for running
+    /// a shell over thousands of strangers' scripts and it was verified on
+    /// this machine with live canaries before the first sweep — `source
+    /// /absent/file` is not an error, a `rm -rf` in a scanned script does not
+    /// run, and neither do command substitutions, process substitutions,
+    /// heredoc bodies, `eval` arguments or `BASH_ENV`. See
     /// `crates/treebank-bash/ORACLE.md`.
     ///
-    /// The oracle forks once per file — bash cannot syntax-check a file from
-    /// inside a long-lived shell, because `set -n` stops that shell from
-    /// executing the `source` that would read the next one — so it is
-    /// parallel, like the ROADMAP prescribes for `php -l`.
+    /// bash cannot syntax-check a file from inside a long-lived shell —
+    /// `set -n` stops that shell from executing the `source` that would read
+    /// the next one — so this is a fork-per-file oracle and it inherits
+    /// `exec_oracle`, exactly as that module's own note anticipates.
+    ///
+    /// **Two reject statuses, both measured.** `bash -n` exits 2 for a syntax
+    /// error nearly everywhere, and **1** when the error is inside an
+    /// array-assignment word list: `x=( a+([0-9]) )` exits 1 where the same
+    /// pattern outside an array exits 2. That is not a curiosity — linux's
+    /// `tools/testing/selftests/wireguard/netns.sh` is such a file, and with
+    /// only `2` in the list the whole sweep would abort on it. 126 (bash
+    /// refuses a binary or a directory) and 127 (no such file) stay outside
+    /// the list on purpose, so a mistyped corpus root still fails loudly
+    /// instead of scoring every file invalid.
+    ///
+    /// `--` guards a corpus path that begins with a dash.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        super::stdin_oracle::run(
+        exec_oracle::run(
             "bash",
-            &["tools/bash-oracle/check.sh"],
-            "bash tools/bash-oracle/check.sh — run from the repo root",
+            &["-n", "--"],
+            &[1, 2],
+            "spawn bash -n — is bash installed?",
             srcroot,
             paths,
         )
