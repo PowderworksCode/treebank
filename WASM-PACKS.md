@@ -313,14 +313,31 @@ rather than two. A grammar directory that generates several parsers has its
 cases split by label, which is the `generate_dir`'s basename, so `tsx` is
 proved by `patched.tsx` and `typescript` by `patched.ts`.
 
-Each pack is also checked against its own ledger: the `upstream.sha` and
-language name it reports from its embedded provenance must match what
-`ledger.json` says. Names are compared with punctuation removed, because a
-grammar's own name and treebank's directory name are allowed to differ that
-much — upstream's C# grammar calls itself `c_sharp` where the directory is
-`csharp`, the same split the crate already has between
-`treebank-grammar-csharp` and the `tree_sitter_c_sharp` library. The check
-found that on its first full run. That check needs no per-language fixture, which is why it
+Each pack is also checked against the sources it claims to come from — three
+**exact** comparisons, no normalisation:
+
+| | compared | catches |
+|---|---|---|
+| `upstream.sha` | provenance vs `ledger.json` | built from the wrong upstream commit |
+| `language_name` | provenance vs `src/grammar.json` | built from the wrong grammar |
+| `language_name` | provenance vs the running module | the artifact is not the one its provenance describes |
+
+The authority for what a grammar is called is `src/grammar.json`, which
+`tree-sitter generate` writes from `grammar.js`. It is **not** the directory
+name, and the two are allowed to differ: the C# grammar declares `c_sharp`
+while its directory is `csharp` — the same split the crate has between
+`treebank-grammar-csharp` and the `tree_sitter_c_sharp` library. So the
+provenance records `grammar` (the directory name, `csharp`) and `language_name`
+(the declared name, `c_sharp`) as two separate fields, and each comparison uses
+the right one.
+
+That distinction is the whole point. Comparing a pack's declared name against
+the directory name looks like a near-miss and invites a fuzzy comparison, and a
+check that accepts near-matches cannot catch a pack built from the wrong
+grammar — which is precisely the failure it exists for. The entry point is
+derived the same way, `tree_sitter_<declared name>`, and `build-wasm.sh`
+asserts `parser.c` actually defines that symbol rather than pattern-matching
+the source for something that looks like one. That check needs no per-language fixture, which is why it
 is the one that scales — and it catches the failure a fixture cannot, since a
 pack accidentally built from the wrong grammar still parses *something*
 cleanly.

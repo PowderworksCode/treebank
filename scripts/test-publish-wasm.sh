@@ -64,6 +64,18 @@ fi
 # "Clean" is a patch repro, "Error" is the negative corpus.
 GRAMMARS_JSON=tools/consumer-test/grammars.json
 
+# Which generate_dir produced this pack, by the same rule publish-wasm.sh names
+# packs with. Returns empty if none matches, which is a failure rather than a
+# thing to guess around.
+pack_gen_dir() { # <grammar-dir> <pack-name>
+  local dir=$1 pack=$2 lang gd name
+  lang=$(basename "$dir"); lang=${lang#treebank-}
+  while IFS= read -r gd; do
+    if [ "$gd" = "." ]; then name="treebank-$lang"; else name="treebank-$(basename "$gd")"; fi
+    [ "$name" = "$pack" ] && { printf '%s' "$gd"; return; }
+  done < <(jq -r '(.generate_dirs // ["."])[]' "$dir/ledger.json")
+}
+
 cases_for() { # <grammar-dir-name> <pack-name> <n-generate-dirs> <expect>
   local grammar=$1 pack=$2 n=$3 expect=$4 label=${2#treebank-}
   if [ "$n" -le 1 ]; then
@@ -125,30 +137,42 @@ for d in "$STAGE/rel"/*/; do
   for w in "$STAGE/consume/$relname"/*.wasm; do
     pack=$(basename "$w" .wasm)
 
-    # The pack must agree with the ledger about what it is. This is the check
-    # that scales: it needs no per-language fixture, and it catches a
-    # mis-detected entry point or a stale artifact — a pack built from the
-    # wrong grammar still parses SOMETHING cleanly.
+    # The pack must agree with the sources it claims to come from. Three
+    # exact comparisons, no normalisation anywhere: a check that quietly
+    # accepts near-matches is not a check.
+    #
+    #   upstream.sha    provenance vs ledger        — right upstream commit
+    #   language_name   provenance vs grammar.json  — right grammar
+    #   language_name   provenance vs the running module — the artifact is the
+    #                   one the provenance describes
+    #
+    # grammar.json is generate's own record of what the grammar calls itself,
+    # and is the only authority for that name. It is NOT the directory name:
+    # the C# grammar declares "c_sharp" while its directory is "csharp", the
+    # same split the crate has between treebank-grammar-csharp and the
+    # tree_sitter_c_sharp library. Comparing against the wrong one of those two
+    # facts is what makes a check want to be fuzzy.
     prov="$STAGE/consume/$relname/$pack.json"
+    gd=$(pack_gen_dir "$grammar_dir" "$pack")
+    if [ -z "$gd" ]; then
+      say "    FAIL: $pack does not correspond to any generate_dir of $gname"; fail=1; continue
+    fi
+    declared=$(jq -r .name "$grammar_dir/build/$gd/src/grammar.json" 2>/dev/null)
     want_sha=$(jq -r .upstream.sha "$grammar_dir/ledger.json")
     got_sha=$(jq -r .upstream.sha "$prov")
-    got_lang=$("${PYTHON:-python3}" tools/wasm-pack/examples/parse.py "$w" 2>/dev/null | sed -n '1s/.*language=\([^ ]*\).*/\1/p')
-    want_lang=$(jq -r .grammar "$grammar_dir/ledger.json")
-    [ "$ngen" -gt 1 ] && want_lang=${pack#treebank-}
-    # Compared with separators removed. The name a grammar gives itself and the
-    # name treebank's directory gives it are allowed to differ in punctuation —
-    # upstream's C# grammar is "c_sharp" where the directory is "csharp", the
-    # same split the crate has between treebank-grammar-csharp and the
-    # tree_sitter_c_sharp library. What this must still catch is a pack built
-    # from the WRONG grammar, and for a multi-parser directory the wrong one of
-    # its parsers, which upstream.sha alone cannot see.
-    norm() { printf '%s' "${1//[^a-zA-Z0-9]/}" | tr 'A-Z' 'a-z'; }
+    prov_lang=$(jq -r '.language_name // ""' "$prov")
+    run_lang=$("${PYTHON:-python3}" tools/wasm-pack/examples/parse.py "$w" 2>/dev/null \
+                 | sed -n '1s/.*language=\([^ ]*\).*/\1/p')
     if [ "$got_sha" != "$want_sha" ]; then
       say "    FAIL: $pack provenance upstream.sha $got_sha != ledger $want_sha"; fail=1
-    elif [ "$(norm "$got_lang")" != "$(norm "$want_lang")" ]; then
-      say "    FAIL: $pack reports language '$got_lang', ledger says '$want_lang'"; fail=1
+    elif [ -z "$declared" ] || [ "$declared" = null ]; then
+      say "    FAIL: $grammar_dir/build/$gd/src/grammar.json declares no name"; fail=1
+    elif [ "$prov_lang" != "$declared" ]; then
+      say "    FAIL: $pack provenance language_name '$prov_lang' != grammar.json '$declared'"; fail=1
+    elif [ "$run_lang" != "$declared" ]; then
+      say "    FAIL: $pack reports language '$run_lang' at runtime, grammar.json declares '$declared'"; fail=1
     else
-      say "    $pack: provenance agrees with ledger (${got_lang}, ${want_sha:0:12})"
+      say "    $pack: matches its sources exactly ($declared, ${want_sha:0:12})"
     fi
 
     mapfile -t positives < <(cases_for "$gname" "$pack" "$ngen" Clean)

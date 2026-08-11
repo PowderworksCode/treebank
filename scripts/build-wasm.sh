@@ -69,6 +69,9 @@ if [ "$GEN_DIR" = "." ]; then PACK="treebank-$LANG_NAME"; else PACK="treebank-$(
 SRC="$GRAMMAR_DIR/build/$GEN_DIR/src"
 RUNTIME="$ROOT/vendor/tree-sitter"
 
+# Set after materialization, from the grammar's own declaration; see ENTRY below.
+LANGUAGE_NAME=""
+
 # ---- preconditions -------------------------------------------------------
 # Initialized on demand, as materialize.sh does for a grammar's upstream: CI
 # checks out without submodules so a job fetches only what it needs.
@@ -96,6 +99,10 @@ if [ "$SKIP_MATERIALIZE" = 0 ]; then
   "$ROOT/scripts/materialize.sh" "$GRAMMAR_DIR" >/dev/null
 fi
 [ -f "$SRC/parser.c" ] || { echo "build-wasm: no $SRC/parser.c — did materialize run?" >&2; exit 1; }
+[ -f "$SRC/grammar.json" ] || { echo "build-wasm: no $SRC/grammar.json — did materialize run?" >&2; exit 1; }
+LANGUAGE_NAME=$(jq -r .name "$SRC/grammar.json")
+[ -n "$LANGUAGE_NAME" ] && [ "$LANGUAGE_NAME" != null ] \
+  || { echo "build-wasm: $SRC/grammar.json declares no name" >&2; exit 1; }
 
 WASI_SDK=$(wasi_sdk_ensure) || exit 1
 BINARYEN=$(binaryen_ensure) || exit 1
@@ -119,10 +126,16 @@ PATCH_MANIFEST=$(
   done | jq -sc 'add // {}'
 )
 
+# `grammar` and `language_name` are two different facts and are recorded
+# separately because they are allowed to differ: `grammar` is the directory-derived
+# name treebank uses (csharp, matching the crate), `language_name` is what the
+# grammar calls itself and what ts_language_name returns (c_sharp). Anything
+# comparing a pack against a ledger has to compare the right one, exactly —
+# normalising them together would hide a pack built from the wrong grammar.
 jq -S \
   --arg pack "$PACK" \
   --arg format standalone \
-  --arg entry "tree_sitter_$(basename "$GEN_DIR" | sed 's/[^a-zA-Z0-9]/_/g; s/^\.$//')" \
+  --arg language_name "$LANGUAGE_NAME" \
   --arg cli "$CLI_WANT" \
   --arg rt_sha "$RUNTIME_SHA" \
   --arg rt_ver "$RUNTIME_VERSION" \
@@ -137,6 +150,7 @@ jq -S \
      pack_abi: 1,
      format: $format,
      grammar: .grammar,
+     language_name: $language_name,
      upstream: .upstream,
      toolchain: {
        generate_cli: {tool: "tree-sitter-cli", version: $cli},
@@ -165,12 +179,19 @@ with open(sys.argv[2], 'w') as f:
 PY
 
 # ---- compile -------------------------------------------------------------
-ENTRY="tree_sitter_$(jq -r '.pack' "$STAGE/provenance.json" | sed 's/^treebank-//; s/[^a-zA-Z0-9]/_/g')"
-# typescript's two grammars export tree_sitter_typescript and tree_sitter_tsx;
-# every other grammar exports tree_sitter_<language>. Read it out of the
-# generated source rather than guessing from the directory name.
-DETECTED=$(grep -oE 'TS_PUBLIC const TSLanguage \*tree_sitter_[a-z0-9_]+|const TSLanguage \*tree_sitter_[a-z0-9_]+' "$SRC/parser.c" | grep -oE 'tree_sitter_[a-z0-9_]+' | head -1)
-[ -n "$DETECTED" ] && ENTRY=$DETECTED
+# The entry point is DECLARED, not detected. src/grammar.json is generate's own
+# record of what this grammar is called; ts_language_name() returns that exact
+# string and the entry symbol is exactly "tree_sitter_<name>". Deriving it from
+# the directory would be wrong wherever the two differ — the C# grammar calls
+# itself c_sharp while its directory is csharp — and pattern-matching parser.c
+# for something that looks like an entry point is a guess that happens to work.
+ENTRY="tree_sitter_$LANGUAGE_NAME"
+if ! grep -q "TSLanguage \*$ENTRY(void)" "$SRC/parser.c"; then
+  echo "build-wasm: FAIL — $SRC/grammar.json declares \"$LANGUAGE_NAME\" but" >&2
+  echo "  $SRC/parser.c defines no $ENTRY(). The generated sources disagree with" >&2
+  echo "  each other; re-run scripts/materialize.sh." >&2
+  exit 1
+fi
 echo "build-wasm: $PACK  (entry $ENTRY, runtime $RUNTIME_VERSION, wasi-sdk $WASI_SDK_VERSION, binaryen $BINARYEN_VERSION)"
 
 mkdir -p "$STAGE/g" "$OUT"
