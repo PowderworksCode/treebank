@@ -1,0 +1,198 @@
+#!/usr/bin/env bash
+# Build a treebank wasm pack: one grammar, self-contained, byte-reproducible.
+#
+#   crates/treebank-<lang>/build/   (scripts/materialize.sh's output)
+#   + vendor/tree-sitter @ the runtime sha the pinned CLI was cut from
+#   + tools/wasm-pack/shim.c        (the pack ABI)
+#   + provenance generated from ledger.json, linked INTO the module
+#   -> dist/wasm/treebank-<lang>.wasm
+#
+# The pack is a standalone wasm module: it imports only WASI, so any runtime
+# can load it with no emscripten glue and no native tree-sitter. See
+# tools/wasm-pack/shim.c for the ABI and WASM-PACKS.md for why this format.
+#
+# THREE PINS, and all three are load-bearing:
+#
+#   generate_cli   the ledger's existing pin, which produced src/parser.c
+#   runtime        vendor/tree-sitter, at the commit that CLI was cut from —
+#                  the runtime must understand the language ABI the CLI emits
+#   emscripten     pinned BY DIGEST, not by tag. Measured: emsdk 3.1.74 and
+#                  4.0.4 compile identical sources to different bytes, so this
+#                  has exactly the exposure generate_cli has. `4.0.4` is a
+#                  mutable tag; the digest is the artifact.
+#
+# Emscripten runs in Docker, always, even if emcc is on PATH. `tree-sitter
+# build --wasm` prefers a local emcc and only falls back to Docker, which means
+# a contributor with emscripten installed silently produces different bytes
+# from CI. This script does not offer the choice.
+#
+# Usage: scripts/build-wasm.sh <grammar-dir> [generate-dir]
+#   scripts/build-wasm.sh crates/treebank-python
+#   scripts/build-wasm.sh crates/treebank-typescript tsx
+#
+#   --out DIR     where to write (default dist/wasm)
+#   --skip-materialize   use build/ as it stands (caller asserts it is fresh)
+set -euo pipefail
+shopt -s nullglob
+
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+
+# Pinned by digest on purpose; see above. Bumping this is a toolchain change
+# with the same weight as bumping generate_cli: it changes every pack's bytes.
+EMSDK_IMAGE="emscripten/emsdk:4.0.4@sha256:47d573d5a86379a06f850de200d69407e6baa2d2f9c19d9e156a67db57f80f2f"
+EMSDK_VERSION="4.0.4"
+
+OUT="$ROOT/dist/wasm"
+SKIP_MATERIALIZE=0
+ARGS=()
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --out)              OUT=$2; shift ;;
+    --skip-materialize) SKIP_MATERIALIZE=1 ;;
+    -h|--help)          sed -n '2,40p' "${BASH_SOURCE[0]}"; exit 0 ;;
+    -*)                 echo "build-wasm: unknown flag $1" >&2; exit 2 ;;
+    *)                  ARGS+=("$1") ;;
+  esac
+  shift
+done
+
+GRAMMAR_DIR=$(cd "${ARGS[0]:?usage: build-wasm.sh <grammar-dir> [generate-dir]}" && pwd)
+GEN_DIR=${ARGS[1]:-.}
+[ -f "$GRAMMAR_DIR/ledger.json" ] || { echo "build-wasm: $GRAMMAR_DIR has no ledger.json" >&2; exit 2; }
+
+LANG_NAME=$(jq -r .grammar "$GRAMMAR_DIR/ledger.json")
+# One pack per generated grammar, not per directory: typescript ships two
+# (typescript, tsx) and they are different parsers with different tables.
+if [ "$GEN_DIR" = "." ]; then PACK="treebank-$LANG_NAME"; else PACK="treebank-$(basename "$GEN_DIR")"; fi
+
+SRC="$GRAMMAR_DIR/build/$GEN_DIR/src"
+RUNTIME="$ROOT/vendor/tree-sitter"
+
+# ---- preconditions -------------------------------------------------------
+[ -e "$RUNTIME/lib/src/lib.c" ] || {
+  echo "build-wasm: vendor/tree-sitter is not checked out" >&2
+  echo "  git submodule update --init vendor/tree-sitter" >&2
+  exit 1
+}
+RUNTIME_SHA=$(git -C "$RUNTIME" rev-parse HEAD)
+if [ -n "$(git -C "$RUNTIME" status --porcelain)" ]; then
+  echo "build-wasm: FAIL — vendor/tree-sitter is dirty; the runtime pin must be pristine" >&2
+  exit 1
+fi
+# The runtime and the CLI that generated parser.c must agree: the runtime has
+# to understand the language ABI the CLI emits. They ship from one repo at one
+# version, so this is checkable rather than assumed.
+CLI_WANT=$(jq -r .generate_cli "$GRAMMAR_DIR/ledger.json")
+RUNTIME_VERSION=$(sed -n 's/^version = "\(.*\)"$/\1/p' "$RUNTIME/Cargo.toml" | head -1)
+if [ "$RUNTIME_VERSION" != "$CLI_WANT" ]; then
+  echo "build-wasm: FAIL — runtime pin is tree-sitter $RUNTIME_VERSION but the ledger's generate_cli is $CLI_WANT" >&2
+  echo "  these must match: the runtime linked into the pack has to load the ABI that CLI generates" >&2
+  exit 1
+fi
+
+if [ "$SKIP_MATERIALIZE" = 0 ]; then
+  "$ROOT/scripts/materialize.sh" "$GRAMMAR_DIR" >/dev/null
+fi
+[ -f "$SRC/parser.c" ] || { echo "build-wasm: no $SRC/parser.c — did materialize run?" >&2; exit 1; }
+
+command -v docker >/dev/null || { echo "build-wasm: docker is required (emscripten runs in it)" >&2; exit 1; }
+
+# ---- provenance ----------------------------------------------------------
+# Linked into the module, so a .wasm that gets vendored into someone's repo and
+# rediscovered later still answers for itself. Deliberately contains NOTHING
+# that varies without changing the artifact: no timestamp, no build host, no
+# treebank commit. Anything ambient in here would break byte-reproducibility,
+# which is the property the provenance exists to make checkable.
+STAGE=$(mktemp -d)
+trap 'rm -rf "$STAGE"' EXIT
+
+# Every patch, with the hash of the patch FILE. That is what makes the series
+# checkable: a consumer can fetch patches/ from this repo, hash them, and know
+# they are looking at the divergence this pack was built from.
+PATCH_MANIFEST=$(
+  for p in "$GRAMMAR_DIR"/patches/*.patch; do
+    jq -n --arg file "$(basename "$p")" --arg sha "$(sha256sum "$p" | cut -d' ' -f1)" \
+      '{($file): $sha}'
+  done | jq -sc 'add // {}'
+)
+
+jq -S \
+  --arg pack "$PACK" \
+  --arg format standalone \
+  --arg entry "tree_sitter_$(basename "$GEN_DIR" | sed 's/[^a-zA-Z0-9]/_/g; s/^\.$//')" \
+  --arg cli "$CLI_WANT" \
+  --arg rt_sha "$RUNTIME_SHA" \
+  --arg rt_ver "$RUNTIME_VERSION" \
+  --arg em_image "$EMSDK_IMAGE" \
+  --arg em_ver "$EMSDK_VERSION" \
+  --argjson patch_files "$PATCH_MANIFEST" \
+  '{
+     pack: $pack,
+     pack_abi: 1,
+     format: $format,
+     grammar: .grammar,
+     upstream: .upstream,
+     toolchain: {
+       generate_cli: {tool: "tree-sitter-cli", version: $cli},
+       runtime:      {tool: "tree-sitter", version: $rt_ver, sha: $rt_sha},
+       emscripten:   {tool: "emscripten", version: $em_ver, image: $em_image}
+     },
+     patches: [.patches[] | {id, title, kind: (.kind // "grammar"),
+                             file: (.file | sub("^patches/"; "")),
+                             sha256: $patch_files[.file | sub("^patches/"; "")]}],
+     sweep: (.corpus | {upstream: (.sweep_upstream // .sweep_upstream_committed), patched: .sweep_patched}),
+     license: "See LICENSE in the upstream grammar repository; patches are treebank'"'"'s and carry the same terms.",
+     note: "Patched redistribution. This pack gives you treebank'"'"'s patched grammar, NOT the corpus sweeps or reference-compiler oracle those patches were derived from."
+   }' "$GRAMMAR_DIR/ledger.json" > "$STAGE/provenance.json"
+
+# As a C string literal, byte for byte, with an explicit length so a host can
+# read it without scanning for a NUL.
+python3 - "$STAGE/provenance.json" "$STAGE/provenance.c" <<'PY'
+import json, sys
+raw = open(sys.argv[1], 'rb').read().rstrip(b'\n')
+esc = ''.join('\\%03o' % b if (b < 32 or b > 126 or chr(b) in '"\\?') else chr(b) for b in raw)
+with open(sys.argv[2], 'w') as f:
+    f.write('/* generated by scripts/build-wasm.sh; do not edit */\n')
+    f.write('const char treebank_provenance[] = "%s";\n' % esc)
+    f.write('const unsigned treebank_provenance_len = %d;\n' % len(raw))
+PY
+
+# ---- compile -------------------------------------------------------------
+ENTRY="tree_sitter_$(jq -r '.pack' "$STAGE/provenance.json" | sed 's/^treebank-//; s/[^a-zA-Z0-9]/_/g')"
+# typescript's two grammars export tree_sitter_typescript and tree_sitter_tsx;
+# every other grammar exports tree_sitter_<language>. Read it out of the
+# generated source rather than guessing from the directory name.
+DETECTED=$(grep -oE 'TS_PUBLIC const TSLanguage \*tree_sitter_[a-z0-9_]+|const TSLanguage \*tree_sitter_[a-z0-9_]+' "$SRC/parser.c" | grep -oE 'tree_sitter_[a-z0-9_]+' | head -1)
+[ -n "$DETECTED" ] && ENTRY=$DETECTED
+echo "build-wasm: $PACK  (entry $ENTRY, runtime $RUNTIME_VERSION, emsdk $EMSDK_VERSION)"
+
+mkdir -p "$STAGE/g" "$OUT"
+# The WHOLE materialized tree, structure preserved — not just src/. typescript's
+# scanner.c includes "../../common/scanner.h", a path that only resolves if the
+# grammar keeps its shape, and flattening src/ into one directory breaks it.
+tar -C "$GRAMMAR_DIR/build" --exclude=.git --exclude=node_modules --exclude=target \
+    -cf - . | tar -C "$STAGE/g" -xf -
+if [ "$GEN_DIR" = "." ]; then REL_SRC="g/src"; else REL_SRC="g/$GEN_DIR/src"; fi
+cp "$ROOT/tools/wasm-pack/shim.c" "$STAGE/shim.c"
+cp -R "$RUNTIME/lib/src" "$STAGE/rt-src"
+cp -R "$RUNTIME/lib/include" "$STAGE/rt-include"
+
+# --no-entry: a reactor, not a command; the host calls exports directly.
+# -sSTANDALONE_WASM: no JS glue, no emscripten runtime expectations.
+# Sources are passed by relative path so nothing about this machine's
+# directory layout can reach the output.
+docker run --rm -v "$STAGE:/w" -w /w "$EMSDK_IMAGE" \
+  emcc -O3 \
+    -DTREEBANK_LANGUAGE_FN="$ENTRY" \
+    -I rt-include -I rt-src -I "$REL_SRC" \
+    rt-src/lib.c "$REL_SRC/parser.c" $([ -f "$STAGE/$REL_SRC/scanner.c" ] && echo "$REL_SRC/scanner.c") \
+    shim.c provenance.c \
+    -sSTANDALONE_WASM --no-entry -sALLOW_MEMORY_GROWTH \
+    -o "out.wasm" >/dev/null
+
+install -m 0644 "$STAGE/out.wasm" "$OUT/$PACK.wasm"
+cp "$STAGE/provenance.json" "$OUT/$PACK.json"
+
+SIZE=$(stat -c%s "$OUT/$PACK.wasm")
+SHA=$(sha256sum "$OUT/$PACK.wasm" | cut -d' ' -f1)
+echo "build-wasm: ok — $OUT/$PACK.wasm  ${SIZE} bytes  sha256:${SHA:0:16}…"

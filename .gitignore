@@ -18,3 +18,4 @@ tools/php-oracle/php-*
 # scala oracle jars (tools/scala-oracle/fetch-jars.sh, pinned by jars.lock)
 tools/scala-oracle/jars/
 tools/scala-oracle/classpath
+dist/

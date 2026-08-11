@@ -58,3 +58,6 @@
 [submodule "crates/treebank-scala/upstream"]
 	path = crates/treebank-scala/upstream
 	url = https://github.com/tree-sitter/tree-sitter-scala
+[submodule "vendor/tree-sitter"]
+	path = vendor/tree-sitter
+	url = https://github.com/tree-sitter/tree-sitter
