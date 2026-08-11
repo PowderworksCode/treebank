@@ -1,0 +1,109 @@
+diff --git a/grammar.js b/grammar.js
+index 3648f02..1751193 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -709,7 +709,7 @@ module.exports = grammar({
+     special_argument_list: $ => seq(
+       '(',
+       optional(seq(
+-        $._type,
++        choice($._type, prec.dynamic(-2, $._expression)),
+         repeat(seq(',', $._expression)),
+         optional(','),
+       )),
+diff --git a/test/corpus/expressions.txt b/test/corpus/expressions.txt
+index 1b86acf..1831cfe 100644
+--- a/test/corpus/expressions.txt
++++ b/test/corpus/expressions.txt
+@@ -220,6 +220,91 @@ func fake_new(new func() int) int {
+               (identifier)
+               (argument_list))))))))
+ 
++================================================================================
++Calls to 'make' and 'new' with non-type arguments
++================================================================================
++
++package main
++
++func main() {
++  // Go 1.26: new(expr) takes a value, not only a type
++  new("hello")
++  new(int32(1000))
++  new(*ptr)
++
++  // `new` and `make` are predeclared identifiers, not keywords, so a
++  // local declaration shadows them and the call takes ordinary arguments
++  var make func(int) *X
++  make(n - 1)
++
++  // the type-taking forms are unchanged
++  new(int)
++  make([]int, 3)
++}
++
++--------------------------------------------------------------------------------
++
++(source_file
++(package_clause
++(package_identifier))
++(function_declaration
++(identifier)
++(parameter_list)
++(block
++(comment)
++(statement_list
++(expression_statement
++(call_expression
++(identifier)
++(argument_list
++(interpreted_string_literal
++(interpreted_string_literal_content)))))
++(expression_statement
++(call_expression
++(identifier)
++(argument_list
++(call_expression
++(identifier)
++(argument_list
++(int_literal))))))
++(expression_statement
++(call_expression
++(identifier)
++(argument_list
++(pointer_type
++(type_identifier)))))
++(comment)
++(comment)
++(var_declaration
++(var_spec
++(identifier)
++(function_type
++(parameter_list
++(parameter_declaration
++(type_identifier)))
++(pointer_type
++(type_identifier)))))
++(expression_statement
++(call_expression
++(identifier)
++(argument_list
++(binary_expression
++(identifier)
++(int_literal)))))
++(comment)
++(expression_statement
++(call_expression
++(identifier)
++(argument_list
++(type_identifier))))
++(expression_statement
++(call_expression
++(identifier)
++(argument_list
++(slice_type
++(type_identifier))
++(int_literal))))))))
++
+ ================================================================================
+ Selector expressions
+ ================================================================================

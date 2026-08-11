@@ -1,0 +1,133 @@
+{
+  "grammar": "go",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-go",
+    "sha": "1547678a9da59885853f5f5cc8a99cc203fa2e2c",
+    "version": "0.25.0",
+    "sha_note": "commit target of the annotated tag v0.25.0; submodule pointers are commits, not tag objects. The two commits after it on master are CI dependency bumps only."
+  },
+  "generate_cli": "0.25.10",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-go name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_go so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball, and drops upstream's duplicated LICENSE entry. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "new and make with non-type arguments",
+      "file": "patches/0003-new-and-make-with-non-type-arguments.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the first top-500 module-proxy sweep",
+      "evidence": {
+        "repro": "package a\n\nfunc f() {\n\t_ = new(\"hello\")\n\t_ = new(int32(1000))\n\tvar make func(int) *X\n\t_ = make(n - 1)\n}\n",
+        "diagnosis": "call_expression special-cases the literal tokens 'new' and 'make' and routes them to special_argument_list, whose first element was strictly $._type. But `new` and `make` are PREDECLARED IDENTIFIERS in Go, not keywords, and two separate things follow from that. (1) Go 1.26 added new(expr) \u2014 `new(x)` returns a pointer to a copy of x \u2014 so the first argument of a real builtin `new` call is now often an expression: a string literal, a conversion, a dereference. Verified against the toolchain: a module with `go 1.26` compiles and runs `new(\"hello\")` and `new(int32(1000))`. (2) Because they are ordinary identifiers, user code can shadow them; k8s.io/kube-openapi vendors a test declaring `var make func(int) *X` and calling `make(n - 1)`. Both shapes reached special_argument_list and had no path. The fix widens that first element to choice($._type, prec.dynamic(-2, $._expression)). The dynamic precedence is the whole subtlety: without it, a BARE IDENTIFIER argument resolves to the expression reading and `new(int)` regresses from (type_identifier) to (identifier) \u2014 a tree-shape change every consumer query would feel. At -2 the expression branch loses to the type branch (which carries prec.dynamic(-1) on _type_identifier inside _simple_type), so every pre-existing shape is preserved and only genuinely-non-type arguments take the new path. Verified node by node: make([]int,3) -> slice_type, make(map[string]int) -> map_type, make(chan int,1) -> channel_type, new(int) -> type_identifier, new(struct{A int}) -> struct_type, all unchanged; new(\"hello\") -> interpreted_string_literal and new(int32(1000)) -> call_expression are new.",
+        "first_seen": {
+          "package": "k8s.io/kubernetes",
+          "version": "v1.36.3",
+          "path": "pkg/api/pod/util_test.go"
+        },
+        "sweep_before": {
+          "passed": 67989,
+          "failed": 17,
+          "gap_files": 17,
+          "clusters": 6
+        },
+        "sweep_after": {
+          "passed": 68006,
+          "failed": 0,
+          "gap_files": 0,
+          "clusters": 0
+        },
+        "evidence_note": "One line of grammar.js closes all 6 clusters and all 17 gap files, and the 67 upstream corpus tests plus the new one all pass. The 17 files were 15 Go-1.26 new(expr) uses across k8s.io/kubernetes and k8s.io/apiserver and 2 shadowed-builtin calls in k8s.io/kube-openapi.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha. Upstream v0.25.0 predates Go 1.26, so the new(expr) half is upstream falling behind the language rather than a mistake \u2014 exactly the case treebank exists for."
+      }
+    }
+  ],
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). Measured here: 0.25.10 regenerates upstream's committed src/parser.c byte for byte except the `@generated by tree-sitter v0.25.8` version comment, so the pin costs nothing against what upstream shipped.",
+  "external_scanner": "none \u2014 tree-sitter-go is pure grammar.js, so every fix here is a declarative grammar.js change routed to a mid-tier model, never a scanner.c state-machine job. This is also why Go's automatic semicolon insertion is not modelled; see grammar_is_broader_than_the_oracle.",
+  "corpus": {
+    "source": "The Go module proxy: proxy.golang.org/<module>/@v/<version>.zip, one immutable zip per version. There is no tarball registry for Go and this is a cleaner source than any already wired up \u2014 content-addressed, notarised by the checksum database, never re-uploaded or deleted, and one URL per version rather than a wheel-vs-sdist choice (PyPI), a conventionally-named sources jar that may not exist (Maven), or three decompressors (Debian). Versions are resolved from the proxy's @latest at fetch time.",
+    "source_note": "Module paths and versions are CASE-ENCODED on the proxy: every uppercase letter becomes '!' plus its lowercase, so the proxy can serve from case-insensitive filesystems. Measured: github.com/BurntSushi/toml 404s unencoded and 200s as github.com/!burnt!sushi/toml. A module zip also prefixes every entry with <module>@<version>/, which is THREE path components for github.com/spf13/cobra@v1.10.2/ \u2014 the first zip treebank has met that needs stripping at all, and the reason Lang::archive_strip exists.",
+    "ranking": "ecosyste.ms, registry proxy.golang.org, sorted by dependent_repos_count \u2014 the same source and the same metric java uses",
+    "ranking_note": "Go publishes no download counts anywhere. The module proxy deliberately does not release its logs; pkg.go.dev's 'known importers' listing is capped (15 for github.com/stretchr/testify, measured, against a real dependent count in the tens of thousands); and deps.dev's documented API states dependent counts cover 'npm, Cargo, Maven and PyPI' \u2014 Go is absent and the endpoint 404s. So this is a dependency-graph proxy, not traffic, and NOT the same kind of metric as crates.io/npm/PyPI downloads. One quirk is specific to Go: a go.mod records the whole transitive requirement set rather than direct imports, so modules nobody imports directly rank high \u2014 github.com/pmezard/go-difflib sits at #2 purely because testify depends on it. Those are still real, widely compiled modules, so the corpus is legitimate; the ranking just should not be read as 'what Go programmers import'.",
+    "files_note": ".go only, the single extension tree-sitter-go's tree-sitter.json claims. Excluded by PATH, using go/build's own rule rather than a treebank heuristic: any directory or file whose name begins with '_' or '.', and testdata/ entirely \u2014 the go tool ignores all of them, and testdata/ is where a Go project keeps deliberately-broken fixtures. vendor/ is excluded for the reason python excludes _vendor/ and javascript excludes bundles: it is a verbatim copy of other modules, so a failure there is attributed to the wrong package. _test.go files are KEPT; they are ordinary Go compiled by `go test` and carry syntax the rest of a package often does not.",
+    "files_note_evidence": "The path filter is doing real work and it was measured rather than assumed. Of 11,619 .go files in the top-100 zips with no filtering at all, the oracle rejects exactly 11 \u2014 and all 11 are deliberately-broken fixtures under testdata/ (cmd/fiximports/testdata/src/old.com/bad/bad.go, go/loader/testdata/badpkgdecl.go, and a generics fixture whose error is 'method must have no type parameters'). The filtered corpus has zero rejects.",
+    "build_tags_note": "Go needs no treebank_preprocessing, and this is measured rather than assumed. Go build constraints (//go:build) are WHOLE-FILE, never within-file: there is no #if-style branch splitting, so a constrained file is still ordinary Go text and go/parser reads it exactly as written. There is therefore none of the parse-vs-compile divergence that crate exists to absorb. Measured on the top-100 corpus: 1382 of 10486 files carry a constraint, including 164 `//go:build ignore`, 42 windows, 14 solaris and 14 `//go:build go1.27` gated on a toolchain NEWER than the one installed \u2014 all 1382 parse. Not one of the corpus's rejected files was excluded by a build tag; every exclusion is by path.",
+    "oracle": "tools/go-oracle \u2014 go/parser.ParseFile with parser.SkipObjectResolution, the parser the Go toolchain itself runs. TWO-VALUED: valid / invalid. It never type-checks, resolves an import or assembles a package, so an unresolved identifier is not an error and each file is judged entirely on its own text. SkipObjectResolution additionally turns off the deprecated ast.Object/ast.Scope graph, which is the one part of ParseFile that tries to link identifiers to declarations \u2014 information a single file with no package context does not have.",
+    "oracle_version": "go1.26.5 linux/amd64",
+    "oracle_version_note": "The toolchain version IS the language version and is load-bearing exactly as generate_cli is. Go 1.26's new(expr) is the live example: it is the feature behind patch 0003, and on go1.25 those same corpus files would be oracle-INVALID and recorded as noise rather than as the grammar gap they are. Bumping it is treated like a patch: full sweep, before/after numbers, ledger entry.",
+    "oracle_verified_per_file": "Verified rather than trusted, at 10x the roadmap's evidence: 8144 files (1650 from ten proxy-fetched modules, 6494 from the Go standard library) returned 8144 valid verdicts in their source trees, and the SAME 8144 verdicts after every file was copied into one flat directory with mangled names (f00123.go) and no go.mod \u2014 which also strips Go's own _test.go and _linux.go filename semantics. It rejects correctly too: all 7 of go/parser's .src fixtures carrying syntax ERROR markers come back invalid and the 3 without come back valid, and a go/types fixture whose only ERROR is 'overflows int32' is correctly called VALID, because that is a type error and not a syntax error.",
+    "oracle_cost": "1.39 s per 1000 files on this corpus, measured (10486 files in 14.6 s). Throughput is flat at 23-29 MB/s across every file-size decile, so seconds-per-1000-FILES tracks corpus composition rather than the oracle: the same binary measures 0.62 s/1000 on a corpus averaging 13 KB/file and 1.39 s/1000 on this one, which averages 41 KB. The ROADMAP's 1.94 s/1000 is consistent with a fatter corpus still. Firmly Tier A on any of these. The reject path is 0.41 s/1000 on files truncated to 60% \u2014 1.5x FASTER than the valid path, like rust's syn, because go/parser bails at the first error instead of recovering.",
+    "fetched": "2026-08-11",
+    "packages": 500,
+    "packages_note": "500 requested, 500 resolved and fetched, zero skips \u2014 the first language where nothing is dropped at the resolve step. Nothing in the module proxy is optional the way an sdist or a sources jar is.",
+    "files": 68006,
+    "sweep_upstream": {
+      "passed": 67989,
+      "failed": 17,
+      "gap_files": 17,
+      "noise_files": 0,
+      "clusters": 6
+    },
+    "sweep_patched": {
+      "passed": 68006,
+      "failed": 0,
+      "gap_files": 0,
+      "noise_files": 0,
+      "clusters": 0
+    },
+    "remaining_gaps_note": "None. 68006 of 68006 files parse, and zero files in the corpus are oracle-invalid, so there is no noise either. That is an unusually clean result and the reason is worth stating rather than celebrating: Go's syntax is small, has been stable since 1.18, has no preprocessor and no dialects, and the path filter removes the testdata/ trees where the invalid files live. The negative corpus, not the sweep, is where this grammar's real risk sits."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "tree-sitter-go accepts a superset of what go/parser accepts, in four measured ways. This is the same direction as tree-sitter-python's deliberate Python 2 support: the grammar accepts, the oracle rejects. It can never manufacture a sweep gap \u2014 a gap is 'grammar rejected AND oracle accepted' \u2014 so gap_files stays exact. What it does constrain is the negative corpus, which cannot contain any of these four.",
+    "found_by": "24 hand-written invalid Go files, each confirmed rejected by go/parser, run against the grammar. 20 were correctly rejected and are now test/negative/. The 4 below were accepted.",
+    "cases": [
+      {
+        "case": "no package clause",
+        "repro": "func main() {}",
+        "why": "DELIBERATE UPSTREAM DESIGN, stated in grammar.js's source_file rule: 'Unlike a Go compiler, we accept statements at top-level to enable parsing of partial code snippets in documentation (see #63).' Not patched \u2014 an editor parsing a partial buffer is upstream's stated use case."
+      },
+      {
+        "case": "two package clauses",
+        "repro": "package a\\n\\npackage b\\n",
+        "why": "Same rule and the same deliberate decision: source_file is a repeat over top-level declarations."
+      },
+      {
+        "case": "variadic parameter that is not last",
+        "repro": "func f(a ...int, b int) {}",
+        "why": "DELIBERATE AND TESTED UPSTREAM: test/corpus/declarations.txt's 'Function declarations' case asserts `func f(x ... int, y ... int)` parses. It is also spec-conformant \u2014 the Go spec's EBNF is `ParameterDecl = [ IdentifierList ] [ \"...\" ] Type`, which permits ... on any parameter; 'can only use ... with final parameter' is a check go/parser applies after the grammar. ATTEMPTED AND REVERTED: restricting parameter_list to a final-only variadic generates cleanly, holds the sweep at 68006/68006 and does make the grammar reject it \u2014 but it deletes an upstream corpus test case, for zero corpus benefit. Changing a tested upstream decision on no evidence is the drift GRAMMARS.md warns about, so it was reverted rather than shipped."
+      },
+      {
+        "case": "opening brace on the line after the signature",
+        "repro": "func f()\\n{\\n}\\n",
+        "why": "STRUCTURAL. Go inserts a semicolon at end of line when the last token is an identifier, a literal, or one of `break continue fallthrough return ++ -- ) ] }`, so `func f()` ends the declaration and the following block is orphaned \u2014 go/parser says so. Modelling that needs the LEXER to insert semicolons, and tree-sitter-go has no external scanner at all (newline is the plain regex /\\n/ used as an optional terminator). Not fixable in grammar.js; it would be a scanner.c job and a large one."
+      }
+    ],
+    "why_this_is_safe": "All four are accepts-invalid, never rejects-valid, so none of them can inflate gap_files or send an agent after a phantom bug. The cost is stated plainly: the negative corpus cannot pin any of these four, so a future patch that made one of them WORSE would not be caught here. Two are upstream's deliberate design, one is spec-conformant and upstream-tested, and one needs an external scanner that does not exist."
+  }
+}

@@ -120,5 +120,24 @@
         "expect": "Clean"
       }
     ]
+  },
+  {
+    "grammar": "treebank-go",
+    "dep": "tree-sitter-go",
+    "crate": "treebank-grammar-go",
+    "cases": [
+      {
+        "label": "go",
+        "language": "tree_sitter_go::LANGUAGE",
+        "fixture": "patched.go",
+        "expect": "Clean"
+      },
+      {
+        "label": "go strictness (must reject)",
+        "language": "tree_sitter_go::LANGUAGE",
+        "fixture": "must-reject.go",
+        "expect": "Error"
+      }
+    ]
   }
 ]
