@@ -9,12 +9,18 @@ serialization buffer overflows* — a correctness fix in the external scanner,
 in a language where heredocs are everywhere. The other three commits touch
 the Rust/wasm bindings and the LICENSE include, not the parser.
 
-Ten patches: two packaging, eight grammar. On the 500-gem, 25,604-file
-corpus they take the sweep from 25,542 passing with 22 grammar gaps to
-**25,564 passing with 0**. The 40 files still failing are ERB templates that
-CRuby also rejects. `noise_files` was 40 before the first patch and 40 after
-every one of the eight — measured at each patch level — so no patch bought a
+Twelve patches: two packaging, ten grammar. On the 1000-gem, 42,706-file
+corpus they take the sweep from 42,627 passing with 28 grammar gaps to
+**42,655 passing with 0**. The 51 files still failing are ERB templates that
+CRuby also rejects. `noise_files` was 51 before the first patch and 51 after
+every one of the ten — measured at each patch level — so no patch bought a
 passing file by accepting something the reference parser rejects.
+
+The corpus was doubled from 500 gems to 1000 after the first ten patches had
+taken the 500-gem sweep to zero gaps: at that point the corpus, not the
+grammar, was the limit. The second 500 gems produced exactly two new gaps,
+0011 and 0012, both pre-existing upstream — each was checked by materializing
+the pin with only the two packaging patches applied.
 
 ## 0001 — treebank redistribution notice
 
@@ -155,3 +161,34 @@ Collect[*bin.default_render_fragment_functions].
 
 That position gets an argument list without the immediacy constraint. The new
 corpus test asserts `foo (1)` is still a command call.
+
+## 0011 — more than one call chained onto a do block
+
+1 file. `_chained_command_call` took only a `command_call_with_block` as its
+receiver, so exactly one call could follow a `do` block:
+
+```ruby
+should.raise Foo do
+  bar
+end.message.should.match(/x/)   # end.message parsed; .should did not
+```
+
+Made left-recursive. This is the same rule patch 0003 put a precedence on, so
+it was worth ruling out as fallout: the packaging-only baseline rejects it
+too, and always did.
+
+## 0012 — element reference on a string with a leading space
+
+1 file. The scanner emits `_element_reference_bracket` for a `[` with
+whitespace before it only when an expression cannot start at that position.
+After a string literal one still can — adjacent string literals concatenate,
+so `STRING_START` stays valid — but a string is not a method and cannot take
+command arguments, so `[` is the only possible reading. The scanner cannot
+see that; the grammar can, so the case is expressed there. fog writes:
+
+```ruby
+tests('Compute::VcloudDirector | media' ['attributes']) do
+```
+
+`'a' 'b'` still chains and `puts ['a']` still takes an array argument, both
+asserted in the corpus test.

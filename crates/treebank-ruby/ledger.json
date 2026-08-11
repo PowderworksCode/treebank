@@ -249,6 +249,58 @@
         },
         "note": "`argument_list` opens with token.immediate('(') so that `foo (1)` stays a command call whose argument is parenthesised. After a call operator with no method name — the `foo.(args)` call sugar — there is no such ambiguity and Ruby allows a line break, so that position gets an argument list without the immediacy constraint. `foo (1)` is still a command call, which the new corpus test asserts."
       }
+    },
+    {
+      "id": 11,
+      "title": "more than one call chained onto a do block",
+      "file": "patches/0011-more-than-one-call-chained-onto-a-do-block.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "treebank; pre-existing upstream gap, found by deepening the corpus from 500 to 1000 gems",
+      "evidence": {
+        "repro": "should.raise Foo do\n  bar\nend.message.should.match(/x/)",
+        "first_seen": {
+          "package": "cocoapods-try",
+          "version": "1.2.0"
+        },
+        "sweep_before": {
+          "passed": 42653,
+          "failed": 53
+        },
+        "sweep_after": {
+          "passed": 42654,
+          "failed": 52
+        },
+        "note": "`_chained_command_call` took only a `command_call_with_block` as its receiver, so exactly one call could follow a do block: `end.message` parsed, `end.message.should` did not. Made left-recursive. Verified pre-existing by materializing the pin with only the two packaging patches — the baseline rejects it too, so this is not fallout from patch 0003's precedence work on the same rule."
+      }
+    },
+    {
+      "id": 12,
+      "title": "element reference on a string with a leading space",
+      "file": "patches/0012-element-reference-on-a-string-with-a-leading-space.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "origin": "treebank; pre-existing upstream gap, found by deepening the corpus from 500 to 1000 gems",
+      "evidence": {
+        "repro": "tests('Compute::VcloudDirector | media' ['attributes']) do",
+        "first_seen": {
+          "package": "fog",
+          "version": "2.3.0"
+        },
+        "sweep_before": {
+          "passed": 42654,
+          "failed": 52
+        },
+        "sweep_after": {
+          "passed": 42655,
+          "failed": 51
+        },
+        "note": "The scanner emits `_element_reference_bracket` for a `[` with whitespace before it only when an expression cannot start there. After a string literal one still can, because adjacent string literals concatenate and STRING_START stays valid — but a string is not a method and cannot take command arguments, so `[` is the only reading. The scanner cannot see that; the grammar can, so the case is expressed there. `'a' 'b'` still chains and `puts ['a']` still takes an array argument, both asserted in the corpus test. Verified pre-existing against the packaging-only baseline."
+      }
     }
   ],
   "corpus": {
@@ -257,25 +309,25 @@
     "ranking": "ecosyste.ms index of rubygems.org, sorted by downloads",
     "ranking_note": "RubyGems publishes real per-gem download counts but no top-N endpoint of its own — the numbers are queryable one gem at a time. ecosyste.ms indexes the registry and can sort by them, which makes this the same KIND of metric as crates.io, npm and PyPI: traffic, not Java's dependent-repos proxy, even though it arrives through the same ecosyste.ms API java uses.",
     "files_note": ".rb only, the single extension tree-sitter-ruby's tree-sitter.json claims, following python and javascript. Ruby has plenty of other files this grammar also parses (.rake, .gemspec, Rakefile, Gemfile, config.ru); they are left out so classify() matches what the grammar advertises, and adding them would be a deliberate change with its own sweep evidence. Paths containing a `vendor` component are excluded for the reason python excludes _vendor/: a gem that vendors a dependency ships someone else's source, so a failure there is attributed to the wrong package.",
-    "fetched": "2026-08-11",
-    "packages": 500,
-    "packages_note": "500 requested, 500 resolved — no gem in the top 500 lacked a ruby-platform release.",
-    "files": 25604,
+    "fetched": "2026-08-11 (500 gems), deepened to 1000 the same day",
+    "packages": 1000,
+    "packages_note": "1000 requested, 1000 resolved — no gem in the top 1000 lacked a ruby-platform release.",
+    "files": 42706,
     "sweep_upstream": {
-      "passed": 25542,
-      "failed": 62,
-      "gap_files": 22,
-      "noise_files": 40,
-      "clusters": 28
+      "passed": 42627,
+      "failed": 79,
+      "gap_files": 28,
+      "noise_files": 51,
+      "clusters": 34
     },
     "sweep_patched": {
-      "passed": 25564,
-      "failed": 40,
+      "passed": 42655,
+      "failed": 51,
       "gap_files": 0,
-      "noise_files": 40,
-      "clusters": 11
+      "noise_files": 51,
+      "clusters": 17
     },
-    "sweep_note": "Zero grammar gaps remain. noise_files was 40 before the first patch and 40 after every one of the eight — measured at each patch level, not just the ends — so no patch bought a passing file by accepting something the reference parser rejects. The 40 are ERB templates: .rb files under generators/templates/ in rspec-rails, devise, geocoder and friends, whose contents are `class <%= @scope_prefix %>Controller`. They are not Ruby, CRuby rejects them, and they are correctly recorded as corpus noise.",
+    "sweep_note": "Zero grammar gaps remain. noise_files was 51 before the first patch and 51 after every one of the ten — measured at each patch level, not just at the ends — so no patch bought a passing file by accepting something the reference parser rejects. The 51 are ERB templates: .rb files under generators/templates/ in rspec-rails, devise, geocoder, draper and jbuilder, whose contents are `class <%= @scope_prefix %>Controller`. They are not Ruby, CRuby rejects them, and they are correctly recorded as corpus noise.",
     "oracle": {
       "tool": "tools/rb-oracle/check.rb — CRuby's own parser via RubyVM::AbstractSyntaxTree.parse_file",
       "version": "CRuby 3.2.3 (2024-01-18 revision 52bb2ac0a6) [x86_64-linux-gnu]",
@@ -286,7 +338,8 @@
       "cost": "0.25-0.35 s per 1000 files (0.35 on 1000 CRuby stdlib files averaging 7.3 KB, 0.25 on 604 real gem files averaging 4.3 KB, including a 0.05-0.07 s interpreter startup). Reproduces the roadmap's measured 0.29 s/1000. The reject path is CHEAPER, not dearer — 0.22 s/1000 on the same 1000 files truncated to 60% — because the parser bails at the first error, like rust's syn. That is the path that matters, since validate() is only ever called on files the grammar already failed.",
       "cross_check": "Agreed with `ruby -c`, forked per file, on 600 files spanning both directions (300 clean stdlib, 300 truncated garbage): zero disagreements.",
       "unreadable_files": "A file the oracle cannot read is NOT reported invalid: it prints to stderr and exits 2, which the driver surfaces as a failure. Saying 'invalid' there would erase a candidate grammar gap, and it is silent — an early run against relative paths from the wrong directory returned 604 of 604 'invalid' and looked like a clean result."
-    }
+    },
+    "corpus_depth": "Doubled from the top 500 gems (25,604 files) to the top 1000 (42,706) after the first ten patches had taken the 500-gem sweep to zero gaps — at that point the corpus, not the grammar, was the limit. The second 500 gems produced exactly two new gaps, both pre-existing upstream and both fixed here (0011, 0012). On the 500-gem corpus the same twelve patches read 25,542 -> 25,564 of 25,604; the numbers above are the 1000-gem ones."
   },
   "grammar_looseness": {
     "summary": "Four constructs CRuby 3.2.3 rejects that this grammar accepts. All predate the treebank patches — each was checked against the unpatched pin — and none is reachable from a sweep gap, because a gap requires the grammar to REJECT. They are recorded because they are the only things test/negative could not cover.",
