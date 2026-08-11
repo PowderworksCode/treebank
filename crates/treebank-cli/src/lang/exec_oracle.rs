@@ -3,8 +3,24 @@
 //! `stdin_oracle` covers the cheap shape: one long-lived process reads a
 //! whole batch of paths and answers them all, so the interpreter starts
 //! once. Some reference parsers cannot do that. `php -l` takes exactly one
-//! file per invocation, and so do `luac -p`, `bash -n` and `awk -f` — the
-//! only way to ask them about a thousand files is a thousand processes.
+//! file per invocation, and so do `bash -n` and `awk -f` — the only way to
+//! ask them about a thousand files is a thousand processes.
+//!
+//! Check for a batch path before reaching for this, because the *tool* being
+//! fork-per-file does not mean the *language* is. Lua looked like a member
+//! of this class — `luac -p` takes one file per run, and the roadmap costed
+//! it that way — but `loadfile(path, "t")` inside one long-lived `lua` is
+//! the same C entry point (`luaL_loadfilex`) that `luac -p` itself calls,
+//! so treebank-lua uses `stdin_oracle` and measures 0.17 s/1000 against
+//! 0.48 s for the same `luac -p` parallelized to 16 cores. A batch path
+//! through the same parser beats this driver by ~3x when one exists.
+//!
+//! When you do find one, test it adversarially rather than by agreement:
+//! treebank-php built a batch oracle that matched `php -l` on all 1703
+//! corpus files and still silently accepted ten classes of invalid PHP,
+//! which only a negative battery caught. See that ledger's
+//! `corpus.oracle_batch_note` and treebank-lua's
+//! `oracle_not_luac.adversarial_battery`.
 //!
 //! That is 20–90× the per-file cost of every batch oracle, and it is paid in
 //! process startup rather than in parsing: measured on 1000 files from the
