@@ -171,7 +171,21 @@ for dir in "${TARGETS[@]}"; do
   cp "$dir/LOCAL-PATCHES.md" "$stage/LOCAL-PATCHES.md"
   mkdir -p "$stage/patches" && cp "$dir"/patches/*.patch "$stage/patches/"
 
-  ( cd "$stage" && sha256sum *.wasm *.json > SHA256SUMS )
+  # Highlight/injection/tags queries travel with the grammar. Every upstream
+  # grammar ships them, editors need them, and nvim-treesitter's release-hygiene
+  # tier counts them; they are already in the materialized tree and cost a few
+  # KB. Packed as one archive so a release has a fixed asset list however many
+  # query files a grammar has.
+  # Reproducible: sorted entries, zeroed mtimes and ownership, and `gzip -n` so
+  # the gzip header carries no timestamp. Without -n the archive — and so
+  # SHA256SUMS — differs on every build, which would make a release look
+  # changed when nothing in it had.
+  if [ -d "$dir/build/queries" ]; then
+    tar -C "$dir/build" --sort=name --mtime=@0 --owner=0 --group=0 \
+        --numeric-owner -cf - queries | gzip -n > "$stage/queries.tar.gz"
+  fi
+
+  ( cd "$stage" && sha256sum *.wasm *.json $([ -f queries.tar.gz ] && echo queries.tar.gz) > SHA256SUMS )
 
   cat > "$stage/RELEASE.md" <<EOF
 # ${packs[*]} $version
@@ -213,6 +227,26 @@ EOF
     fi
   fi
 done
+
+# The index: one stable URL listing every pack, so consumers do not have to
+# discover twenty-two releases. Regenerated from the tags that exist plus
+# whatever this run staged, and published to a moving tag of its own.
+INDEX="$OUT/packs.json"
+mkdir -p "$OUT"
+index_args=(--staged "$OUT")
+[ -n "$TAG_PREFIX" ] && index_args+=(--tag-prefix "$TAG_PREFIX")
+[ "$MODE" = dry-run ] && index_args+=(--offline)
+"$ROOT/scripts/wasm-index.sh" "${index_args[@]}" > "$INDEX"
+echo "  index: $(jq '.packs|length' "$INDEX") packs -> $INDEX"
+if [ "$MODE" = execute ] && [ "$overall" = 0 ]; then
+  # Deleted and recreated rather than edited: a release asset cannot be
+  # replaced atomically, and a half-updated index is worse than a stale one.
+  gh release delete "${TAG_PREFIX}packs-index" --yes --cleanup-tag 2>/dev/null || true
+  gh release create "${TAG_PREFIX}packs-index" --title "Pack index" \
+     --notes "Every published treebank wasm pack, with the sha256 of each artifact. Regenerated on every release run." \
+     "$INDEX"
+  echo "  index: published to ${TAG_PREFIX}packs-index"
+fi
 
 echo "=============================================================="
 for r in "${released[@]}"; do echo "  released: $r"; done

@@ -307,6 +307,56 @@ local HTTP server, fetches the assets by URL, verifies `SHA256SUMS`, and parses
 each grammar's patch-repro fixture with **both** consumers, asserting the
 negative corpus is still rejected. It publishes nothing.
 
+Fixtures come from [`tools/consumer-test/grammars.json`](tools/consumer-test/grammars.json)
+— the same file the crate rehearsal reads, so adding a language is one edit
+rather than two. A grammar directory that generates several parsers has its
+cases split by label, which is the `generate_dir`'s basename, so `tsx` is
+proved by `patched.tsx` and `typescript` by `patched.ts`.
+
+Each pack is also checked against its own ledger: the `upstream.sha` and
+language name it reports from its embedded provenance must match what
+`ledger.json` says. Names are compared with punctuation removed, because a
+grammar's own name and treebank's directory name are allowed to differ that
+much — upstream's C# grammar calls itself `c_sharp` where the directory is
+`csharp`, the same split the crate already has between
+`treebank-grammar-csharp` and the `tree_sitter_c_sharp` library. The check
+found that on its first full run. That check needs no per-language fixture, which is why it
+is the one that scales — and it catches the failure a fixture cannot, since a
+pack accidentally built from the wrong grammar still parses *something*
+cleanly.
+
+## The index
+
+Twenty-two GitHub Releases are not a distribution. `scripts/wasm-index.sh`
+builds a `packs.json` listing every published pack, republished to a moving
+`packs-index` tag so there is one stable URL:
+
+```
+https://github.com/<owner>/<repo>/releases/download/packs-index/packs.json
+```
+
+```json
+{ "schema": "treebank-packs-index/1", "pack_abi": 1, "format": "standalone",
+  "packs": [ { "pack": "treebank-python", "version": "0.25.0-treebank.1",
+               "upstream": { "git_url": "…", "sha": "293fdc02…", "version": "0.25.0" },
+               "sha256": "139538c3…",
+               "urls": { "wasm": "…", "provenance": "…", "sha256sums": "…", "queries": "…" } } ] }
+```
+
+The index is mutable — that is what an index is for — but nothing in it is
+trusted: every entry carries the sha256 of an immutable artifact, so a tampered
+index can misdirect a consumer but cannot make them accept bytes the project
+did not build. It is derived from the release tags that exist, so it cannot
+list a pack that was never released, and the rehearsal asserts that every hash
+in it matches the artifact it points at and that no URL leaks the rehearsal tag
+namespace.
+
+Releases also carry `queries.tar.gz` — upstream's highlight, injection and tag
+queries, which every grammar ships and every editor needs. It is built with
+sorted entries, zeroed mtimes and `gzip -n`, so it is byte-reproducible too; a
+timestamped archive would make `SHA256SUMS` churn and every release look
+changed when nothing was.
+
 ## 7. Size and licensing
 
 | pack | standalone | side module | Δ | gzipped |

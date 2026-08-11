@@ -213,6 +213,7 @@ from Python, Go, Ruby, Rust or the browser with no toolchain at the far end.
 
 ```sh
 scripts/build-wasm.sh crates/treebank-python   # -> dist/wasm/treebank-python.wasm
+scripts/wasm-index.sh                          # -> packs.json, every published pack
 scripts/test-publish-wasm.sh                   # full rehearsal; publishes nothing
 ```
 
