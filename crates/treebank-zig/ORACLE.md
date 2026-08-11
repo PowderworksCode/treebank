@@ -1,5 +1,9 @@
 # The Zig oracle, and which Zig it speaks for
 
+The oracle itself is `tools/zig-oracle/`, alongside the other reference
+parsers; this file is the measurement behind it, kept with the grammar it
+adjudicates for, as `crates/treebank-c/ORACLE.md` is.
+
 `check.zig` answers one question per file — does Zig's own parser accept this
 text — through `std.zig.Ast.parse(gpa, src, .zig)`, the exact call the
 compiler, `zig fmt` and every language server make to turn a file into a
