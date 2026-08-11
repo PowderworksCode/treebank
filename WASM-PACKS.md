@@ -198,6 +198,13 @@ ARTIFACT_INPUTS=(scripts/build-wasm.sh tools/wasm-pack/shim.c vendor/tree-sitter
 pack, so bumping it really does change all of them. `scripts/verify.sh` is not:
 it decides whether a pack may ship, not what is in it.
 
+`vendor/` was also added to `changed-grammars.sh`'s `CORE` list, with a
+self-test case. Without it a runtime bump produces an *empty* matrix, the
+release job is skipped by its own `if:`, and the run goes green having released
+nothing — a failure that looks exactly like success. It costs some wasted
+verification on a rare event, which is the right side to err on, and keeps one
+definition of "core" rather than a second list that only wasm knows about.
+
 ## 6. What a consumer actually writes
 
 Both examples below are the complete binding. Run for real, output pasted.

@@ -10,7 +10,10 @@
 #
 #   - a change under crates/treebank-<lang>/ concerns that grammar;
 #   - a change to anything in CORE concerns all of them, because CORE is what
-#     builds, verifies and packages every grammar;
+#     builds, verifies and packages every grammar. vendor/ is in there because
+#     vendor/tree-sitter's runtime is linked into every wasm pack, so bumping it
+#     changes all of them — and without it a runtime bump would produce an empty
+#     matrix and release nothing at all, silently;
 #   - anything else (docs, corpus reports, the daily job) concerns none.
 #
 # Usage: scripts/changed-grammars.sh <base-ref> [head-ref]
@@ -26,6 +29,7 @@ CORE=(
   'crates/treebank-cli/'
   'crates/treebank-preprocessing/'
   'tools/'
+  'vendor/'
   '.github/workflows/'
   '.gitmodules'
   'Cargo.toml'
@@ -112,6 +116,9 @@ if [ "${1:-}" = "--self-test" ]; then
   t "$(all_grammars | jq -R . | jq -sc .)" true '.github/workflows/publish-grammars.yml'
   t "$(all_grammars | jq -R . | jq -sc .)" true 'tools/consumer-test/src/main.rs'
   t "$(all_grammars | jq -R . | jq -sc .)" true '.gitmodules'
+  # The wasm runtime is linked into every pack: a bump here must not produce an
+  # empty matrix, which would release nothing and look like success.
+  t "$(all_grammars | jq -R . | jq -sc .)" true 'vendor/tree-sitter'
   # core wins even when a single grammar also changed
   t "$(all_grammars | jq -R . | jq -sc .)" true 'crates/treebank-rust/ledger.json' 'scripts/verify.sh'
   # The diff FORM, not just the classification. This is the part that cannot
