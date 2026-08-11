@@ -6,6 +6,7 @@
 mod c;
 mod csharp;
 mod exec_oracle;
+mod go;
 mod java;
 mod javascript;
 mod npm;
@@ -64,6 +65,23 @@ pub trait Lang: Sync {
         None
     }
 
+    /// How many leading components of an archive member's path are the
+    /// archive's own wrapper and should be dropped.
+    ///
+    /// Compressed tarballs (crates.io, npm, GitHub source archives, Debian
+    /// `.orig.tar.*`) wrap everything in one `<name>-<version>/` directory;
+    /// Maven sources jars and nupkgs are already root-relative. Container
+    /// format was a good enough proxy for that distinction until Go, which
+    /// is a zip that must be stripped, and by more than one component:
+    /// every entry of a module proxy zip is prefixed `<module>@<version>/`,
+    /// and `github.com/spf13/cobra@v1.10.2/` is three components. So the
+    /// count is the language's to decide; the default is what every
+    /// language did before Go existed.
+    fn archive_strip(&self, entry: &Path, is_zip: bool) -> usize {
+        let _ = entry;
+        usize::from(!is_zip)
+    }
+
     /// Grammar dirs to load, in routing-index order, relative to the
     /// grammar repo root. Single-grammar languages return `["."]`.
     fn grammar_dirs(&self) -> &'static [&'static str];
@@ -89,6 +107,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static C: c::C = c::C;
     static PYTHON: python::Python = python::Python;
     static PHP: php::Php = php::Php;
+    static GO: go::Go = go::Go;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -98,5 +117,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::C => &C,
         LangName::Python => &PYTHON,
         LangName::Php => &PHP,
+        LangName::Go => &GO,
     }
 }
