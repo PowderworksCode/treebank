@@ -20,6 +20,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
+#include <unistd.h>
 
 /* clang's category names, from its own diagnostic tables. */
 #define CAT_PARSE "Parse Issue"
@@ -112,6 +114,22 @@ int main(void) {
             continue;
         }
         const char *path = fields[0];
+        // An unreadable file is NOT an invalid file, and it is not an
+        // `error` verdict either. c.rs maps every verdict that is not
+        // "valid" to false, which records the file as corpus NOISE -- so a
+        // mistyped corpus root would make every path unreadable, every
+        // grammar failure noise, gap_files zero, and the sweep would report
+        // a flawless grammar. A broken oracle must fail loudly, never
+        // quietly agree with us; the reasoning is spelled out in
+        // crates/treebank-cli/src/lang/exec_oracle.rs. The `error` verdict
+        // below is kept for what it was meant for: libclang failing on a
+        // file that IS there.
+        if (access(path, R_OK) != 0) {
+            fprintf(stderr, "c-oracle: cannot read %s: %s\n", path, strerror(errno));
+            fputs("c-oracle: this is an oracle failure, not a verdict; "
+                  "check the corpus root\n", stderr);
+            return 1;
+        }
         int argc = 0;
         for (int i = 1; i < nfields; i++)
             if (*fields[i]) argv[argc++] = fields[i];

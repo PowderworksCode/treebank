@@ -44,11 +44,25 @@ import warnings
 
 
 def parses(path: str) -> bool:
+    # An unreadable file is NOT an invalid file. Returning False here looks
+    # harmless and is not: validate() is only ever called on files the
+    # grammar already failed, and an invalid verdict records the file as
+    # corpus NOISE. So a mistyped corpus root would make every path
+    # unreadable, every grammar failure noise, gap_files zero -- and the
+    # sweep would report a flawless grammar. A broken oracle must fail
+    # loudly, never quietly agree with us (the reasoning is spelled out in
+    # crates/treebank-cli/src/lang/exec_oracle.rs). So the read is separate
+    # from the compile, and an I/O error is fatal.
     try:
         with open(path, "rb") as f:
             src = f.read()
-    except OSError:
-        return False
+    except OSError as e:
+        sys.stderr.write(
+            f"py-oracle: cannot read {path}: {e}\n"
+            "py-oracle: this is an oracle failure, not a verdict; "
+            "check the corpus root\n"
+        )
+        sys.exit(1)
     try:
         # Bytes input lets CPython honour a PEP 263 coding declaration and
         # strip a BOM itself, which decoding to str here would not.

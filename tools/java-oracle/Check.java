@@ -69,11 +69,25 @@ public class Check {
         out.flush();
     }
 
+    // An unreadable file is NOT an invalid file. Returning false there looks
+    // harmless and is not: validate() is only ever called on files the
+    // grammar already failed, and an invalid verdict records the file as
+    // corpus NOISE. So a mistyped corpus root would make every path
+    // unreadable, every grammar failure noise, gap_files zero -- and the
+    // sweep would report a flawless grammar. A broken oracle must fail
+    // loudly, never quietly agree with us (the reasoning is spelled out in
+    // crates/treebank-cli/src/lang/exec_oracle.rs).
+    //
+    // A RuntimeException out of javac stays a verdict: that is the parser
+    // failing on the file's own content, which is what invalid means.
     private static boolean parses(JavaCompiler compiler, StandardJavaFileManager fm, String path) {
+        if (!Files.isReadable(Path.of(path))) {
+            System.err.println("java-oracle: cannot read " + path);
+            System.err.println("java-oracle: this is an oracle failure, not a verdict; "
+                    + "check the corpus root");
+            System.exit(1);
+        }
         try {
-            if (!Files.isReadable(Path.of(path))) {
-                return false;
-            }
             DiagnosticCollector<JavaFileObject> diagnostics = new DiagnosticCollector<>();
             Iterable<? extends JavaFileObject> units = fm.getJavaFileObjects(Path.of(path));
             // -proc:none keeps annotation processors out; they would need a
@@ -87,7 +101,13 @@ public class Check {
                 }
             }
             return true;
-        } catch (IOException | RuntimeException e) {
+        } catch (IOException e) {
+            System.err.println("java-oracle: cannot read " + path + ": " + e);
+            System.err.println("java-oracle: this is an oracle failure, not a verdict; "
+                    + "check the corpus root");
+            System.exit(1);
+            throw new AssertionError("unreachable");
+        } catch (RuntimeException e) {
             return false;
         }
     }
