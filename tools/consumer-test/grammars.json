@@ -177,5 +177,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-lua",
+    "dep": "tree-sitter-lua",
+    "crate": "treebank-grammar-lua",
+    "cases": [
+      {
+        "label": "lua (5.4 + LuaJIT dialect)",
+        "language": "tree_sitter_lua::LANGUAGE",
+        "fixture": "patched.lua",
+        "expect": "Clean"
+      },
+      {
+        "label": "lua strictness (must reject)",
+        "language": "tree_sitter_lua::LANGUAGE",
+        "fixture": "must-reject.lua",
+        "expect": "Error"
+      }
+    ]
   }
 ]
