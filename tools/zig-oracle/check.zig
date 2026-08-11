@@ -122,10 +122,36 @@ pub fn main() !void {
         const scratch = arena_state.allocator();
 
         const pathz = try std.mem.concatWithSentinel(scratch, u8, &.{path}, 0);
+
+        // An unreadable file is NOT an invalid file. Reporting it as
+        // `invalid` looks harmless and is not: validate() is only ever
+        // called on files the grammar already failed, and an invalid
+        // verdict records the file as corpus NOISE. So a mistyped corpus
+        // root would make every path unreadable, every grammar failure
+        // noise, gap_files zero — and the sweep would report a flawless
+        // grammar. A broken oracle must fail loudly, never quietly agree
+        // with us; the reasoning is spelled out in
+        // crates/treebank-cli/src/lang/exec_oracle.rs. So the read is
+        // separate from the parse, and an I/O error is fatal.
+        const src = readFileZ(scratch, pathz.ptr) catch |err| {
+            var buf: [1024]u8 = undefined;
+            const msg = std.fmt.bufPrint(&buf,
+                "zig-oracle: cannot read {s}: {s}\n" ++
+                "zig-oracle: this is an oracle failure, not a verdict; " ++
+                "check the corpus root\n",
+                .{ path, @errorName(err) },
+            ) catch "zig-oracle: cannot read a corpus file\n";
+            writeAll(2, msg) catch {};
+            std.process.exit(1);
+        };
+
         const verdict = blk: {
-            const src = readFileZ(scratch, pathz.ptr) catch break :blk false;
+            // Everything below IS a verdict about the file's own content.
             // An embedded NUL is not Zig source; `Ast.parse` would stop at
-            // it and call the truncated prefix valid.
+            // it and call the truncated prefix valid. `Ast.parse`'s only
+            // error is OOM, which is kept a verdict for the same reason
+            // py-oracle keeps MemoryError one: it is reached by
+            // pathological input rather than by a broken harness.
             if (std.mem.indexOfScalar(u8, src, 0) != null) break :blk false;
             var ast = std.zig.Ast.parse(scratch, src, .zig) catch break :blk false;
             defer ast.deinit(scratch);
