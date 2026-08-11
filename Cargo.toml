@@ -12,5 +12,6 @@ exclude = [
     "crates/treebank-c",
     "crates/treebank-python",
     "crates/treebank-go",
+    "crates/treebank-zig",
 ]
 resolver = "2"

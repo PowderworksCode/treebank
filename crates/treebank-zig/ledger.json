@@ -1,0 +1,39 @@
+{
+  "grammar": "zig",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter-grammars/tree-sitter-zig",
+    "sha": "6479aa13f32f701c383083d8b28360ebd682fb7d",
+    "version": "1.1.2+8",
+    "sha_note": "master HEAD at pin time, deliberately NOT the newest tag. v1.1.2 is dated 2024-12-21; master carries nine further months of work, including `feat!: update parser to ABI 15` (the ABI tree-sitter 0.25 emits) and `ci: update corpus to Zig 0.15.1`. Pinning the tag would pin a grammar that predates both the ABI and the language era this oracle adjudicates. Submodule pointers are commits, so this is a commit either way."
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-zig name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_zig so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else — dependency versions stay upstream_s. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md.",
+      "note": "The Cargo.lock hunk is hand-produced against upstream_s committed blob rather than taken from `git -C build diff`. tree-sitter-zig force-tracks Cargo.lock while its own .gitignore ignores it, so materialize.sh_s throwaway build repo never stages the file and a diff there would silently come back empty. `git apply` is unaffected — it patches the working tree, not the index — so verify.sh reconstructs the file correctly."
+    }
+  ]
+}
