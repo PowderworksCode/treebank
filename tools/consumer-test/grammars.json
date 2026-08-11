@@ -107,5 +107,18 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-php",
+    "dep": "tree-sitter-php",
+    "crate": "treebank-grammar-php",
+    "cases": [
+      {
+        "label": "php",
+        "language": "tree_sitter_php::LANGUAGE_PHP",
+        "fixture": "patched.php",
+        "expect": "Clean"
+      }
+    ]
   }
 ]
