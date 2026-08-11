@@ -1,9 +1,10 @@
 /* The treebank wasm pack ABI.
  *
  * A pack is ONE self-contained wasm module: the tree-sitter runtime, one
- * patched grammar, and this shim, statically linked. It imports nothing but
- * WASI, so any wasm runtime can drive it — wasmtime, wazero, wasmer, or a
- * browser — with no emscripten JS glue and no native tree-sitter anywhere.
+ * patched grammar, and this shim, statically linked by wasi-sdk's clang. It
+ * imports nothing but WASI, so any wasm runtime can drive it — wasmtime,
+ * wazero, wasmer, or a browser — with no JS glue and no native tree-sitter
+ * anywhere.
  *
  * Contrast with what `tree-sitter build --wasm` emits, which is an emscripten
  * SIDE MODULE: it carries the grammar tables only and expects the tree-sitter
@@ -148,10 +149,3 @@ unsigned EXPORT(tb_node_flags)(const TSNode *n) {
 
 /* Caller owns the result; release it with tb_cstr_free. */
 char *EXPORT(tb_node_sexp)(const TSNode *n) { return ts_node_string(*n); }
-
-/* Defined here rather than imported so the module's only imports are WASI.
- * emscripten emits a call to this on every heap growth so a JS host can
- * re-wrap its typed-array views; a pack has no JS host, and a stub makes the
- * import table WASI-only — which is what lets a binding instantiate a pack
- * with nothing but its runtime's stock WASI support. */
-void emscripten_notify_memory_growth(unsigned index) { (void)index; }

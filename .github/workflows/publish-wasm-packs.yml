@@ -2,7 +2,7 @@
 #
 # A pack is one standalone wasm module — tree-sitter runtime, patched grammar,
 # pack ABI — that imports only WASI, so it is consumable from any language with
-# a wasm runtime and needs no Rust, no C compiler and no emscripten at the far
+# a wasm runtime and needs no Rust, no C compiler and no toolchain at the far
 # end. See WASM-PACKS.md.
 #
 # This workflow is deliberately shaped like publish-grammars.yml, because the
@@ -81,6 +81,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Cache the pinned wasm toolchain
+        uses: actions/cache@v4
+        with:
+          # wasi-sdk and binaryen, downloaded and sha256-verified by
+          # tools/wasm-pack/toolchain.sh. Keyed on that file, so bumping a pin
+          # invalidates the cache by construction rather than by remembering to.
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
       - name: Stage every changed pack
         env:
           IN_GRAMMAR: ${{ inputs.grammar }}
@@ -115,6 +123,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Cache the pinned wasm toolchain
+        uses: actions/cache@v4
+        with:
+          # wasi-sdk and binaryen, downloaded and sha256-verified by
+          # tools/wasm-pack/toolchain.sh. Keyed on that file, so bumping a pin
+          # invalidates the cache by construction rather than by remembering to.
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
       - name: Install wasmtime for the Python consumer
         run: pip install --quiet wasmtime
       - name: Release to localhost, fetch by URL, parse with both consumers
@@ -152,6 +168,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Cache the pinned wasm toolchain
+        uses: actions/cache@v4
+        with:
+          # wasi-sdk and binaryen, downloaded and sha256-verified by
+          # tools/wasm-pack/toolchain.sh. Keyed on that file, so bumping a pin
+          # invalidates the cache by construction rather than by remembering to.
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}

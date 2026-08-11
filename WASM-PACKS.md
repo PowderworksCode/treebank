@@ -76,7 +76,8 @@ Three pins, all load-bearing:
 |---|---|---|
 | `generate_cli` | 0.25.10 | the ledger's existing pin; produced `src/parser.c` |
 | runtime | `vendor/tree-sitter` @ `da6fe9be` | linked into the pack; must understand the language ABI that CLI emits |
-| emscripten | `emscripten/emsdk:4.0.4@sha256:47d573d5…` | compiles all of it |
+| wasi-sdk | 33.0, sha256 per platform | compiles and links it |
+| binaryen | 131, sha256 per platform | packs the data section; see below |
 
 The runtime commit is not a new judgment call: `da6fe9be` is the commit
 `tree-sitter --version` reports for 0.25.10, and its `lib/src` is byte-identical
@@ -84,30 +85,60 @@ to the crates.io tarball of `tree-sitter 0.25.10` already in `Cargo.lock`.
 `build-wasm.sh` refuses to build if the runtime's version disagrees with the
 ledger's `generate_cli`, so the two cannot drift apart silently.
 
-Emscripten is pinned **by digest, not by tag**, because measured:
-
-```
-emsdk 3.1.74 -> 551,549 bytes      emsdk 4.0.4 -> 551,777 bytes
-```
-
-Identical sources, different bytes. The wasm build has exactly the exposure
-`generate_cli` has, and `4.0.4` is a mutable tag. Bumping it is a toolchain
-change with the same weight as bumping the CLI: it changes every pack.
+Both compilers are pinned **by sha256, per platform**, downloaded to a cache
+outside the repo and verified before use — never taken from `PATH`. Compiler
+version is load-bearing: measured on emscripten, 3.1.74 and 4.0.4 turned
+identical sources into different bytes (551,549 vs 551,777). Bumping either pin
+is a toolchain change with the same weight as bumping the CLI.
 
 Two hazards worth naming:
 
-- **`tree-sitter build --wasm` prefers a local `emcc`** and only falls back to
-  Docker. A contributor with emscripten installed silently produces different
-  bytes from CI. `build-wasm.sh` does not offer the choice; emscripten always
-  runs in the pinned Docker image.
-- **The pins move together.** `tree-sitter` 0.26.1 replaced emscripten with
-  wasi-sdk for `build --wasm` ([commit `d4d8ed32`, "cli: Compile parsers to wasm
-  using `wasi-sdk`, not emscripten"](https://github.com/tree-sitter/tree-sitter/commit/d4d8ed32)).
-  Treebank is on 0.25.10 for a measured reason — 0.26.x ships broken Unicode
-  identifier tables — so it is on the emscripten path today. Whenever
-  `generate_cli` moves past that, the wasm toolchain changes wholesale and every
-  pack's bytes change with it. That is a version bump, not a surprise, and it is
-  the reason all three pins are recorded rather than two.
+- **A toolchain on `PATH` must not be able to influence the output.**
+  `tree-sitter build --wasm` gets this wrong: it prefers a local `emcc` and
+  only falls back to Docker, so a contributor with emscripten installed
+  silently produces different bytes from CI. `build-wasm.sh` does not offer the
+  choice.
+- **The pins are independent, deliberately.** Treebank is on CLI 0.25.10 for a
+  measured reason — 0.26.x ships broken Unicode identifier tables — but packs
+  already build with wasi-sdk, the toolchain 0.26.x adopted. The wasm toolchain
+  and the CLI move separately, so the eventual CLI bump is one change to
+  evaluate rather than two at once.
+
+### Why wasi-sdk, and why binaryen is not optional
+
+Treebank originally built packs with emscripten in Docker. That works and is
+reproducible, but the image is **2.81 GB**, pulled once per CI job from a
+rate-limited registry — which is fine at eight grammars and not at twenty.
+wasi-sdk is a 193 MB tarball, needs no Docker at all, and is where upstream
+tree-sitter went (0.26.1 replaced emscripten with wasi-sdk for
+`build --wasm`).
+
+The catch, found only by checking every grammar rather than one: `lld` emits a
+single data segment spanning the whole static image, where emscripten runs
+`wasm-opt`, whose memory-packing pass splits it and drops the long zero runs
+that parse tables are full of. The effect scales with table size, so it is
+nearly invisible on the smallest grammar and enormous on the largest:
+
+| | lld alone | + `wasm-opt -O3` | emscripten |
+|---|---:|---:|---:|
+| python | 628,003 | 564,805 | 560,956 |
+| rust | 1,348,851 | 894,378 | 887,233 |
+| **csharp** | **5,647,046** | **3,073,926** | 3,069,052 |
+
+Generalising from python would have shipped a csharp pack 84% larger than it
+needed to be. With binaryen pinned alongside, the final numbers land within
+**0.5% of emscripten on total size and 0.1% on parse throughput**, for 296 MB
+of toolchain instead of 2.81 GB and no Docker anywhere.
+
+Two settings are load-bearing and easy to get wrong:
+
+- **`-O3`, not `-Oz`.** Measured on 497 CPython stdlib files (10.1 MB):
+  `-O3` 7,343 bytes/ms, `-O2` 6,608, `-Oz` 5,348. `-Oz` buys 6% size for 28%
+  throughput, which is the wrong direction for something meant to parse corpora.
+- **No LTO.** `-flto` silently loses the reactor exec model — the module
+  exports `_start` instead of `_initialize` and every WASI host refuses to
+  instantiate it. It also made the module *bigger*. Do not re-add it without
+  checking the exports.
 
 ### Why this is not a new ledger field
 
@@ -118,8 +149,9 @@ On inspection the ledger needs no new field, and adding one would be worse:
 - The runtime pin lives in `vendor/tree-sitter`'s submodule pointer, which is
   the same mechanism `upstream/` uses, checked against `generate_cli` at build
   time.
-- The emscripten digest is repo-wide, like `scripts/`. Copying it into seven
-  ledgers would create seven copies of one fact that must never diverge.
+- The wasi-sdk and binaryen pins are repo-wide, like `scripts/`, and live in
+  `tools/wasm-pack/toolchain.sh`. Copying them into seven ledgers would create
+  seven copies of one fact that must never diverge.
 
 What *is* per-grammar — the upstream pin, the patch series, `generate_dirs` —
 the ledger already carries, and the pack's provenance is generated from it. The

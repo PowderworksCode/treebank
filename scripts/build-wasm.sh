@@ -16,15 +16,16 @@
 #   generate_cli   the ledger's existing pin, which produced src/parser.c
 #   runtime        vendor/tree-sitter, at the commit that CLI was cut from —
 #                  the runtime must understand the language ABI the CLI emits
-#   emscripten     pinned BY DIGEST, not by tag. Measured: emsdk 3.1.74 and
-#                  4.0.4 compile identical sources to different bytes, so this
-#                  has exactly the exposure generate_cli has. `4.0.4` is a
-#                  mutable tag; the digest is the artifact.
+#   wasi-sdk       version AND sha256 per platform, in
+#                  tools/wasm-pack/toolchain.sh. Measured: two compiler
+#                  versions turn identical sources into different bytes, so
+#                  this has exactly the exposure generate_cli has.
 #
-# Emscripten runs in Docker, always, even if emcc is on PATH. `tree-sitter
-# build --wasm` prefers a local emcc and only falls back to Docker, which means
-# a contributor with emscripten installed silently produces different bytes
-# from CI. This script does not offer the choice.
+# The compiler is downloaded, hash-verified and cached outside the repo; it is
+# never taken from PATH. A contributor's own clang or emcc cannot influence the
+# output, which is the whole point — `tree-sitter build --wasm` gets this wrong
+# by preferring a local emcc, so a machine with emscripten installed silently
+# produces different bytes from CI.
 #
 # Usage: scripts/build-wasm.sh <grammar-dir> [generate-dir]
 #   scripts/build-wasm.sh crates/treebank-python
@@ -37,10 +38,10 @@ shopt -s nullglob
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 
-# Pinned by digest on purpose; see above. Bumping this is a toolchain change
-# with the same weight as bumping generate_cli: it changes every pack's bytes.
-EMSDK_IMAGE="emscripten/emsdk:4.0.4@sha256:47d573d5a86379a06f850de200d69407e6baa2d2f9c19d9e156a67db57f80f2f"
-EMSDK_VERSION="4.0.4"
+# The toolchain pin and its rationale live in their own file: changing it
+# changes every pack's bytes and should be reviewable on its own.
+# shellcheck source=../tools/wasm-pack/toolchain.sh
+. "$ROOT/tools/wasm-pack/toolchain.sh"
 
 OUT="$ROOT/dist/wasm"
 SKIP_MATERIALIZE=0
@@ -96,7 +97,8 @@ if [ "$SKIP_MATERIALIZE" = 0 ]; then
 fi
 [ -f "$SRC/parser.c" ] || { echo "build-wasm: no $SRC/parser.c — did materialize run?" >&2; exit 1; }
 
-command -v docker >/dev/null || { echo "build-wasm: docker is required (emscripten runs in it)" >&2; exit 1; }
+WASI_SDK=$(wasi_sdk_ensure) || exit 1
+BINARYEN=$(binaryen_ensure) || exit 1
 
 # ---- provenance ----------------------------------------------------------
 # Linked into the module, so a .wasm that gets vendored into someone's repo and
@@ -124,8 +126,11 @@ jq -S \
   --arg cli "$CLI_WANT" \
   --arg rt_sha "$RUNTIME_SHA" \
   --arg rt_ver "$RUNTIME_VERSION" \
-  --arg em_image "$EMSDK_IMAGE" \
-  --arg em_ver "$EMSDK_VERSION" \
+  --arg sdk_ver "$WASI_SDK_VERSION" \
+  --arg sdk_plat "$(wasi_sdk_platform)" \
+  --arg sdk_sha "$(wasi_sdk_sha256 "$(wasi_sdk_platform)")" \
+  --arg bin_ver "$BINARYEN_VERSION" \
+  --arg bin_sha "$(binaryen_sha256 "$(wasi_sdk_platform)")" \
   --argjson patch_files "$PATCH_MANIFEST" \
   '{
      pack: $pack,
@@ -136,7 +141,8 @@ jq -S \
      toolchain: {
        generate_cli: {tool: "tree-sitter-cli", version: $cli},
        runtime:      {tool: "tree-sitter", version: $rt_ver, sha: $rt_sha},
-       emscripten:   {tool: "emscripten", version: $em_ver, image: $em_image}
+       wasi_sdk:     {tool: "wasi-sdk", version: $sdk_ver, platform: $sdk_plat, sha256: $sdk_sha},
+       binaryen:     {tool: "binaryen", version: $bin_ver, platform: $sdk_plat, sha256: $bin_sha}
      },
      patches: [.patches[] | {id, title, kind: (.kind // "grammar"),
                              file: (.file | sub("^patches/"; "")),
@@ -165,7 +171,7 @@ ENTRY="tree_sitter_$(jq -r '.pack' "$STAGE/provenance.json" | sed 's/^treebank-/
 # generated source rather than guessing from the directory name.
 DETECTED=$(grep -oE 'TS_PUBLIC const TSLanguage \*tree_sitter_[a-z0-9_]+|const TSLanguage \*tree_sitter_[a-z0-9_]+' "$SRC/parser.c" | grep -oE 'tree_sitter_[a-z0-9_]+' | head -1)
 [ -n "$DETECTED" ] && ENTRY=$DETECTED
-echo "build-wasm: $PACK  (entry $ENTRY, runtime $RUNTIME_VERSION, emsdk $EMSDK_VERSION)"
+echo "build-wasm: $PACK  (entry $ENTRY, runtime $RUNTIME_VERSION, wasi-sdk $WASI_SDK_VERSION, binaryen $BINARYEN_VERSION)"
 
 mkdir -p "$STAGE/g" "$OUT"
 # The WHOLE materialized tree, structure preserved — not just src/. typescript's
@@ -178,18 +184,32 @@ cp "$ROOT/tools/wasm-pack/shim.c" "$STAGE/shim.c"
 cp -R "$RUNTIME/lib/src" "$STAGE/rt-src"
 cp -R "$RUNTIME/lib/include" "$STAGE/rt-include"
 
-# --no-entry: a reactor, not a command; the host calls exports directly.
-# -sSTANDALONE_WASM: no JS glue, no emscripten runtime expectations.
-# Sources are passed by relative path so nothing about this machine's
-# directory layout can reach the output.
-docker run --rm -v "$STAGE:/w" -w /w "$EMSDK_IMAGE" \
-  emcc -O3 \
+# -mexec-model=reactor: the module is a library the host calls into, not a
+# command with a main(). Losing this (LTO does) breaks every WASI host.
+# --strip-all: drops the ~155 KB name section, which also carries the output
+# FILENAME — the one part of a wasi-sdk build that is not a pure function of
+# the inputs. See tools/wasm-pack/toolchain.sh for why -O3 and why no LTO.
+#
+# Sources are passed by relative path, from inside the staging directory, so
+# nothing about this machine's layout can reach the output.
+SCANNER=""
+[ -f "$STAGE/$REL_SRC/scanner.c" ] && SCANNER="$REL_SRC/scanner.c"
+( cd "$STAGE" && "$WASI_SDK/bin/clang" \
+    --target=wasm32-wasip1 -mexec-model=reactor -O3 \
+    --sysroot="$WASI_SDK/share/wasi-sysroot" \
     -DTREEBANK_LANGUAGE_FN="$ENTRY" \
     -I rt-include -I rt-src -I "$REL_SRC" \
-    rt-src/lib.c "$REL_SRC/parser.c" $([ -f "$STAGE/$REL_SRC/scanner.c" ] && echo "$REL_SRC/scanner.c") \
-    shim.c provenance.c \
-    -sSTANDALONE_WASM --no-entry -sALLOW_MEMORY_GROWTH \
-    -o "out.wasm" >/dev/null
+    rt-src/lib.c "$REL_SRC/parser.c" $SCANNER shim.c provenance.c \
+    -Wl,--export-memory -Wl,--strip-all \
+    -o linked.wasm )
+
+# lld leaves one data segment covering the whole static image. wasm-opt's
+# memory packing splits it and drops the zero runs parse tables are full of,
+# which is most of the artifact for a large grammar — see toolchain.sh. `-all`
+# because wasi-sdk emits bulk-memory and non-trapping float ops that wasm-opt
+# will not validate under its default feature set.
+( cd "$STAGE" && "$BINARYEN/bin/wasm-opt" -all -O3 \
+    --strip-producers --strip-debug linked.wasm -o out.wasm )
 
 install -m 0644 "$STAGE/out.wasm" "$OUT/$PACK.wasm"
 cp "$STAGE/provenance.json" "$OUT/$PACK.json"

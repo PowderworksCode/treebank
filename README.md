@@ -216,8 +216,9 @@ scripts/build-wasm.sh crates/treebank-python   # -> dist/wasm/treebank-python.wa
 scripts/test-publish-wasm.sh                   # full rehearsal; publishes nothing
 ```
 
-Measured byte-for-byte reproducible across every grammar, on three pins —
-`generate_cli`, the runtime submodule, and emscripten *by digest*. The
+Measured byte-for-byte reproducible across every grammar, on four pins —
+`generate_cli`, the runtime submodule, and wasi-sdk and binaryen by *sha256
+per platform*, downloaded and verified rather than taken from PATH. The
 provenance is linked inside the module, so a `.wasm` found on its own still
 says which upstream, which patches and which toolchain produced it. A pack
 gives you treebank's patched parsing and **not** the sweeps or the oracle those
