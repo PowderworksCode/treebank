@@ -3,7 +3,8 @@
   "upstream": {
     "git_url": "https://github.com/tree-sitter-grammars/tree-sitter-zig",
     "sha": "6479aa13f32f701c383083d8b28360ebd682fb7d",
-    "version": "1.1.2+8",
+    "version": "1.1.2",
+    "version_note": "Upstream's own Cargo.toml and tree-sitter.json still say 1.1.2 at the pinned sha — the tag was cut in December 2024 and master has not been bumped since — so this field says 1.1.2 too. It is the PUBLISH BASE that publish.sh checks against the materialized Cargo.toml, not a description of how far past the tag the pin sits; sha_note carries that. An earlier draft wrote 1.1.2+8 here and publish.sh correctly rejected it.",
     "sha_note": "master HEAD at pin time, deliberately NOT the newest tag. v1.1.2 is dated 2024-12-21; master carries nine further months of work, including `feat!: update parser to ABI 15` (the ABI tree-sitter 0.25 emits) and `ci: update corpus to Zig 0.15.1`. Pinning the tag would pin a grammar that predates both the ABI and the language era this oracle adjudicates. Submodule pointers are commits, so this is a commit either way."
   },
   "generate_cli": "0.25.10",
