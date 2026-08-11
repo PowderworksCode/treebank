@@ -37,12 +37,38 @@ while ((line = Console.In.ReadLine()) != null)
 }
 stdout.Flush();
 
+// An unreadable file is NOT an invalid file. Returning false for one looks
+// harmless and is not: validate() is only ever called on files the grammar
+// already failed, and an invalid verdict records the file as corpus NOISE.
+// So a mistyped corpus root would make every path unreadable, every grammar
+// failure noise, gap_files zero -- and the sweep would report a flawless
+// grammar. A broken oracle must fail loudly, never quietly agree with us;
+// the reasoning is spelled out in
+// crates/treebank-cli/src/lang/exec_oracle.rs.
+//
+// So the read is separate from the parse. Roslyn's own diagnostics stay the
+// only source of a verdict, and a parser blow-up on the file's content is
+// still invalid -- that is the file's fault, not the harness's.
 static bool Parses(string path, CSharpParseOptions options)
 {
+    SourceText text;
     try
     {
         using var stream = File.OpenRead(path);
-        var text = SourceText.From(stream, Encoding.UTF8, canBeEmbedded: false);
+        text = SourceText.From(stream, Encoding.UTF8, canBeEmbedded: false);
+    }
+    catch (Exception e) when (e is IOException or UnauthorizedAccessException
+                              or ArgumentException or NotSupportedException)
+    {
+        Console.Error.WriteLine($"cs-oracle: cannot read {path}: {e.Message}");
+        Console.Error.WriteLine("cs-oracle: this is an oracle failure, not a verdict; "
+            + "check the corpus root");
+        Environment.Exit(1);
+        throw;
+    }
+
+    try
+    {
         var tree = CSharpSyntaxTree.ParseText(text, options, path);
         foreach (var d in tree.GetDiagnostics())
         {

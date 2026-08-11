@@ -85,12 +85,26 @@ function asJsx(src, sourceType) {
   }
 }
 
+// An unreadable file is NOT an invalid file. Returning false here looks
+// harmless and is not: validate() is only ever called on files the grammar
+// already failed, and an invalid verdict records the file as corpus NOISE.
+// So a mistyped corpus root would make every path unreadable, every grammar
+// failure noise, gap_files zero -- and the sweep would report a flawless
+// grammar. A broken oracle must fail loudly, never quietly agree with us;
+// the reasoning is spelled out in
+// crates/treebank-cli/src/lang/exec_oracle.rs.
+//
+// The asScript/asModule/asJsx catches below are untouched: those are the
+// parser rejecting the file's own content, which is what invalid means.
 function check(file) {
   let src;
   try {
     src = fs.readFileSync(file, "utf8");
-  } catch {
-    return false;
+  } catch (e) {
+    process.stderr.write(`js-oracle: cannot read ${file}: ${e.message}\n`);
+    process.stderr.write("js-oracle: this is an oracle failure, not a verdict; " +
+      "check the corpus root\n");
+    process.exit(1);
   }
   if (src.charCodeAt(0) === 0xfeff) src = src.slice(1);
   // Node strips a shebang before compiling; vm.compileFunction does not.
