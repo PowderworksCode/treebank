@@ -1,0 +1,63 @@
+diff --git a/grammar.js b/grammar.js
+index 5cdae6d..32791e5 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1206,8 +1206,13 @@ module.exports = grammar({
+ 
+     gnu_asm_qualifier: _ => choice(
+       'volatile',
++      // GCC's alternate keywords come in both spellings, `__volatile__` and
++      // `__volatile`; glibc's per-architecture headers use the short one.
++      '__volatile',
+       '__volatile__',
+       'inline',
++      '__inline',
++      '__inline__',
+       'goto',
+     ),
+ 
+diff --git a/test/corpus/expressions.txt b/test/corpus/expressions.txt
+index 3cbed5c..be245fa 100644
+--- a/test/corpus/expressions.txt
++++ b/test/corpus/expressions.txt
+@@ -1481,3 +1481,40 @@ unsigned const char *c;
+       (primitive_type))
+     (pointer_declarator
+       (identifier))))
++
++================================================================================
++Alternate asm qualifier keywords
++================================================================================
++
++void f(void) {
++  __asm __volatile ("flush %0" : : "r" (0));
++  __asm__ __inline ("nop");
++}
++
++--------------------------------------------------------------------------------
++
++(translation_unit
++  (function_definition
++    type: (primitive_type)
++    declarator: (function_declarator
++      declarator: (identifier)
++      parameters: (parameter_list
++        (parameter_declaration
++          type: (primitive_type))))
++    body: (compound_statement
++      (expression_statement
++        (gnu_asm_expression
++          (gnu_asm_qualifier)
++          assembly_code: (string_literal
++            (string_content))
++          output_operands: (gnu_asm_output_operand_list)
++          input_operands: (gnu_asm_input_operand_list
++            operand: (gnu_asm_input_operand
++              constraint: (string_literal
++                (string_content))
++              value: (number_literal)))))
++      (expression_statement
++        (gnu_asm_expression
++          (gnu_asm_qualifier)
++          assembly_code: (string_literal
++            (string_content)))))))

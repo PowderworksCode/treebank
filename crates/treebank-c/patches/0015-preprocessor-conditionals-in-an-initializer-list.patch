@@ -1,0 +1,114 @@
+diff --git a/grammar.js b/grammar.js
+index 6ad6255..bdd0bed 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -59,6 +59,7 @@ module.exports = grammar({
+     [$._top_level_item, $._top_level_statement],
+     [$.type_specifier, $._top_level_expression_statement],
+     [$.type_qualifier, $.extension_expression],
++    [$.expression, $.concatenated_string],
+   ],
+ 
+   extras: $ => [
+@@ -173,6 +174,8 @@ module.exports = grammar({
+     ...preprocIf('_in_field_declaration_list', $ => $._field_declaration_list_item),
+     ...preprocIf('_in_enumerator_list', $ => seq($.enumerator, ',')),
+     ...preprocIf('_in_enumerator_list_no_comma', $ => $.enumerator, -1),
++    ...preprocIf('_in_initializer_list', $ => seq($._initializer_list_item, ',')),
++    ...preprocIf('_in_initializer_list_no_comma', $ => $._initializer_list_item, -1),
+ 
+     preproc_arg: _ => token(prec(-1, /\S([^/\n]|\/[^*]|\\\r?\n)*/)),
+     preproc_directive: _ => /#[ \t]*[a-zA-Z0-9]\w*/,
+@@ -1361,17 +1364,42 @@ module.exports = grammar({
+       ')',
+     ),
+ 
++    // Shaped like enumerator_list rather than a plain commaSep, because a
++    // conditional inside a braced initializer is everywhere in this corpus:
++    //   static const int t[] = {
++    //     A,
++    //   #ifdef HAVE_B
++    //     B,
++    //   #endif
++    //   };
++    // and a #define, or an #include of a list fragment, sits in the same slot.
+     initializer_list: $ => seq(
+       '{',
+-      commaSep(choice(
+-        $.initializer_pair,
+-        $.expression,
+-        $.initializer_list,
++      repeat(choice(
++        seq($._initializer_list_item, ','),
++        alias($.preproc_if_in_initializer_list, $.preproc_if),
++        alias($.preproc_ifdef_in_initializer_list, $.preproc_ifdef),
++        $.preproc_def,
++        $.preproc_function_def,
++        $.preproc_include,
++      )),
++      optional(seq(
++        choice(
++          $._initializer_list_item,
++          alias($.preproc_if_in_initializer_list_no_comma, $.preproc_if),
++          alias($.preproc_ifdef_in_initializer_list_no_comma, $.preproc_ifdef),
++        ),
++        repeat(choice($.preproc_def, $.preproc_function_def, $.preproc_include)),
+       )),
+-      optional(','),
+       '}',
+     ),
+ 
++    _initializer_list_item: $ => choice(
++      $.initializer_pair,
++      $.expression,
++      $.initializer_list,
++    ),
++
+     initializer_pair: $ => choice(
+       seq(
+         field('designator', repeat1(choice(
+diff --git a/test/corpus/preprocessor.txt b/test/corpus/preprocessor.txt
+index 124b8a9..edd06da 100644
+--- a/test/corpus/preprocessor.txt
++++ b/test/corpus/preprocessor.txt
+@@ -534,3 +534,40 @@ enum fsconfig_command {
+       (preproc_def
+         name: (identifier)
+         value: (preproc_arg)))))
++
++================================================================================
++Conditionals and directives in an initializer list
++================================================================================
++
++static const char *t[] = {
++	"a",
++#ifdef HAVE_B
++	"b",
++#endif
++#define C_INDEX 2
++	"c",
++};
++
++--------------------------------------------------------------------------------
++
++(translation_unit
++  (declaration
++    (storage_class_specifier)
++    (type_qualifier)
++    type: (primitive_type)
++    declarator: (init_declarator
++      declarator: (pointer_declarator
++        declarator: (array_declarator
++          declarator: (identifier)))
++      value: (initializer_list
++        (string_literal
++          (string_content))
++        (preproc_ifdef
++          name: (identifier)
++          (string_literal
++            (string_content)))
++        (preproc_def
++          name: (identifier)
++          value: (preproc_arg))
++        (string_literal
++          (string_content))))))

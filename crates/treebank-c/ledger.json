@@ -16,23 +16,23 @@
     "source": "Debian sid, source packages ranked by popcon (popularity-contest) installs aggregated per source package, filtered to packages whose sources.debian.org SLOC is >=2000 ansic and ansic >= cpp; upstream .orig.tar.* only (never the .debian.tar.* patch tarball); .c and .h files, C++ headers excluded by content",
     "source_note": "C has no registry, so popularity is borrowed. popcon counts machines, which is closer in kind to crates.io downloads than Java's dependent-repos proxy. The bias is explicit and it is the point: this corpus is the C that ships in a distribution \u2014 system libraries, daemons, autotools trees, GNU extensions \u2014 NOT trending C on GitHub, which is a different corpus and would give different gap numbers. The SLOC filter exists because popcon ranks everything Debian ships: without it the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc-16 (no C at all).",
     "oracle": "tools/c-oracle \u2014 libclang 20.1.2, parse-only, verdict from clang's own diagnostic categories. THREE-VALUED: valid / invalid / indeterminate. See crates/treebank-c/ORACLE.md for what it does and does not claim; the short version is 'no syntax error, in GNU C, given these include paths', NOT 'this compiles'. Lang::validate collapses indeterminate to false, so gap_files is a FLOOR and noise_files mixes 'reference rejected it' with 'could not tell'; the full split is in corpus/c/oracle-verdicts.json and on the sweep's stderr.",
-    "fetched": "2026-08-08 (popcon + sid Sources snapshot of that date)",
-    "packages": 20,
-    "files": 39928,
-    "files_note": ".c and .h from the top 20 C source packages by popcon; 365 of 12,767 headers dropped as C++ (unguarded namespace/template/class, comments and __cplusplus-guarded regions excluded from the scan)",
+    "fetched": "2026-08-11 (popcon + sid Sources snapshot of that date)",
+    "packages": 100,
+    "files": 84455,
+    "files_note": ".c and .h from the top 100 C source packages by popcon; C++ headers excluded by content (unguarded namespace/template/class, comments and __cplusplus-guarded regions excluded from the scan)",
     "sweep_upstream": {
-      "passed": 21991,
-      "failed": 17937,
-      "gap_files": 4542,
-      "config_files": 960,
-      "noise_files": 12435,
-      "clusters": 926
+      "passed": 43089,
+      "failed": 41366,
+      "gap_files": 13826,
+      "config_files": 1883,
+      "noise_files": 25657,
+      "clusters": 1035
     },
     "oracle_split": {
-      "valid": 5502,
-      "invalid": 452,
-      "indeterminate": 11983,
-      "note": "of the 17,937 failing files. INDETERMINATE OUTNUMBERS VALID 2.2:1, so gap_files is a floor and noise_files (12,435) mixes 'reference rejected it' (452) with 'could not tell' (11,983). ~79% of indeterminates carry an unresolved include; the largest remaining class is the configure-generated config.h, which no static include path can supply."
+      "valid": 15088,
+      "invalid": 652,
+      "indeterminate": 24694,
+      "note": "of the 40,434 files still failing with patches 0003-0015 applied (corpus/c/oracle-verdicts.json, written by the same sweep). INDETERMINATE STILL OUTNUMBERS VALID 1.6:1, so gap_files is a floor and noise_files mixes 'reference rejected it' (652) with 'could not tell' (24,694). ~79% of indeterminates carry an unresolved include; the largest remaining class is the configure-generated config.h, which no static include path can supply."
     },
     "oracle_flags": "-std=gnu17 -ferror-limit=0 -w, -iquote<every header-bearing dir in the package and its ancestors>, -I<package root, include/, inc/, src/, lib/>, -idirafter<every header-bearing dir>",
     "oracle_flags_note": "Three search paths, each doing a distinct job. -iquote answers the package's own quoted includes. -I is limited to the package's PUBLIC dirs on purpose: it is searched before the system dirs, so a wide -I list lets a package's private replacements for system headers shadow the real ones (glibc string/string.h answering <string.h>) and resolution gets WORSE (measured: 4578 -> 4060 valid). -idirafter carries the wide list instead; being searched AFTER the system dirs it can only supply headers the system lacks, which is what glibc's <sigsetops.h> needs. Measured on 1,500 failing files: -iquote+public -I alone = 372 valid / 11 invalid / 1117 indeterminate; adding -idirafter = 453 / 37 / 1010.",
@@ -77,7 +77,16 @@
     "oracle_correction": "The first published numbers for this corpus (gap 5629, invalid 302, indeterminate 12006) were computed while c-oracle had a fixed 128-flag cap per request, which silently truncated the include list for the three largest packages \u2014 glibc alone has 498 header-bearing dirs. The cap is gone; the numbers above are the corrected ones. The truncation also made -idirafter look inert, because its flags were the ones being dropped.",
     "source_freshness": "rank re-downloads the sid Sources index when the cached copy is older than 12h (TREEBANK_REFRESH_SOURCES=1 forces it). The index carries every package's version, so a permanently cached copy froze the corpus: resolve() would return the same tarballs forever, the sweep cache would skip them all, and the 'new version of a top-K package' event this loop is built on could never fire for C. The per-package SLOC verdicts are cached in corpus/c/db/sloc.json keyed by name and stamped with the version measured, so a daily re-rank queries only the packages whose version moved \u2014 measured at k=200: 227 lookups in 9s cold (~25/sec, 8-way), then 2 lookups and 1.9s warm. sources.debian.org lags the archive, so a version it has not indexed yet falls back to the newest it does hold; without that, a refresh on an upload day silently dropped glibc and mesa, the two largest C sources in the corpus.",
     "preprocessing": "crates/treebank-preprocessing, declared via Lang::preprocessing(): __cplusplus is undefined when parsing C. The sweep re-parses each VALID failing file with dead branches removed; the 909 that then parse cleanly are recorded as config_files rather than gaps, because no grammar patch can fix them \u2014 a header opening `extern \"C\" {` inside one #ifdef __cplusplus and closing `}` inside another has no single well-formed tree. Without this they sat at #2 in the fix queue, the largest cluster an agent could not win. A second pass forces individual conditional branches: where the symbol is unknown (#ifdef F_DUPFD_CLOEXEC around one of two spellings of a signature) it does not matter what the symbol means, because both branches are valid and the grammar fails only on seeing both. 51 more files are explained entirely this way and 43 are re-clustered onto the problem that was hiding behind a split. The soundness guard is that the error's own line must survive the forcing \u2014 without it an include guard 'clears' every error in a header by emptying it, which accounted for 173 of 243 raw hits.",
-    "macro_diagnosis": "crates/treebank-preprocessing expands the package's macros into each gap file and re-parses. 1,102 of the 4,593 gap files (24.0%) then parse cleanly, so the grammar was meeting an unexpanded macro rather than unfamiliar syntax. This does NOT change the verdict \u2014 unlike the extern \"C\" case, THREAD_LOCAL int x; is something a grammar could parse \u2014 it annotates each cluster with the macros responsible (SPA_EXPORT, drm_public, _PUBLIC_, DBUS_EXPORT, NCURSES_CONST, weak_alias...), which is what writing a minimal rule and judging its over-acceptance needs."
+    "macro_diagnosis": "crates/treebank-preprocessing expands the package's macros into each gap file and re-parses. on the 20-package pilot, 1,102 of the 4,593 gap files (24.0%) then parsed cleanly, so the grammar was meeting an unexpanded macro rather than unfamiliar syntax. This does NOT change the verdict \u2014 unlike the extern \"C\" case, THREAD_LOCAL int x; is something a grammar could parse \u2014 it annotates each cluster with the macros responsible (SPA_EXPORT, drm_public, _PUBLIC_, DBUS_EXPORT, NCURSES_CONST, weak_alias...), which is what writing a minimal rule and judging its over-acceptance needs.",
+    "sweep_patched": {
+      "passed": 44021,
+      "failed": 40434,
+      "gap_files": 13199,
+      "config_files": 1889,
+      "noise_files": 25346,
+      "clusters": 1541
+    },
+    "sweep_note": "Both numbers are the 100-package corpus above (84,455 files). The 20-package pilot these fields used to carry (39,928 files, 21,991 passed) is kept in LOCAL-PATCHES.md under 'Pilot sweep \u2014 measured', with the include-flag and oracle experiments that were run on it; the pair here has to be comparable, so it moves with the corpus. sweep_patched is patches 0003-0015 applied."
   },
   "patches": [
     {
@@ -100,6 +109,408 @@
       ],
       "kind": "packaging",
       "origin": "treebank; upstream owns the tree-sitter-c name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_c so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "anonymous bit-fields",
+      "file": "patches/0003-anonymous-bit-fields.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "struct s {\n  int x : 1;\n  int : 3;\n  unsigned : 0;\n  int y : 2, : 4, z;\n};\n",
+        "diagnosis": "C11 6.7.2.1 writes struct-declarator as `declarator` or `declarator_opt : constant-expression`, so a bit-field may be unnamed: `unsigned int :3;` is padding and `int :0;` forces alignment to the next storage unit. _field_declaration_declarator required a declarator before bitfield_clause, so every such member parsed as MISSING field_identifier. The rule is now the two-way choice the standard writes.",
+        "first_seen": {
+          "package": "glibc",
+          "version": "2.43-3",
+          "path": "include/struct___timespec64.h"
+        },
+        "sweep_before": {
+          "passed": 43089,
+          "failed": 41366,
+          "gap_files": 13826
+        },
+        "sweep_after": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "GNU attributes in declaration positions",
+      "file": "patches/0004-gnu-attributes-in-declaration-positions.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/declarations.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "int a __attribute__((unused));\nint b, c __attribute__((aligned(4)));\nstatic int d __attribute__((section(\"x\"))) = 1;\nint * __attribute__((nonnull)) f;\ntypedef unsigned long int __attribute__((__may_alias__)) op_t;\n",
+        "diagnosis": "Three positions GCC accepts and the grammar did not: after the declarator of an object declaration, after the `*` of a pointer declarator, and on either side of the type in a typedef. The first is a new rule, gnu_attributed_declarator, aliased back to attributed_declarator so the node name is unchanged, and limited to the object declarators on purpose: function declarators, parameters, fields and typedefs already absorb a trailing attribute, and letting the general attributed_declarator take __attribute__ made all four ambiguous \u2014 generation failed on three of them, and with the conflict declared, `void f(int x __attribute__((unused)))` re-parsed into a different tree and broke upstream's own Attributes and Type qualifiers corpus tests.",
+        "first_seen": {
+          "package": "glibc",
+          "version": "2.43-3",
+          "path": "sysdeps/generic/string-optype.h"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 5,
+      "title": "named variadic macro parameters",
+      "file": "patches/0005-named-variadic-macro-parameters.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/preprocessor.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "#define check(FMT...) do { } while (0)\n#define log(fmt, args...) printf(fmt, ##args)\n",
+        "diagnosis": "`#define check(FMT...)` is the GNU spelling of a variadic macro: the parameter name stands for the rest of the argument list where ISO C writes `...` and __VA_ARGS__. preproc_params took `identifier` or `...` but not an identifier carrying one, so the whole #define was an error.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "misc-utils/pipesz.c"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 6,
+      "title": "complex types",
+      "file": "patches/0006-complex-types.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "_Complex double a;\ndouble _Complex b;\nlong double _Complex c;\n__complex__ float d;\n",
+        "diagnosis": "_Complex and _Imaginary (C99 6.7.2) appear beside float/double rather than instead of them, which is why they belong with signed/unsigned/long/short in sized_type_specifier and not in primitive_type. __complex__ is GCC's spelling. Without them `_Complex float cf;` read as two juxtaposed type names and failed.",
+        "first_seen": {
+          "package": "glibc",
+          "version": "2.43-3",
+          "path": "sysdeps/alpha/fpu/cfloat-compat.h"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 7,
+      "title": "case ranges",
+      "file": "patches/0007-case-ranges.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "void f(int c) {\n  switch (c) {\n    case 'a' ... 'z':\n      break;\n    case 0 ... 2:\n      break;\n  }\n}\n",
+        "diagnosis": "`case 'a' ... 'z':` is a GNU extension every character-classification switch in the corpus uses. The range end is a new `end` field on case_statement, so a plain case is unchanged.",
+        "first_seen": {
+          "package": "glibc",
+          "version": "2.43-3",
+          "path": "locale/programs/linereader.c"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 8,
+      "title": "alternate asm qualifier keywords",
+      "file": "patches/0008-alternate-asm-qualifier-keywords.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "void f(void) {\n  __asm __volatile (\"flush %0\" : : \"r\" (0));\n  __asm__ __inline (\"nop\");\n}\n",
+        "diagnosis": "GCC's alternate keywords come in both spellings \u2014 __volatile__ and __volatile, __inline__ and __inline \u2014 and glibc's per-architecture headers use the short one. gnu_asm_qualifier knew only the doubled form.",
+        "first_seen": {
+          "package": "glibc",
+          "version": "2.43-3",
+          "path": "sysdeps/sparc/sparc32/dl-plt.h"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 9,
+      "title": "__has_include in preprocessor conditionals",
+      "file": "patches/0009-has-include-in-preprocessor-conditionals.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/preprocessor.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "#if __has_include(<stdcountof.h>)\n#define A 1\n#endif\n",
+        "diagnosis": "__has_include is C23 and a GNU/clang extension long before it. Its operand is a header name, not an expression, so like `defined` it cannot go through preproc_call_expression \u2014 the <...> form is a system_lib_string, which inside an #if would otherwise lex as a less-than operator. New preproc_has_include node, mirroring preproc_defined.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "include/c.h"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 10,
+      "title": "typeof",
+      "file": "patches/0010-typeof.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "__typeof (x->field) a;\ntypeof(int) b;\nvoid f(void) {\n  int c = (__typeof__ (a + 1)) 0;\n}\n",
+        "diagnosis": "C23's typeof, spelled __typeof/__typeof__ by GCC for decades. typeof(x) on a bare name already parsed by accident, as a macro_type_specifier whose operand looked like a type descriptor; anything else did not, because no type descriptor holds a field access. The new typeof_specifier takes either a type or an expression.",
+        "first_seen": {
+          "package": "glibc",
+          "version": "2.43-3",
+          "path": "socket/tst-cmsghdr-skeleton.c"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 11,
+      "title": "_Atomic type specifier",
+      "file": "patches/0011-atomic-type-specifier.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "_Atomic(int) x;\nstruct s { _Atomic(unsigned char *) start; };\n",
+        "diagnosis": "C11 6.7.2.4 gives _Atomic two jobs: the qualifier `_Atomic int x;`, which the grammar had, and the atomic type specifier `_Atomic(int) x;`, which it did not. mimalloc, vendored inside CPython, is written in the second form throughout.",
+        "first_seen": {
+          "package": "python3.13",
+          "version": "3.13.14-1",
+          "path": "Include/internal/mimalloc/mimalloc/types.h"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 12,
+      "title": "a label at the end of a compound statement",
+      "file": "patches/0012-label-at-the-end-of-a-compound-statement.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "int f(int x) {\n  if (x)\n    goto out;\n  x = 1;\nout:\n}\n",
+        "diagnosis": "C23 6.8.1 allows a label with no statement after it at the end of a block \u2014 the `out:` the `goto out;` idiom leaves before the closing brace \u2014 and GCC and clang accept it in every dialect. labeled_statement required a statement, so the block ended with a MISSING ;. trailing_label is admitted only in that one position, so a label with no statement stays an error anywhere else.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "lib/sysfs.c"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 13,
+      "title": "a type as a call argument when it carries an abstract declarator",
+      "file": "patches/0013-type-call-argument-with-abstract-declarator.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "void f(va_list ap) {\n  char *a = va_arg(ap, char *);\n  int (*g)(void) = va_arg(ap, int (*)(void));\n}\n",
+        "diagnosis": "va_arg is a macro and its second argument is a type, not an expression; the same shape appears throughout the corpus in package-local macros. argument_list already admits a compound_statement for exactly this reason (upstream's note: macros taking statements as arguments), and this extends it to a type descriptor \u2014 but only one carrying an abstract declarator (`char *`, `int (*)(void)`, `long []`), none of which can be read as an expression. A bare type name is not accepted, so test/negative/type-in-plain-call-argument.c (`g(struct s)`) stays rejected. Nor is a leading qualifier: making `const` valid at the start of an argument makes the lexer prefer the keyword inside __attribute__((const)) and breaks upstream's Attributes test, so `va_arg(ap, const char *)` still fails while `char const *` parses. The alias carries prec.dynamic(-2) so macro_type_specifier keeps winning where upstream's tests say it should.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "lib/strutils.c"
+        },
+        "sweep_before": {
+          "passed": 43100,
+          "failed": 41355,
+          "gap_files": 13811
+        },
+        "sweep_after": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 14,
+      "title": "preprocessor directives between enumerators",
+      "file": "patches/0014-preprocessor-directives-between-enumerators.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/preprocessor.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "enum e {\n\tA = 0,\n#define A A\n\tB = 1,\n#define B B\n\tLAST\n#define LAST LAST\n};\n",
+        "diagnosis": "enumerator_list already admitted #if/#ifdef and a bare #directive, but not #define \u2014 and the kernel UAPI headers (which systemd vendors wholesale) put a #define after every enumerator so each name is testable with #ifdef. Unlike an enumerator the directive is not followed by a comma, and it can also follow the last enumerator, so it needed a slot in both the repeat and the comma-less tail.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "include/mountutils.h"
+        },
+        "sweep_before": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_after": {
+          "passed": 44021,
+          "failed": 40434,
+          "gap_files": 13199
+        },
+        "sweep_note": "measured for patches 0014-0015 as a pair: sweep_before is the tree with 0003-0013 applied, sweep_after the whole series."
+      }
+    },
+    {
+      "id": 15,
+      "title": "preprocessor conditionals and directives in an initializer list",
+      "file": "patches/0015-preprocessor-conditionals-in-an-initializer-list.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/preprocessor.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the Debian sid popcon sweep",
+      "evidence": {
+        "repro": "static const char *t[] = {\n\t\"a\",\n#ifdef HAVE_B\n\t\"b\",\n#endif\n#define C_INDEX 2\n\t\"c\",\n};\n",
+        "diagnosis": "A braced initializer whose elements are guarded by #ifdef is one of the commonest shapes in this corpus \u2014 tables of syscalls, ioctls, partition types, colour names \u2014 and initializer_list was a plain commaSep with no preprocessor slot at all, so the whole declaration failed. It is now shaped like enumerator_list: element-then-comma, or a conditional, or a directive, with the same comma-less tail. preprocIf gets two more instantiations, _in_initializer_list and _in_initializer_list_no_comma, which is exactly how upstream already handles enumerators and struct members. The #include slot is for the list-fragment header (util-linux's pt-mbr-partnames.h), which stays invalid on its own \u2014 test/negative/ still rejects the fragment itself. The one new conflict, [expression, concatenated_string], is the identifier-then-string ambiguity concatenated_string has always carried, reachable now that an #ifdef name can sit directly before an element.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "disk-utils/blockdev.c"
+        },
+        "sweep_before": {
+          "passed": 43491,
+          "failed": 40964,
+          "gap_files": 13569
+        },
+        "sweep_after": {
+          "passed": 44021,
+          "failed": 40434,
+          "gap_files": 13199
+        },
+        "sweep_note": "measured for patches 0014-0015 as a pair: sweep_before is the tree with 0003-0013 applied, sweep_after the whole series."
+      }
     }
   ]
 }

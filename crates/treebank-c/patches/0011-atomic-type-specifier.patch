@@ -1,0 +1,61 @@
+diff --git a/grammar.js b/grammar.js
+index e0b5e2c..a69e1a3 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -650,11 +650,22 @@ module.exports = grammar({
+       $.enum_specifier,
+       $.macro_type_specifier,
+       $.sized_type_specifier,
++      $.atomic_type_specifier,
+       $.typeof_specifier,
+       $.primitive_type,
+       $._type_identifier,
+     ),
+ 
++    // C11 6.7.2.4: `_Atomic(T)` is an atomic type specifier, distinct from
++    // the `_Atomic` qualifier that the same keyword spells when no operand
++    // follows it.
++    atomic_type_specifier: $ => seq(
++      '_Atomic',
++      '(',
++      field('type', $.type_descriptor),
++      ')',
++    ),
++
+     // C23's typeof, which GCC has spelled __typeof/__typeof__ for decades.
+     // The operand is either a type or an expression — `__typeof (cmsg->len)`
+     // is the form macro_type_specifier could not reach, since a field access
+diff --git a/test/corpus/types.txt b/test/corpus/types.txt
+index e4739d0..0113168 100644
+--- a/test/corpus/types.txt
++++ b/test/corpus/types.txt
+@@ -159,3 +159,29 @@ void f(void) {
+                   left: (identifier)
+                   right: (number_literal))))
+             value: (number_literal)))))))
++
++========================================
++Atomic type specifier
++========================================
++
++_Atomic(int) x;
++struct s { _Atomic(unsigned char *) start; };
++
++---
++
++(translation_unit
++  (declaration
++    type: (atomic_type_specifier
++      type: (type_descriptor
++        type: (primitive_type)))
++    declarator: (identifier))
++  (struct_specifier
++    name: (type_identifier)
++    body: (field_declaration_list
++      (field_declaration
++        type: (atomic_type_specifier
++          type: (type_descriptor
++            type: (sized_type_specifier
++              type: (primitive_type))
++            declarator: (abstract_pointer_declarator)))
++        declarator: (field_identifier)))))

@@ -1,0 +1,95 @@
+diff --git a/grammar.js b/grammar.js
+index 0c55908..663d742 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1311,7 +1311,25 @@ module.exports = grammar({
+     extension_expression: $ => seq('__extension__', $.expression),
+ 
+     // The compound_statement is added to parse macros taking statements as arguments, e.g. MYFORLOOP(1, 10, i, { foo(i); bar(i); })
+-    argument_list: $ => seq('(', commaSep(choice($.expression, $.compound_statement)), ')'),
++    // The type descriptor is there for the same reason: `va_arg(ap, char *)`
++    // is a macro whose second argument is a type, and stdarg.h's is not the
++    // only such macro. It is restricted to types carrying an abstract
++    // declarator — `char *`, `int (*)(void)`, `long []` — none of which can
++    // be read as an expression, so a bare type name like `f(struct s)` stays
++    // an error. A LEADING qualifier is left out on purpose: making `const`
++    // valid at the start of an argument makes the lexer prefer the keyword
++    // inside `__attribute__((const))`.
++    argument_list: $ => seq('(', commaSep(choice(
++      $.expression,
++      $.compound_statement,
++      prec.dynamic(-2, alias($._abstract_type_argument, $.type_descriptor)),
++    )), ')'),
++
++    _abstract_type_argument: $ => seq(
++      field('type', $.type_specifier),
++      repeat($.type_qualifier),
++      field('declarator', $._abstract_declarator),
++    ),
+ 
+     field_expression: $ => seq(
+       prec(PREC.FIELD, seq(
+diff --git a/test/corpus/expressions.txt b/test/corpus/expressions.txt
+index be245fa..7fb0eea 100644
+--- a/test/corpus/expressions.txt
++++ b/test/corpus/expressions.txt
+@@ -1518,3 +1518,59 @@ void f(void) {
+           (gnu_asm_qualifier)
+           assembly_code: (string_literal
+             (string_content)))))))
++
++================================================================================
++A type as a call argument
++================================================================================
++
++void f(va_list ap) {
++  char *a = va_arg(ap, char *);
++  int (*g)(void) = va_arg(ap, int (*)(void));
++}
++
++--------------------------------------------------------------------------------
++
++(translation_unit
++  (function_definition
++    type: (primitive_type)
++    declarator: (function_declarator
++      declarator: (identifier)
++      parameters: (parameter_list
++        (parameter_declaration
++          type: (type_identifier)
++          declarator: (identifier))))
++    body: (compound_statement
++      (declaration
++        type: (primitive_type)
++        declarator: (init_declarator
++          declarator: (pointer_declarator
++            declarator: (identifier))
++          value: (call_expression
++            function: (identifier)
++            arguments: (argument_list
++              (identifier)
++              (type_descriptor
++                type: (primitive_type)
++                declarator: (abstract_pointer_declarator))))))
++      (declaration
++        type: (primitive_type)
++        declarator: (init_declarator
++          declarator: (function_declarator
++            declarator: (parenthesized_declarator
++              (pointer_declarator
++                declarator: (identifier)))
++            parameters: (parameter_list
++              (parameter_declaration
++                type: (primitive_type))))
++          value: (call_expression
++            function: (identifier)
++            arguments: (argument_list
++              (identifier)
++              (type_descriptor
++                type: (primitive_type)
++                declarator: (abstract_function_declarator
++                  declarator: (abstract_parenthesized_declarator
++                    (abstract_pointer_declarator))
++                  parameters: (parameter_list
++                    (parameter_declaration
++                      type: (primitive_type))))))))))))
