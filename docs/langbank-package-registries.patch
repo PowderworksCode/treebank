@@ -1,0 +1,950 @@
+diff --git a/README.md b/README.md
+index 2e935cd..d4c44e4 100644
+--- a/README.md
++++ b/README.md
+@@ -70,6 +70,8 @@ Lifted from `entl-codebase/src/profiles`, essentially unchanged:
+ | ecosystems | 5 — cargo, npm, pnpm, yarn, bun |
+ | tool profiles | 17, with 31 command patterns — what an invocation does and what it produces |
+ | artifacts | binary, napi, site, tauri |
++| package registries | 6 — crates.io, npm, PyPI, Maven Central, NuGet, Debian |
++| archive shapes | 10 — what a download arrives in, and how to open it |
+ | facets | structured-code, style-host, component-host |
+ | conventions | test layout, inline-test detection, typecheck defaults |
+ | verbosity | measured relative verbosity per language and per language pair |
+@@ -147,9 +149,11 @@ data/
+   comment-syntax.toml       tables shared by languages that comment alike
+   facets.toml               reusable source surfaces
+   artifacts.toml            what a build produces
++  archives.toml             what a registry serves, and how to open it
+   languages/rust.toml       one file per language, all 827 of them
+   sources/linguist.toml     upstreams checked against, pinned by revision and digest
+   ecosystems/cargo.toml     one file per ecosystem, with the directories it generates
++  package-registries/pypi.toml  one file per registry, with its endpoints
+   tools/cargo.toml          one file per tool, with its command patterns
+ ```
+ 
+diff --git a/build.rs b/build.rs
+index f0d2d1e..b0b26f4 100644
+--- a/build.rs
++++ b/build.rs
+@@ -535,6 +535,205 @@ fn tools(out: &mut String, directory: &Path) {
+     out.push_str("}\n\n");
+ }
+ 
++/// Archive shapes, keyed by id in one table like facets and artifacts.
++fn archives(out: &mut String, path: &Path) {
++    let text = std::fs::read_to_string(path).expect("read archives.toml");
++    let shapes: BTreeMap<String, Value> = toml::from_str(&text).expect("parse archives.toml");
++    out.push_str("pub(crate) mod archive_shapes {\n");
++    for (id, shape) in &shapes {
++        let compression = shape
++            .get("compression")
++            .and_then(Value::as_array)
++            .map_or_else(Vec::new, |array| {
++                array
++                    .iter()
++                    .filter_map(Value::as_str)
++                    .map(|kind| format!("crate::ArchiveCompression::{}", camel(kind)))
++                    .collect()
++            });
++        let member = shape
++            .get("member")
++            .and_then(Value::as_str)
++            .map_or_else(|| "None".to_owned(), |member| format!("Some({member:?})"));
++        writeln!(
++            out,
++            "    pub static {name}: crate::ArchiveShape = crate::ArchiveShape {{\n\
++             \x20       id: {id:?},\n\
++             \x20       display_name: {display:?},\n\
++             \x20       container: crate::ArchiveContainer::{container},\n\
++             \x20       compression: &[{compression}],\n\
++             \x20       strip_root: {strip},\n\
++             \x20       member: {member},\n\
++             \x20       carries: crate::ArchiveContents::{carries},\n\
++             \x20   }};\n\
++             \x20   crate::registry::submit! {{ crate::ArchiveRegistration(&{name}) }}",
++            name = screaming(id),
++            display = shape
++                .get("display-name")
++                .and_then(Value::as_str)
++                .unwrap_or(id),
++            container = camel(
++                shape
++                    .get("container")
++                    .and_then(Value::as_str)
++                    .unwrap_or("tar")
++            ),
++            compression = compression.join(", "),
++            strip = shape
++                .get("strip-root")
++                .and_then(Value::as_bool)
++                .unwrap_or(false),
++            member = member,
++            carries = camel(
++                shape
++                    .get("carries")
++                    .and_then(Value::as_str)
++                    .unwrap_or("source")
++            ),
++        )
++        .expect("write archive shape");
++    }
++    out.push_str("}\n\n");
++}
++
++/// Where a published version comes from. One file per registry, pointing at
++/// the languages it publishes, the ecosystems that resolve against it and the
++/// archive shapes it serves.
++fn package_registries(out: &mut String, directory: &Path) {
++    let mut files = std::fs::read_dir(directory)
++        .expect("read data/package-registries")
++        .filter_map(Result::ok)
++        .map(|entry| entry.path())
++        .filter(|path| path.extension().is_some_and(|ext| ext == "toml"))
++        .collect::<Vec<_>>();
++    files.sort();
++
++    out.push_str("pub(crate) mod package_registries {\n");
++    let mut exports = Vec::new();
++    for path in &files {
++        println!("cargo:rerun-if-changed={}", path.display());
++        let text = std::fs::read_to_string(path).expect("read package registry toml");
++        let entry: Value =
++            toml::from_str(&text).unwrap_or_else(|error| panic!("{}: {error}", path.display()));
++        let id = entry
++            .get("id")
++            .and_then(Value::as_str)
++            .expect("package registry id");
++        exports.push(id.to_owned());
++
++        let languages = entry
++            .get("languages")
++            .and_then(Value::as_array)
++            .map_or_else(Vec::new, |array| {
++                array
++                    .iter()
++                    .filter_map(Value::as_str)
++                    .map(|language| {
++                        format!("&super::super::languages::{}::PROFILE", ident(language))
++                    })
++                    .collect()
++            });
++        let ecosystems = entry
++            .get("ecosystems")
++            .and_then(Value::as_array)
++            .map_or_else(Vec::new, |array| {
++                array
++                    .iter()
++                    .filter_map(Value::as_str)
++                    .map(|eco| format!("&super::super::ecosystems::{}::PROFILE", ident(eco)))
++                    .collect()
++            });
++        let archives =
++            entry
++                .get("archives")
++                .and_then(Value::as_array)
++                .map_or_else(Vec::new, |array| {
++                    array
++                        .iter()
++                        .filter_map(Value::as_str)
++                        .map(|archive| {
++                            format!("&super::super::archive_shapes::{}", screaming(archive))
++                        })
++                        .collect()
++                });
++        let optional = |key: &str| {
++            entry
++                .get(key)
++                .and_then(Value::as_str)
++                .map_or_else(|| "None".to_owned(), |value| format!("Some({value:?})"))
++        };
++        let popularity = entry.get("popularity").map_or_else(
++            || "None".to_owned(),
++            |popularity| {
++                format!(
++                    "Some(crate::PopularitySource {{ source: {:?}, publisher: {:?}, first_party: {}, metric: crate::PopularityMetric::{} }})",
++                    popularity.get("source").and_then(Value::as_str).unwrap_or_default(),
++                    popularity.get("publisher").and_then(Value::as_str).unwrap_or_default(),
++                    popularity.get("first-party").and_then(Value::as_bool).unwrap_or(false),
++                    camel(popularity.get("metric").and_then(Value::as_str).unwrap_or("downloads")),
++                )
++            },
++        );
++
++        writeln!(
++            out,
++            "    pub mod {module} {{\n\
++             \x20       pub static PROFILE: crate::PackageRegistry = crate::PackageRegistry {{\n\
++             \x20           id: {id:?},\n\
++             \x20           display_name: {display:?},\n\
++             \x20           role: crate::RegistryRole::{role},\n\
++             \x20           languages: &[{languages}],\n\
++             \x20           ecosystems: &[{ecosystems}],\n\
++             \x20           coordinate: {coordinate},\n\
++             \x20           metadata_url: {metadata},\n\
++             \x20           metadata_accept: {accept},\n\
++             \x20           download_url: {download},\n\
++             \x20           archives: &[{archives}],\n\
++             \x20           source_availability: crate::SourceAvailability::{availability},\n\
++             \x20           popularity: {popularity},\n\
++             \x20       }};\n\
++             \x20       crate::registry::submit! {{ crate::PackageRegistryRegistration(&PROFILE) }}\n\
++             \x20   }}",
++            module = ident(id),
++            display = entry
++                .get("display-name")
++                .and_then(Value::as_str)
++                .unwrap_or(id),
++            role = camel(
++                entry
++                    .get("role")
++                    .and_then(Value::as_str)
++                    .unwrap_or("package-registry")
++            ),
++            languages = languages.join(", "),
++            ecosystems = ecosystems.join(", "),
++            coordinate = optional("coordinate"),
++            metadata = optional("metadata-url"),
++            accept = optional("metadata-accept"),
++            download = optional("download-url"),
++            archives = archives.join(", "),
++            availability = camel(
++                entry
++                    .get("source-availability")
++                    .and_then(Value::as_str)
++                    .unwrap_or("published")
++            ),
++            popularity = popularity,
++        )
++        .expect("write package registry");
++    }
++    for id in &exports {
++        writeln!(
++            out,
++            "    pub use {}::PROFILE as {};",
++            ident(id),
++            screaming(id)
++        )
++        .expect("write package registry export");
++    }
++    out.push_str("}\n\n");
++}
++
+ fn main() {
+     let data = Path::new("data");
+     println!("cargo:rerun-if-changed=data");
+@@ -543,6 +742,8 @@ fn main() {
+     facets(&mut out, &data.join("facets.toml"));
+     artifacts(&mut out, &data.join("artifacts.toml"));
+     ecosystems(&mut out, &data.join("ecosystems"));
++    archives(&mut out, &data.join("archives.toml"));
++    package_registries(&mut out, &data.join("package-registries"));
+     tools(&mut out, &data.join("tools"));
+ 
+     out.push_str("pub(crate) mod languages {\n");
+diff --git a/data/archives.toml b/data/archives.toml
+new file mode 100644
+index 0000000..652673b
+--- /dev/null
++++ b/data/archives.toml
+@@ -0,0 +1,86 @@
++# How a registry packages a published version, and what opening one requires.
++#
++# Distinct from `artifacts.toml`, which is what a *build produces* — a binary, a
++# site bundle, a Tauri app. This is what a *registry serves*: the container a
++# download arrives in. A consumer that unpacks one needs four facts, none of
++# which can be read off the file extension reliably enough to guess:
++#
++#   container    tar or zip, before compression
++#   strip-root   tarballs wrap their entries in one directory; zips do not, and
++#                stripping one would drop the whole `com/` of a Java coordinate
++#   member       the payload is a second archive inside the first (`.gem`)
++#   carries      source as written, or the output of a build
++#
++# `carries` is the one that decides whether a corpus consumer should want it at
++# all: a wheel and an sdist are both Python packages, and only one of them is
++# the tree the author wrote.
++
++[crate]
++display-name = "crates.io .crate"
++container = "tar"
++compression = ["gzip"]
++strip-root = true
++carries = "source"
++
++[npm-tarball]
++display-name = "npm tarball"
++container = "tar"
++compression = ["gzip"]
++strip-root = true
++carries = "source"
++
++[sdist]
++display-name = "Python source distribution"
++container = "tar"
++compression = ["gzip"]
++strip-root = true
++carries = "source"
++
++[wheel]
++display-name = "Python wheel"
++container = "zip"
++strip-root = false
++carries = "build-output"
++
++[sources-jar]
++display-name = "Maven -sources.jar"
++container = "zip"
++strip-root = false
++carries = "source"
++
++[jar]
++display-name = "Maven .jar"
++container = "zip"
++strip-root = false
++carries = "build-output"
++
++[nupkg]
++display-name = "NuGet package"
++container = "zip"
++strip-root = false
++carries = "build-output"
++
++# The one nested shape: the outer tar holds `data.tar.gz`, `metadata.gz` and
++# `checksums.yaml.gz` at its root, and the source is inside the first of them.
++[gem]
++display-name = "RubyGems .gem"
++container = "tar"
++strip-root = false
++member = "data.tar.gz"
++carries = "source"
++
++# Debian ships whatever upstream released, so all three compressions occur and
++# a consumer has to sniff rather than trust the name.
++[debian-orig-tarball]
++display-name = "Debian .orig.tar.*"
++container = "tar"
++compression = ["gzip", "xz", "bzip2"]
++strip-root = true
++carries = "source"
++
++[git-source-archive]
++display-name = "git forge source archive"
++container = "tar"
++compression = ["gzip"]
++strip-root = true
++carries = "source"
+diff --git a/data/package-registries/crates-io.toml b/data/package-registries/crates-io.toml
+new file mode 100644
+index 0000000..466ea5c
+--- /dev/null
++++ b/data/package-registries/crates-io.toml
+@@ -0,0 +1,15 @@
++id = "crates-io"
++display-name = "crates.io"
++role = "package-registry"
++languages = ["rust"]
++ecosystems = ["cargo"]
++download-url = "https://static.crates.io/crates/{name}/{name}-{version}.crate"
++archives = ["crate"]
++
++# crates.io publishes its whole database as a nightly dump, so the ranking is
++# first-party and needs no third-party index.
++[popularity]
++source = "https://static.crates.io/db-dump.tar.gz"
++publisher = "crates.io"
++first-party = true
++metric = "downloads"
+diff --git a/data/package-registries/debian.toml b/data/package-registries/debian.toml
+new file mode 100644
+index 0000000..6efacb9
+--- /dev/null
++++ b/data/package-registries/debian.toml
+@@ -0,0 +1,24 @@
++# A distribution rather than a registry: it publishes upstream's own release
++# tarball for software that has no registry of its own, which is what makes it
++# the only usable corpus source for C.
++id = "debian"
++display-name = "Debian"
++role = "distribution"
++# Deliberately no `languages`. A distribution ships every language there is,
++# and which ones a given source package contains is a measured fact, not a
++# static one — see `sloc-url`.
++metadata-url = "https://deb.debian.org/debian/dists/{suite}/main/source/Sources.gz"
++download-url = "https://deb.debian.org/debian/{directory}/{file}"
++archives = ["debian-orig-tarball"]
++# Per-package SLOC by language, which is how a consumer finds out whether a
++# source package is really the language it wants.
++sloc-url = "https://sources.debian.org/api/info/package/{name}/{version}/"
++
++# popcon counts machines that have the package installed, aggregated per source
++# package by Debian itself. Closer in kind to a downloads number than to a
++# dependency-graph proxy, but it is neither: it counts installations.
++[popularity]
++source = "https://popcon.debian.org/source/by_inst"
++publisher = "popcon.debian.org"
++first-party = true
++metric = "installs"
+diff --git a/data/package-registries/maven-central.toml b/data/package-registries/maven-central.toml
+new file mode 100644
+index 0000000..77108ea
+--- /dev/null
++++ b/data/package-registries/maven-central.toml
+@@ -0,0 +1,19 @@
++id = "maven-central"
++display-name = "Maven Central"
++role = "package-registry"
++languages = ["java"]
++# `group:artifact`, where the group's dots become path segments.
++coordinate = "{group}:{artifact}"
++metadata-url = "https://repo1.maven.org/maven2/{group-path}/{artifact}/maven-metadata.xml"
++download-url = "https://repo1.maven.org/maven2/{group-path}/{artifact}/{version}/{artifact}-{version}-sources.jar"
++archives = ["sources-jar", "jar"]
++
++# Central publishes no download counts. ecosyste.ms indexes the registry and
++# exposes how many public repositories depend on each artifact — a
++# dependency-graph proxy, not traffic, and not comparable with a downloads
++# number without saying so.
++[popularity]
++source = "https://packages.ecosyste.ms/api/v1/registries/repo1.maven.org/packages"
++publisher = "packages.ecosyste.ms"
++first-party = false
++metric = "dependent-repos"
+diff --git a/data/package-registries/npm.toml b/data/package-registries/npm.toml
+new file mode 100644
+index 0000000..36ff37e
+--- /dev/null
++++ b/data/package-registries/npm.toml
+@@ -0,0 +1,20 @@
++id = "npm"
++display-name = "npm"
++role = "package-registry"
++languages = ["javascript", "typescript"]
++# One registry, four package managers. This is why a registry is not an
++# ecosystem: pnpm, yarn and bun all resolve against registry.npmjs.org.
++ecosystems = ["npm", "pnpm", "yarn", "bun"]
++metadata-url = "https://registry.npmjs.org/{name}"
++# The download URL is not derivable from the coordinate: it is `dist.tarball`
++# in the metadata document, so a consumer must read the metadata first.
++metadata-accept = "application/vnd.npm.install-v1+json"
++archives = ["npm-tarball"]
++
++# npm exposes per-package download counts but no "top N" endpoint at all, so
++# the ranking has to come from a third party that keeps one.
++[popularity]
++source = "https://registry.npmjs.org/npm-high-impact"
++publisher = "wooorm/npm-high-impact"
++first-party = false
++metric = "downloads"
+diff --git a/data/package-registries/nuget.toml b/data/package-registries/nuget.toml
+new file mode 100644
+index 0000000..96457a3
+--- /dev/null
++++ b/data/package-registries/nuget.toml
+@@ -0,0 +1,21 @@
++id = "nuget"
++display-name = "NuGet"
++role = "package-registry"
++languages = ["c-sharp"]
++# The flat container addresses packages by lowercased id.
++name-case = "lower"
++download-url = "https://api.nuget.org/v3-flatcontainer/{name}/{version}/{name}.{version}.nupkg"
++archives = ["nupkg"]
++
++# A .nupkg ships compiled assemblies; there is not one .cs file in any of the
++# top twenty packages. What it does ship is SourceLink metadata — a repository
++# url and commit in the .nuspec — so source has to be fetched from the forge.
++source-availability = "source-link"
++
++# NuGet's search service ranks an empty query by download count and returns the
++# count with each hit, which is the registry's own number.
++[popularity]
++source = "https://azuresearch-usnc.nuget.org/query"
++publisher = "NuGet"
++first-party = true
++metric = "downloads"
+diff --git a/data/package-registries/pypi.toml b/data/package-registries/pypi.toml
+new file mode 100644
+index 0000000..8b989c5
+--- /dev/null
++++ b/data/package-registries/pypi.toml
+@@ -0,0 +1,16 @@
++id = "pypi"
++display-name = "PyPI"
++role = "package-registry"
++languages = ["python"]
++metadata-url = "https://pypi.org/pypi/{name}/json"
++# Both are published; only the sdist carries source. A package that publishes
++# no sdist has no source on PyPI at all.
++archives = ["sdist", "wheel"]
++
++# PyPI serves no download counts through its own API — they live in the public
++# BigQuery dataset, and this is the standard published extract of it.
++[popularity]
++source = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages.min.json"
++publisher = "hugovk/top-pypi-packages"
++first-party = false
++metric = "downloads"
+diff --git a/src/lib.rs b/src/lib.rs
+index 37b39d0..c1ab551 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -22,6 +22,7 @@ mod ecosystem;
+ mod facet;
+ mod ids;
+ mod language;
++mod package_registry;
+ mod tool;
+ mod traversal;
+ mod verbosity;
+@@ -60,6 +61,17 @@ pub use languages::rust::PROFILE as RUST_LANGUAGE;
+ pub use languages::scss::PROFILE as SCSS_LANGUAGE;
+ pub use languages::shell::PROFILE as SHELL_LANGUAGE;
+ pub use languages::typescript::PROFILE as TYPESCRIPT_LANGUAGE;
++pub use package_registries::{
++    CRATES_IO as CRATES_IO_REGISTRY, DEBIAN as DEBIAN_REGISTRY,
++    MAVEN_CENTRAL as MAVEN_CENTRAL_REGISTRY, NPM as NPM_REGISTRY, NUGET as NUGET_REGISTRY,
++    PYPI as PYPI_REGISTRY,
++};
++pub use package_registry::{
++    ArchiveCompression, ArchiveContainer, ArchiveContents, ArchiveRegistration, ArchiveShape,
++    PackageRegistry, PackageRegistryRegistration, PopularityMetric, PopularitySource, RegistryRole,
++    SourceAvailability, archive_shape, archive_shapes, package_registries,
++    package_registries_for_language, package_registry,
++};
+ pub use tool::{
+     ArgumentPattern, CiWorkload, CommandPattern, TaskKind, TestRetryConfiguration,
+     TestRetryProfile, TestRetrySignal, ToolId, ToolProfile, ToolRegistration, classify_tool,
+diff --git a/src/package_registry.rs b/src/package_registry.rs
+new file mode 100644
+index 0000000..2170c23
+--- /dev/null
++++ b/src/package_registry.rs
+@@ -0,0 +1,268 @@
++//! Where a published version comes from, and what shape it arrives in.
++//!
++//! A package registry is not an ecosystem. npm, pnpm, yarn and bun are four
++//! ecosystems with four manifests and four lockfiles, and they all resolve
++//! against one registry; Debian is a registry-shaped source with no ecosystem
++//! at all. Keeping them apart is the same separation this crate already makes
++//! between a language and the ecosystem that publishes it.
++//!
++//! Endpoints are data. Fetching is not: nothing here opens a socket, and the
++//! URL templates are strings a consumer substitutes into, exactly as
++//! `data/sources/linguist.toml` records the URL it was checked against.
++
++use std::collections::BTreeSet;
++use std::sync::LazyLock;
++
++use crate::registry;
++use crate::{EcosystemProfile, LanguageProfile, ecosystem_profiles, language_profiles};
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum RegistryRole {
++    /// Publishes packages under coordinates it owns.
++    PackageRegistry,
++    /// Redistributes upstream releases, and ships every language there is.
++    Distribution,
++}
++
++/// The container a download arrives in, before compression.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ArchiveContainer {
++    Tar,
++    Zip,
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ArchiveCompression {
++    Gzip,
++    Xz,
++    Bzip2,
++}
++
++/// Whether an archive holds source as written or the output of a build.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum ArchiveContents {
++    Source,
++    BuildOutput,
++}
++
++/// What has to be known to open one archive.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct ArchiveShape {
++    pub id: &'static str,
++    pub display_name: &'static str,
++    pub container: ArchiveContainer,
++    /// Compressions this shape occurs in. More than one means a consumer has
++    /// to sniff rather than trust the file name.
++    pub compression: &'static [ArchiveCompression],
++    /// Tarballs wrap their entries in a single directory and zips do not.
++    /// Stripping a zip's first path segment would drop the whole `com/` of
++    /// `com/google/common/base/Ascii.java`.
++    pub strip_root: bool,
++    /// The payload is a second archive inside this one, under this name.
++    pub member: Option<&'static str>,
++    pub carries: ArchiveContents,
++}
++
++impl ArchiveShape {
++    pub fn is_source(&self) -> bool {
++        matches!(self.carries, ArchiveContents::Source)
++    }
++}
++
++/// How popular a package is, and who says so.
++///
++/// The metric matters more than the number. A downloads count, an installed-
++/// machines count and a count of public repositories that depend on something
++/// are three different questions, and a consumer that ranks by one while
++/// describing it as another is publishing a wrong claim rather than an
++/// imprecise one.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub struct PopularitySource {
++    pub source: &'static str,
++    pub publisher: &'static str,
++    /// Whether the registry itself publishes this number. A third-party index
++    /// can lag, change shape, or stop.
++    pub first_party: bool,
++    pub metric: PopularityMetric,
++}
++
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum PopularityMetric {
++    /// Traffic: how often it was fetched.
++    Downloads,
++    /// Machines that have it installed.
++    Installs,
++    /// Public repositories that depend on it — a dependency-graph proxy, not
++    /// traffic, and not comparable with a downloads number.
++    DependentRepos,
++}
++
++/// Whether source can be had from the registry at all.
++#[derive(Debug, Clone, Copy, PartialEq, Eq)]
++pub enum SourceAvailability {
++    /// A source archive is published under a coordinate of its own.
++    Published,
++    /// The package ships build output, and names the repository and commit it
++    /// was built from. Source has to come from the forge.
++    SourceLink,
++}
++
++#[derive(Debug, Clone, Copy)]
++pub struct PackageRegistry {
++    pub id: &'static str,
++    pub display_name: &'static str,
++    pub role: RegistryRole,
++    /// Languages this registry publishes. Empty for a distribution, which
++    /// ships all of them.
++    pub languages: &'static [&'static LanguageProfile],
++    /// Ecosystems that resolve against it.
++    pub ecosystems: &'static [&'static EcosystemProfile],
++    /// Coordinate shape, when a name alone does not address a package.
++    pub coordinate: Option<&'static str>,
++    pub metadata_url: Option<&'static str>,
++    pub metadata_accept: Option<&'static str>,
++    pub download_url: Option<&'static str>,
++    pub archives: &'static [&'static ArchiveShape],
++    pub source_availability: SourceAvailability,
++    pub popularity: Option<PopularitySource>,
++}
++
++impl PackageRegistry {
++    /// The archives worth fetching for a corpus: the ones that carry source.
++    pub fn source_archives(&self) -> impl Iterator<Item = &'static ArchiveShape> {
++        self.archives.iter().copied().filter(|a| a.is_source())
++    }
++
++    pub fn publishes_language(&self, language: &LanguageProfile) -> bool {
++        self.languages
++            .iter()
++            .any(|candidate| std::ptr::eq(*candidate, language))
++    }
++
++    pub fn serves_ecosystem(&self, ecosystem: &EcosystemProfile) -> bool {
++        self.ecosystems
++            .iter()
++            .any(|candidate| std::ptr::eq(*candidate, ecosystem))
++    }
++}
++
++#[derive(Debug, Clone, Copy)]
++pub struct ArchiveRegistration(pub &'static ArchiveShape);
++
++#[derive(Debug, Clone, Copy)]
++pub struct PackageRegistryRegistration(pub &'static PackageRegistry);
++
++registry::collect!(ArchiveRegistration);
++registry::collect!(PackageRegistryRegistration);
++
++static ARCHIVES: LazyLock<Vec<&'static ArchiveShape>> = LazyLock::new(|| {
++    let mut shapes = registry::iter::<ArchiveRegistration>
++        .into_iter()
++        .map(|registration| registration.0)
++        .collect::<Vec<_>>();
++    shapes.sort_by_key(|shape| shape.id);
++    for pair in shapes.windows(2) {
++        assert_ne!(pair[0].id, pair[1].id, "duplicate archive shape ID");
++    }
++    for shape in &shapes {
++        // A zip carries its own compression per entry; naming one outside it
++        // would be describing a container this crate does not model.
++        assert!(
++            !matches!(shape.container, ArchiveContainer::Zip) || shape.compression.is_empty(),
++            "archive shape {:?} is a zip and names a compression",
++            shape.id
++        );
++    }
++    shapes
++});
++
++static REGISTERED: LazyLock<Vec<&'static PackageRegistry>> = LazyLock::new(|| {
++    let mut registries = registry::iter::<PackageRegistryRegistration>
++        .into_iter()
++        .map(|registration| registration.0)
++        .collect::<Vec<_>>();
++    registries.sort_by_key(|registry| registry.id);
++    for pair in registries.windows(2) {
++        assert_ne!(pair[0].id, pair[1].id, "duplicate package registry ID");
++    }
++    let shapes = ARCHIVES.iter().collect::<Vec<_>>();
++    for entry in &registries {
++        for language in entry.languages {
++            assert!(
++                language_profiles()
++                    .iter()
++                    .any(|registered| std::ptr::eq(*registered, *language)),
++                "package registry {:?} publishes unregistered language {:?}",
++                entry.id,
++                language.id
++            );
++        }
++        for ecosystem in entry.ecosystems {
++            assert!(
++                ecosystem_profiles()
++                    .iter()
++                    .any(|registered| std::ptr::eq(*registered, *ecosystem)),
++                "package registry {:?} serves unregistered ecosystem {:?}",
++                entry.id,
++                ecosystem.id
++            );
++        }
++        let mut named = BTreeSet::new();
++        for archive in entry.archives {
++            assert!(
++                shapes
++                    .iter()
++                    .any(|registered| std::ptr::eq(**registered, *archive)),
++                "package registry {:?} names unregistered archive {:?}",
++                entry.id,
++                archive.id
++            );
++            assert!(
++                named.insert(archive.id),
++                "package registry {:?} repeats archive {:?}",
++                entry.id,
++                archive.id
++            );
++        }
++        // A registry that publishes source must say which archive carries it.
++        // The alternative is SourceLink, where the answer is "none of them".
++        assert!(
++            !matches!(entry.source_availability, SourceAvailability::Published)
++                || entry.archives.iter().any(|archive| archive.is_source()),
++            "package registry {:?} publishes source but names no source archive",
++            entry.id
++        );
++    }
++    registries
++});
++
++pub fn archive_shapes() -> &'static [&'static ArchiveShape] {
++    ARCHIVES.as_slice()
++}
++
++pub fn archive_shape(id: &str) -> Option<&'static ArchiveShape> {
++    archive_shapes()
++        .binary_search_by_key(&id, |shape| shape.id)
++        .ok()
++        .map(|index| archive_shapes()[index])
++}
++
++pub fn package_registries() -> &'static [&'static PackageRegistry] {
++    REGISTERED.as_slice()
++}
++
++pub fn package_registry(id: &str) -> Option<&'static PackageRegistry> {
++    package_registries()
++        .binary_search_by_key(&id, |entry| entry.id)
++        .ok()
++        .map(|index| package_registries()[index])
++}
++
++/// Every registry that publishes a language, in id order.
++pub fn package_registries_for_language(language: &str) -> Vec<&'static PackageRegistry> {
++    package_registries()
++        .iter()
++        .copied()
++        .filter(|entry| entry.languages.iter().any(|profile| profile.id == language))
++        .collect()
++}
+diff --git a/tests/package_registries.rs b/tests/package_registries.rs
+new file mode 100644
+index 0000000..530bb2e
+--- /dev/null
++++ b/tests/package_registries.rs
+@@ -0,0 +1,153 @@
++//! Package registries and archive shapes, generated from `data/`.
++//!
++//! Registration happens at link time, so a crate that compiles proves nothing
++//! about whether these registered. Same discipline as the other generated
++//! registries: assert the facts, so a TOML file that silently loses a field
++//! fails here rather than in a consumer.
++
++use langbank::*;
++
++#[test]
++fn the_registries_are_the_expected_size() {
++    assert_eq!(package_registries().len(), 6, "package registries");
++    assert_eq!(archive_shapes().len(), 10, "archive shapes");
++}
++
++#[test]
++fn registries_point_at_languages_by_pointer() {
++    let crates_io = package_registry("crates-io").expect("crates-io");
++    let rust = language_profile("rust").expect("rust");
++    assert!(crates_io.publishes_language(rust));
++
++    let python = language_profile("python").expect("python");
++    assert!(!crates_io.publishes_language(python));
++    assert!(
++        package_registry("pypi")
++            .expect("pypi")
++            .publishes_language(python)
++    );
++
++    // C# is `c-sharp` here. Consumers that spell it otherwise need a mapping,
++    // and this is the assertion that tells them so.
++    let registries = package_registries_for_language("c-sharp");
++    assert_eq!(registries.len(), 1);
++    assert_eq!(registries[0].id, "nuget");
++}
++
++#[test]
++fn one_registry_serves_four_ecosystems() {
++    // The reason a registry is not an ecosystem: npm, pnpm, yarn and bun are
++    // four ecosystems with four lockfiles, resolving against one registry.
++    let npm = package_registry("npm").expect("npm registry");
++    assert_eq!(npm.ecosystems.len(), 4);
++    for id in ["npm", "pnpm", "yarn", "bun"] {
++        let ecosystem = ecosystem_profile(id).expect("ecosystem");
++        assert!(npm.serves_ecosystem(ecosystem), "npm registry serves {id}");
++    }
++    assert!(!npm.serves_ecosystem(ecosystem_profile("cargo").expect("cargo")));
++}
++
++#[test]
++fn archives_keep_the_facts_an_unpacker_needs() {
++    // A tarball wraps its entries in one directory; a zip does not, and
++    // stripping one would drop the whole `com/` of a Java coordinate.
++    let crate_archive = archive_shape("crate").expect("crate");
++    assert_eq!(crate_archive.container, ArchiveContainer::Tar);
++    assert!(crate_archive.strip_root);
++
++    let sources_jar = archive_shape("sources-jar").expect("sources-jar");
++    assert_eq!(sources_jar.container, ArchiveContainer::Zip);
++    assert!(!sources_jar.strip_root);
++
++    // Debian ships whatever upstream released, so a consumer has to sniff.
++    let orig = archive_shape("debian-orig-tarball").expect("debian-orig-tarball");
++    assert_eq!(
++        orig.compression,
++        &[
++            ArchiveCompression::Gzip,
++            ArchiveCompression::Xz,
++            ArchiveCompression::Bzip2
++        ]
++    );
++
++    // The one nested shape: the source is a second tarball inside the first.
++    let gem = archive_shape("gem").expect("gem");
++    assert_eq!(gem.member, Some("data.tar.gz"));
++    assert_eq!(gem.container, ArchiveContainer::Tar);
++}
++
++#[test]
++fn source_and_build_output_are_distinguished() {
++    // Both are published under a Python coordinate and only one is the tree
++    // the author wrote.
++    assert!(archive_shape("sdist").expect("sdist").is_source());
++    assert!(!archive_shape("wheel").expect("wheel").is_source());
++    assert!(!archive_shape("nupkg").expect("nupkg").is_source());
++
++    let pypi = package_registry("pypi").expect("pypi");
++    let source: Vec<&str> = pypi.source_archives().map(|shape| shape.id).collect();
++    assert_eq!(source, vec!["sdist"]);
++
++    // NuGet publishes no source at all: a .nupkg is assemblies, and the
++    // repository and commit it was built from are in the .nuspec.
++    let nuget = package_registry("nuget").expect("nuget");
++    assert_eq!(nuget.source_availability, SourceAvailability::SourceLink);
++    assert_eq!(nuget.source_archives().count(), 0);
++}
++
++#[test]
++fn a_popularity_number_carries_what_it_measures() {
++    // Three registries, three different questions. A consumer that ranks by
++    // one while describing it as another publishes a wrong claim.
++    let expected = [
++        ("crates-io", PopularityMetric::Downloads, true),
++        ("npm", PopularityMetric::Downloads, false),
++        ("pypi", PopularityMetric::Downloads, false),
++        ("maven-central", PopularityMetric::DependentRepos, false),
++        ("nuget", PopularityMetric::Downloads, true),
++        ("debian", PopularityMetric::Installs, true),
++    ];
++    for (id, metric, first_party) in expected {
++        let popularity = package_registry(id)
++            .expect("registry")
++            .popularity
++            .expect("popularity source");
++        assert_eq!(popularity.metric, metric, "{id} metric");
++        assert_eq!(popularity.first_party, first_party, "{id} first-party");
++        assert!(popularity.source.starts_with("https://"), "{id} source");
++    }
++}
++
++#[test]
++fn a_distribution_claims_no_language() {
++    // Debian ships every language there is; which one a source package holds
++    // is measured, not static.
++    let debian = package_registry("debian").expect("debian");
++    assert_eq!(debian.role, RegistryRole::Distribution);
++    assert!(debian.languages.is_empty());
++    assert!(debian.ecosystems.is_empty());
++
++    let crates_io = package_registry("crates-io").expect("crates-io");
++    assert_eq!(crates_io.role, RegistryRole::PackageRegistry);
++}
++
++#[test]
++fn endpoints_are_templates_not_requests() {
++    let maven = package_registry("maven-central").expect("maven-central");
++    assert_eq!(maven.coordinate, Some("{group}:{artifact}"));
++    assert!(
++        maven
++            .download_url
++            .expect("download url")
++            .ends_with("{artifact}-{version}-sources.jar")
++    );
++
++    // npm's download URL is not derivable from the coordinate: it is
++    // `dist.tarball` in the metadata document.
++    let npm = package_registry("npm").expect("npm");
++    assert_eq!(npm.download_url, None);
++    assert_eq!(
++        npm.metadata_accept,
++        Some("application/vnd.npm.install-v1+json")
++    );
++}
