@@ -61,6 +61,9 @@ pub enum LangName {
     #[serde(rename = "zig")]
     #[value(name = "zig")]
     Zig,
+    #[serde(rename = "lua")]
+    #[value(name = "lua")]
+    Lua,
 }
 
 impl LangName {
@@ -77,6 +80,7 @@ impl LangName {
             LangName::Go => "go",
             LangName::Bash => "bash",
             LangName::Zig => "zig",
+            LangName::Lua => "lua",
         }
     }
 }
@@ -91,6 +95,37 @@ impl std::fmt::Display for LangName {
 pub struct Upstream {
     pub git_url: String,
     pub sha: String,
+}
+
+/// The reference parser a sweep's verdicts were produced with.
+///
+/// This is `generate_cli` for the oracle, and it is load-bearing for exactly
+/// the same reason. `generate_cli` exists because regenerating with a
+/// different tree-sitter-cli silently changes what the grammar accepts; this
+/// exists because running a different reference parser silently changes what
+/// "invalid" means, and a sweep's gap/noise split is only interpretable
+/// against the parser that produced it.
+///
+/// Lua is the cheapest language that forces the point — 5.1, 5.2, 5.3, 5.4,
+/// LuaJIT and Luau are genuinely different syntaxes, `goto` is 5.2+ and
+/// integer division is 5.3+, so which `luac` is installed decides verdicts —
+/// but it is not the first language to need it. C's answer is only meaningful
+/// as "libclang 20.1.2, given `-std=gnu17`", and Scala (2 vs 3), Haskell
+/// (per-package `LANGUAGE` pragmas) and Zig (a moving target) all need it
+/// later. Hence `flags`: the dialect is not always a version number.
+#[derive(Debug, Deserialize)]
+pub struct Oracle {
+    /// What runs, concretely enough to re-run — e.g. `tools/lua-oracle/check.lua`.
+    pub tool: String,
+    /// The exact version whose verdicts the ledger's sweep numbers describe.
+    pub version: String,
+    /// The language dialect that version implies, named in the language's own
+    /// terms: "PUC-Rio Lua 5.4", "GNU C17", "Python 3.12".
+    pub dialect: String,
+    /// Flags that select the dialect where a version alone does not, e.g.
+    /// C's `-std=gnu17`. Empty when the tool's version settles it.
+    #[serde(default)]
+    pub flags: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -111,6 +146,11 @@ pub struct Ledger {
     pub generate_cli: String,
     #[serde(default)]
     pub generate_dirs: Option<Vec<String>>,
+    /// Absent on grammars that predate the field; `check` reports it as a
+    /// gap rather than a hard error so adding it stays a per-grammar change
+    /// with its own evidence, exactly like adopting a new patch.
+    #[serde(default)]
+    pub oracle: Option<Oracle>,
     #[serde(default)]
     pub patches: Vec<Patch>,
 }
@@ -179,6 +219,28 @@ pub fn check(grammar_dir: &Path) -> Result<Vec<String>> {
 
     if led.generate_cli.is_empty() {
         bad.push("generate_cli is empty — the CLI version must be pinned".to_string());
+    }
+
+    // An oracle field that exists must be complete: a half-filled one is
+    // worse than none, because it reads as a recorded dialect while leaving
+    // the load-bearing part blank.
+    match &led.oracle {
+        None => bad.push(
+            "no oracle field — the reference parser's tool/version/dialect must be recorded \
+             alongside the verdicts it produced (see crates/treebank-lua/ledger.json)"
+                .to_string(),
+        ),
+        Some(o) => {
+            for (field, value) in [
+                ("tool", &o.tool),
+                ("version", &o.version),
+                ("dialect", &o.dialect),
+            ] {
+                if value.trim().is_empty() {
+                    bad.push(format!("oracle.{field} is empty"));
+                }
+            }
+        }
     }
 
     // Patches are applied in ledger order and numbered by filename, so the
@@ -256,7 +318,22 @@ pub fn run(grammar_dir: Option<&Path>) -> Result<()> {
         let problems = check(dir)?;
         total += problems.len();
         if problems.is_empty() {
-            println!("ledger: {} ok", dir.display());
+            let led = load(dir)?;
+            // The pinned dialect belongs on CI's stdout next to the grammar
+            // it judges: a sweep number quoted without the reference parser
+            // that produced it is not a claim this repo makes.
+            let oracle = led
+                .oracle
+                .map(|o| {
+                    let flags = if o.flags.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [{}]", o.flags.join(" "))
+                    };
+                    format!(" — oracle {} ({}){flags}", o.version, o.dialect)
+                })
+                .unwrap_or_default();
+            println!("ledger: {} ok{oracle}", dir.display());
         } else {
             println!("ledger: {} — {} problem(s)", dir.display(), problems.len());
             for p in problems {

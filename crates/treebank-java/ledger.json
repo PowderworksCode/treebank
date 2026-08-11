@@ -11,6 +11,16 @@
     "."
   ],
   "generate_deps": null,
+  "oracle": {
+    "tool": "tools/java-oracle/Check.java (JavacTask.parse), run with the JDK single-file source launcher",
+    "version": "OpenJDK 21.0.11",
+    "dialect": "Java, the JDK's own latest source level (21)",
+    "flags": [
+      "-proc:none",
+      "-XDshould-stop.ifError=PARSE"
+    ],
+    "note": "javac's own parser, stopped after PARSE so no attribution, no classpath resolution and no annotation processing happen; a missing dependency is not an error. Verified on 1000 files ripped out of their source trees with no classpath: 1000 valid. The JDK version is the source level and is load-bearing the way an interpreter version is elsewhere."
+  },
   "corpus": {
     "source": "Maven Central top-100 by dependent repositories (ecosyste.ms index of repo1.maven.org), fetched 2026-08-06; each artifact's -sources.jar at the version maven-metadata.xml calls <release>; .java files",
     "source_note": "Maven Central publishes no download counts, so the ranking is a dependency-graph proxy (how many public repos depend on the artifact) rather than traffic, unlike the crates.io and npm rankings. 11 of the top 100 are pom-only aggregators with no sources jar and are skipped, leaving 89 artifacts.",

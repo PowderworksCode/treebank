@@ -31,3 +31,6 @@
 [submodule "crates/treebank-zig/upstream"]
 	path = crates/treebank-zig/upstream
 	url = https://github.com/tree-sitter-grammars/tree-sitter-zig
+[submodule "crates/treebank-lua/upstream"]
+	path = crates/treebank-lua/upstream
+	url = https://github.com/tree-sitter-grammars/tree-sitter-lua

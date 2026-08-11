@@ -7,6 +7,13 @@
   },
   "generate_cli": "0.25.10",
   "generate_cli_note": "pinned: tree-sitter-cli 0.26.x ships Unicode identifier tables that wrongly exclude XID_Start chars (e.g. U+212A KELVIN SIGN), which breaks char literals like 'K' in some parse states; 0.25.10 and earlier are correct",
+  "oracle": {
+    "tool": "syn::parse_file, in-process in treebank-cli (crates/treebank-cli/src/lang/rust.rs)",
+    "version": "syn 2.0.119",
+    "dialect": "Rust 2021 edition",
+    "flags": [],
+    "note": "Parse-only and in-process, so it is the one oracle with no fork cost and the one that runs in parallel (rayon). syn parses the whole file to an AST and never resolves a name, expands a macro body, or type-checks."
+  },
   "corpus": {
     "source": "crates.io top-1000 by all-time downloads, db dump 2026-08-06",
     "files": 27307,

@@ -12,13 +12,21 @@
     "."
   ],
   "generate_deps": null,
+  "oracle": {
+    "tool": "tools/py-oracle/check.py (CPython compile(src, path, 'exec')), run under python3",
+    "version": "CPython 3.12.3",
+    "dialect": "Python 3.12",
+    "flags": [
+      "dont_inherit=True"
+    ],
+    "note": "Deliberately compile() and not ast.parse(): CPython enforces rules AFTER the parser that are still SyntaxErrors (return outside a function, a non-final bare except, duplicate parameter names) and ast.parse accepts all of them. Two-valued. The interpreter version IS the language version: match is 3.10+, the walrus 3.8+. See corpus.oracle_note for the measured cost of that choice."
+  },
   "corpus": {
     "source": "PyPI source distributions (sdist) of the top packages by download count. Wheels are never used as a fallback: a wheel is build output, so for anything with a build step it is not the tree the author wrote. Packages publishing no sdist are skipped by the fetch driver, as Java skips artifacts with no sources jar.",
     "ranking": "hugovk/top-pypi-packages (top-pypi-packages.min.json), the standard published extract of the public PyPI download dataset",
     "ranking_note": "PyPI's own API exposes no download counts; the numbers live in the public BigQuery/ClickHouse dataset. This is therefore the same KIND of metric as crates.io and npm downloads \u2014 traffic \u2014 unlike Java's dependent-repos proxy. The dataset's own last_update is printed by `treebank rank` and belongs in any sweep write-up.",
     "files_note": ".py only, the single extension tree-sitter-python's tree-sitter.json claims. .pyi stubs are also Python and this same grammar parses them; they are excluded for now so classify() matches what the grammar advertises, and adding them would be a deliberate change with its own sweep evidence. Paths containing a _vendor/ or _vendored/ component are excluded for the reason javascript excludes bundles: pip and others vendor whole dependency sets, so a failure there is attributed to the wrong package and the same code is already in the corpus under its real owner.",
     "oracle": "tools/py-oracle/check.py \u2014 CPython's own front end via compile(src, path, 'exec'), the exact call Python makes to turn a module's text into code. TWO-VALUED: valid / invalid. It never imports, executes or resolves a name, so a missing dependency is not an error and each file is judged entirely on its own text.",
-    "oracle_version": "CPython 3.12.3",
     "oracle_version_note": "The interpreter version IS the language version and is load-bearing exactly as generate_cli is: `match` is 3.10+, the walrus 3.8+, parenthesised context managers 3.10 in practice. A file needing syntax newer than this interpreter is recorded as corpus noise, which is the honest answer. Bumping it is treated like a patch: full sweep, before/after numbers, ledger entry.",
     "fetched": "2026-08-10 (top-pypi-packages last_update 2026-08-01)",
     "packages": 492,
