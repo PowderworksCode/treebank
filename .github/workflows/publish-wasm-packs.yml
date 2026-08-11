@@ -1,0 +1,168 @@
+# Publish treebank wasm packs as GitHub Releases.
+#
+# A pack is one standalone wasm module — tree-sitter runtime, patched grammar,
+# pack ABI — that imports only WASI, so it is consumable from any language with
+# a wasm runtime and needs no Rust, no C compiler and no emscripten at the far
+# end. See WASM-PACKS.md.
+#
+# This workflow is deliberately shaped like publish-grammars.yml, because the
+# two answer the same questions and a second scheme would be a second thing to
+# maintain:
+#
+#   - The `verify` job IS verify-grammars.yml, called rather than copied, so
+#     materialization gates a release exactly as it gates a crate.
+#   - Which grammars a change concerns is scripts/changed-grammars.sh's answer,
+#     taken from that workflow's output. One ledger change rebuilds one pack,
+#     not eleven.
+#   - `plan` (build + stage, upload nothing) and `rehearse` (release to a local
+#     HTTP server, fetch by URL, verify hashes, parse with both example
+#     consumers) run on every PR, so the release path is exercised end to end
+#     before it can ever release.
+#   - `publish` cannot run on a pull_request, and a manual dispatch has to tick
+#     the box.
+#
+# No secret is needed: releases are created with the built-in GITHUB_TOKEN.
+# That is one of the reasons releases were chosen over npm — see WASM-PACKS.md,
+# "Where does it publish".
+name: publish-wasm-packs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'vendor/**'
+      - '.gitmodules'
+      - '.github/workflows/publish-wasm-packs.yml'
+  pull_request:
+    paths:
+      - 'crates/**'
+      - 'scripts/**'
+      - 'tools/**'
+      - 'vendor/**'
+      - '.gitmodules'
+      - '.github/workflows/publish-wasm-packs.yml'
+  workflow_dispatch:
+    inputs:
+      execute:
+        description: 'Actually create GitHub Releases. Unchecked = build and stage only.'
+        type: boolean
+        default: false
+      grammar:
+        description: 'Single grammar dir, e.g. crates/treebank-python. Blank = all changed.'
+        type: string
+        default: ''
+      force:
+        description: 'Release even if unchanged since the last release tag.'
+        type: boolean
+        default: false
+
+# Never two release runs at once, and never cancel one in flight: a cancelled
+# run can leave a release created but untagged.
+concurrency:
+  group: publish-wasm-packs-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    uses: ./.github/workflows/verify-grammars.yml
+
+  plan:
+    needs: verify
+    if: needs.verify.outputs.grammars != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Stage every changed pack
+        env:
+          IN_GRAMMAR: ${{ inputs.grammar }}
+          GRAMMARS: ${{ needs.verify.outputs.grammars }}
+        run: |
+          set -euo pipefail
+          # --force so the plan always builds: without it an unchanged pack
+          # would be skipped and this job would prove nothing. It cannot
+          # release — --dry-run is not overridable from here.
+          args=(--dry-run --force)
+          if [ -n "${IN_GRAMMAR:-}" ]; then
+            args+=("$IN_GRAMMAR")
+          else
+            while IFS= read -r g; do args+=("crates/$g"); done < <(jq -r '.[]' <<<"$GRAMMARS")
+          fi
+          scripts/publish-wasm.sh "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wasm-packs-plan
+          path: dist/release/
+          if-no-files-found: error
+
+  rehearse:
+    needs: verify
+    if: needs.verify.outputs.grammars != '[]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install wasmtime for the Python consumer
+        run: pip install --quiet wasmtime
+      - name: Release to localhost, fetch by URL, parse with both consumers
+        env:
+          IN_GRAMMAR: ${{ inputs.grammar }}
+          GRAMMARS: ${{ needs.verify.outputs.grammars }}
+        run: |
+          set -euo pipefail
+          args=()
+          if [ -n "${IN_GRAMMAR:-}" ]; then
+            args+=("$IN_GRAMMAR")
+          else
+            while IFS= read -r g; do args+=("crates/$g"); done < <(jq -r '.[]' <<<"$GRAMMARS")
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/test-publish-wasm.sh "${args[@]}"
+
+  publish:
+    needs: [plan, rehearse]
+    if: >-
+      github.event_name == 'push' ||
+      (github.event_name == 'workflow_dispatch' && inputs.execute)
+    runs-on: ubuntu-latest
+    # One place to require a human approval before a release goes out:
+    # Settings > Environments > wasm-packs > Required reviewers.
+    environment: wasm-packs
+    permissions:
+      contents: write   # to create releases and push their tags
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: tree:0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IN_FORCE: ${{ inputs.force }}
+          IN_GRAMMAR: ${{ inputs.grammar }}
+        run: |
+          set -euo pipefail
+          args=(--execute)
+          if [ "${IN_FORCE:-false}" = true ]; then args+=(--force); fi
+          if [ -n "${IN_GRAMMAR:-}" ]; then args+=("$IN_GRAMMAR"); fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          scripts/publish-wasm.sh "${args[@]}"
+          git push --tags

@@ -69,11 +69,12 @@ SRC="$GRAMMAR_DIR/build/$GEN_DIR/src"
 RUNTIME="$ROOT/vendor/tree-sitter"
 
 # ---- preconditions -------------------------------------------------------
-[ -e "$RUNTIME/lib/src/lib.c" ] || {
-  echo "build-wasm: vendor/tree-sitter is not checked out" >&2
-  echo "  git submodule update --init vendor/tree-sitter" >&2
-  exit 1
-}
+# Initialized on demand, as materialize.sh does for a grammar's upstream: CI
+# checks out without submodules so a job fetches only what it needs.
+if [ ! -e "$RUNTIME/lib/src/lib.c" ]; then
+  echo "build-wasm: initializing vendor/tree-sitter submodule"
+  git -C "$ROOT" submodule update --init --depth 1 -- vendor/tree-sitter
+fi
 RUNTIME_SHA=$(git -C "$RUNTIME" rev-parse HEAD)
 if [ -n "$(git -C "$RUNTIME" status --porcelain)" ]; then
   echo "build-wasm: FAIL — vendor/tree-sitter is dirty; the runtime pin must be pristine" >&2

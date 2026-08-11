@@ -204,6 +204,25 @@ code upstream's grammars reject — so the tag, the re-run skip, the version
 increment and the drop-in rename are all tested without anything reaching
 crates.io. CI runs it on every change.
 
+### Wasm packs
+
+Crates are consumed by linking, which needs a Rust toolchain. A **pack** is the
+same patched grammar as one standalone WebAssembly module — tree-sitter runtime,
+grammar and a small ABI, statically linked, importing only WASI — so it loads
+from Python, Go, Ruby, Rust or the browser with no toolchain at the far end.
+
+```sh
+scripts/build-wasm.sh crates/treebank-python   # -> dist/wasm/treebank-python.wasm
+scripts/test-publish-wasm.sh                   # full rehearsal; publishes nothing
+```
+
+Measured byte-for-byte reproducible across every grammar, on three pins —
+`generate_cli`, the runtime submodule, and emscripten *by digest*. The
+provenance is linked inside the module, so a `.wasm` found on its own still
+says which upstream, which patches and which toolchain produced it. A pack
+gives you treebank's patched parsing and **not** the sweeps or the oracle those
+patches came from. See [WASM-PACKS.md](WASM-PACKS.md).
+
 ## Current status (2026-08-06, measured on Linux)
 
 Top-100 per ecosystem — what the daily job sweeps, and what the ledgers'
