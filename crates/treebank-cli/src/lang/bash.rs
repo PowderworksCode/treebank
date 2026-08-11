@@ -181,6 +181,22 @@ impl Lang for Bash {
         }
     }
 
+    /// 250 MB. Shell is a guest language, so an artifact's size is decided
+    /// by its host: the top 500 Debian sources by popcon come to 11.5 GB, of
+    /// which **7.6 GB is eight packages** — texlive-extra (3.2 GB),
+    /// chromium, qt6-webengine, texlive-lang, texlive-base, firefox-esr,
+    /// libreoffice, qtwebengine — that between them are 1.6% of the corpus.
+    /// Two-thirds of the bytes for one part in sixty.
+    ///
+    /// This is a real change to the population and it is stated rather than
+    /// hidden: chromium and firefox-esr carry tens of thousands of lines of
+    /// shell each, and they are **not** in the corpus. Every skip is logged
+    /// by the fetch driver, and `ledger.json` records the cap next to the
+    /// package count it produced.
+    fn max_artifact_bytes(&self) -> Option<u64> {
+        Some(250_000_000)
+    }
+
     fn grammar_dirs(&self) -> &'static [&'static str] {
         &["."]
     }

@@ -1,0 +1,69 @@
+diff --git a/grammar.js b/grammar.js
+index 5d94cce..a9d8a63 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -200,11 +200,17 @@ module.exports = grammar({
+     for_statement: $ => seq(
+       choice('for', 'select'),
+       field('variable', $._simple_variable_name),
+-      optional(seq(
+-        'in',
+-        field('value', repeat1($._literal)),
+-      )),
+-      $._terminator,
++      // The terminator is required only when there IS a word list: bash
++      // accepts `for i do ... done` (the `do` delimits by itself) and
++      // rejects `for i in a b do ... done`.
++      choice(
++        seq(
++          'in',
++          field('value', repeat1($._literal)),
++          $._terminator,
++        ),
++        optional($._terminator),
++      ),
+       field('body', $.do_group),
+     ),
+ 
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index 612f80f..ab870d6 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -1939,3 +1939,37 @@ esac
+           (command_name
+             (word))))
+       (extglob_pattern))))
++
++================================================================================
++For loop with no word list
++================================================================================
++
++for arg do
++  echo "$arg"
++done
++
++select opt do
++  echo "$opt"
++done
++
++--------------------------------------------------------------------------------
++
++(program
++  (for_statement
++    (variable_name)
++    (do_group
++      (command
++        (command_name
++          (word))
++        (string
++          (simple_expansion
++            (variable_name))))))
++  (for_statement
++    (variable_name)
++    (do_group
++      (command
++        (command_name
++          (word))
++        (string
++          (simple_expansion
++            (variable_name)))))))

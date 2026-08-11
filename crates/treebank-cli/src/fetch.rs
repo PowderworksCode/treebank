@@ -89,10 +89,48 @@ fn strip_root(lang: &dyn Lang, entry_path: &Path, is_zip: bool) -> Option<PathBu
     safe_path(comps.as_path())
 }
 
-fn download(url: &str) -> Result<Vec<u8>> {
-    let resp = ureq::get(url).call().with_context(|| format!("GET {url}"))?;
+/// Read timeouts are not hygiene here, they are a measured need. A Debian
+/// mirror stalled mid-body on a 726 MB tarball — socket ESTABLISHED, bytes
+/// sitting unread in the receive queue, zero progress for fifteen minutes —
+/// and with ureq's default of no read timeout that wedges the whole fetch
+/// behind one package. The limit is per read syscall, so a slow-but-alive
+/// transfer is unaffected and only a dead one is cut.
+fn download(url: &str, max_bytes: Option<u64>) -> Result<Vec<u8>> {
+    let resp = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout_read(std::time::Duration::from_secs(60))
+        .build()
+        .get(url)
+        .call()
+        .with_context(|| format!("GET {url}"))?;
+    // Content-Length is advisory, so the cap is also enforced while reading;
+    // checking the header first is what avoids spending the download to find
+    // out.
+    if let (Some(cap), Some(len)) = (
+        max_bytes,
+        resp.header("Content-Length").and_then(|v| v.parse::<u64>().ok()),
+    ) {
+        anyhow::ensure!(
+            len <= cap,
+            "artifact is {} MB, over this language's {} MB cap",
+            len / 1_000_000,
+            cap / 1_000_000
+        );
+    }
     let mut buf = Vec::new();
-    resp.into_reader().read_to_end(&mut buf)?;
+    match max_bytes {
+        None => {
+            resp.into_reader().read_to_end(&mut buf)?;
+        }
+        Some(cap) => {
+            resp.into_reader().take(cap + 1).read_to_end(&mut buf)?;
+            anyhow::ensure!(
+                buf.len() as u64 <= cap,
+                "artifact exceeds this language's {} MB cap",
+                cap / 1_000_000
+            );
+        }
+    }
     Ok(buf)
 }
 
@@ -171,6 +209,15 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
         let mut tar = tar::Archive::new(decompress(archive)?);
         for entry in tar.entries()? {
             let mut entry = entry?;
+            // Regular files only. A symlink read as an entry yields no bytes
+            // and would be written as an empty regular file — and then the
+            // next entry underneath it cannot create its parent directory,
+            // which is exactly how a GitHub repository tarball killed a
+            // 500-repo fetch with `File exists (os error 17)`. The zip
+            // branch has always checked this; the tar branch did not.
+            if !entry.header().entry_type().is_file() {
+                continue;
+            }
             let entry_path = entry.path()?.to_path_buf();
             let Some(rel) = strip_root(lang, &entry_path, false) else { continue };
             let mut buf = Vec::new();
@@ -212,7 +259,7 @@ pub fn run(lang: &dyn Lang, list: &Path, limit: usize, corpus: &Path) -> Result<
             .find(|p| p.exists())
             .unwrap_or_else(|| cache.join(format!("{stem}.{ext}")));
         if !tarball.exists() {
-            match download(&tarball_url) {
+            match download(&tarball_url, lang.max_artifact_bytes()) {
                 Ok(buf) => {
                     std::fs::write(&tarball, &buf)?;
                     eprintln!("fetch: downloaded {stem} ({} KB)", buf.len() / 1024);

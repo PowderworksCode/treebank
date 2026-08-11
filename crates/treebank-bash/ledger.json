@@ -3,7 +3,8 @@
   "upstream": {
     "git_url": "https://github.com/tree-sitter/tree-sitter-bash",
     "sha": "a06c2e4415e9bc0346c6b86d401879ffb44058f7",
-    "version": "0.25.1"
+    "version": "0.25.1",
+    "sha_note": "v0.25.1, which is also master \u2014 upstream's last push was 2025-12-02, eight months before this was vendored."
   },
   "generate_cli": "0.25.10",
   "generate_dirs": [
@@ -31,6 +32,177 @@
       ],
       "kind": "packaging",
       "origin": "treebank; upstream owns the tree-sitter-bash name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_bash so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md."
+    },
+    {
+      "id": 3,
+      "title": "case patterns with more than three concatenated parts",
+      "file": "patches/0003-case-patterns-with-more-than-three-parts.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 Debian sweep",
+      "evidence": {
+        "repro": "case $x in *\"a\"b) ;; esac\n",
+        "diagnosis": "_extglob_blob allowed exactly `extglob_pattern`, or `extglob_pattern` + one of string/expansion/command_substitution + one optional trailing extglob_pattern. A case pattern with more parts than that had no path at all. autoconf writes five-part patterns in every configure it generates \u2014 `*\"\\n\"enable_$ac_useropt\"\\n\"*`, which is extglob + string + word + expansion + string + extglob \u2014 so this rejected 392 of the corpus's 344 configure scripts and their siblings. The fix makes the tail a repeat over the same set plus word, raw_string and simple_expansion; the shape of the tree (repeated `value` fields) is unchanged, because _extglob_blob already produced more than one.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "configure"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 24572,
+          "failed": 1091,
+          "gap_files": 943
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 24939,
+          "failed": 724,
+          "gap_files": 576
+        },
+        "evidence_note": "367 files, zero regressions: noise_files stayed at 148 across the change and all 100 upstream corpus tests still pass. On the GitHub corpus this patch fixes NOTHING (1434 gaps before and after), which is the sharpest single piece of evidence that the two artifact populations are different languages in practice.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 4,
+      "title": "substring expansion with a variable offset",
+      "file": "patches/0004-substring-expansion-with-a-variable-offset.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by both the Debian and the GitHub sweep",
+      "evidence": {
+        "repro": "echo \"${var:$offset:1}\"\necho \"${arr[@]:$keep_count}\"\n",
+        "diagnosis": "_expansion_max_length lists what may appear in the two `:` positions of a substring expansion. The SECOND position already had `optional($.simple_expansion)`, so `${a:1:$n}` parsed; the first did not, so `${a:$off:1}` and `${a:$off}` had no path. One line, and it makes the two positions symmetric.",
+        "first_seen": {
+          "package": "lvm2",
+          "version": "2.03.31-2",
+          "path": "test/lib/check.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 24939,
+          "failed": 724,
+          "gap_files": 576
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 24955,
+          "failed": 708,
+          "gap_files": 560
+        },
+        "sweep_before_github": {
+          "gap_files": 1434
+        },
+        "sweep_after_github": {
+          "gap_files": 1393
+        },
+        "evidence_note": "The one patch here that both corpora wanted: 16 files on Debian and 41 on GitHub, where array slicing with a computed offset is ordinary modern bash.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 5,
+      "title": "for loop with no word list",
+      "file": "patches/0005-for-loop-with-no-word-list.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 Debian sweep",
+      "evidence": {
+        "repro": "for arg do\n  echo \"$arg\"\ndone\n",
+        "diagnosis": "for_statement required a $._terminator between the variable and the do_group. bash requires one only when there IS a word list: `for i do ... done` is valid (the `do` delimits by itself) and `for i in a b do ... done` is not. The terminator moved inside the `in` branch, with an optional one on the branch without it, so `for i; do`, `for i<newline>do` and `for i in a b; do` are untouched and `for i in a b do` is still rejected \u2014 verified explicitly, because widening a rule that also feeds `select` is exactly where an accepts-invalid regression would hide.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "tests/ts/getopt/basic"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 24955,
+          "failed": 708,
+          "gap_files": 560
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 24993,
+          "failed": 670,
+          "gap_files": 522
+        },
+        "sweep_before_github": {
+          "gap_files": 1393
+        },
+        "sweep_after_github": {
+          "gap_files": 1388
+        },
+        "evidence_note": "38 files on Debian, 5 on GitHub \u2014 POSIX-sh idiom, so it lives where the shell has to run under dash as well as bash.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
     }
-  ]
+  ],
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). Noted for this grammar in particular: upstream's committed src/parser.c is byte-identical to what 0.25.10 generates, so materialization changes no generated file until a patch does.",
+  "corpus": {
+    "source": "Debian sid source packages (.orig.tar.*, upstream's own release archive, not the distro-patched tree), ranked by popcon installs per SOURCE package. Bash is the first language here with no package registry at all, so the corpus has to come from artifacts. Two artifact sources are implemented and BOTH are measured, because they are different populations: lang/debian.rs (default) and lang/github.rs, selected by TREEBANK_BASH_CORPUS.",
+    "ranking": "popcon (popularity-contest) install counts. It counts machines rather than dependency edges, which makes it the same KIND of metric as crates.io/npm/PyPI downloads rather than Java's dependent-repos proxy.",
+    "ranking_note": "SHELL IS A GUEST LANGUAGE. No package is written in shell; it arrives as build glue, init scripts, test harnesses and maintainer helpers inside packages written in something else \u2014 the largest bodies of shell in sid belong to git (278k lines, mostly its test suite), systemd (41k) and bash itself (8.9k next to 135k of C). So the filter cannot be C's 'more of this than of that'; it is a floor, sh >= 500 lines anywhere in the package. Measured over the 1061 packages the walk looked up: 87% contain some shell, 61% have >= 100 lines, 48% >= 500, 38% >= 2000. The threshold is therefore not very selective, and that is the honest picture \u2014 shell is nearly everywhere. The consequence to state: popcon installs are attributed to the PACKAGE, not to its shell, so this ranks 'shell that ships inside software people install', which is not the same thing as 'popular shell scripts'.",
+    "size_cap": "250 MB per artifact (Lang::max_artifact_bytes). Registry tarballs are bounded by what an author publishes; artifacts are not. The top 500 Debian sources by popcon come to 11.5 GB, of which 7.6 GB is EIGHT packages \u2014 texlive-extra (3.2 GB), chromium, qt6-webengine, texlive-lang, texlive-base, firefox-esr, libreoffice, qtwebengine \u2014 1.6% of the corpus for two thirds of the bytes. All eight are skipped and logged by name. This is a real change to the population: chromium and firefox-esr carry tens of thousands of lines of shell each and are NOT in these numbers.",
+    "files_note": "Shell is also the first language here whose files mostly have NO EXTENSION. Measured on this machine's /usr and /etc, 933 of the 963 shell scripts present are found by shebang and only 124 by *.sh/*.bash \u2014 an extension-only rule would have seen 13% of them. classify() therefore takes the extensions and names tree-sitter.json claims (.sh, .bash, .ebuild, .eclass, .bashrc, .bash_profile) PLUS every extensionless file as a candidate, and admit() decides the candidates on their first line, using upstream's own first-line-regex (^#!.*\\b(sh|bash|dash)\\b.*$) as an ALLOWLIST. It has to be an allowlist: an extensionless file is a candidate precisely because its name says nothing, so perl, python, awk and expect must be denied admission rather than merely not-denied. Files containing a NUL byte are dropped (bash refuses them outright).",
+    "composition_note": "What 'shell Debian ships' actually means, measured: of 25,663 files and 498 MB, 344 are autotools `configure` (200 MB, 40% of the bytes) and the next six most common filenames are install-sh, build.sh, missing, depcomp, compile and ltmain.sh \u2014 generated autotools and libtool boilerplate, near-identical across packages. 12% of the corpus files are byte-for-byte duplicates of another file in it. They are kept rather than filtered because they are real, and the most widely distributed shell in existence, but a gap count from this corpus must be read with the clustering: ONE autoconf bug is 392 gap files (see patch 0003).",
+    "oracle": "tools/bash-oracle/check.sh \u2014 bash's own parser via `bash -n`, which reads the whole script and executes nothing. TWO-VALUED: valid / invalid. See ORACLE.md for the full write-up; that it does not execute was verified with live canaries before any corpus file was fetched, and 'source /absent/file is not an error' is only one of eight probes.",
+    "oracle_version": "GNU bash 5.2.21(1)-release (x86_64-pc-linux-gnu)",
+    "oracle_version_note": "The shell's version IS the language version and is load-bearing exactly as generate_cli is. It also fixes the dialect: this is the reference parser for the sh/bash/dash files admit() admits and for nothing else. Pointing it at zsh, ksh, fish or csh would turn the grammar's correct rejection of another language into a reported gap.",
+    "oracle_cost": "2.4 s per 1000 files serial, of which 83% is process startup (0.7 ms bare spawn, 1.6 ms bash startup, 2.0 ms on an empty file, 2.4 ms on real files ~6 KB each \u2014 so only ~0.4 ms is parsing). The ROADMAP recorded 3.6; both figures are mostly a measurement of fork+exec on their own hardware and the part that belongs to bash agrees. bash cannot syntax-check a file from inside a long-lived shell (set -n stops that shell executing the `source` that would read the next file), so it is a fork-per-file oracle like `php -l` and check.sh runs the forks in parallel: 0.12 s per 1000 at -P16.",
+    "oracle_honesty": "963 real shell scripts from this machine's /usr and /etc: 952 valid, 11 invalid, ZERO false rejects. All 11 were read and are genuinely not bash \u2014 ten netpbm `#!/bin/sh` polyglots whose bodies are Perl, and one ucf documentation example whose `: if test ...; then` really is a syntax error.",
+    "oracle_limits": "bash's parser defers everything that is not syntax, so `$(( 1 + + ))` and `${!}` are VALID here and fail at runtime, and an unterminated heredoc is a warning. Correct for a parse-only oracle \u2014 the grammar treats those regions as text too \u2014 but it means this oracle can never be evidence for TIGHTENING the grammar inside arithmetic or expansions.",
+    "fetched": "2026-08-11 (Debian sid Sources index of that day)",
+    "packages": 492,
+    "packages_note": "500 requested; 492 fetched. The 8 missing are exactly the size-cap skips listed under size_cap.",
+    "files": 25663,
+    "sweep_upstream": {
+      "passed": 24572,
+      "failed": 1091,
+      "gap_files": 943,
+      "noise_files": 148,
+      "clusters": 210
+    },
+    "sweep_patched": {
+      "passed": 24993,
+      "failed": 670,
+      "gap_files": 522,
+      "noise_files": 148,
+      "clusters": 206
+    },
+    "github_corpus": {
+      "what": "The same sweep against the other artifact source: 492 of the top 500 repositories GitHub's linguist calls Shell, ranked by stars, pinned at a commit sha. TREEBANK_BASH_CORPUS=github; corpus/bash-github/.",
+      "files": 41923,
+      "bytes_note": "163 MB across 41,923 files \u2014 mean 3.9 KB, against Debian's 19.4 KB. GitHub shell is many small scripts; Debian shell is a few enormous generated ones.",
+      "sweep_upstream": {
+        "passed": 39672,
+        "failed": 2251,
+        "gap_files": 1434,
+        "noise_files": 817,
+        "clusters": 322
+      },
+      "sweep_patched": {
+        "passed": 39718,
+        "failed": 2205,
+        "gap_files": 1388,
+        "noise_files": 817,
+        "clusters": 322
+      },
+      "finding": "THE TWO POPULATIONS DISAGREE, and the patch series is the proof rather than the assertion: patches 0003-0005 removed 45% of Debian's gaps (943 -> 522) and 3% of GitHub's (1434 -> 1388). Patch 0003 alone fixed 392 Debian files and ZERO GitHub files, because it is an autoconf construct and GitHub's shell is not generated by autoconf. The noise rate differs by 3.4x \u2014 1.95% on GitHub against 0.58% on Debian \u2014 and the cluster count is half again as large (322 vs 206), i.e. GitHub exercises a wider variety of constructs in smaller files.",
+      "ranking_bias": "Stars are attention, not use: the weakest popularity metric in this repo, and it does not decay. `language:Shell` is linguist's majority vote over a repository, which put ohmyzsh (zsh), d3 (JavaScript) and papers-we-love (a reading list) in the top ten. Gap files are also concentrated \u2014 839 of 1,388 come from three repositories \u2014 where Debian's spread across 492 independently-maintained sources.",
+      "template_contamination": "MEASURED LIMIT OF A PER-FILE ORACLE. 419 of the 1,388 GitHub gap files (30%) are Jinja2 templates with a .sh extension \u2014 ComplianceAsCode/content ships them as `{{% if product in ['sle15'] %}}` \u2014 and `bash -n` calls them VALID because the template tags happen to lex as shell words. No two-valued per-file oracle can catch that, so the honest reading of the GitHub gap number is 'at most 969 real gaps'. Debian has no equivalent: its shell is shipped to run, not to be rendered. A content filter in admit() on template delimiters is the identified fix and is deliberately not applied here, because it would need its own before/after evidence."
+    },
+    "remaining_gaps_note": "522 Debian gap files remain, in three groups. (1) 107 autotools `configure` files still fail, at a whole-file ERROR whose first-error signature is line 1, so the report cannot point at the construct; delta reduction over a 12,248-line prefix did not converge inside a 20-minute budget and it is not diagnosed. Not guessed at. (2) 60 files, `x=1 >/dev/null` \u2014 a single variable assignment followed by a redirection and no command name, which bash runs as a command whose only lasting effect is the assignment (libtool's ltmain.sh probes shell features with `__PLUSEQ_TEST+=\" b\" 2>/dev/null`). TWO OR MORE assignments already parse, through variable_assignments; exactly one does not, because `command` consumes the assignment as a prefix and then demands a name. Attempted and reverted: adding the no-name alternative to `command` generates cleanly once `[$.command]` is declared internally ambiguous, and it fixes the herestring form (`x=1 <<< hi`) but not the file_redirect form, which `redirected_statement`'s prec.dynamic(-1) still wins. A correct fix needs that precedence interaction worked out rather than a bigger hammer. (3) The tail: 19 files of `$((0x$(...)))`, 13 of `) fi`, and ~200 singleton clusters.",
+    "over_acceptance_note": "The negative corpus is 14 files, not 18. FOUR candidates were rejected by bash and ACCEPTED by the grammar, so they cannot be committed as negative tests without failing verify.sh, and they are recorded here instead because they are the accepts-invalid-code direction GRAMMARS.md warns about: (1) `f() { }` and every other empty compound body \u2014 bash requires at least one command in `{ }`, `( )`, `do ... done` and `then ... fi`, and the grammar makes all of them optional (`case x in esac` is the one bash really does allow, and the grammar is right there); (2) a stray `done`, (3) a stray `esac`, and (4) `: if test -d /x; then` \u2014 all three the same root cause, which is that the grammar lets a reserved word be an ordinary command_name where bash treats it as a syntax error in command position. Both are upstream's, both are real, and neither was patched here: (1) is a one-token change per rule but a tightening, which needs its own before/after sweep to show it breaks nothing, and (2)-(4) need the reserved-word set threaded through the external scanner."
+  }
 }
