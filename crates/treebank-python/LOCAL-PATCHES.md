@@ -185,40 +185,75 @@ Three alternatives were measured and rejected:
 
 ## Known gaps, not fixed
 
-Two files remain, both indentation problems in the external scanner. Both
-were investigated to a conclusion rather than left open.
+Two files remain — and they are **one bug**, not two. An earlier revision of
+this section described them as separate problems and claimed the second had
+no minimal repro. Both statements were wrong; the corrected account follows.
 
-### 1. Bracketed continuation at column zero (ruff `fmt_on_off/indent.py`)
+### The bug: a dedent emitted inside brackets
+
+Python ignores indentation inside brackets, so a continuation line may sit at
+any column, including below the enclosing block. Both remaining files do
+exactly that, and both come back with three `ERROR`s:
 
 ```python
-def test():
-  (b +
-c
-   )
+# ruff fmt_on_off/indent.py          # executing tests/test_main.py:466
+def test():                          class C:
+  a                                      def m(self):
+  (b +                                       tester = 1
+c                                            (tester
+   )                                        .
+                                            x
+                                           ) = 4
 ```
 
-Python ignores indentation inside brackets, so this is valid.
+The `executing` file was previously filed as "pathological backslash
+continuations with no minimal repro". It does contain those, but they are not
+what fails — the failing region is the parenthesised assignment target above,
+and it reproduces in seven lines. The earlier search missed it because it
+bisected *contiguous line windows* of the file: every window containing those
+lines carries their leading indentation, which is an `IndentationError` at
+module level, so the oracle rejected every candidate and the search reported
+nothing. The method could not express the reduction, and its silence was read
+as evidence.
 
-**Measured, and this is the useful part:** at the moment the scanner decides,
-a legitimate dedent (`def f():` / `  a` / `b`) and this case are
-*indistinguishable*. Both present as `indent=0 cur=2 DEDENT=1 NEWLINE=0
-within_brackets=0`. The parser genuinely asks for a dedent in both, so **no
-refinement of the existing heuristic can separate them** — the scanner has to
-know the bracket depth itself.
+### Why the existing guard cannot fix it
 
-Tracking it exactly means the scanner must *emit* the brackets: merely
-observing `lexer->lookahead` double-counts, because the scanner is invoked
-repeatedly at one position. Declaring `'('`, `'['`, `'{'` as externals and
-emitting them with a depth counter (serialization included) **fixes this file
-and breaks 33 of upstream's 123 corpus tests**, because external tokens do not
-carry the same conflict behaviour as internal ones. Reverted.
+The scanner has a `within_brackets` guard, but it is a proxy: it asks the
+parser whether a *closing* bracket is a valid next token. After `(b +` the
+parser wants an operand, so `)` is not valid and the guard reads false.
 
-This needs an upstream redesign of how indentation and brackets interact, not
-a patch.
+Measured at the moment of decision, a legitimate dedent and this case are
+**indistinguishable**:
 
-### 2. Pathological backslash indentation (`executing`)
+| | |
+|---|---|
+| `def f():` / `  a` / `b` | `indent=0 cur=2 DEDENT=1 NEWLINE=0 within_brackets=0` |
+| `(b +` / `c` | `indent=0 cur=2 DEDENT=1 NEWLINE=0 within_brackets=0` |
 
-Deliberately awkward continuations at *decreasing* indentation. No contiguous
-window of the file is both oracle-valid and grammar-failing, so there is no
-minimal repro — it depends on the whole file's accumulated indent stack. Not
-attempted blind.
+The parser genuinely requests a dedent in both. Nothing in `valid_symbols`
+separates them, so no refinement of the heuristic can work — the scanner must
+count brackets itself.
+
+### Why counting them does not work either
+
+Counting exactly requires the scanner to *emit* the brackets; merely watching
+`lexer->lookahead` double-counts, because the scanner is invoked repeatedly at
+one position. Three variants were built and measured, all reverted:
+
+| variant | result |
+|---|---|
+| `'('`, `'['`, `'{'` external, depth counter, serialization | fixes both files, **breaks 33 of 123 corpus tests** |
+| `'('` only | **breaks the same 33**, and fixes only the first file — the second still has 2 errors |
+| `'('` only, skipped during error recovery | **still 33** |
+
+The failures are not confined to error recovery: `Await expressions`, `Named
+expressions`, `Yield expressions` and `Default Tuple Arguments` all break, so
+making a bracket external changes ordinary parsing, not just recovery. And
+since the paren-only variant does not even close the second file, exact paren
+depth is not sufficient for this bug — bracket depth alone is not the whole
+story.
+
+This is an upstream change to how tree-sitter-python models indentation and
+brackets, not a patch this series should carry. The right next step is an
+issue against upstream with the seven-line repro and the `valid_symbols`
+trace above.
