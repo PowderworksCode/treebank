@@ -26,7 +26,7 @@ use serde::Deserialize;
 /// The canonical name of a supported language. This is the only place the
 /// spelling is decided: it is what `--lang` accepts, what a ledger's
 /// `grammar` field must hold, and what `corpus/<lang>/` is called.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize, clap::ValueEnum)]
 pub enum LangName {
     #[serde(rename = "rust")]
     #[value(name = "rust")]
@@ -55,6 +55,9 @@ pub enum LangName {
     #[serde(rename = "go")]
     #[value(name = "go")]
     Go,
+    #[serde(rename = "bash")]
+    #[value(name = "bash")]
+    Bash,
 }
 
 impl LangName {
@@ -69,6 +72,7 @@ impl LangName {
             LangName::Python => "python",
             LangName::Php => "php",
             LangName::Go => "go",
+            LangName::Bash => "bash",
         }
     }
 }

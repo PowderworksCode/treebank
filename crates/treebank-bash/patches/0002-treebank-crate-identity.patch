@@ -1,0 +1,55 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index ae71487..be82cc8 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -195,7 +195,7 @@ dependencies = [
+ ]
+ 
+ [[package]]
+-name = "tree-sitter-bash"
++name = "treebank-grammar-bash"
+ version = "0.25.1"
+ dependencies = [
+  "cc",
+diff --git a/Cargo.toml b/Cargo.toml
+index d9a5a3d..014b126 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,6 +1,6 @@
+ [package]
+-name = "tree-sitter-bash"
+-description = "Bash grammar for tree-sitter"
++name = "treebank-grammar-bash"
++description = "Patched redistribution of tree-sitter/tree-sitter-bash: upstream at a pinned commit plus the treebank patch series. Not an upstream release."
+ version = "0.25.1"
+ authors = [
+   "Max Brunsfeld <maxbrunsfeld@gmail.com>",
+@@ -10,14 +10,26 @@ license = "MIT"
+ readme = "README.md"
+ keywords = ["incremental", "parsing", "tree-sitter", "bash"]
+ categories = ["parsing", "text-editors"]
+-repository = "https://github.com/tree-sitter/tree-sitter-bash"
++repository = "https://github.com/PowderworksCode/treebank"
++homepage = "https://treebank.dev"
+ edition = "2021"
+ autoexamples = false
+ 
+ build = "bindings/rust/build.rs"
+-include = ["LICENSE", "bindings/rust/*", "grammar.js", "queries/*", "src/*", "tree-sitter.json"]
++include = [
++  "LICENSE",
++  "LOCAL-PATCHES.md",
++  "bindings/rust/*",
++  "grammar.js",
++  "ledger.json",
++  "patches/*",
++  "queries/*",
++  "src/*",
++  "tree-sitter.json",
++]
+ 
+ [lib]
++name = "tree_sitter_bash"
+ path = "bindings/rust/lib.rs"
+ 
+ [dependencies]

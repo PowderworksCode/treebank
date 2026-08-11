@@ -25,3 +25,6 @@
 [submodule "crates/treebank-go/upstream"]
 	path = crates/treebank-go/upstream
 	url = https://github.com/tree-sitter/tree-sitter-go
+[submodule "crates/treebank-bash/upstream"]
+	path = crates/treebank-bash/upstream
+	url = https://github.com/tree-sitter/tree-sitter-bash

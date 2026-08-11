@@ -3,9 +3,12 @@
 //! corpus, how files route to grammars, and what the reference parser is —
 //! lives behind this trait; rank/fetch/sweep/oracle are generic drivers.
 
+mod bash;
 mod c;
 mod csharp;
+mod debian;
 mod exec_oracle;
+mod github;
 mod go;
 mod java;
 mod javascript;
@@ -108,6 +111,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static PYTHON: python::Python = python::Python;
     static PHP: php::Php = php::Php;
     static GO: go::Go = go::Go;
+    static BASH: bash::Bash = bash::Bash;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -118,5 +122,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Python => &PYTHON,
         LangName::Php => &PHP,
         LangName::Go => &GO,
+        LangName::Bash => &BASH,
     }
 }
