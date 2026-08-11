@@ -56,14 +56,56 @@ if _VERSION ~= WANT then
   os.exit(1)
 end
 
+-- An unreadable file is NOT an invalid file. Returning "invalid" here looks
+-- harmless and is not: validate() is only ever called on files the grammar
+-- already failed, and an invalid verdict records the file as corpus NOISE.
+-- So a mistyped corpus root would make every path unreadable, every grammar
+-- failure noise, gap_files zero — and the sweep would report a flawless
+-- grammar. A broken oracle must fail loudly, never quietly agree with us
+-- (the reasoning is spelled out in crates/treebank-cli/src/lang/exec_oracle.rs).
+--
+-- Lua makes this trap easier to fall into than the other oracles, because
+-- `loadfile` returns the SAME nil for "this is not valid Lua" and "I could
+-- not open that". So readability is established separately, with an explicit
+-- open and read, before the verdict is asked for.
+--
+-- The verdict itself still comes from `loadfile` rather than from
+-- `load(<the bytes we just read>)`, deliberately: loadfile is
+-- luaL_loadfilex, the entry point `luac -p` uses, and it skips a leading
+-- `#!` line where load(<string>) does not. Reusing the bytes would save a
+-- second open and would silently change what this oracle means — the
+-- equivalence with `luac -p` is measured (2606 corpus files and a 20-file
+-- adversarial battery, zero disagreements) and it is measured about
+-- loadfile.
+local function must_be_readable(path)
+  local f, err = io.open(path, "rb")
+  if not f then
+    io.stderr:write(
+      ("lua-oracle: cannot read %s: %s\n"):format(path, err or "unknown error"),
+      "lua-oracle: this is an oracle failure, not a verdict; check the corpus root\n")
+    os.exit(1)
+  end
+  -- A directory opens cleanly on Linux and only fails on read, so the read
+  -- is part of the check rather than the open alone.
+  local ok, content = pcall(f.read, f, "a")
+  f:close()
+  if not ok or content == nil then
+    io.stderr:write(
+      ("lua-oracle: cannot read %s: %s\n"):format(path, (not ok) and tostring(content) or "read returned nothing"),
+      "lua-oracle: this is an oracle failure, not a verdict; check the corpus root\n")
+    os.exit(1)
+  end
+end
+
 local out = io.stdout
 for line in io.lines() do
   local path = line:match("^%s*(.-)%s*$")
   if path ~= "" then
+    must_be_readable(path)
     -- Second return value (the message) is deliberately dropped: a file is
     -- valid or it is not, and the reason is the sweep's business, not the
-    -- oracle's. Errors that are not syntax — an unreadable file — also come
-    -- back nil here and count as invalid, matching py-oracle's OSError path.
+    -- oracle's. By here the file is known readable, so a nil chunk is a
+    -- verdict about its CONTENT.
     local chunk = loadfile(path, "t")
     out:write(path, "\t", chunk and "valid" or "invalid", "\n")
   end
