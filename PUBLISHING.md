@@ -65,7 +65,11 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-javascript` | `treebank-grammar-javascript` | `tree_sitter_javascript` |
 | `crates/treebank-java` | `treebank-grammar-java` | `tree_sitter_java` |
 | `crates/treebank-csharp` | `treebank-grammar-csharp` | `tree_sitter_c_sharp` |
+| `crates/treebank-c` | `treebank-grammar-c` | `tree_sitter_c` |
+| `crates/treebank-python` | `treebank-grammar-python` | `tree_sitter_python` |
 | `crates/treebank-php` | `treebank-grammar-php` | `tree_sitter_php` |
+| `crates/treebank-go` | `treebank-grammar-go` | `tree_sitter_go` |
+| `crates/treebank-bash` | `treebank-grammar-bash` | `tree_sitter_bash` |
 
 The crate name is **derived from the directory**, not read from the manifest.
 That is safe to key on because `treebank ledger` (which `verify.sh` runs first)

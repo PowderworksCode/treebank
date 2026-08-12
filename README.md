@@ -8,15 +8,19 @@ offer to upstream maintainers), and `scripts/materialize.sh` produces the
 gitignored working tree `build/` that everything else consumes. Current
 grammars:
 
-- `crates/treebank-rust` — tree-sitter-rust 0.24.2, 12 grammar patches
+- `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
 - `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript +
-  tsx grammars), 2 grammar patches
+  tsx grammars), 12 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX
   included), 2 grammar patches
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 - `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
+- `crates/treebank-c` — tree-sitter-c 0.24.2, no grammar patches
+- `crates/treebank-python` — tree-sitter-python 0.25.0, 6 grammar patches
 - `crates/treebank-php` — tree-sitter-php 0.24.2 (php + php_only grammars),
   2 grammar patches
+- `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
+- `crates/treebank-bash` — tree-sitter-bash 0.25.1, 3 grammar patches
 
 ```sh
 git clone --recurse-submodules <repo>   # or: git submodule update --init
@@ -25,7 +29,11 @@ scripts/materialize.sh crates/treebank-typescript
 scripts/materialize.sh crates/treebank-javascript
 scripts/materialize.sh crates/treebank-java
 scripts/materialize.sh crates/treebank-csharp
+scripts/materialize.sh crates/treebank-c
+scripts/materialize.sh crates/treebank-python
 scripts/materialize.sh crates/treebank-php
+scripts/materialize.sh crates/treebank-go
+scripts/materialize.sh crates/treebank-bash
 ```
 
 ## Setting up a machine
@@ -48,7 +56,7 @@ against github.com (the daily job pushes branches through
 ## The loop
 
 Every corpus command takes `--lang
-<rust|typescript|javascript|java|csharp|c|python|php>` (default `rust`) and keeps its
+<rust|typescript|javascript|java|csharp|c|python|php|go|bash>` (default `rust`) and keeps its
 data under `corpus/<lang>/`.
 
 ```sh
@@ -64,6 +72,11 @@ alias tb=./target/release/treebank
 #               NuGet ships assemblies, not source (see the ledger)
 #   php:        Packagist's own popularity ranking; dist URLs are rewritten
 #               from api.github.com (60 req/hr unauthenticated) to codeload
+#   bash:       no registry exists, so the corpus comes from ARTIFACTS.
+#               Debian sid source packages ranked by popcon (the default), or
+#               GitHub repositories ranked by stars with
+#               TREEBANK_BASH_CORPUS=github. They are different populations
+#               and give different gap numbers — see the ledger
 tb rank  --lang rust --k 1000
 tb fetch --lang rust --limit 100
 
@@ -73,7 +86,8 @@ tb fetch --lang rust --limit 100
 # which calls `const x: number = 1` valid JavaScript; java: tools/java-oracle,
 # javac's own parser via JavacTask.parse; php: `php -l`, which needs PHP 8.4
 # or newer — see crates/treebank-php/ledger.json, or run
-# tools/php-oracle/fetch.sh on a machine without root), and writes
+# tools/php-oracle/fetch.sh on a machine without root; bash: `bash -n`, which
+# parses and executes nothing — see crates/treebank-bash/ORACLE.md), and writes
 # corpus/<lang>/reports/sweep.json + an agent-ready REPORT.md.
 tb sweep --lang rust       --grammar crates/treebank-rust/build
 tb sweep --lang typescript --grammar crates/treebank-typescript/build
