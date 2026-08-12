@@ -56,10 +56,31 @@ TS="npx -y tree-sitter-cli@$CLI_WANT"
 # `tree-sitter test` over in verify.sh — is therefore past the registry
 # already, and generate keeps failing on the first try, immediately, with its
 # own message intact.
+#
+# And when a failing npm or npx says nothing at all, fetch() goes and gets the
+# debug log npm always writes anyway. That is not a hypothetical politeness:
+# the first version of this change made the probe retry in CI and the three
+# attempts printed three empty lines, so the retry alone would have left the
+# next person exactly as blind as run 31642866147 did.
+NPM_LOGS="${npm_config_logs_dir:-${npm_config_cache:-$HOME/.npm}/_logs}"
+npm_log_tail() {  # npm_log_tail <marker-file>: what npm wrote down but did not say
+  local since=$1 newest
+  newest=$(ls -t "$NPM_LOGS"/*-debug-*.log 2>/dev/null | head -1) || return 0
+  # Only a log this attempt actually wrote. Any older one belongs to some
+  # earlier command and would be a confidently misleading answer.
+  if [ -n "$newest" ] && [ "$newest" -nt "$since" ]; then
+    echo "   --- $newest (last 40 lines) ---" >&2
+    tail -40 "$newest" >&2
+  fi
+}
+
 fetch() {  # fetch <what> <cmd...>
   local what=$1; shift
-  local out rc attempt
+  local out rc attempt marker
+  marker=$(mktemp)
+  trap 'rm -f "$marker"' RETURN
   for attempt in 1 2 3; do
+    touch "$marker"
     # rc is read in the else branch, not after the `if`: an if compound resets
     # $? to 0 once it is done, so `rc=$?` on the far side reports every failure
     # as "exited 0".
@@ -70,10 +91,12 @@ fetch() {  # fetch <what> <cmd...>
       rc=$?
     fi
     echo "materialize: $what exited $rc (attempt $attempt/3)" >&2
-    printf '%s\n' "$out" >&2
+    if [ -n "$out" ]; then printf '%s\n' "$out" >&2; else echo "   (no output at all)" >&2; fi
+    npm_log_tail "$marker"
     if [ "$attempt" != 3 ]; then sleep $((attempt * 5)); fi
   done
   echo "materialize: FAIL — $what failed 3 times; see its output above" >&2
+  rm -f "$marker"
   exit 1
 }
 
