@@ -287,7 +287,6 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
                 entry.read_to_end(&mut buf).with_context(ctx)?;
                 take(lang, buf, pkgdir, Path::new(""), &rel, true, &mut files).with_context(ctx)?;
             }
-            }
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
