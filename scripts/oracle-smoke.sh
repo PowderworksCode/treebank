@@ -106,8 +106,14 @@ for ledger in crates/*/ledger.json; do
   good=$(jq -r '.oracle.smoke.valid'   "$ledger")
   evil=$(jq -r '.oracle.smoke.invalid' "$ledger")
 
+  # stderr is kept, not discarded. An oracle that refuses to run usually says
+  # exactly why — php's version floor names the package to install — and a
+  # guard that swallows that and reports a bare exit status makes the reader
+  # go read the source to find out what the tool already told them.
+  err="$TMP/$lang.err"
+
   # 1. unreadable must be fatal, and must not answer
-  out=$(echo "$MISSING" | "$TREEBANK" oracle --lang "$lang" 2>/dev/null); status=$?
+  out=$(echo "$MISSING" | "$TREEBANK" oracle --lang "$lang" 2>"$err"); status=$?
   if [ "$status" -eq 0 ]; then
     bad "$lang: an unreadable file exited 0"
     note "verdict was: ${out:-<none>} — validate() is only called on files the"
@@ -120,11 +126,12 @@ for ledger in crates/*/ledger.json; do
   fi
 
   # 2. the oracle still works
-  out=$(printf '%s\n%s\n' "$good" "$evil" | "$TREEBANK" oracle --lang "$lang" 2>/dev/null); status=$?
+  out=$(printf '%s\n%s\n' "$good" "$evil" | "$TREEBANK" oracle --lang "$lang" 2>"$err"); status=$?
   gv=$(grep -F "$good" <<<"$out" | cut -f2)
   ev=$(grep -F "$evil" <<<"$out" | cut -f2)
   if [ "$status" -ne 0 ]; then
     bad "$lang: exited $status on readable files"
+    while IFS= read -r line; do note "$line"; done < <(tail -6 "$err")
   elif [ "$gv" != valid ] || [ "$ev" != invalid ]; then
     bad "$lang: expected valid/invalid, got '${gv:-<none>}'/'${ev:-<none>}'"
     note "valid fixture:   $good"

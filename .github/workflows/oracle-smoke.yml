@@ -72,11 +72,27 @@ jobs:
         with:
           go-version: stable
 
-      - name: Install lua5.4 and php
+      - name: Install lua5.4
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq lua5.4 php-cli
+          sudo apt-get install -y -qq lua5.4
+
+      # PHP from ondrej's PPA, not the distro package. treebank-php's oracle
+      # enforces a MEASURED floor of 8.4: on 1703 files from the top 40
+      # Packagist packages, PHP 8.3 rejects 7, every one of them current
+      # Symfony using property hooks and asymmetric visibility. Running an
+      # older PHP would score valid 8.4+ code as invalid, which files real
+      # grammar gaps as corpus noise. ubuntu-latest ships 8.3, so the distro
+      # package is below the floor and the oracle refuses to run on it --
+      # which is how this step came to exist: the smoke test caught it.
+      - name: Install PHP 8.4
+        run: |
+          set -euo pipefail
+          sudo add-apt-repository -y ppa:ondrej/php
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq php8.4-cli
+          php8.4 --version | head -1
 
       # Zig is pinned to the version treebank-zig's ledger names, and unlike
       # libclang below that is NOT a formality. For Zig the compiler version
