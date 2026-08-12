@@ -8,19 +8,20 @@ offer to upstream maintainers), and `scripts/materialize.sh` produces the
 gitignored working tree `build/` that everything else consumes. Current
 grammars:
 
-- `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
-- `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript +
-  tsx grammars), 12 grammar patches
-- `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX
-  included), 2 grammar patches
-- `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
-- `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
-- `crates/treebank-c` — tree-sitter-c 0.24.2, no grammar patches
-- `crates/treebank-python` — tree-sitter-python 0.25.0, 6 grammar patches
-- `crates/treebank-php` — tree-sitter-php 0.24.2 (php + php_only grammars),
-  2 grammar patches
-- `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
+<!-- BEGIN GENERATED: scripts/grammar-docs.sh -->
 - `crates/treebank-bash` — tree-sitter-bash 0.25.1, 3 grammar patches
+- `crates/treebank-c` — tree-sitter-c 0.24.2, 13 grammar patches
+- `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
+- `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
+- `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
+- `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX included), 2 grammar patches
+- `crates/treebank-lua` — tree-sitter-lua 0.5.0, 1 grammar patch
+- `crates/treebank-php` — tree-sitter-php 0.24.2 (php + php_only grammars), 4 grammar patches
+- `crates/treebank-python` — tree-sitter-python 0.25.0, 6 grammar patches
+- `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
+- `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript + tsx grammars), 12 grammar patches
+- `crates/treebank-zig` — tree-sitter-zig 1.1.2, 2 grammar patches
+<!-- END GENERATED -->
 
 ```sh
 git clone --recurse-submodules <repo>   # or: git submodule update --init
