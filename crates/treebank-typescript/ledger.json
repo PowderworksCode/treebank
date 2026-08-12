@@ -12,6 +12,15 @@
     "tsx"
   ],
   "generate_deps": "npm ci (define-grammar.js requires tree-sitter-javascript; lockfile is upstream's, never regenerated)",
+  "oracle": {
+    "tool": "tools/ts-oracle/check.mjs (ts.createSourceFile), run under node",
+    "version": "TypeScript 5.9.3 on Node.js v22.23.2",
+    "dialect": "TypeScript, ScriptTarget.Latest",
+    "flags": [
+      "ScriptTarget.Latest"
+    ],
+    "note": "createSourceFile and NOT transpileModule: it parses and reads parseDiagnostics only, with no Program, no tsconfig and no type checking, so a missing dependency is not an error. The TypeScript version IS the language version here exactly as an interpreter version is elsewhere; a file needing newer syntax than 5.9.3 is recorded as corpus noise."
+  },
   "corpus": {
     "source": "npm top-1000 by downloads (npm-high-impact), fetched 2026-08-06; .ts/.mts/.cts/.d.ts -> typescript grammar, .tsx -> tsx grammar",
     "files": 11986,

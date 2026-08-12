@@ -40,6 +40,9 @@ refuses to run if the submodule is dirty or off the pinned sha.
 - `generate_deps` — non-null when generation needs `npm ci` first (grammars
   that import other grammars). Always `npm ci`, never `npm install`: the
   lockfile stays upstream's.
+- `oracle` — `{tool, version, dialect, flags}`: the reference parser the
+  ledger's sweep numbers were produced with. **Required of every grammar**;
+  `treebank ledger` fails without it and prints it on success. See below.
 - `patches[]` — one entry per patch file with origin and evidence
   (repro, first-seen package, before/after sweep numbers).
 
@@ -71,6 +74,47 @@ wrongly drop some XID_Start chars** (e.g. U+212A KELVIN SIGN, which rustc
 accepts), which broke `'K'`-style char literals — the corpus sweep is what
 caught it. All grammars pin **0.25.10**. Bumping a pin is treated like a
 patch: full sweep, before/after numbers, ledger entry.
+
+## Why the oracle is pinned too
+
+`generate_cli` exists because regenerating with a different CLI silently
+changes what the grammar *accepts*. `oracle` exists for the mirror reason:
+running a different reference parser silently changes what "invalid"
+*means*, and a sweep's gap/noise split is only interpretable against the
+parser that produced it. A gap number quoted without its oracle is not a
+claim this repo makes.
+
+It is not bookkeeping, and two grammars measured it from opposite ends of
+the difficulty range:
+
+- **zig** — 801 of 11,672 files (**6.86%**) change verdict between Zig 0.11
+  and 0.16; 3.11% across 0.13–0.16 alone. Its ledger calls this the single
+  most load-bearing field it has.
+- **lua** — 6 of 2,606 files (0.23%) change verdict on nothing but which
+  interpreter is installed: `goto continue` needs 5.2+, `-1ULL` needs
+  LuaJIT.
+
+`flags` exists because a version alone does not always settle the dialect:
+C's answer only means anything as "libclang 20.1.2, **given `-std=gnu17`**",
+bash pins `-n`, and zig names its binary through `TREEBANK_ZIG_ORACLE`
+rather than taking whatever `zig` is on PATH. Scala (2 vs 3) and Haskell
+(per-package `LANGUAGE` pragmas) will need the same.
+
+Bumping an oracle is treated like bumping the CLI, and like a patch: full
+sweep, before/after numbers, ledger entry.
+
+Two rules the oracles themselves follow, both learned from a real defect:
+
+- **An unreadable file is not an invalid file.** `validate()` only ever runs
+  on files the grammar already failed, and an `invalid` verdict records the
+  file as *noise* — so a mistyped corpus root would turn every grammar
+  failure into noise, drive `gap_files` to zero, and report a flawless
+  grammar. Every oracle exits non-zero on I/O rather than emitting a
+  verdict. A broken oracle must fail loudly, never quietly agree with us.
+- **A batch oracle is proved by a negative battery, not by agreement.** php
+  built one that matched `php -l` on all 1,703 corpus files and still
+  silently accepted ten classes of invalid PHP. Agreement on clean library
+  code is worth nothing here; only files that *should* be rejected test it.
 
 ## The redistribution notice
 

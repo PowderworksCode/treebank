@@ -12,6 +12,17 @@
     "."
   ],
   "generate_deps": null,
+  "oracle": {
+    "tool": "tools/cs-oracle (Roslyn CSharpSyntaxTree.ParseText), built once with dotnet build -c Release",
+    "version": "Microsoft.CodeAnalysis.CSharp 4.8.0 on .NET SDK 8.0.129",
+    "dialect": "C# LanguageVersion.Latest as of Roslyn 4.8.0",
+    "flags": [
+      "LanguageVersion.Latest",
+      "DocumentationMode.None",
+      "SourceCodeKind.Regular"
+    ],
+    "note": "ParseText with no Compilation: syntax only, no binding, no references, no .csproj. Verified on 1000 files with no project context: 999 valid. The Roslyn package is pinned in tools/cs-oracle/cs-oracle.csproj precisely so verdicts do not drift with whatever SDK is installed; this field records the same pin where the sweep numbers can see it."
+  },
   "corpus": {
     "source": "NuGet top-100 by downloads (azuresearch), fetched 2026-08-06, resolved through each package's nuspec SourceLink <repository url + commit> to a GitHub source archive at that exact commit; .cs files",
     "source_note": "NuGet ships compiled assemblies, not source \u2014 there is not one .cs file in any of the top 20 packages \u2014 so unlike the crates.io/npm/Maven corpora this one is repository source, tests and samples and build tooling included, at the commit the package was built from. Of the top 100: 50 fetched, 13 skipped because a higher-ranked package already claimed the same repo+commit, 8 with no usable nuspec repository metadata, the rest for other resolve failures. The result is dominated by two Microsoft monorepos (dotnet/dotnet, Azure/azure-sdk-for-net), so file counts here reflect repository size, not package popularity.",

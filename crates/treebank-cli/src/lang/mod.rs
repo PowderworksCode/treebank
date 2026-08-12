@@ -12,6 +12,7 @@ mod github;
 mod go;
 mod java;
 mod javascript;
+mod lua;
 mod npm;
 mod php;
 mod python;
@@ -53,6 +54,17 @@ pub trait Lang: Sync {
     fn admit(&self, rel: &Path, content: &[u8]) -> bool {
         let _ = (rel, content);
         true
+    }
+
+    /// May an archive member be an archive worth walking into? Default `false`,
+    /// which is right for every registry that ships one tarball per package.
+    ///
+    /// LuaRocks does not: a `.src.rock` is a zip holding the rockspec plus the
+    /// source, and about a quarter of rocks carry that source as upstream's
+    /// release tarball rather than an unpacked tree. Without this those
+    /// packages extract to zero files and look empty. Recursion is one level.
+    fn nested_archives(&self) -> bool {
+        false
     }
 
     /// What this language knows for certain about its own preprocessor, if
@@ -128,6 +140,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static GO: go::Go = go::Go;
     static BASH: bash::Bash = bash::Bash;
     static ZIG: zig::Zig = zig::Zig;
+    static LUA: lua::Lua = lua::Lua;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -140,5 +153,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Go => &GO,
         LangName::Bash => &BASH,
         LangName::Zig => &ZIG,
+        LangName::Lua => &LUA,
     }
 }

@@ -175,6 +175,35 @@ fn decompress(archive: &Path) -> Result<Box<dyn Read>> {
     })
 }
 
+/// Decompress an in-memory archive the same way `decompress` does a file.
+fn decompress_bytes(buf: Vec<u8>) -> Box<dyn Read> {
+    match buf.first_chunk::<6>() {
+        Some([0xfd, b'7', b'z', b'X', b'Z', 0x00]) => {
+            Box::new(liblzma::read::XzDecoder::new(std::io::Cursor::new(buf)))
+        }
+        Some([b'B', b'Z', b'h', ..]) => {
+            Box::new(bzip2::read::BzDecoder::new(std::io::Cursor::new(buf)))
+        }
+        _ => Box::new(flate2::read::GzDecoder::new(std::io::Cursor::new(buf))),
+    }
+}
+
+/// Which archive shape a blob is, by magic bytes.
+enum Shape {
+    Zip,
+    Tar,
+    NotAnArchive,
+}
+
+fn shape(buf: &[u8]) -> Shape {
+    match buf.first_chunk::<6>() {
+        Some([b'P', b'K', ..]) => Shape::Zip,
+        Some([0x1f, 0x8b, ..]) | Some([b'B', b'Z', b'h', ..]) => Shape::Tar,
+        Some([0xfd, b'7', b'z', b'X', b'Z', 0x00]) => Shape::Tar,
+        _ => Shape::NotAnArchive,
+    }
+}
+
 /// Extract corpus files (per lang.classify) from a package archive.
 ///
 /// Registries ship two shapes. Compressed tarballs (npm, crates.io, GitHub
@@ -182,64 +211,170 @@ fn decompress(archive: &Path) -> Result<Box<dyn Read>> {
 /// directory, which is stripped. Zips (Maven `-sources.jar`, `.nupkg`) do not:
 /// their entries are already root-relative, so stripping would drop the first
 /// path segment — the whole `com/` of `com/google/common/base/Ascii.java`.
+///
+/// A third shape appears with LuaRocks: an archive whose *member* is itself
+/// an archive. A `.src.rock` is a zip holding the rockspec plus the package's
+/// source, and how that source is carried is the packager's choice — often an
+/// unpacked directory, but for roughly a quarter of rocks (measured: 12 of the
+/// top 50 by downloads, including argparse, lpeg, luasocket and lua_cliargs)
+/// it is upstream's release tarball, dropped in whole. Walking only the outer
+/// archive finds no source files in those at all and reports them as empty
+/// packages, which reads as "this package has no Lua in it" rather than "the
+/// extractor stopped one level too early". Languages opt in through
+/// `Lang::nested_archives`; recursion is one level only, which is all any
+/// observed rock needs and keeps a zip bomb from turning into an unbounded
+/// walk.
 fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<ManifestFile>> {
     let mut files = Vec::new();
-    let is_zip = {
-        use std::io::Read as _;
-        let mut magic = [0u8; 4];
-        let mut f = std::fs::File::open(archive)?;
-        f.read_exact(&mut magic).is_ok() && &magic[..2] == b"PK"
-    };
-
-    if is_zip {
-        let mut zip = zip::ZipArchive::new(std::fs::File::open(archive)?)
-            .with_context(|| format!("open zip {}", archive.display()))?;
-        for i in 0..zip.len() {
-            let mut entry = zip.by_index(i)?;
-            if !entry.is_file() {
-                continue;
+    // The package archive is streamed from disk rather than read into memory:
+    // Debian .orig.tar.* in the C corpus run to hundreds of megabytes, and
+    // slurping one to reach its members would be a real regression for every
+    // language that has never needed nested extraction. Only nested members —
+    // which the entry reader has already produced as bytes — go through the
+    // in-memory path.
+    let mut magic = [0u8; 6];
+    {
+        let mut f = std::fs::File::open(archive)
+            .with_context(|| format!("open {}", archive.display()))?;
+        let _ = f.read(&mut magic)?;
+    }
+    let ctx = || format!("extract {}", archive.display());
+    match shape(&magic) {
+        Shape::Zip => {
+            let mut zip = zip::ZipArchive::new(std::fs::File::open(archive)?)
+                .with_context(|| format!("open zip {}", archive.display()))?;
+            for i in 0..zip.len() {
+                let mut entry = zip.by_index(i).with_context(ctx)?;
+                if !entry.is_file() {
+                    continue;
+                }
+                let Some(rel) = entry.enclosed_name() else { continue };
+                let Some(rel) = strip_root(lang, &rel, true) else { continue };
+                let mut buf = Vec::new();
+                entry.read_to_end(&mut buf).with_context(ctx)?;
+                take(lang, buf, pkgdir, Path::new(""), &rel, true, &mut files).with_context(ctx)?;
             }
-            let Some(rel) = entry.enclosed_name() else { continue };
-            let Some(rel) = strip_root(lang, &rel, true) else { continue };
-            let mut buf = Vec::new();
-            entry.read_to_end(&mut buf)?;
-            files.extend(record(lang, pkgdir, &rel, &buf)?);
         }
-    } else {
-        let mut tar = tar::Archive::new(decompress(archive)?);
-        for entry in tar.entries()? {
-            let mut entry = entry?;
-            // Regular files only, the same check the zip branch above makes.
-            // A tar carries directory, symlink and hardlink entries too, and
-            // `record` would write a zero-byte regular FILE at such an
-            // entry's path whenever the name passes `classify` — after which
-            // no entry underneath it can create its parent directory, and
-            // the whole fetch dies with `File exists (os error 17)` rather
-            // than skipping one package.
-            //
-            // Two sessions found this independently, from different
-            // triggers, which is worth recording because it is one defect
-            // with two doors. A SYMLINK entry read for its bytes yields
-            // none, and killed a 500-repo bash fetch. A DIRECTORY whose name
-            // carries the source extension does the same: Zig repositories
-            // name directories after their build entry point, so
-            // `examples/example-with-build.zig/` is idiomatic rather than
-            // exotic (measured: jedisct1/zigly, rank 380 of the Zig
-            // top-500). No other language here puts its source extension on
-            // a directory, which is part of why the tar path went this long
-            // without the check the zip path always had.
-            if !entry.header().entry_type().is_file() {
-                continue;
+        _ => {
+            let mut tar = tar::Archive::new(decompress(archive)?);
+            for entry in tar.entries().with_context(ctx)? {
+                let mut entry = entry.with_context(ctx)?;
+                // Regular files only, the same check the zip branch above makes.
+                // A tar carries directory, symlink and hardlink entries too, and
+                // `record` would write a zero-byte regular FILE at such an
+                // entry's path whenever the name passes `classify` — after which
+                // no entry underneath it can create its parent directory, and
+                // the whole fetch dies with `File exists (os error 17)` rather
+                // than skipping one package.
+                //
+                // Two sessions found this independently, from different
+                // triggers, which is worth recording because it is one defect
+                // with two doors. A SYMLINK entry read for its bytes yields
+                // none, and killed a 500-repo bash fetch. A DIRECTORY whose name
+                // carries the source extension does the same: Zig repositories
+                // name directories after their build entry point, so
+                // `examples/example-with-build.zig/` is idiomatic rather than
+                // exotic (measured: jedisct1/zigly, rank 380 of the Zig
+                // top-500). No other language here puts its source extension on
+                // a directory, which is part of why the tar path went this long
+                // without the check the zip path always had.
+                if !entry.header().entry_type().is_file() {
+                    continue;
+                }
+                let entry_path = entry.path().with_context(ctx)?.to_path_buf();
+                let Some(rel) = strip_root(lang, &entry_path, false) else { continue };
+                let mut buf = Vec::new();
+                entry.read_to_end(&mut buf).with_context(ctx)?;
+                take(lang, buf, pkgdir, Path::new(""), &rel, true, &mut files).with_context(ctx)?;
             }
-            let entry_path = entry.path()?.to_path_buf();
-            let Some(rel) = strip_root(lang, &entry_path, false) else { continue };
-            let mut buf = Vec::new();
-            entry.read_to_end(&mut buf)?;
-            files.extend(record(lang, pkgdir, &rel, &buf)?);
         }
     }
     files.sort_by(|a, b| a.path.cmp(&b.path));
+    files.dedup_by(|a, b| a.path == b.path);
     Ok(files)
+}
+
+/// Walk a NESTED archive, already in memory because its containing entry was
+/// read to produce it. Unlike the package archive it keeps its own wrapping
+/// directory: that is what stops `dkjson-2.11/dkjson.lua` colliding with
+/// another member's `dkjson.lua`, and it records which inner archive a file
+/// came from.
+fn walk(
+    lang: &dyn Lang,
+    buf: Vec<u8>,
+    pkgdir: &Path,
+    prefix: &Path,
+    files: &mut Vec<ManifestFile>,
+) -> Result<()> {
+    match shape(&buf) {
+        Shape::Zip => {
+            let mut zip = zip::ZipArchive::new(std::io::Cursor::new(buf)).context("open zip")?;
+            for i in 0..zip.len() {
+                let mut entry = zip.by_index(i)?;
+                if !entry.is_file() {
+                    continue;
+                }
+                let Some(rel) = entry.enclosed_name() else { continue };
+                let Some(rel) = safe_path(&rel) else { continue };
+                let mut inner = Vec::new();
+                entry.read_to_end(&mut inner)?;
+                take(lang, inner, pkgdir, prefix, &rel, false, files)?;
+            }
+        }
+        Shape::Tar => {
+            let mut tar = tar::Archive::new(decompress_bytes(buf));
+            for entry in tar.entries()? {
+                let mut entry = entry?;
+                // Regular files only, for the reason the outer tar branch
+                // gives: a symlink yields no bytes, lands as an empty regular
+                // file, and blocks the directory beneath it. A rock's inner
+                // release tarball is an upstream tarball like any other and
+                // carries symlinks just the same.
+                if !entry.header().entry_type().is_file() {
+                    continue;
+                }
+                let entry_path = entry.path()?.to_path_buf();
+                // A nested archive keeps its own root.
+                let Some(rel) = safe_path(&entry_path) else { continue };
+                let mut inner = Vec::new();
+                entry.read_to_end(&mut inner)?;
+                take(lang, inner, pkgdir, prefix, &rel, false, files)?;
+            }
+        }
+        Shape::NotAnArchive => {}
+    }
+    Ok(())
+}
+
+/// One archive member: recurse into it if it is itself an archive and this
+/// language asked for that, otherwise record it.
+fn take(
+    lang: &dyn Lang,
+    buf: Vec<u8>,
+    pkgdir: &Path,
+    prefix: &Path,
+    rel: &Path,
+    outermost: bool,
+    files: &mut Vec<ManifestFile>,
+) -> Result<()> {
+    if outermost && lang.nested_archives() && !matches!(shape(&buf), Shape::NotAnArchive) {
+        // Nest under the archive's own path so two inner archives cannot
+        // overwrite each other, and so the manifest shows the provenance.
+        let nested_prefix = prefix.join(rel);
+        // Non-fatal on purpose. Magic bytes say "this is an archive", not
+        // "this is a WELL-FORMED archive", and corpus packages ship
+        // deliberately broken ones: luarocks itself carries corrupt-archive
+        // fixtures for its own error handling, whose gzip header is followed
+        // by garbage. Those must skip the member, not abort the package and
+        // take the rest of the fetch down with it.
+        if let Err(e) = walk(lang, buf, pkgdir, &nested_prefix, files) {
+            eprintln!("fetch: skipping unreadable nested archive {}: {e:#}", nested_prefix.display());
+        }
+        return Ok(());
+    }
+    let full = prefix.join(rel);
+    files.extend(record(lang, pkgdir, &full, &buf)?);
+    Ok(())
 }
 
 pub fn run(lang: &dyn Lang, list: &Path, limit: usize, corpus: &Path) -> Result<()> {
@@ -262,11 +397,11 @@ pub fn run(lang: &dyn Lang, list: &Path, limit: usize, corpus: &Path) -> Result<
         // The extension is cosmetic — extract() sniffs the magic bytes — but
         // a cached Maven sources.jar should not be named .tar.gz.
         // .crate/.tgz are legacy cache names from before the lang refactor.
-        let ext = ["jar", "zip", "nupkg", "tar.xz", "tar.bz2"]
+        let ext = ["jar", "src.rock", "zip", "nupkg", "tar.xz", "tar.bz2"]
             .into_iter()
             .find(|e| tarball_url.ends_with(&format!(".{e}")))
             .unwrap_or("tar.gz");
-        let tarball = ["tar.gz", "tar.xz", "tar.bz2", "crate", "tgz", "jar", "zip", "nupkg"]
+        let tarball = ["tar.gz", "tar.xz", "tar.bz2", "crate", "tgz", "jar", "src.rock", "zip", "nupkg"]
             .iter()
             .map(|e| cache.join(format!("{stem}.{e}")))
             .find(|p| p.exists())

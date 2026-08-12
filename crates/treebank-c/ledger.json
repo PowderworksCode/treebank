@@ -12,6 +12,17 @@
     "."
   ],
   "generate_deps": null,
+  "oracle": {
+    "tool": "tools/c-oracle (libclang, verdict from clang's own diagnostic categories)",
+    "version": "libclang 20.1.2",
+    "dialect": "GNU C17",
+    "flags": [
+      "-std=gnu17",
+      "-ferror-limit=0",
+      "-w"
+    ],
+    "note": "THREE-VALUED: valid / invalid / indeterminate, the only oracle that is. See crates/treebank-c/ORACLE.md; the claim is 'no syntax error, in GNU C, given these include paths', NOT 'this compiles'. Lang::validate collapses indeterminate to false, so gap_files is a FLOOR. This is the language that proves `flags` has to exist: -std=gnu17 selects the dialect and the libclang version alone does not settle it. The include-path flags are per-file and are described in corpus.oracle_flags rather than here."
+  },
   "corpus": {
     "source": "Debian sid, source packages ranked by popcon (popularity-contest) installs aggregated per source package, filtered to packages whose sources.debian.org SLOC is >=2000 ansic and ansic >= cpp; upstream .orig.tar.* only (never the .debian.tar.* patch tarball); .c and .h files, C++ headers excluded by content",
     "source_note": "C has no registry, so popularity is borrowed. popcon counts machines, which is closer in kind to crates.io downloads than Java's dependent-repos proxy. The bias is explicit and it is the point: this corpus is the C that ships in a distribution \u2014 system libraries, daemons, autotools trees, GNU extensions \u2014 NOT trending C on GitHub, which is a different corpus and would give different gap numbers. The SLOC filter exists because popcon ranks everything Debian ships: without it the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc-16 (no C at all).",

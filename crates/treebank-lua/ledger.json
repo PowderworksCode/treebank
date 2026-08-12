@@ -1,0 +1,139 @@
+{
+  "grammar": "lua",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter-grammars/tree-sitter-lua",
+    "sha": "10fe0054734eec83049514ea2e718b2a56acd0c9",
+    "version": "0.5.0",
+    "sha_note": "commit target of tag v0.5.0; submodule pointers are commits, not annotated tag objects"
+  },
+  "upstream_choice": {
+    "summary": "tree-sitter-grammars/tree-sitter-lua is not one option among several \u2014 it is the grammar, and the convergence is total: nvim-treesitter, Helix and Zed all pin not merely the same repository but the SAME COMMIT, 10fe0054 (v0.5.0), which is the commit pinned here.",
+    "evidence": "nvim-treesitter lua/nvim-treesitter/parsers.lua -> tree-sitter-grammars/tree-sitter-lua @ 10fe0054; Helix languages.toml [[grammar]] name=\"lua\" -> same repo @ 10fe0054; Zed extensions/lua (zed-extensions/lua) extension.toml [grammars.lua] -> same repo @ 10fe0054 (commented '# v0.5.0'). crates.io tree-sitter-lua: 3,153,414 downloads all-time, 1,357,851 in 90 days.",
+    "alternatives_considered": "tjdevries/tree-sitter-lua (131 stars, last pushed 2024-10-23) and Azganoth/tree-sitter-lua (53 stars, 2022-08-29) are the only other Lua grammars with any following, and both are dormant. Luau is a genuinely separate grammar for a genuinely separate language and is NOT vendored here; it is its own roadmap entry (#50, crates.io 28,118 downloads, 1/112th of Lua) and it is the one place the editors disagree \u2014 nvim uses tree-sitter-grammars/tree-sitter-luau, Helix uses polychromatist/tree-sitter-luau, Zed uses 4teapo/zed-luau."
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "oracle": {
+    "tool": "tools/lua-oracle/check.lua, run under lua5.4",
+    "version": "Lua 5.4.6",
+    "dialect": "PUC-Rio Lua 5.4",
+    "flags": [],
+    "note": "PUC-Rio Lua's own front end via loadfile(path, \"t\") \u2014 the exact call Lua makes to turn a file's text into a chunk. TWO-VALUED: valid / invalid. It compiles and stops: no execution, no require, no name resolution, so a missing dependency is not an error and each file is judged on its own text. check.lua refuses to run under any other _VERSION rather than silently producing verdicts for an unrecorded dialect.",
+    "unreadable_note": "An unreadable file is NOT an invalid file: the oracle writes the path and reason to stderr and exits 1 rather than emitting a verdict, so a mistyped corpus root fails the sweep instead of turning every grammar failure into noise and reporting a flawless grammar. Adopted from main's 'oracles: an unreadable file is not an invalid file', whose reasoning traces back to exec_oracle.rs. Lua makes the trap easier to fall into than the other oracles, because loadfile returns the SAME nil for 'not valid Lua' and 'could not open that' \u2014 so readability is established by an explicit open+read first, and only then is the verdict asked for. The verdict still comes from loadfile rather than from the bytes just read, deliberately: loadfile is luaL_loadfilex and skips a leading '#!' line where load(<string>) does not, and the measured equivalence with `luac -p` is an equivalence about loadfile. Verified after the change: the 2606-file corpus and the 20-file adversarial battery both still agree with `luac -p` on every file, and a nonexistent path and a directory are each fatal rather than 'invalid'."
+  },
+  "oracle_why_this_field_exists": "generate_cli exists because regenerating with a different tree-sitter-cli silently changes what the grammar accepts. This field exists because running a different reference parser silently changes what 'invalid' means, and a sweep's gap/noise split is only interpretable against the parser that produced it. Lua is the cheapest language that forces the point \u2014 5.1 / 5.2 / 5.3 / 5.4 / LuaJIT / Luau are genuinely different syntaxes, so which luac is installed decides the verdicts \u2014 but it is not the first language to need it: C's answer is only meaningful as 'libclang 20.1.2, given -std=gnu17', which is why `flags` exists and why treebank-c's ledger now carries the same field. Scala (2 vs 3), Haskell (per-package LANGUAGE pragmas) and Zig all need it later. `treebank ledger` requires it of every grammar, so it cannot quietly go stale.",
+  "oracle_not_luac": {
+    "summary": "The roadmap costed this oracle as `luac -p` at 1.7 ms/file. That figure reproduces exactly \u2014 1.59-1.67 s per 1000 files over 5 interleaved passes \u2014 but ~70% of it is fork, not parsing, and the implementation here is `loadfile` in ONE interpreter process instead.",
+    "measured": "1000-file sample, 10.4 MB of real Lua (mean 10.4 KB, median 2.5 KB). luac -p serial: 1.59-1.67 s. The same 1000 forks over an EMPTY file: 1.04-1.28 s, so parsing itself is ~0.45 s. luac -p under xargs -P16: 0.47-0.50 s. One lua process with loadfile: 0.16-0.23 s. On the reject path (every file truncated to 60%, which is the input validate() actually sees) the batch oracle is 0.13-0.15 s \u2014 faster than the valid path, because the parser bails at the first error, the same shape rust's syn shows.",
+    "equivalence": "loadfile is luaL_loadfilex, the same entry point luac -p uses, so it also skips a leading '#!' line \u2014 load(<string>) does not, and would call every shebanged script invalid. Verified verdict-for-verdict against luac -p over all 2606 files: identical, 2601 valid / 5 invalid, zero disagreements.",
+    "one_divergence": "mode \"t\" refuses precompiled binary chunks that luac -p loads and calls valid. Deliberate and in the safe direction: a bytecode blob has no Lua syntax, so the grammar correctly fails it, and calling it valid would manufacture a grammar gap out of a file with no source at all. Occurrences in the 2606-file sample: zero.",
+    "adversarial_battery": "Prompted by treebank-php, which built a batch oracle (opcache_compile_file), found it agreed with `php -l` on all 1703 corpus files, and REJECTED it anyway because a 22-file adversarial battery caught it silently accepting ten classes of invalid PHP. Their conclusion generalises and is worth repeating: agreement on clean library code is worthless as evidence for a batch oracle; only a negative battery tests it. So this one was tested that way too. 20 files, 14 of them invalid, weighted at the post-parse and code-generation errors that were exactly PHP's blind spot: break outside a loop, break inside a nested function, goto to an undefined label, a duplicate label, `...` outside a vararg function, assignment to a <const>, >200 locals, a bogus attribute name, a duplicated attribute, plus plain syntax errors and four valid controls. `luac -p` and loadfile agreed on ALL 20, zero disagreements. The structural reason they agree where PHP's did not: loadfile is luaL_loadfilex, literally the same entry point luac -p calls, so there is no second code path to diverge - whereas opcache_compile_file is a genuinely different path from php -l. The battery is the evidence that this reasoning is not just plausible."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "tree-sitter-lua deliberately spans PUC Lua 5.x AND LuaJIT 2.x \u2014 upstream's README says so in as many words \u2014 while the oracle is PUC 5.4 alone. So the grammar accepts a strict superset of what the oracle calls valid. This is the same relationship treebank-python documents for Python 2, and it needs stating because it decides what the negative corpus may contain.",
+    "evidence": "grammar.js's number rule carries `seq(digits, /U?LL/i)` for LuaJIT 64-bit literals, an `i`/`I` imaginary suffix, and a `0b` binary literal form that NO PUC Lua accepts; it also has goto_statement (5.2+) and `<attrib>` for <const>/<close> (5.4). Verified by parsing, not by reading: the grammar accepts `1LL`, `0xFFULL`, `goto`/`//`/bitwise/`<const>`, and even `local goto = 1` (valid 5.1, rejected by 5.4); it rejects Luau (`local x: number`, `x += 1`), nested long brackets and hand-written garbage. luac 5.4 rejects the LuaJIT and 5.1 cases.",
+    "why_this_is_safe": "A sweep gap is 'grammar rejected it AND the oracle accepted it'. This asymmetry runs the other way \u2014 grammar accepts, oracle rejects \u2014 so it can never manufacture a gap, and gap_files stays exact. Measured over 2606 files: 0 files where the grammar failed and the oracle said valid; 3 where both rejected (noise); 2 where the grammar accepted and the oracle rejected, both of them neovim test files using LuaJIT's `-1ULL`.",
+    "cost": "LuaJIT-only syntax is booked as corpus noise rather than judged. In a deliberately LuaJIT-heavy sample (neovim, lua-resty-core, luvit) that cost 2 files in 2606 = 0.08%. The alternative \u2014 pinning LuaJIT as the oracle \u2014 was considered and rejected: it would move the asymmetry to the dangerous side for 5.4-only syntax, and LuaRocks itself is overwhelmingly portable code (4412 of 5360 rocks, 82%, declare compatibility with BOTH 5.1 and 5.4 via luarocks.org's per-version manifests).",
+    "negative_corpus_consequence": "test/negative/ must NOT contain LuaJIT literals (1LL, 0xFFULL, 0b1010), Luau syntax, or `local goto = 1`. The grammar accepts the first by design and should; the oracle rejects them; a negative test built from them would be testing the dialect gap, not the grammar. Restricted to syntax invalid in EVERY Lua dialect. VERIFIED rather than asserted: each of the 16 files in test/negative/ is rejected by Lua 5.1.5, Lua 5.4.6 AND LuaJIT 2.1, as well as by the grammar.",
+    "dialect_measurement": "The same 2606 files through three interpreters, all built or installed for this: Lua 5.1.5 -> 2597 valid / 9 invalid; Lua 5.4.6 (pinned) -> 2601 / 5; LuaJIT 2.1 -> 2603 / 3. SIX files change verdict on nothing but which interpreter is installed (0.23%): four koreader files using the `goto continue` idiom (5.2+, which LuaJIT also has) and two neovim files using LuaJIT's -1ULL. That is the concrete thing this ledger's `oracle` field exists to stop being invisible.",
+    "grammar_equals_luajit": "Measured, and it is the cleanest evidence for what the grammar's language actually is: over all 2606 files the grammar agrees with LuaJIT 2.1 EXACTLY \u2014 the same 3 rejects (one syntax_error.lua fixture, two truncated indent fixtures), zero disagreements in either direction. Against 5.4 it is 0 gaps / 2 grammar-accepts-oracle-rejects; against 5.1, 0 gaps / 6. Zero gap files against all three, so the choice of dialect cannot manufacture a gap here whichever way it goes; it only decides how much is booked as noise.",
+    "why_not_luajit_then": "Considered seriously, because LuaJIT matches the grammar exactly on this corpus. Rejected for now on three grounds: PUC 5.4 is the standard packaged interpreter (apt install lua5.4) where LuaJIT and 5.1 had to be built from source for this comparison; LuaRocks is overwhelmingly portable code (4412 of 5360 rocks, 82%, declare BOTH 5.1 and 5.4 compatibility via luarocks.org's per-version manifests); and the measured cost of 5.4 on a deliberately LuaJIT-heavy sample was 2 files in 2606. If a LuaRocks sweep shows that cost growing, the right upgrade is a UNION oracle \u2014 valid if any of 5.1/5.4/LuaJIT accepts it, which is exactly the language the grammar targets \u2014 not a swap to LuaJIT, which would move the same problem onto 5.4-only syntax. Not built now because on the evidence it would change 2 files in 2606 and would make every CI machine build two extra interpreters from source.",
+    "second_axis_scope_rules": "The LuaJIT dialect gap is the SMALL half of this relationship. The larger half is that Lua's parser enforces scope and semantic rules a tree-sitter grammar cannot express at all, so the oracle rejects a whole class of files the grammar accepts. Measured on the adversarial battery: of 14 oracle-invalid files, the grammar accepts 8 - break outside a loop, break inside a nested function, goto to an undefined label, a duplicate label, `...` outside a vararg function, assignment to a <const>, >200 local variables, and `local x <bogus> = 1` (the grammar's _attrib rule takes any identifier where Lua allows only const and close). It correctly rejects the 6 that are genuine syntax errors. This runs in the safe direction like the dialect gap - grammar accepts, oracle rejects, so it can never manufacture a gap - but it bounds test/negative much more tightly than the dialect note alone suggests: a negative test may only use SYNTAX errors, never a scope or semantic one, because the grammar will not reject the latter and by its nature cannot. The 16 files in test/negative are all pure syntax errors and were each verified rejected by the grammar."
+  },
+  "corpus": {
+    "source": "LuaRocks .src.rock archives (a zip carrying the rockspec plus the author's source tree) for the top modules by cumulative downloads.",
+    "ranking": "scraped from luarocks.org's paginated module listing (/modules?page=N, 50 rows per page, 134 pages at fetch time)",
+    "ranking_note": "LuaRocks publishes no ranking API and no bulk download-count endpoint; unlike PyPI it has no public download dataset either. The listing is the only complete per-module source, and it carries the exact figure in a `title` attribute beside an ABBREVIATED display value ('7.8m') \u2014 reading the displayed text instead would rank every popular rock below every unpopular one. The metric is cumulative downloads since publication: the same KIND of number as crates.io's total (traffic), unlike Java's dependent-repos proxy, but all-time rather than recent, so it favours long-lived rocks over fast-growing ones.",
+    "namespace_note": "LuaRocks is not a flat namespace: `luasocket` exists under both `lunarmodules` and `luasocket`, `lua_cliargs` under both `lunarmodules` and `amireh`, and both of each are real rocks with real downloads. Packages are therefore named `author/module` throughout, and fetch::pkg_dir turns the slash into `__` for the corpus directory.",
+    "versions_note": "Development rows (scm-1, dev-1, flagged `development_flag` on the module page) are skipped in favour of the newest release. They track a VCS branch, so what they contain depends on when you asked, which is not a corpus anyone can re-measure.",
+    "files_note": ".lua only, the single extension tree-sitter-lua's tree-sitter.json claims. .rockspec files are also Lua syntax and this grammar parses them, and every package ships one; they are excluded for now so classify() matches what the grammar advertises, and including them would change the corpus's character (a rockspec is a data table, not code). Adding them would be a deliberate change with its own sweep evidence. Paths containing a __MACOSX component are excluded: they are AppleDouble resource forks (._name) that macOS's zip writer stores beside every real entry, carrying a .lua extension while being binary metadata rather than source. Measured: 7 in this corpus, all from one rock published from a Mac; without the exclusion they are noise forever.",
+    "fetched": "2026-08-11 (luarocks.org module listing and module pages of that date)",
+    "packages": 383,
+    "packages_note": "500 requested; 383 resolved. 113 of the 117 skips are a 404 on the .src.rock: those rocks publish only a .rockspec, whose source is fetched from git or an upstream URL at install time rather than carried by LuaRocks. That is the LuaRocks analogue of a PyPI package publishing no sdist, and the fetch driver skips them for the same reason rather than chasing an external source of unknown provenance.",
+    "files": 8582,
+    "nested_archives_note": "A .src.rock is a zip carrying the rockspec plus the source, and how the source is carried is the packager's choice. Roughly a quarter of rocks (12 of the top 50 by downloads, including argparse, lpeg, luasocket and lua_cliargs) drop in upstream's release TARBALL rather than an unpacked tree, so the extractor has to walk one level deeper or those packages come out empty. Measured effect on the first 50 packages: 974 files before, 1189 after (+22%). Lang::nested_archives opts in; recursion is one level, and a member whose magic bytes say 'archive' but which does not parse as one is skipped rather than fatal (luarocks itself ships deliberately corrupt archives as fixtures for its own error handling).",
+    "sweep_upstream": {
+      "passed": 8545,
+      "failed": 37,
+      "gap_files": 3,
+      "noise_files": 34,
+      "clusters": 31,
+      "note": "upstream 10fe0054 with the two packaging patches only, i.e. before patch 0003."
+    },
+    "remaining_gaps_note": "2 gap files remain, both the SAME cause and neither a grammar.js bug: a literal NUL byte, one inside a string literal (net-url tests/query_test.lua) and one inside a comment (openssl test/root_ca.lua). Lua reads source as a length-delimited buffer and accepts embedded NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token ends at the NUL and the remainder of the file is ERROR. Verified minimal: `x = \"a<NUL>b\"` is valid to luac 5.4 and fails to parse. This is a tree-sitter CORE limitation, not something grammar.js or scanner.c can express, and it is recorded as such rather than counted as a grammar gap it is not. Patch 0003 does not help and was never going to: its scan_quote_string_content loop also terminates on 0. Incidence 2 of 8582 (0.02%), after excluding the 7 __MACOSX resource forks which also open with a NUL. The third gap the first sweep found - a quoted string beginning with a long-comment opener - is fixed by patch 0003.",
+    "sweep_patched": {
+      "passed": 8546,
+      "failed": 36,
+      "gap_files": 2,
+      "noise_files": 34,
+      "clusters": 28,
+      "note": "with patch 0003. 99.58% of files parse."
+    }
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-lua name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_lua so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md.",
+      "note": "Also corrects upstream's include list from \"/LICENSE\" to \"/LICENSE.md\": the file in the tree is LICENSE.md, so as written the MIT licence text never reached the published tarball at all. A redistribution has to ship its licence, so this is fixed here rather than left for upstream. Worth offering upstream as a standalone one-line fix."
+    },
+    {
+      "id": 3,
+      "title": "long comment opener at the start of a quoted string",
+      "file": "patches/0003-long-comment-opener-at-the-start-of-a-quoted-string.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/comments.txt",
+        "test/highlight/string.lua"
+      ],
+      "kind": "grammar",
+      "origin": "upstream PR #80 (tree-sitter-grammars/tree-sitter-lua), open at time of writing, by notpeter; opened against zed-extensions/lua#54. Its base commit is EXACTLY this ledger's pinned sha, so it applies to the pin unchanged. Taken as-is for grammar.js, src/scanner.c and the two test files; its regenerated src/parser.c, src/grammar.json and src/tree_sitter/array.h are deliberately NOT carried, because materialize.sh regenerates those with the pinned CLI. Found independently by this crate's first sweep and diagnosed to the same repro before the PR was discovered; retire this patch when it merges upstream.",
+      "evidence": {
+        "repro": "x = \"--[[\"\n",
+        "diagnosis": "A quoted string whose content BEGINS with a long-comment opener. `comment` is in `extras`, so the external scanner's _block_comment_start stays valid at the start of string content; scan_comment_start consumes `--` and then scan_block_start consumes `[[`, and the string's content is lexed as the start of a long comment. Specific to that position and to the EXTERNAL token: `x = \"a--[[b\"`, `x = \"-- [[\"` and `x = \"--foo\"` all parsed before the fix, the last of which shows the INTERNAL comment extra is correctly not valid there. The fix moves quoted-string content into the scanner as two new external tokens checked BEFORE the comment branch, so the contest is decided by scanner order rather than by token immediacy. Attempted first and reverted: making the closing quote token.immediate, so the state after the opening quote admits no extras, was verified to reach the generated grammar.json and did NOT fix it - an internal token loses to any valid external one regardless of immediacy, which is why the fix has to be scanner-side.",
+        "first_seen": {
+          "package": "lunarmodules/luacheck",
+          "version": "1.2.0-1",
+          "path": "luacheck/spec/lexer_spec.lua"
+        },
+        "sweep_before": {
+          "passed": 8545,
+          "failed": 37,
+          "gap_files": 3,
+          "noise_files": 34,
+          "clusters": 31
+        },
+        "sweep_after": {
+          "passed": 8546,
+          "failed": 36,
+          "gap_files": 2,
+          "noise_files": 34,
+          "clusters": 28
+        },
+        "evidence_note": "One file in 8,582 and zero regressions, both measured over the identical corpus with only this patch removed and restored. Regression-tested well beyond the sweep, because the patch changes how EVERY quoted string is lexed: the 2,606-file external corpus (neovim, nvim-treesitter, awesome, lua-resty-core, koreader, luvit) fails exactly the same 3 files as before and no others; upstream's own corpus tests stay 42/42 with highlight assertions rising 58 -> 76; the 16-file negative corpus is still fully rejected; the oracle's 20-file adversarial battery still agrees 20/20; and the tree SHAPE is unchanged - string_content still wraps escape_sequence children, which is what consumers' queries depend on and the thing a lexer change most easily breaks.",
+        "upstream_status": "open as PR #80 against the pinned sha; retire this patch on merge"
+      }
+    }
+  ]
+}

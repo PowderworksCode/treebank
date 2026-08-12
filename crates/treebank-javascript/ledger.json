@@ -12,6 +12,16 @@
     "."
   ],
   "generate_deps": null,
+  "oracle": {
+    "tool": "tools/js-oracle/check.mjs (V8 via node:vm, plus a JSX-only @babel/parser leg), run under node",
+    "version": "Node.js v22.23.2 (V8), @babel/parser 7.29.8",
+    "dialect": "ECMAScript as of V8 in Node 22, plus JSX",
+    "flags": [
+      "--experimental-vm-modules",
+      "--no-warnings"
+    ],
+    "note": "Two legs because one parser does not cover what this grammar covers: V8 (CJS wrapper or SourceTextModule, picked by Node's own module rules) construction-only, never linked or evaluated; plus babel restricted to the JSX plugin for the JSX that V8 rejects and tree-sitter-javascript parses. Deliberately NOT the TypeScript parser, which would call `const x: number = 1` valid and turn this grammar's correct rejection of TypeScript into a reported gap."
+  },
   "corpus": {
     "source": "npm top-100 by downloads (npm-high-impact 1.13.0), fetched 2026-08-06; .js/.mjs/.cjs/.jsx, excluding *.min.js bundles (generated, and they inline other packages' code)",
     "files": 720,
