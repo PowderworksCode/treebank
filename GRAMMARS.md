@@ -126,6 +126,15 @@ Patches capture source-of-truth files only (grammar.js, scanner.c, corpus
 tests), never generated files — `materialize.sh` regenerates those. Add the
 ledger entry with evidence, and describe the patch in `LOCAL-PATCHES.md`.
 
+One trap in that `git -C build diff` step. `materialize.sh` stages `build/`
+with `git add -A`, which honours the *upstream* repo's `.gitignore`. A file
+that upstream force-tracks but its own `.gitignore` ignores is therefore
+present in `build/` and untracked there, so a diff for it comes back **empty
+rather than failing** — a silently lost patch. tree-sitter-zig's `Cargo.lock`
+is one such file. When a patch must touch one, diff it against the upstream
+blob instead (`git -C upstream show HEAD:<path>`); `git apply` patches the
+working tree and not the index, so verification is unaffected.
+
 ## Bumping upstream
 
 ```sh

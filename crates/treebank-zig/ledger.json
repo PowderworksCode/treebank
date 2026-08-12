@@ -1,0 +1,154 @@
+{
+  "grammar": "zig",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter-grammars/tree-sitter-zig",
+    "sha": "6479aa13f32f701c383083d8b28360ebd682fb7d",
+    "version": "1.1.2",
+    "version_note": "Upstream's own Cargo.toml and tree-sitter.json still say 1.1.2 at the pinned sha — the tag was cut in December 2024 and master has not been bumped since — so this field says 1.1.2 too. It is the PUBLISH BASE that publish.sh checks against the materialized Cargo.toml, not a description of how far past the tag the pin sits; sha_note carries that. An earlier draft wrote 1.1.2+8 here and publish.sh correctly rejected it.",
+    "sha_note": "master HEAD at pin time, deliberately NOT the newest tag. v1.1.2 is dated 2024-12-21; master carries nine further months of work, including `feat!: update parser to ABI 15` (the ABI tree-sitter 0.25 emits) and `ci: update corpus to Zig 0.15.1`. Pinning the tag would pin a grammar that predates both the ABI and the language era this oracle adjudicates. Submodule pointers are commits, so this is a commit either way."
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.lock",
+        "Cargo.toml"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns the tree-sitter-zig name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_zig so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else — dependency versions stay upstream_s. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md.",
+      "note": "The Cargo.lock hunk is hand-produced against upstream_s committed blob rather than taken from `git -C build diff`. tree-sitter-zig force-tracks Cargo.lock while its own .gitignore ignores it, so materialize.sh_s throwaway build repo never stages the file and a diff there would silently come back empty. `git apply` is unaffected — it patches the working tree, not the index — so verify.sh reconstructs the file correctly."
+    },
+    {
+      "id": 3,
+      "title": "Zig 0.15: async/await as identifiers, and struct-literal asm clobbers",
+      "file": "patches/0003-zig-0-15-async-await-as-identifiers-and-struct-literal-asm-clobbers.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/zig-0.15.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by probing the 0.15 language changes against the grammar, then measured by the top-500 GitHub sweep",
+      "evidence": {
+        "repro": "const S = struct { await: u8, async: *const fn (u8) void };\nconst E = enum { async, await };\nconst async = 1;\npub fn f() void { const v = .{ .async = async }; _ = v; }\npub fn g() void { asm volatile (\"\" ::: .{ .memory = true }); }\n",
+        "diagnosis": "Two halves of one release. Zig 0.15 removed `async` and `await` as keywords, so from that release on they are ordinary identifiers and may name a declaration, a struct field, an enum member, an initializer field or a value; the grammar still tokenized them as keywords, so every one of those positions failed. A dedicated inline rule `_keyword_identifier` admits them in the naming positions (container_field in both its branches, field_initializer) and as a bare identifier expression. Separately, 0.15 changed asm clobbers from a string list to a struct literal — `::: \"memory\"` became `::: .{ .memory = true }` — and asm_clobbers accepted only strings; it now takes either.",
+        "why_the_keywords_are_kept": "`async_expression` and `await_expression` are untouched, so `async g()` and `await frame` still produce their own nodes. The lexer decides on lookahead: an operand follows, it is the keyword form; nothing follows, it is a name. No conflict declaration is needed and a corpus test pins both readings.",
+        "rejected_alternative": "DELETING the `async`/`await` keyword rules outright, which is what a grammar targeting only 0.15+ would do, and which LOOKS BETTER ON THE METRIC: measured over the same 45,242 files it gives 113 gap files against this patch's 119. It was rejected because the improvement is an artifact of the pinned oracle. gap_files fell by 31 while noise_files ROSE by 27 — 27 files the grammar previously parsed correctly now produce error trees, and because the 0.16.0 oracle also rejects pre-0.15 async source, every one of them is booked as corpus noise instead of a regression. lithdew/pike's `await self.frame;` is real Zig that real repositories are still written in. THE PINNED-ORACLE METRIC CANNOT SEE THIS CLASS OF REGRESSION, which is precisely why the alternative is recorded here rather than silently not taken.",
+        "why_the_gap_exists": "tree-sitter-zig's last corpus refresh targeted Zig 0.15.1 (upstream commit f1ea9cb7, 2025-09-09). These are the parts of that release it did not reach — exactly the drift a version-pinned oracle exists to find.",
+        "first_seen": {
+          "package": "ziglang/zig",
+          "path": "lib/std/Io.zig"
+        },
+        "sweep_before": {
+          "passed": 44755,
+          "failed": 487,
+          "gap_files": 351,
+          "noise_files": 136
+        },
+        "sweep_after": {
+          "passed": 44987,
+          "failed": 255,
+          "gap_files": 119,
+          "noise_files": 136
+        },
+        "evidence_note": "232 files, and noise_files is unchanged at 136 — zero regressions. The before/after sweeps ran over the identical 45,242-file corpus with only this patch removed and restored."
+      }
+    },
+    {
+      "id": 4,
+      "title": "a pointer to an if type expression",
+      "file": "patches/0004-pointer-to-an-if-type-expression.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/zig-pointer-if-type.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 GitHub sweep",
+      "evidence": {
+        "repro": "const builtin = @import(\"builtin\");\nconst Command = struct {\n    status: *if (builtin.link_libc) c_int else u32,\n};\n",
+        "diagnosis": "`pointer_type` admitted only `$.type_expression` as its pointee, and `if_type_expression` is a sibling of that rule rather than a member of it. So `*if (cfg) A else B` — ordinary conditional-type code, used in std and ghostty for platform-varying fields — had no path, and the parser fell through to a range expression looking for `..`, which is where the cluster signature `range_expression > MISSING ..` came from. The pointee now takes either.",
+        "first_seen": {
+          "package": "ghostty-org/ghostty",
+          "path": "src/Command.zig"
+        },
+        "sweep_before": {
+          "passed": 44987,
+          "failed": 255,
+          "gap_files": 119,
+          "noise_files": 136
+        },
+        "sweep_after": {
+          "passed": 44988,
+          "failed": 254,
+          "gap_files": 118,
+          "noise_files": 136
+        },
+        "evidence_note": "One file, zero regressions. Reported as measured rather than dressed up: the `range_expression > MISSING ..` cluster it was drawn from is heterogeneous, and the 22 files still under that signature are a different shape (`struct { error{foo} }`), not this one."
+      }
+    }
+  ],
+  "corpus": {
+    "source": "GitHub repositories, shallow tarball of the default branch's head commit. Zig has no package registry: build.zig.zon dependencies are URLs with content hashes rather than registry coordinates, so there is nothing to rank by downloads and nothing that resolves a name to a release. The artifact-corpus path in crates/treebank-cli/src/lang/github.rs is used instead — the same module the bash grammar uses for the same reason, taken byte-identical from that branch rather than reimplemented.",
+    "ranking": "stars, via GitHub's repository search (language:Zig fork:false archived:false), paged past the 1000-result cap with a descending star bound",
+    "ranking_note": "Stars are the WEAKEST popularity metric in this repository and the ledger should say so plainly. crates.io, npm and PyPI count downloads and popcon counts machines; a star costs nothing, never decays, and measures attention rather than use. It is used because GitHub publishes no download counts and nothing else ranks a repository. `language:Zig` is GitHub's own linguist classification of the REPOSITORY — a majority vote over its files — so this selects repositories that are MOSTLY Zig, where the Debian path deliberately selects packages that merely CONTAIN the language. 'Zig on GitHub by stars' is a specific and defensible population. It is one population, not the population.",
+    "version_note": "A repository has no version, so the pinned head sha is used as one. 'version' here means 'what HEAD was when we fetched', not something an author released.",
+    "files_note": ".zig only, the single extension tree-sitter-zig's tree-sitter.json claims. .zon is deliberately excluded even though the same parser reads it: ZON is a different PARSE MODE (Ast.parse(.., .zon)), it is data rather than code, and the grammar does not advertise the extension — admitting it would have the oracle and the grammar answering different questions about one file. zig-cache/, .zig-cache/ and zig-out/ components are excluded as build output, for the reason javascript excludes bundles and python excludes _vendor/.",
+    "oracle": "tools/zig-oracle/check.zig — std.zig.Ast.parse(gpa, src, .zig), the call the compiler itself makes to turn a file's text into a syntax tree. TWO-VALUED: valid / invalid. It resolves no @import, runs no comptime and links nothing, so a missing dependency is not an error and each file is judged entirely on its own bytes.",
+    "oracle_version": "Zig 0.16.0",
+    "oracle_version_note": "THE SINGLE MOST LOAD-BEARING FIELD IN THIS LEDGER. For every other language in this repository 'is this file valid?' has one answer; for Zig it has one answer per compiler version, because the grammar itself moves between releases. Measured on 11,672 files, 801 (6.86%) do not get the same verdict from 0.11.0 through 0.16.0, and 363 (3.11%) differ across 0.13-0.16 alone. 0.16.0 is the current tagged release and the maximum-agreement point: it dominates 0.15.2 outright (+2 files, -0). Lang::validate deliberately does NOT fall back to `zig` on PATH — TREEBANK_ZIG_ORACLE must name a binary built by this toolchain — because silently adjudicating with whatever compiler happens to be installed would make every number below drift when the box is updated. See crates/treebank-zig/ORACLE.md for the full six-version measurement.",
+    "oracle_note": "Deliberately Ast.parse and NOT `zig ast-check` (AstGen), which is the analogue of the compile()-over-ast.parse() choice py-oracle made. Measured and rejected for three reasons. (1) AstGen enforces LINT-GRADE rules, not well-formedness: on 400 parser-valid files it rejects 42, including `local variable is never mutated` and `unused function parameter`. A file with an unused parameter is unambiguously well-formed Zig that zig fmt round-trips, and a tree-sitter grammar must accept it. CPython's post-parse checks are different in kind — `return` outside a function is invalid in every program and every version. (2) It makes the version problem WORSE: 11 of those 42 are `invalid builtin function`, drift in the builtin set stacked on drift in the grammar. (3) It hangs. `zig ast-check` loops forever on `((1 + 1));` on 0.13.0, 0.14.1 and 0.15.2 (fixed in 0.16.0) — and the file it hangs on is ziglang/zig's own test/cases/compile_errors/doubled_grouped_expr_as_stmt.zig, whose comment reads 'makes sure that the doubled grouped_expression does not cause an endless loop in AstGen'. One corpus file wedging the sweep is disqualifying by itself.",
+    "oracle_crosscheck": "Against zig fmt --check on 0.16.0, an independent path through the same parser: of the 125 files the oracle calls invalid in the 11,672-file sample, zig fmt reports a parse error on 125. Of a 500-file oracle-valid sample, on 0.",
+    "oracle_cost": "0.14 s per 1000 files (1.51 s for 11,672), flat at ~56 MB RSS — the arena is reset per file. Roughly 9x faster than py-oracle; firmly Tier A.",
+    "fetched": "2026-08-11",
+    "packages": 500,
+    "packages_note": "500 requested, 500 resolved; >= 67 stars at the tail.",
+    "files": 45242,
+    "sweep_upstream": {
+      "passed": 44755,
+      "failed": 487,
+      "gap_files": 351,
+      "noise_files": 136,
+      "clusters": 103
+    },
+    "sweep_patched": {
+      "passed": 44988,
+      "failed": 254,
+      "gap_files": 118,
+      "noise_files": 136,
+      "clusters": 91
+    },
+    "sweep_note": "noise_files is IDENTICAL before and after (136). Every patch closed gaps without a single file changing from passing to failing, which is the property the before/after pair exists to demonstrate.",
+    "preprocessing": "None, and that is a finding rather than an unset default. Zig has no textual preprocessor. Its conditional compilation is `if (builtin.os.tag == .windows)` — an ordinary expression whose branches must ALL parse, evaluated after parsing — so the whole class of configuration-inherent parse failures that treebank-preprocessing exists for (C's 909 config_files, C#'s brace asymmetry) cannot occur here. config_files is 0 in both sweeps above, by construction and not by luck.",
+    "remaining_gaps_note": "118 gap files remain, and they are characterized rather than merely counted. 52 of the 118 are ziglang/zig's OWN deliberately-invalid fixtures under test/cases/compile_errors/ and doc/langref/ — files that parse cleanly and are rejected one stage later by AstGen, so the oracle calls them valid and the grammar's stricter lexer calls them invalid. The largest such class is malformed numeric and character literals (`0.0_`, `0e.0`, `'\\U1234'`), ~28 files: Zig's tokenizer emits a number token for anything number-shaped and AstGen validates its contents, while the grammar validates in the regex. CLOSING THAT GAP WOULD MAKE THE GRAMMAR ACCEPT GENUINELY INVALID LITERALS, which is the wrong direction and the drift GRAMMARS.md warns about, so it is deliberately left open. The remaining third-party gaps are long-tail single-file shapes with no cluster above 7.",
+    "oracle_io_note": "An unreadable file is a fatal oracle failure, not an `invalid` verdict: check.zig writes the path and the reason to stderr and exits 1, emitting no verdict, and stdin_oracle.rs turns the non-zero exit into a failed sweep. This follows PR #33, which fixed the same bug in all six batch oracles. The reasoning matters more than the change: validate() is only ever called on files the grammar ALREADY failed, so an invalid verdict records the file as NOISE — meaning an unreadable corpus root would turn every grammar failure into noise, drive gap_files to zero, and report a flawless grammar. A broken oracle must fail loudly, never quietly agree with us. Verdicts about the file's own CONTENT stay verdicts: an embedded NUL is invalid, and Ast.parse's only error is OOM, kept a verdict for the reason py-oracle keeps MemoryError one."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "This grammar is a UNION OF ZIG ERAS: measured, it accepts usingnamespace, async/await/suspend/resume, anyframe (all removed in 0.15), AND labeled switch (added 0.14) and destructuring assignment (added 0.12) — all at once. No single Zig compiler accepts that set. For gap counting this is the safe direction and it is load-bearing: a construct the 0.16.0 oracle rejects but the grammar accepts can only ever be recorded as noise, never as a gap, so pinning the oracle to 0.16.0 cannot manufacture a gap out of a construct that 0.15 removed.",
+    "cost": "test/negative/ cannot contain anything removed from the language, because the grammar accepts it by design. Five negative-corpus candidates were written, measured, and moved out for exactly this reason: chained comparison `1 < 2 < 3` (the grammar parses `<` left-associative; Zig's grammar makes comparison non-associative), `a && b` (parsed as `a & &b`, which is a real expression shape — Zig's TOKENIZER has a dedicated invalid token for `&&`), a tab inside a comment (banned in 0.14), a declaration between struct fields, and a trailing unattached doc comment. All five are rejected by the 0.16.0 oracle and accepted by the grammar. They are documented rather than deleted; a file the grammar already accepts cannot guard against future drift, which is what test/negative/ is for.",
+    "negative_corpus": "10 files, each verified rejected by the 0.16.0 oracle AND by the grammar."
+  },
+  "downstream": {
+    "note": "Three repositories in this family already hold Zig-specific work, and a Zig corpus feeds them. Named here because a named consumer is worth more than a generic one, and because two of them wanted something concrete from the shape of this crate rather than just its existence.",
+    "cowbird": "~/powderworks/cowbird, a Zig-to-Rust port harness whose src/analysis/ holds lifetimes.rs and typemap.rs. What it can use directly: corpus/zig/manifest.json is 500 packages x (package, version=head sha, downloads=stars) with one entry per file carrying path, bytes and sha256 — a reproducible, content-addressed 45,242-file Zig body — and crates/treebank-zig publishes as treebank-grammar-zig with [lib] name tree_sitter_zig, so it is a drop-in for upstream's crate in a Rust analysis tool.",
+    "baozi": "~/powderworks/baozi/LIFETIMES.tsv holds 2,252 hand-classified Zig FIELDS. Fields are `container_field` nodes in this grammar, and patch 0003 widened exactly that rule (async/await as field names), so the classification and the grammar meet on the same node. A `(container_field name: (identifier) type: _)` query over this corpus is the scale check that hand-classification cannot do for itself.",
+    "entl": "~/powderworks/entl's entl-zig-air and entl-zig-observe work on AIR, which is several stages past the parser, so this crate serves them only indirectly — via the corpus as an input body, not via the tree shape.",
+    "caveat": "The corpus is 'Zig on GitHub by stars' and inherits every bias recorded under corpus.ranking_note. In particular ziglang/zig itself is in it and contributes 2,950 of the files in the 60-repo sample measured in ORACLE.md, including deliberately-invalid fixtures; a consumer wanting only idiomatic application Zig should exclude test/cases/ and doc/langref/."
+  }
+}

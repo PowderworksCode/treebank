@@ -209,12 +209,25 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
         let mut tar = tar::Archive::new(decompress(archive)?);
         for entry in tar.entries()? {
             let mut entry = entry?;
-            // Regular files only. A symlink read as an entry yields no bytes
-            // and would be written as an empty regular file — and then the
-            // next entry underneath it cannot create its parent directory,
-            // which is exactly how a GitHub repository tarball killed a
-            // 500-repo fetch with `File exists (os error 17)`. The zip
-            // branch has always checked this; the tar branch did not.
+            // Regular files only, the same check the zip branch above makes.
+            // A tar carries directory, symlink and hardlink entries too, and
+            // `record` would write a zero-byte regular FILE at such an
+            // entry's path whenever the name passes `classify` — after which
+            // no entry underneath it can create its parent directory, and
+            // the whole fetch dies with `File exists (os error 17)` rather
+            // than skipping one package.
+            //
+            // Two sessions found this independently, from different
+            // triggers, which is worth recording because it is one defect
+            // with two doors. A SYMLINK entry read for its bytes yields
+            // none, and killed a 500-repo bash fetch. A DIRECTORY whose name
+            // carries the source extension does the same: Zig repositories
+            // name directories after their build entry point, so
+            // `examples/example-with-build.zig/` is idiomatic rather than
+            // exotic (measured: jedisct1/zigly, rank 380 of the Zig
+            // top-500). No other language here puts its source extension on
+            // a directory, which is part of why the tar path went this long
+            // without the check the zip path always had.
             if !entry.header().entry_type().is_file() {
                 continue;
             }

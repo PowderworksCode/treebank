@@ -18,6 +18,7 @@ mod python;
 mod rust;
 mod stdin_oracle;
 mod typescript;
+mod zig;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -126,6 +127,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static PHP: php::Php = php::Php;
     static GO: go::Go = go::Go;
     static BASH: bash::Bash = bash::Bash;
+    static ZIG: zig::Zig = zig::Zig;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -137,5 +139,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Php => &PHP,
         LangName::Go => &GO,
         LangName::Bash => &BASH,
+        LangName::Zig => &ZIG,
     }
 }

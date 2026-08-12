@@ -158,5 +158,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-zig",
+    "dep": "tree-sitter-zig",
+    "crate": "treebank-grammar-zig",
+    "cases": [
+      {
+        "label": "zig",
+        "language": "tree_sitter_zig::LANGUAGE",
+        "fixture": "patched.zig",
+        "expect": "Clean"
+      },
+      {
+        "label": "zig strictness (must reject)",
+        "language": "tree_sitter_zig::LANGUAGE",
+        "fixture": "must-reject.zig",
+        "expect": "Error"
+      }
+    ]
   }
 ]
