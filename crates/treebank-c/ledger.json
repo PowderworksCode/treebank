@@ -86,7 +86,8 @@
       "noise_files": 25346,
       "clusters": 1541
     },
-    "sweep_note": "Both numbers are the 100-package corpus above (84,455 files). The 20-package pilot these fields used to carry (39,928 files, 21,991 passed) is kept in LOCAL-PATCHES.md under 'Pilot sweep \u2014 measured', with the include-flag and oracle experiments that were run on it; the pair here has to be comparable, so it moves with the corpus. sweep_patched is patches 0003-0015 applied."
+    "sweep_note": "Both numbers are the 100-package corpus above (84,455 files). The 20-package pilot these fields used to carry (39,928 files, 21,991 passed) is kept in LOCAL-PATCHES.md under 'Pilot sweep \u2014 measured', with the include-flag and oracle experiments that were run on it; the pair here has to be comparable, so it moves with the corpus. sweep_patched is patches 0003-0015 applied.",
+    "negative_corpus": "15 files, each rejected by the oracle AND by the grammar. Six were added by adversarial review of the thirteen-fix sweep PR, which introduced thirteen permissive rules and no new guards: a malformed case range at either end, a bit-field with no width, typeof with no operand, _Atomic with no type, and a type descriptor used where a value belongs. Each one is the boundary a new rule must not cross."
   },
   "patches": [
     {
@@ -447,7 +448,8 @@
           "failed": 40964,
           "gap_files": 13569
         },
-        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series."
+        "sweep_note": "measured for patches 0004-0013 as a stack: a full sweep of this corpus is 84,455 files and ~45 minutes, almost all of it the reference parser adjudicating the 41k failures, so the eleven fixes were developed and corpus-tested one at a time and swept together. sweep_before is the tree with 0003 applied, sweep_after the whole series.",
+        "known_over_acceptance": "Deliberate and inherent: allowing `va_arg(ap, char *)` means `g(char *)` parses too, and that is invalid C when g is a function rather than a macro. Nothing in the token stream distinguishes them. Confirmed by adversarial review: the oracle calls `int g(int); int f(void) { return g(char *); }` invalid (1 parse issue) and the grammar accepts it. The boundary that IS held is a bare type name \u2014 test/negative/type-in-plain-call-argument.c pins `g(struct s)` as rejected, and type-descriptor-is-not-an-expression.c pins `(char *)` as a value."
       }
     },
     {

@@ -324,6 +324,25 @@ and another ~21% in the `#ifdef __cplusplus` brace asymmetry, which is
 configuration selection rather than parsing. The patches below are the
 remainder — the part that is language, not preprocessor state.
 
+## Adversarial review of the sweep fixes
+
+The thirteen grammar fixes were checked by generating invalid C aimed at each
+new rule, confirming the oracle rejects it, and then asking whether the grammar
+does too. Eight of ten probes were genuinely invalid; the grammar rejected
+seven of those eight.
+
+The eighth is a deliberate, inherent trade, now recorded in the ledger against
+patch 0013: parsing `va_arg(ap, char *)` requires accepting a type with an
+abstract declarator as a call argument, which necessarily also accepts
+`g(char *)` — invalid C when `g` is a function. Nothing in the token stream
+distinguishes the two. The guard that *does* hold is that a bare type name
+stays an error.
+
+The review's substantive finding was procedural: thirteen permissive rules
+arrived with **no new negative-corpus files**, which is precisely the direction
+`GRAMMARS.md` says sweeps cannot catch. Six were added, one per new accept
+surface, each verified oracle-invalid and grammar-rejected.
+
 ## Patches
 
 ### 0001 — treebank redistribution notice
