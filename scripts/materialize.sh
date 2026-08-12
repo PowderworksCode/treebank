@@ -34,17 +34,27 @@ TS="npx -y tree-sitter-cli@$CLI_WANT"
 # ci`, and npx, which resolves and downloads the pinned CLI because each CI
 # job starts with an empty npx cache. They are the only steps here that can
 # fail for a reason having nothing to do with the grammar, and they do fail.
-# Measured 2026-08-12: two pushes to main landed three minutes apart, ~24
-# verify jobs ran `npx -y tree-sitter-cli@0.25.10` at once, and three of them
-# (go, javascript, typescript) exited 1 in about a second having printed
-# NOTHING AT ALL — no npm line, no npx line, no error. Re-running the
-# identical commits passed all 12 grammars.
+# Measured 2026-08-12 (run 31642866147 and the push three minutes before it):
+# `npx -y tree-sitter-cli@0.25.10` exited 1 in about a second having printed
+# NOTHING AT ALL — no npm line, no npx line, no error — on go, then on
+# javascript and typescript, while every other grammar passed. Re-running the
+# identical commits passed all twelve.
 #
-# The worse half of that is the silence: a transient registry failure was
-# indistinguishable from a real generate error, so the log told a grammar
-# agent only that materialize died somewhere after the last patch. fetch()
-# fixes both halves — it retries a network command twice, and when the retries
-# are exhausted it prints what the command actually said.
+# It is an outage, not a coin flip, and it is worth writing down how narrow
+# one is, because that is what sets the retry schedule below. Timestamped
+# across one run's twelve jobs: go's npx succeeded at 22:02:02-04, then every
+# fresh npx failed from 22:02:04 to 22:02:39 — java at :04/:11/:21, python at
+# :07/:14/:24, rust at :20/:28/:38, all three exhausting their retries inside
+# the same window — and php and typescript succeeded again from 22:02:48. A
+# ~35 second hole. So retries must SPAN more than they COUNT: 5 + 15 + 45
+# covers 65 seconds, where the first cut's 5 + 10 covered 16 and rescued
+# nobody.
+#
+# The other half of the bug is the silence, which is worse: a transient
+# registry failure was indistinguishable from a real generate error, so the
+# log told a grammar agent only that materialize died somewhere after the last
+# patch. fetch() fixes both halves — it retries, and it prints what the
+# command actually said.
 #
 # What fetch() must NOT wrap is `tree-sitter generate`, because a generate
 # failure is usually the grammar being wrong, and retrying that is 15 seconds
@@ -77,9 +87,12 @@ npm_log_tail() {  # npm_log_tail <marker-file>: what npm wrote down but did not 
 fetch() {  # fetch <what> <cmd...>
   local what=$1; shift
   local out rc attempt marker
+  # 5 + 15 + 45: four attempts spanning 65 seconds, chosen against a measured
+  # outage rather than by taste. See the note above.
+  local backoff=(5 15 45)
   marker=$(mktemp)
   trap 'rm -f "$marker"' RETURN
-  for attempt in 1 2 3; do
+  for attempt in 1 2 3 4; do
     touch "$marker"
     # rc is read in the else branch, not after the `if`: an if compound resets
     # $? to 0 once it is done, so `rc=$?` on the far side reports every failure
@@ -90,12 +103,12 @@ fetch() {  # fetch <what> <cmd...>
     else
       rc=$?
     fi
-    echo "materialize: $what exited $rc (attempt $attempt/3)" >&2
+    echo "materialize: $what exited $rc (attempt $attempt/4)" >&2
     if [ -n "$out" ]; then printf '%s\n' "$out" >&2; else echo "   (no output at all)" >&2; fi
     npm_log_tail "$marker"
-    if [ "$attempt" != 3 ]; then sleep $((attempt * 5)); fi
+    if [ "$attempt" != 4 ]; then sleep "${backoff[attempt-1]}"; fi
   done
-  echo "materialize: FAIL — $what failed 3 times; see its output above" >&2
+  echo "materialize: FAIL — $what failed 4 times over 65 s; see its output above" >&2
   rm -f "$marker"
   exit 1
 }
