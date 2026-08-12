@@ -1,0 +1,74 @@
+# The one oracle property no other check can see.
+#
+# verify-grammars.yml runs the ledger, materialize, `tree-sitter test` and the
+# negative corpus, per grammar. None of that invokes an oracle. So the class of
+# bug fixed in "oracles: an unreadable file is not an invalid file" — an oracle
+# answering `invalid` for a file it could not read, which records every grammar
+# failure as corpus noise, drives gap_files to zero and reports a flawless
+# grammar — is invisible to every check in the repository. It was found by hand
+# and could come back the same way.
+#
+# This is deliberately a separate workflow rather than a job in
+# verify-grammars.yml: that workflow's matrix is derived from which GRAMMARS a
+# change concerns, and this concerns none of them. It is about tools/.
+#
+# The runtimes are installed explicitly and the script is run with
+# --require-all, so a missing toolchain fails the job instead of quietly
+# skipping the oracle it would have tested. A guard that can silently test
+# nothing is worse than no guard.
+name: oracle-smoke
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/**'
+      - 'scripts/oracle-smoke.sh'
+      - '.github/workflows/oracle-smoke.yml'
+  pull_request:
+    paths:
+      - 'tools/**'
+      - 'scripts/oracle-smoke.sh'
+      - '.github/workflows/oracle-smoke.yml'
+
+concurrency:
+  group: oracle-smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+
+      # libclang for c-oracle. The version is deliberately NOT pinned to the
+      # one in treebank-c's ledger: that pin is load-bearing for VERDICTS on
+      # real corpus files, and this test only asserts plumbing — that a
+      # missing file is fatal and that `int main(void) { return 0; }` still
+      # comes back valid. Any libclang can answer that.
+      - name: Install libclang
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq llvm-dev libclang-dev
+          echo "TREEBANK_LLVM_DIR=$(llvm-config --prefix)" >> "$GITHUB_ENV"
+
+      - name: Oracle smoke test
+        run: scripts/oracle-smoke.sh --require-all
