@@ -57,6 +57,29 @@ const SHELL_EXTENSIONS: [&str; 4] = ["sh", "bash", "ebuild", "eclass"];
 /// the same effect more directly.
 const SHELL_SHEBANGS: [&str; 3] = ["sh", "bash", "dash"];
 
+/// Jinja/Django statement keywords. A file carrying one of these in a `{% %}`
+/// tag is a *template that renders to* a shell script, not a shell script.
+///
+/// Interpolation is deliberately not enough. `{{ x }}` matches 1,818 files in
+/// the GitHub corpus of which only 461 fail, so most of them are ordinary
+/// shell that mentions double braces — awk programs, GitHub Actions
+/// expressions inside quotes, printf formats. The statement tag is the
+/// discriminator, and it has to be anchored on a real keyword rather than on
+/// `{%` alone: measured on the Debian corpus, a bare `{%…%}` rule matched ten
+/// files of which eight were false positives — `{%s%}` in gettext's OCaml
+/// format-string fixtures, `{%%k1%}` in libgcrypt's configure, `{% %%}` in
+/// gitk. None of those is a template and all are valid shell.
+///
+/// `comment` is excluded from the list on purpose. ceph ships a shell script
+/// that *emits a Jekyll post* containing `{% comment %}`, and that file is
+/// shell.
+const JINJA_KEYWORDS: [&str; 25] = [
+    "if", "elif", "else", "endif", "for", "endfor", "set", "endset", "from",
+    "import", "include", "extends", "macro", "endmacro", "call", "endcall",
+    "block", "endblock", "filter", "endfilter", "raw", "endraw", "with",
+    "endwith", "autoescape",
+];
+
 /// Bash is the first language with no registry *and* a choice of artifact
 /// source, and the two answer different questions — see `lang::debian` and
 /// `lang::github` for what each biases toward. `TREEBANK_BASH_CORPUS` picks
@@ -167,6 +190,16 @@ impl Lang for Bash {
             return false;
         }
         let head = &content[..content.len().min(8192)];
+        // A template that renders to a shell script is not a shell script,
+        // and no per-file oracle can tell the difference: `bash -n` calls
+        // ComplianceAsCode's `{{% if product in ['sle15'] %}}` files VALID,
+        // because the tags happen to lex as shell words. They therefore
+        // arrive as grammar gaps rather than as noise, which is the one way
+        // a two-valued oracle can inflate the number it exists to protect.
+        // Measured before this filter: 419 of 1,388 GitHub gap files, 30%.
+        if looks_like_a_template(content) {
+            return false;
+        }
         let named = rel
             .file_name()
             .and_then(|n| n.to_str())
@@ -241,6 +274,38 @@ impl Lang for Bash {
     }
 }
 
+/// Does this file carry a Jinja/Django **statement** tag — `{% if … %}`,
+/// `{%- from … %}` — anywhere in it?
+///
+/// Written out rather than pulled from a regex crate, which treebank-cli does
+/// not depend on and which this does not need. `{{% if … %}}` (the delimiters
+/// ComplianceAsCode configures) contains `{% if …` as a substring, so it is
+/// matched by the same scan.
+fn looks_like_a_template(content: &[u8]) -> bool {
+    let mut i = 0;
+    while let Some(off) = content[i..].windows(2).position(|w| w == b"{%") {
+        let mut j = i + off + 2;
+        // `{%-` is the whitespace-trimming form of the same tag.
+        if content.get(j) == Some(&b'-') {
+            j += 1;
+        }
+        while matches!(content.get(j), Some(b' ' | b'\t' | b'\r' | b'\n')) {
+            j += 1;
+        }
+        let rest = &content[j..];
+        if JINJA_KEYWORDS.iter().any(|kw| {
+            rest.starts_with(kw.as_bytes())
+                // a keyword, not a prefix of a longer word: `{%setopt%}` is
+                // not a `set` tag.
+                && !matches!(rest.get(kw.len()), Some(c) if c.is_ascii_alphanumeric() || *c == b'_')
+        }) {
+            return true;
+        }
+        i = i + off + 2;
+    }
+    false
+}
+
 /// The interpreter named on a `#!` line, reduced to its bare name: the last
 /// path component, and the first argument instead when that component is
 /// `env`. `#!/usr/bin/env -S bash -e` is real, so leading `-` words are
@@ -294,6 +359,24 @@ mod tests {
         // no shebang at all, but named as shell: still shell
         assert!(b.admit(Path::new("lib/common.sh"), b"foo() { :; }\n"));
         assert!(b.admit(Path::new(".bashrc"), b"PS1='$ '\n"));
+    }
+
+    #[test]
+    fn templates_that_render_to_shell_are_not_shell() {
+        let b = Bash;
+        // The tags ComplianceAsCode actually ships, and the plain Jinja ones.
+        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n{{% if product == \"x\" %}}\n"));
+        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n{% for x in y %}\n"));
+        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n{%- from 'a.jinja' import G %}\n"));
+        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n# {% if expanded is not defined %}\n"));
+        // Real shell that merely contains the characters. Every one of these
+        // is a file from the Debian corpus.
+        assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\nprintf '{%s%}' \"$x\"\n"));
+        assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\nsed 's/{%%k1%}/x/'\n"));
+        assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\necho '{% %%}'\n"));
+        assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\necho '{% comment %}' >> post.md\n"));
+        // A keyword must be a whole word.
+        assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\necho '{%setopt%}'\n"));
     }
 
     #[test]
