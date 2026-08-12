@@ -100,6 +100,72 @@
         "evidence_note": "10 files, zero regressions: all 144 corpus tests pass (143 upstream + this patch's), and namespace declarations, `use` statements, relative names (namespace\\Foo::bar()), enum cases, property types, return types and parameter types were each regression-tested against php -l.",
         "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
       }
+    },
+    {
+      "id": 5,
+      "title": "keywords as property names in string interpolation",
+      "file": "patches/0005-keywords-as-property-names-in-string-interpolation.patch",
+      "files": [
+        "common/define-grammar.js",
+        "test/corpus/string.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the daily top-100 Packagist sweep",
+      "evidence": {
+        "repro": "<?php\n$keys[] = \"\\0$item->class\\0$key\";\n",
+        "diagnosis": "A property name after `->` is a plain identifier, so PHP accepts every keyword there, inside a string exactly as outside one. Upstream lifts the reserved-word restriction for the ordinary member access -- _member_name uses reserved('nothing', $.name) -- but not for _simple_string_member_access_expression, the interpolation-only twin, which spells the name as a bare $.name. $.name is the grammar's `word` token, so the parser-level reserved word set applies to it and every keyword in BASE_RESERVED_KEYWORD_SET loses to the keyword reading: \"$item->class\", \"$item->print\" and \"$item->list\" all error, while $item->class outside a string parses. The fix is the one-token change that makes the twin match the original, and it fixes the primitive types too (\"$item->int\", \"$item->mixed\"): in this parse state no primitive_type token is valid, so nothing beats $.name in the lexer once the reserved set is lifted -- which is why patch 0004's extra alias() alternatives are not needed here.",
+        "measured_scope": "Verified against php -l over a 39-keyword battery (class list print echo new function static return if else foreach array bool false float int iterable mixed never null object string true void namespace default match fn readonly enum exit include require and or xor clone yield ...), each as a property name in both an encapsed string and a heredoc: php accepts all 78 forms, the grammar rejected them before this patch and accepts them after. Only the simple `$obj->prop` interpolation form is touched; the braced form \"{$item->class}\" already parsed, because it routes through the ordinary member_access_expression.",
+        "first_seen": {
+          "package": "symfony/var-dumper",
+          "version": "v8.1.2",
+          "path": "Cloner/Data.php"
+        },
+        "sweep_before": {
+          "passed": 7429,
+          "failed": 2,
+          "gap_files": 2
+        },
+        "sweep_after": {
+          "passed": 7430,
+          "failed": 1,
+          "gap_files": 1
+        },
+        "evidence_note": "1 file, zero regressions: all 145 corpus tests pass (144 before + this patch's), and the numbers are the daily top-100 corpus (7,431 files), not the 499-package corpus patches 0003-0004 were measured on -- see corpus.sweep_note.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 6,
+      "title": "cast operands: require, require_once, match and yield",
+      "file": "patches/0006-cast-operands-require-match-and-yield.patch",
+      "files": [
+        "common/define-grammar.js",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the daily top-100 Packagist sweep",
+      "evidence": {
+        "repro": "<?php\n$b = (string) match (true) {\n    default => 'x',\n};\n$a = (bool) require_once 'some.php';\n",
+        "diagnosis": "PHP casts an `expr`, so every alternative of $.expression is a legal cast operand. cast_expression instead lists its operands, and the list is short by four. The ones that begin with the operand itself -- assignment, binary, conditional -- never needed listing: they arrive through $._unary_expression and extend rightwards under PREC.CAST, which is what keeps `(int) $x + 1` parsing as `((int) $x) + 1`. What has to be listed is the constructs that lead with a KEYWORD and swallow to the right, and upstream listed only two of the six: include and include_once. Missing were require and require_once -- the other half of the same pair, so `(bool) require_once $file;` failed while `(bool) include $file;` parsed -- plus match and yield / yield from. The match omission is the one the corpus hits, and it is reported from the far side as `return_statement > MISSING ;` because the parser ends the return statement at the cast and then finds `match` where it wants a semicolon.",
+        "measured_scope": "Each of the 14 alternatives of $.expression was checked as a cast operand against php -l: php accepts all 14, and the grammar rejected exactly these four. Adding them closes the set rather than adding an alternation for the one file that failed, which is why require/require_once and yield are in the patch with no corpus file of their own -- require_once was the fifth cluster of the 499-package sweep (proxy-manager-lts Autoloader.php, `return (bool) require_once $file;`), recorded as a known gap in this ledger before this patch, and yield is the same shape. Cast precedence is unchanged: `(int) $a + 1` and `(int) $a ? 1 : 2` still parse cast-first, and all 146 corpus tests pass, upstream's `Cast include` among them.",
+        "first_seen": {
+          "package": "league/uri-interfaces",
+          "version": "7.8.1",
+          "path": "IPv4/Converter.php"
+        },
+        "sweep_before": {
+          "passed": 7430,
+          "failed": 1,
+          "gap_files": 1
+        },
+        "sweep_after": {
+          "passed": 7431,
+          "failed": 0,
+          "gap_files": 0
+        },
+        "evidence_note": "1 file, zero regressions; the numbers are the daily top-100 corpus (7,431 files) -- see corpus.sweep_note. Generation is conflict-free: the four new alternatives needed no new conflicts entry.",
+        "upstream_status": "not yet reported upstream; the patch applies directly to the pinned sha"
+      }
     }
   ],
   "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). For php this pin also decides the upstream sha -- see upstream.sha_note.",
@@ -118,26 +184,27 @@
     "oracle_version_choice_note": "Newest stable rather than a per-package version manager, because the choice does not exist: every one of the top 40's composer.json 'require.php' constraints is a FLOOR ('>=7.2', '^7.4 || ^8.0', '>=5.6') and not one names a ceiling, so the single interpreter satisfying all of them at once is the newest. Verified monotone within 8.x by probing 15 constructs across 8.3/8.4/8.5: each version accepts everything the previous one did and adds more; the only constructs all three reject ($s{0}, (real), (unset)) were removed at the 7->8 boundary, before every version in play.",
     "oracle_cost": "13.8-14.5 s per 1000 files serially -- roughly 20x the next-worst Tier-A oracle, because php -l has no batch mode and forks an interpreter per file. Parallelized by exec_oracle at the machine's core count: 0.66-0.68 s per 1000 on 16 cores, a 21x speedup, flat past the core count (32 workers measured no better than 16) and degrading gently rather than sharply under load, because each unit of work is a fork that exits rather than a thread holding a core. Measured on a distribution php8.5 at ~15 ms per fork; a static build costs ~71 ms per fork for identical verdicts, which is why tools/php-oracle/fetch.sh is the fallback and not the default.",
     "oracle_batch_note": "A batch oracle was built and REJECTED. opcache_compile_file() is non-executing, throws catchable ParseError/CompileError, survives duplicate declarations across files, and ran the whole corpus at 0.19 ms/file - 80x faster than php -l, and it agreed with php -l on all 1703 files. It is nevertheless WRONG: on a 22-file adversarial battery it silently accepted ten classes of invalid PHP (break/continue outside a loop, duplicate function, duplicate parameter, goto to an undefined label, reserved class name, misplaced strict_types, non-public interface method, duplicate default clause, new in a const expression), because the engine raises those as E_COMPILE_ERROR, which surfaces neither in the return value nor as a throwable nor in error_get_last(). Agreement on 1703 files of clean library code was worthless as evidence - only the negative battery caught it. A variant that scrapes the engine's own error log does match php -l on all 22, but it depends on diagnostic message text and buys a speedup the sweep does not need: validate() only ever runs on files the grammar already failed, which is tens to hundreds of files, where the parallelized php -l is already under a second. Recorded here so this is not rediscovered and quietly adopted.",
-    "fetched": "2026-08-11",
-    "packages": 499,
-    "packages_note": "500 requested; 499 resolved. roave/security-advisories publishes no tagged release (it is a metapackage of dev branches only) and the fetch driver skips it.",
-    "files": 86308,
+    "fetched": "2026-08-12",
+    "packages": 100,
+    "packages_note": "The daily job fetches the top 100 (TREEBANK_LIMIT), which is the corpus every number in this block is measured on. The one-off 499-package cut that patches 0003-0004 were measured on (500 requested, 499 resolved -- roave/security-advisories publishes no tagged release, it is a metapackage of dev branches only, and the fetch driver skips it) is kept in LOCAL-PATCHES.md.",
+    "files": 7431,
     "sweep_upstream": {
-      "passed": 86223,
-      "failed": 85,
-      "gap_files": 81,
-      "noise_files": 4,
-      "clusters": 25
+      "passed": 7428,
+      "failed": 3,
+      "gap_files": 3,
+      "noise_files": 0,
+      "clusters": 3
     },
     "sweep_patched": {
-      "passed": 86298,
-      "failed": 10,
-      "gap_files": 6,
-      "noise_files": 4,
-      "clusters": 9
+      "passed": 7431,
+      "failed": 0,
+      "gap_files": 0,
+      "noise_files": 0,
+      "clusters": 0
     },
-    "remaining_gaps_note": "6 gap files remain, in 5 distinct causes, each examined rather than left unnamed. (1) friendsofphp/php-cs-fixer PhpUnitTestAnnotationFixer.php and one other, failing at the very top of the file (<root> > ERROR(php_tag declare_statement comment namespace_definition ...)). (2) proxy-manager-lts Autoloader.php: `return (bool) require_once $file;` - a cast applied to a require expression, which the grammar's cast_expression does not admit. (3) league/uri-interfaces Converter.php: `return (string) match (true) { ... };` - a cast applied to a match expression; reported as a MISSING ';', which is the same cast-operand gap seen from the other side. (4) symfony/var-dumper Data.php: \"\\0$item->class\\0$key\" - the property name `class` accessed inside string interpolation, the interpolation-context twin of patch 0004's problem. (5) symfony/cache ValueWrapper.php: a class name containing a non-ASCII byte. None was patched blind: (2) and (3) are one fix and want a considered widening of cast_expression's operand rather than a quick alternation, and (4) needs the same reserved-word treatment inside the scanner-owned interpolation path.",
-    "noise_note": "All 4 noise files are jetbrains/phpstorm-stubs, which describes PHP's own internals and therefore declares things no PHP file may declare: `class object`, `interface iterable`, `function clone(...)`, and a property on a class the stub redeclares. php -l rejects them and so does the grammar, which is the oracle agreeing with the parser rather than a gap - a useful sanity check that the adjudication is working."
+    "remaining_gaps_note": "Zero gap files remain on this corpus: the top-100 slice now parses 7,431 of 7,431, and it carries no noise (all 4 of the phpstorm-stubs noise files were in the 499-package cut, not this one). Three of the five causes named when the 499-package sweep was last reported are closed -- the cast-of-require and cast-of-match pair by patch 0006, and \"\\0$item->class\" by patch 0005. The two that are neither fixed nor measurable here are outside the top 100 and stay recorded rather than dropped: friendsofphp/php-cs-fixer PhpUnitTestAnnotationFixer.php and one other, failing at the very top of the file (<root> > ERROR(php_tag declare_statement comment namespace_definition ...)), and symfony/cache ValueWrapper.php, a class name containing a non-ASCII byte. Neither package is in this corpus, so neither was re-measured; nothing was patched blind.",
+    "noise_note": "Zero noise files in the top-100 corpus. In the 499-package cut all 4 were jetbrains/phpstorm-stubs, which describes PHP's own internals and therefore declares things no PHP file may declare: `class object`, `interface iterable`, `function clone(...)`, and a property on a class the stub redeclares. php -l rejects them and so does the grammar, which is the oracle agreeing with the parser rather than a gap -- a useful sanity check that the adjudication is working, and one this smaller corpus no longer exercises.",
+    "sweep_note": "Both numbers are the top-100 corpus above (7,431 files, fetched 2026-08-12), measured with the same pinned CLI: sweep_upstream is the pristine submodule tree, sweep_patched is patches 0003-0006 applied. The pair has to be comparable, so it moves with the corpus. The 499-package cut these fields used to carry (86,308 files; 86,223 -> 86,298 passed, 81 -> 6 gap files, 4 noise) is kept in LOCAL-PATCHES.md, and the sweep_before/sweep_after inside patches 0003 and 0004 are still that corpus's numbers, marked as such: they are the record of what those patches were measured on and are not restated here."
   },
   "grammar_is_broader_than_the_oracle": {
     "summary": "tree-sitter-php parses syntax that PHP 8 removed, so for the cast case the grammar accepts a strict superset of what the oracle calls valid -- the same relationship treebank-python records for Python 2, and it needs stating because it decides what test/negative/ can contain.",
