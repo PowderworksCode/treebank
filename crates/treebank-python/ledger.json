@@ -19,7 +19,14 @@
     "flags": [
       "dont_inherit=True"
     ],
-    "note": "Deliberately compile() and not ast.parse(): CPython enforces rules AFTER the parser that are still SyntaxErrors (return outside a function, a non-final bare except, duplicate parameter names) and ast.parse accepts all of them. Two-valued. The interpreter version IS the language version: match is 3.10+, the walrus 3.8+. See corpus.oracle_note for the measured cost of that choice."
+    "note": "Deliberately compile() and not ast.parse(): CPython enforces rules AFTER the parser that are still SyntaxErrors (return outside a function, a non-final bare except, duplicate parameter names) and ast.parse accepts all of them. Two-valued. The interpreter version IS the language version: match is 3.10+, the walrus 3.8+. See corpus.oracle_note for the measured cost of that choice.",
+    "smoke": {
+      "requires": [
+        "python3"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.py",
+      "invalid": "crates/treebank-python/test/negative/bare-import.py"
+    }
   },
   "corpus": {
     "source": "PyPI source distributions (sdist) of the top packages by download count. Wheels are never used as a fallback: a wheel is build output, so for anything with a build step it is not the tree the author wrote. Packages publishing no sdist are skipped by the fetch driver, as Java skips artifacts with no sources jar.",

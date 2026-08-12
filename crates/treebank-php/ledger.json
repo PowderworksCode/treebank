@@ -180,7 +180,14 @@
       "short_open_tag=0",
       "-l"
     ],
-    "note": "Values restructured from this ledger's own corpus.oracle / oracle_flags_note / oracle_version by the treebank-lua change that made this field mandatory; no fact here is new. The reference implementation's own syntax-check mode, TWO-VALUED, verified parse-only and non-executing. -n ignores php.ini so the box's configuration cannot move a verdict, and short_open_tag is pinned to the language default because it genuinely can: with it on '<? function f( { ?>' is a parse error, with it off the same bytes are inline HTML and the file is valid. The code additionally enforces a floor of PHP_VERSION_ID >= 80400: measured, PHP 8.3.6 rejects 7 of 1703 files that 8.4.23 and 8.5.8 both accept."
+    "note": "Values restructured from this ledger's own corpus.oracle / oracle_flags_note / oracle_version by the treebank-lua change that made this field mandatory; no fact here is new. The reference implementation's own syntax-check mode, TWO-VALUED, verified parse-only and non-executing. -n ignores php.ini so the box's configuration cannot move a verdict, and short_open_tag is pinned to the language default because it genuinely can: with it on '<? function f( { ?>' is a parse error, with it off the same bytes are inline HTML and the file is valid. The code additionally enforces a floor of PHP_VERSION_ID >= 80400: measured, PHP 8.3.6 rejects 7 of 1703 files that 8.4.23 and 8.5.8 both accept.",
+    "smoke": {
+      "requires": [
+        "php"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.php",
+      "invalid": "crates/treebank-php/test/negative/class-named-with-a-reserved-word.php"
+    }
   },
   "corpus": {
     "source": "Packagist dist archives of the top packages by Packagist's own popularity ranking. The dist archive is the published source tree Composer itself downloads, so there is no source/build-output choice to make the way PyPI's sdist-vs-wheel forces one.",

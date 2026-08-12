@@ -10,7 +10,14 @@
 #
 # This is deliberately a separate workflow rather than a job in
 # verify-grammars.yml: that workflow's matrix is derived from which GRAMMARS a
-# change concerns, and this concerns none of them. It is about tools/.
+# change concerns, and this concerns all of them at once.
+#
+# The trigger paths matter as much as the script. An earlier version watched
+# only `tools/**`, which cannot see the oracle that had the bug longest:
+# rust's is `syn` in-process, it lives in crates/treebank-cli/src/lang/rust.rs,
+# and no change to it would have run this check. The paths below follow what
+# the script actually reads — every ledger, every Lang impl, and the CLI that
+# drives them.
 #
 # The runtimes are installed explicitly and the script is run with
 # --require-all, so a missing toolchain fails the job instead of quietly
@@ -23,11 +30,18 @@ on:
     branches: [main]
     paths:
       - 'tools/**'
+      - 'crates/*/ledger.json'
+      - 'crates/treebank-cli/src/**'
       - 'scripts/oracle-smoke.sh'
       - '.github/workflows/oracle-smoke.yml'
   pull_request:
+    # Duplicated rather than a YAML anchor: Actions' support for anchors is
+    # not dependable, and a trigger that silently stops matching is the exact
+    # failure this workflow exists to catch.
     paths:
       - 'tools/**'
+      - 'crates/*/ledger.json'
+      - 'crates/treebank-cli/src/**'
       - 'scripts/oracle-smoke.sh'
       - '.github/workflows/oracle-smoke.yml'
 
@@ -58,11 +72,35 @@ jobs:
         with:
           go-version: stable
 
+      - name: Install lua5.4 and php
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq lua5.4 php-cli
+
+      # Zig is pinned to the version treebank-zig's ledger names, and unlike
+      # libclang below that is NOT a formality. For Zig the compiler version
+      # IS the language version — measured, 801 of 11,672 corpus files change
+      # verdict across 0.11 to 0.16 — so that grammar's oracle refuses to
+      # resolve `zig` from PATH at all and takes its binary from
+      # TREEBANK_ZIG_ORACLE. Building the smoke binary with "whatever zig the
+      # runner has" would be the exact mistake the field exists to prevent,
+      # in the check that is supposed to guard it.
+      - name: Install Zig 0.16.0 and build the oracle
+        run: |
+          set -euo pipefail
+          ver=0.16.0
+          curl -sSL "https://ziglang.org/download/$ver/zig-x86_64-linux-$ver.tar.xz" | tar xJ
+          tools/zig-oracle/build.sh "$PWD/zig-x86_64-linux-$ver/zig"
+          echo "TREEBANK_ZIG_ORACLE=$PWD/tools/zig-oracle/check-$ver" >> "$GITHUB_ENV"
+
       # libclang for c-oracle. The version is deliberately NOT pinned to the
       # one in treebank-c's ledger: that pin is load-bearing for VERDICTS on
       # real corpus files, and this test only asserts plumbing — that a
-      # missing file is fatal and that `int main(void) { return 0; }` still
-      # comes back valid. Any libclang can answer that.
+      # missing file is fatal, and that the two fixtures the ledger names
+      # still come back valid and invalid. Any libclang can answer that, and
+      # c's ledger — unlike zig's — does not forbid resolving the tool
+      # loosely.
       - name: Install libclang
         run: |
           set -euo pipefail
@@ -83,6 +121,10 @@ jobs:
           echo "$otp_bin" >> "$GITHUB_PATH"
           echo "$elixir_bin" >> "$GITHUB_PATH"
           echo "TREEBANK_ELIXIR=$elixir_bin/elixir" >> "$GITHUB_ENV"
+      # The script drives `treebank oracle`, the single entry point every
+      # oracle is reached through, so the binary is a prerequisite.
+      - name: Build treebank
+        run: cargo build --release
 
       - name: Oracle smoke test
         run: scripts/oracle-smoke.sh --require-all

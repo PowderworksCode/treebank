@@ -78,6 +78,58 @@ enum Cmd {
         #[arg(long)]
         dir: PathBuf,
     },
+    /// Run a language's reference parser over paths on stdin, one per line,
+    /// writing "<path>\tvalid|invalid". This is `Lang::validate` and nothing
+    /// else — the same call `sweep` adjudicates failures with.
+    ///
+    /// It exists so every oracle has ONE entry point regardless of shape.
+    /// The oracles are otherwise four different things: batch processes
+    /// reading stdin (python, go, zig...), a JSON three-valued one (c),
+    /// fork-per-file exec oracles (bash, php), and `syn` in-process with no
+    /// subprocess at all (rust). `scripts/oracle-smoke.sh` drives this rather
+    /// than each tool directly, which is what lets that check be a loop over
+    /// languages instead of a hand-written block per oracle — and means it
+    /// tests the path `sweep` really takes, drivers and wiring included,
+    /// rather than a parallel invocation that can drift from it.
+    Oracle {
+        #[arg(long, value_enum)]
+        lang: LangName,
+        /// Resolve stdin's paths against this root [default: the cwd].
+        #[arg(long, default_value = ".")]
+        srcroot: PathBuf,
+    },
+}
+
+/// `treebank oracle`: stdin paths -> `Lang::validate` -> stdout verdicts.
+///
+/// Errors propagate, so an oracle that cannot answer exits non-zero with no
+/// verdicts on stdout. That is the property `oracle-smoke.sh` asserts, and it
+/// is the one that matters: `validate` is only ever called on files the
+/// grammar ALREADY failed, so a verdict of `invalid` records the file as
+/// corpus noise. An oracle that answers `invalid` for files it could not read
+/// turns every grammar failure into noise and reports a flawless grammar.
+fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
+    use std::io::{BufRead, Write};
+    let paths: Vec<String> = std::io::stdin()
+        .lock()
+        .lines()
+        .collect::<Result<Vec<_>, _>>()?
+        .into_iter()
+        .map(|l| l.trim().to_string())
+        .filter(|l| !l.is_empty())
+        .collect();
+    let verdicts = lang::get(lang).validate(srcroot, &paths)?;
+    let mut out = std::io::BufWriter::new(std::io::stdout().lock());
+    for p in &paths {
+        // A path the oracle declined to answer for is not silently dropped:
+        // the caller asked about it, so say so and fail.
+        let Some(v) = verdicts.get(p) else {
+            anyhow::bail!("{lang} oracle returned no verdict for {p}");
+        };
+        writeln!(out, "{p}\t{}", if *v { "valid" } else { "invalid" })?;
+    }
+    out.flush()?;
+    Ok(())
 }
 
 fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {
@@ -112,5 +164,6 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Ledger { grammar } => ledger::run(grammar.as_deref()),
         Cmd::Negative { grammar, dir } => sweep::negative(&grammar, &dir),
+        Cmd::Oracle { lang, srcroot } => oracle_cmd(lang, &srcroot),
     }
 }

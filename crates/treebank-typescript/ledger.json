@@ -19,7 +19,15 @@
     "flags": [
       "ScriptTarget.Latest"
     ],
-    "note": "createSourceFile and NOT transpileModule: it parses and reads parseDiagnostics only, with no Program, no tsconfig and no type checking, so a missing dependency is not an error. The TypeScript version IS the language version here exactly as an interpreter version is elsewhere; a file needing newer syntax than 5.9.3 is recorded as corpus noise."
+    "note": "createSourceFile and NOT transpileModule: it parses and reads parseDiagnostics only, with no Program, no tsconfig and no type checking, so a missing dependency is not an error. The TypeScript version IS the language version here exactly as an interpreter version is elsewhere; a file needing newer syntax than 5.9.3 is recorded as corpus noise.",
+    "smoke": {
+      "requires": [
+        "node"
+      ],
+      "build": "npm ci --no-audit --no-fund --prefix tools/ts-oracle",
+      "valid": "tools/consumer-test/fixtures/patched.ts",
+      "invalid": "crates/treebank-typescript/test/negative/anonymous-function-signature.ts"
+    }
   },
   "corpus": {
     "source": "npm top-1000 by downloads (npm-high-impact), fetched 2026-08-06; .ts/.mts/.cts/.d.ts -> typescript grammar, .tsx -> tsx grammar",

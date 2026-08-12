@@ -142,7 +142,12 @@
         },
         "why_not": "DISQUALIFIED, and NOT on speed \u2014 that has to be said explicitly because the obvious objection is wrong here. Parallelized the way lang::exec_oracle already runs php and bash, taplo is 0.78 s/1000 at 16 workers (14.1 serial), firmly Tier A. It fails on two other things. (1) Conformance: 698/709, of which 2 are accepts-invalid (table/append-with-dotted-keys-04, table/super-twice) and 9 are rejects-valid (BOM x2, non-ASCII in comments/keys/strings, uppercase float exponent, date-like keys, datetime edge). (2) Fatal: `taplo lint` takes GLOBS, so a path matching nothing collects zero files and EXITS 0. A directory does the same. Under exec_oracle status 0 means valid, so a mistyped corpus root would call every file valid, turn every grammar failure into a GAP, and dispatch a fix agent at each. GRAMMARS.md states this defect in the opposite polarity \u2014 mistyped root, everything invalid, gap_files falls to zero, flawless grammar \u2014 and exec_oracle's reject_statuses catches a tool that spells rejection with an unexpected status but structurally cannot catch a tool that spells 'I found nothing to check' as 0. This is the more expensive direction of the same defect and, on its own, disqualifying."
       }
-    ]
+    ],
+    "smoke": {
+      "valid": "tools/consumer-test/fixtures/patched.toml",
+      "invalid": "crates/treebank-toml/test/negative/bad-escape-sequence.toml",
+      "note": "No `requires`: the toml crate parses in-process, so there is nothing to install and nothing to build."
+    }
   },
   "oracle_why_reference_and_not_position": "authority is `reference` and the `position` block is deliberately absent. TOML has ONE authority \u2014 toml-lang \u2014 and no dispute about who decides, which is what separates it from treebank-yaml, where libyaml, go-yaml, PyYAML and snakeyaml genuinely disagree and the choice is a stated position rather than a fact. What TOML has instead is TWO RELEASED SPEC REVISIONS, and that is a `spec` question, not an `authority` one. The two fields were designed together with the tbyaml session precisely so this case could be expressed without bending either: the boring case should look boring.",
   "spec_revision_choice": {

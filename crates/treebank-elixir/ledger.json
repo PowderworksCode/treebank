@@ -32,7 +32,15 @@
     "dialect": "Elixir 1.20",
     "flags": [],
     "note": "Elixir's own front end via Code.string_to_quoted/2 -- the call the compiler makes to turn a file's text into an AST. TWO-VALUED: valid / invalid. It tokenizes and parses and stops: no macro expansion, no use/import/require resolution, no module attribute evaluation, no .exs execution, so a missing dependency is not an error and each file is judged on its own text. check.exs refuses to run under a different Elixir MINOR rather than silently producing verdicts for an unrecorded dialect; an OTP mismatch warns instead of refusing, because the parser is Elixir code while OTP underneath supplies the runtime and the Unicode tables.",
-    "unreadable_note": "An unreadable file is NOT an invalid file: the oracle writes the path and reason to stderr and exits 1 rather than emitting a verdict, so a mistyped corpus root fails the sweep instead of turning every grammar failure into noise and reporting a flawless grammar. Verified after the fact: a nonexistent path and a directory (which opens cleanly on Linux and fails only on read, with :eisdir) are each fatal rather than 'invalid'."
+    "unreadable_note": "An unreadable file is NOT an invalid file: the oracle writes the path and reason to stderr and exits 1 rather than emitting a verdict, so a mistyped corpus root fails the sweep instead of turning every grammar failure into noise and reporting a flawless grammar. Verified after the fact: a nonexistent path and a directory (which opens cleanly on Linux and fails only on read, with :eisdir) are each fatal rather than 'invalid'.",
+    "smoke": {
+      "requires": [
+        "elixir"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.ex",
+      "invalid": "crates/treebank-elixir/test/negative/bare-arrow.ex",
+      "note": "check.exs is a BATCH oracle \u2014 one long-lived VM for the whole run \u2014 so a bug in it does not fail one file, it votes on all of them, and its first draft did exactly that: a mistyped option raised, a blanket rescue caught it, and every file came back `invalid`. Assertion (2), that a known-valid file still comes back valid, is what catches that shape. `requires` names the bare command because tools/beam-toolchain/fetch.sh puts the pinned Elixir on PATH; TREEBANK_ELIXIR still overrides which binary runs."
+    }
   },
   "oracle_does_not_evaluate": {
     "summary": "VERIFIED, not assumed. Elixir runs arbitrary code at COMPILE time -- module bodies, module attributes, macros, `use` -- and this oracle is pointed at thousands of strangers' files, so 'it only parses' had to be measured before a single file was swept.",
