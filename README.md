@@ -18,6 +18,7 @@ grammars:
 - `crates/treebank-lua` — tree-sitter-lua 0.5.0, 1 grammar patch
 - `crates/treebank-php` — tree-sitter-php 0.24.2 (php + php_only grammars), 4 grammar patches
 - `crates/treebank-python` — tree-sitter-python 0.25.0, 6 grammar patches
+- `crates/treebank-ruby` — tree-sitter-ruby 0.23.1, 10 grammar patches
 - `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
 - `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript + tsx grammars), 12 grammar patches
 - `crates/treebank-zig` — tree-sitter-zig 1.1.2, 2 grammar patches

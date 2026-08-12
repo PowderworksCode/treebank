@@ -70,6 +70,7 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-lua` | `treebank-grammar-lua` | `tree_sitter_lua` |
 | `crates/treebank-php` | `treebank-grammar-php` | `tree_sitter_php` |
 | `crates/treebank-python` | `treebank-grammar-python` | `tree_sitter_python` |
+| `crates/treebank-ruby` | `treebank-grammar-ruby` | `tree_sitter_ruby` |
 | `crates/treebank-rust` | `treebank-grammar-rust` | `tree_sitter_rust` |
 | `crates/treebank-typescript` | `treebank-grammar-typescript` | `tree_sitter_typescript` |
 | `crates/treebank-zig` | `treebank-grammar-zig` | `tree_sitter_zig` |
