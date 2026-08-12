@@ -109,6 +109,21 @@ ksh, fish or csh would turn the grammar's *correct* rejection of another
 language into a reported gap — the same trap as pointing the JavaScript
 oracle at the TypeScript parser.
 
+The other case the shebang cannot catch is the **template**. A file that
+*renders to* a shell script is not one, and `bash -n` cannot see the
+difference: ComplianceAsCode ships `.sh` files beginning
+`{{% if product in ['sle15'] %}}`, and those tags lex as ordinary shell
+words, so the oracle calls them **valid**. They therefore arrive as grammar
+*gaps* rather than as noise — the one direction in which a two-valued
+per-file oracle can inflate the very number it exists to protect. Measured
+before it was fixed: 419 of 1,388 GitHub gap files, 30%.
+
+Nothing in the oracle can fix that, so the corpus does it instead:
+`lang/bash.rs`'s `admit()` drops a file carrying a Jinja/Django *statement*
+tag. See the ledger's `corpus.template_filter` for why it is anchored on a
+keyword — a bare `{%…%}` rule has an 80% false-positive rate on Debian,
+where `{%s%}` is a gettext format-string fixture.
+
 The one case the shebang cannot catch is the polyglot: a `#!/bin/sh` preamble
 that `exec`s another interpreter on itself. netpbm ships ten of them
 (`pnmflip`, `ppmfade`, `pgmcrater`, …) — two lines of shell, then Perl. They
