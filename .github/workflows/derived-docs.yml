@@ -1,0 +1,57 @@
+# The README and PUBLISHING grammar lists are generated; this asserts they
+# are current.
+#
+# Adding a language updates GRAMMARS.md's contract, the ledger and the
+# consumer test, and CI enforces all three. Nothing enforced the two prose
+# lists, so they drifted: they named six grammars when there were ten, that
+# was fixed by hand in 51b08d1 — and zig fell off the list again within a day
+# of the fix. With several sessions landing languages in parallel, a list
+# somebody has to remember to edit is a list that is wrong.
+#
+# scripts/grammar-docs.sh derives both blocks from files CI already refuses to
+# do without: ledger.json, patches/, and the crate identity patch. --check
+# regenerates into a temp file and diffs, so the failure message is the patch
+# you need.
+#
+# Separate from verify-grammars.yml on purpose. That workflow's matrix is
+# derived per GRAMMAR; this is one repo-wide check with different triggers
+# (it cares about README.md and PUBLISHING.md, which that workflow ignores),
+# and keeping it out of a file five sessions are editing avoids conflicts for
+# no benefit.
+name: derived-docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'crates/*/ledger.json'
+      - 'crates/*/patches/**'
+      - 'README.md'
+      - 'PUBLISHING.md'
+      - 'scripts/grammar-docs.sh'
+      - '.github/workflows/derived-docs.yml'
+  pull_request:
+    paths:
+      - 'crates/*/ledger.json'
+      - 'crates/*/patches/**'
+      - 'README.md'
+      - 'PUBLISHING.md'
+      - 'scripts/grammar-docs.sh'
+      - '.github/workflows/derived-docs.yml'
+
+concurrency:
+  group: derived-docs-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # No submodules and no toolchain: the generator reads ledger.json and
+      # patches/, both of which are committed.
+      - uses: actions/checkout@v4
+        with:
+          submodules: false
+      - name: Grammar docs are up to date
+        run: scripts/grammar-docs.sh --check

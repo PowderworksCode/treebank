@@ -138,6 +138,16 @@ The published version is deliberately *not* in the tree; it is derived from
 crates.io at publish time, so nothing here can drift from what is published.
 See [PUBLISHING.md](PUBLISHING.md).
 
+## The docs that list grammars are generated
+
+The grammar lists in `README.md` and `PUBLISHING.md` are produced by
+`scripts/grammar-docs.sh` from `ledger.json`, `patches/` and the crate
+identity patch — do not hand-edit the blocks between the `BEGIN GENERATED`
+markers. Adding a grammar therefore needs no doc edit at all; CI
+(`derived-docs.yml`) fails if the blocks are stale. Anything editorial that
+the ledger cannot know goes in the ledger's optional `docs_note`, which is
+how javascript's "JSX included" survives regeneration.
+
 ## Negative corpus
 
 `test/negative/` holds files the reference parser rejects; the grammar must

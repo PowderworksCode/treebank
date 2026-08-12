@@ -58,18 +58,22 @@ leaving the crate.
 Upstream owns the `tree-sitter-*` names on crates.io, so these crates cannot use
 the names in upstream's manifests. They publish as:
 
+<!-- BEGIN GENERATED: scripts/grammar-docs.sh -->
 | directory | crate | library |
 |---|---|---|
+| `crates/treebank-bash` | `treebank-grammar-bash` | `tree_sitter_bash` |
+| `crates/treebank-c` | `treebank-grammar-c` | `tree_sitter_c` |
+| `crates/treebank-csharp` | `treebank-grammar-csharp` | `tree_sitter_c_sharp` |
+| `crates/treebank-go` | `treebank-grammar-go` | `tree_sitter_go` |
+| `crates/treebank-java` | `treebank-grammar-java` | `tree_sitter_java` |
+| `crates/treebank-javascript` | `treebank-grammar-javascript` | `tree_sitter_javascript` |
+| `crates/treebank-lua` | `treebank-grammar-lua` | `tree_sitter_lua` |
+| `crates/treebank-php` | `treebank-grammar-php` | `tree_sitter_php` |
+| `crates/treebank-python` | `treebank-grammar-python` | `tree_sitter_python` |
 | `crates/treebank-rust` | `treebank-grammar-rust` | `tree_sitter_rust` |
 | `crates/treebank-typescript` | `treebank-grammar-typescript` | `tree_sitter_typescript` |
-| `crates/treebank-javascript` | `treebank-grammar-javascript` | `tree_sitter_javascript` |
-| `crates/treebank-java` | `treebank-grammar-java` | `tree_sitter_java` |
-| `crates/treebank-csharp` | `treebank-grammar-csharp` | `tree_sitter_c_sharp` |
-| `crates/treebank-c` | `treebank-grammar-c` | `tree_sitter_c` |
-| `crates/treebank-python` | `treebank-grammar-python` | `tree_sitter_python` |
-| `crates/treebank-php` | `treebank-grammar-php` | `tree_sitter_php` |
-| `crates/treebank-go` | `treebank-grammar-go` | `tree_sitter_go` |
-| `crates/treebank-bash` | `treebank-grammar-bash` | `tree_sitter_bash` |
+| `crates/treebank-zig` | `treebank-grammar-zig` | `tree_sitter_zig` |
+<!-- END GENERATED -->
 
 The crate name is **derived from the directory**, not read from the manifest.
 That is safe to key on because `treebank ledger` (which `verify.sh` runs first)
