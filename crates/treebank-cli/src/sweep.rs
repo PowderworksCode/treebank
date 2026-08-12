@@ -155,6 +155,61 @@ struct SweepCache {
     passed_sha256: Vec<String>,
 }
 
+/// Resolve as many *split constructs* as a file has, one error at a time.
+///
+/// A conditional that splits a construct makes the grammar fail on code that
+/// is valid in every configuration — see `treebank_preprocessing::branches`.
+/// Files routinely contain several, so this walks: find the first error, force
+/// the conditional enclosing it, keep whichever choice moves the error PAST
+/// that line while leaving the line itself intact, and go again.
+///
+/// Returns the failure that branch forcing could not explain — `None` when the
+/// whole file comes out clean — and how many splits were resolved on the way.
+/// The returned failure is the honest one to cluster on: a file whose first
+/// error is a split belongs with whatever its *next* problem is, not with the
+/// split it was previously filed under.
+fn resolve_splits(
+    parser: &mut Parser,
+    original: &Failure,
+    source: &str,
+) -> (Option<Failure>, usize) {
+    const MAX_SPLITS: usize = 8;
+    let mut text = source.to_string();
+    let mut current = original.clone();
+    let mut resolved = 0;
+    for _ in 0..MAX_SPLITS {
+        let Some(region) =
+            treebank_preprocessing::innermost_containing(&text, current.line)
+        else {
+            break;
+        };
+        let mut progressed = false;
+        for keep_if in [true, false] {
+            let variant = treebank_preprocessing::force_branch(&text, &region, keep_if);
+            // The guard: an error that vanished with its own line proves
+            // nothing (every header is wrapped in an include guard).
+            if !treebank_preprocessing::line_survives(&variant, current.line) {
+                continue;
+            }
+            match check_file(parser, &current.package, &current.path, variant.as_bytes()) {
+                None => return (None, resolved + 1),
+                Some(next) if next.line > current.line => {
+                    text = variant;
+                    current = next;
+                    resolved += 1;
+                    progressed = true;
+                    break;
+                }
+                Some(_) => {}
+            }
+        }
+        if !progressed {
+            break;
+        }
+    }
+    (Some(current), resolved)
+}
+
 pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Path, out: &Path) -> Result<()> {
     let loaded: Vec<(tree_sitter::Language, String)> = lang
         .grammar_dirs()
@@ -243,7 +298,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     // file parse cleanly, the rejection is a property of the preprocessor and
     // no grammar patch can fix it — so it must not be filed as a gap, where it
     // would sit at the top of the queue absorbing a fix agent's attempts.
-    let config_inherent: std::collections::HashSet<String> = match lang.preprocessing() {
+    let mut config_inherent: std::collections::HashSet<String> = match lang.preprocessing() {
         None => Default::default(),
         Some(symbols) => {
             let hits: Vec<String> = failures
@@ -272,6 +327,47 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
             hits.into_iter().collect()
         }
     };
+
+    // Conditionals whose symbols nobody declared can split a construct just
+    // as `#ifdef __cplusplus` does — `#ifdef F_DUPFD_CLOEXEC` around one of
+    // two spellings of a function signature. Nothing here needs to know what
+    // the symbol means: if forcing either branch removes the error, the
+    // grammar was failing only because it must see both at once.
+    let mut split_resolved: HashMap<String, Option<Failure>> = HashMap::new();
+    if lang.preprocessing().is_some() {
+        let candidates: Vec<&Failure> = failures
+            .iter()
+            .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
+            .filter(|f| !config_inherent.contains(&f.path))
+            .collect();
+        let found: Vec<(String, Option<Failure>, usize)> = candidates
+            .par_iter()
+            .filter_map(|f| {
+                let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
+                let mut parser = Parser::new();
+                parser.set_language(&languages[lang.route(&None, &f.path)]).ok()?;
+                let (remaining, resolved) = resolve_splits(&mut parser, f, &src);
+                (resolved > 0).then(|| (f.path.clone(), remaining, resolved))
+            })
+            .collect();
+        let (mut whole, mut partial) = (0usize, 0usize);
+        for (path, remaining, _) in found {
+            if remaining.is_none() {
+                whole += 1;
+                config_inherent.insert(path.clone());
+            } else {
+                partial += 1;
+            }
+            split_resolved.insert(path, remaining);
+        }
+        if whole + partial > 0 {
+            eprintln!(
+                "preprocessing: {whole} file(s) explained entirely by split constructs; \
+                 {partial} more had a split ahead of their real problem and are \
+                 re-clustered on that"
+            );
+        }
+    }
 
     // Macro expansion, for diagnosis only. Unlike the conditional case above
     // this never changes a verdict: `THREAD_LOCAL int x;` is something a
@@ -334,9 +430,17 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
         }
     }
 
+    // Cluster on the failure that survives split resolution, so a file is
+    // filed under its real problem rather than under a conditional split that
+    // happened to come first in the file.
     let mut by_sig: BTreeMap<String, Vec<Failure>> = BTreeMap::new();
     for f in &failures {
-        by_sig.entry(f.signature.clone()).or_default().push(f.clone());
+        let effective = match split_resolved.get(&f.path) {
+            Some(Some(reclustered)) => reclustered.clone(),
+            Some(None) => f.clone(), // fully explained; stays for the config bucket
+            None => f.clone(),
+        };
+        by_sig.entry(effective.signature.clone()).or_default().push(effective);
     }
     let mut clusters: Vec<Cluster> = by_sig
         .into_iter()

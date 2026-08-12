@@ -158,7 +158,7 @@ On 1,500 failing files, `-idirafter` is worth **372 → 453 valid** and
 
 ```
 21,991 passed (55.1%) / 17,937 failed (44.9%), 924 clusters
-  of the failures:  4,593 gap  |  909 config-inherent  |  12,435 noise
+  of the failures:  4,542 gap  |  960 config-inherent  |  12,435 noise
   oracle split:     5,502 valid | 452 invalid | 11,983 indeterminate
 ```
 

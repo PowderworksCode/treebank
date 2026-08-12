@@ -69,8 +69,10 @@
 //! matter most. Only conditionals that are *decidable* from the declared
 //! symbols are touched; everything else is left exactly as written.
 
+pub mod branches;
 pub mod expand;
 
+pub use branches::{force_branch, innermost_containing, line_survives, regions, Region};
 pub use expand::{expand, Expansion, Macro, Macros};
 
 use std::collections::{HashMap, HashSet};
