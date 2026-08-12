@@ -118,6 +118,12 @@
         "language": "tree_sitter_php::LANGUAGE_PHP",
         "fixture": "patched.php",
         "expect": "Clean"
+      },
+      {
+        "label": "php_only",
+        "language": "tree_sitter_php::LANGUAGE_PHP_ONLY",
+        "fixture": "patched.php",
+        "expect": "Clean"
       }
     ]
   },
