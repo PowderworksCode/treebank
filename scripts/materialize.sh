@@ -30,9 +30,56 @@ GEN_DIRS=()
 while IFS= read -r d; do GEN_DIRS+=("$d"); done < <(jq -r '(.generate_dirs // ["."])[]' ledger.json)
 TS="npx -y tree-sitter-cli@$CLI_WANT"
 
+# Three things in this script reach the network — the submodule clone, `npm
+# ci`, and npx, which resolves and downloads the pinned CLI because each CI
+# job starts with an empty npx cache. They are the only steps here that can
+# fail for a reason having nothing to do with the grammar, and they do fail.
+# Measured 2026-08-12: two pushes to main landed three minutes apart, ~24
+# verify jobs ran `npx -y tree-sitter-cli@0.25.10` at once, and three of them
+# (go, javascript, typescript) exited 1 in about a second having printed
+# NOTHING AT ALL — no npm line, no npx line, no error. Re-running the
+# identical commits passed all 12 grammars.
+#
+# The worse half of that is the silence: a transient registry failure was
+# indistinguishable from a real generate error, so the log told a grammar
+# agent only that materialize died somewhere after the last patch. fetch()
+# fixes both halves — it retries a network command twice, and when the retries
+# are exhausted it prints what the command actually said.
+#
+# What fetch() must NOT wrap is `tree-sitter generate`, because a generate
+# failure is usually the grammar being wrong, and retrying that is 15 seconds
+# and three copies of the same error for every typo in grammar.js. So the
+# retry goes on a separate one-line probe of the CLI instead, and the probe
+# leaves the npx cache warm: measured, `npx -y tree-sitter-cli@0.25.10` with
+# an exact version spec is then satisfied entirely from cache and succeeds
+# under npm_config_offline. Every later npx in the job — generate here, and
+# `tree-sitter test` over in verify.sh — is therefore past the registry
+# already, and generate keeps failing on the first try, immediately, with its
+# own message intact.
+fetch() {  # fetch <what> <cmd...>
+  local what=$1; shift
+  local out rc attempt
+  for attempt in 1 2 3; do
+    # rc is read in the else branch, not after the `if`: an if compound resets
+    # $? to 0 once it is done, so `rc=$?` on the far side reports every failure
+    # as "exited 0".
+    if out=$("$@" 2>&1); then
+      if [ -n "$out" ]; then printf '%s\n' "$out"; fi
+      return 0
+    else
+      rc=$?
+    fi
+    echo "materialize: $what exited $rc (attempt $attempt/3)" >&2
+    printf '%s\n' "$out" >&2
+    if [ "$attempt" != 3 ]; then sleep $((attempt * 5)); fi
+  done
+  echo "materialize: FAIL — $what failed 3 times; see its output above" >&2
+  exit 1
+}
+
 if [ ! -e upstream/.git ]; then
   echo "materialize: initializing upstream submodule"
-  git submodule update --init -- "$ROOT/upstream"
+  fetch "submodule clone" git submodule update --init -- "$ROOT/upstream"
 fi
 HEAD=$(git -C upstream rev-parse HEAD)
 if [ "$HEAD" != "$SHA" ]; then
@@ -66,8 +113,14 @@ for p in "$ROOT"/patches/*.patch; do
 done
 
 if [ -n "$NEED_DEPS" ]; then
-  (cd build && npm ci --no-audit --no-fund >/dev/null 2>&1)
+  # This one used to be `>/dev/null 2>&1`, which threw away the diagnosis of
+  # every dependency failure to keep the log tidy. fetch() keeps it tidy the
+  # honest way: npm's one-line summary on success, all of it on failure.
+  (cd build && fetch "npm ci" npm ci --no-audit --no-fund)
 fi
+# $TS is deliberately unquoted in both places — it is a command line
+# ("npx -y pkg@ver"), not a path.
+fetch "fetching tree-sitter-cli@$CLI_WANT" $TS --version
 for d in "${GEN_DIRS[@]}"; do
   (cd "build/$d" && $TS generate)
 done
