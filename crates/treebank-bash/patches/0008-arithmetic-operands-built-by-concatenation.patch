@@ -1,0 +1,79 @@
+diff --git a/grammar.js b/grammar.js
+index 0f94bed..cfdf9f9 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -772,7 +772,18 @@ module.exports = grammar({
+       $.command_substitution,
+     )),
+ 
++    // An arithmetic operand may be built by CONCATENATION, which nothing in
++    // these rules allowed: `$((0x$(cat file)))` glues a hex prefix to a
++    // command substitution, and `$((0x${v}))` to an expansion. bash expands
++    // the operand to text first and only then reads it as a number, so any
++    // adjacency is legal there.
++    _arithmetic_concatenation: $ => prec(2, seq(
++      choice($.number, $.variable_name, $._simple_variable_name),
++      repeat1(choice($.simple_expansion, $.expansion, $.command_substitution)),
++    )),
++
+     _arithmetic_literal: $ => prec(1, choice(
++      alias($._arithmetic_concatenation, $.concatenation),
+       $.number,
+       $.subscript,
+       $.simple_expansion,
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index da41cf0..2e0de49 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -1808,3 +1808,51 @@ echo "${var:1:$n}"
+         (number)
+         (simple_expansion
+           (variable_name))))))
++
++================================================================================
++Arithmetic operands built by concatenation
++================================================================================
++
++rvd=$((0x$(echo 1234)))
++n=$((0x${v}))
++m=$((a$(id -u)))
++plain=$((0x12 + a * 2))
++
++--------------------------------------------------------------------------------
++
++(program
++  (variable_assignment
++    (variable_name)
++    (arithmetic_expansion
++      (concatenation
++        (variable_name)
++        (command_substitution
++          (command
++            (command_name
++              (word))
++            (number))))))
++  (variable_assignment
++    (variable_name)
++    (arithmetic_expansion
++      (concatenation
++        (variable_name)
++        (expansion
++          (variable_name)))))
++  (variable_assignment
++    (variable_name)
++    (arithmetic_expansion
++      (concatenation
++        (variable_name)
++        (command_substitution
++          (command
++            (command_name
++              (word))
++            (word))))))
++  (variable_assignment
++    (variable_name)
++    (arithmetic_expansion
++      (binary_expression
++        (number)
++        (binary_expression
++          (variable_name)
++          (number))))))
