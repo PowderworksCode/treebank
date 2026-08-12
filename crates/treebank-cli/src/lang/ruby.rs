@@ -76,6 +76,12 @@ impl Lang for Ruby {
         true
     }
 
+    /// `data.tar.gz` carries the whole package; `metadata.gz` and
+    /// `checksums.yaml.gz` are gzipped YAML, not tars.
+    fn nested_archive_member(&self, rel: &Path) -> bool {
+        rel == Path::new("data.tar.gz")
+    }
+
     /// `.rb` only — the single extension tree-sitter-ruby's
     /// tree-sitter.json claims, following the same rule as python and
     /// javascript. Ruby has plenty of other files this grammar also parses

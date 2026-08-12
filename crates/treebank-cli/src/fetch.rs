@@ -381,7 +381,11 @@ fn take(
     outermost: bool,
     files: &mut Vec<ManifestFile>,
 ) -> Result<()> {
-    if outermost && lang.nested_archives() && !matches!(shape(&buf), Shape::NotAnArchive) {
+    if outermost
+        && lang.nested_archives()
+        && lang.nested_archive_member(rel)
+        && !matches!(shape(&buf), Shape::NotAnArchive)
+    {
         // Nest under the archive's own path so two inner archives cannot
         // overwrite each other, and so the manifest shows the provenance.
         let nested_prefix = prefix.join(rel);

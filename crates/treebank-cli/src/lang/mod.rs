@@ -68,6 +68,23 @@ pub trait Lang: Sync {
         false
     }
 
+    /// Which member is the payload, for a language that knows. Default: any
+    /// member that looks like an archive, which is right for LuaRocks, where
+    /// whether the source arrives as a tree or as upstream's tarball is the
+    /// packager's choice and the name varies.
+    ///
+    /// A `.gem` is not like that: the source is always `data.tar.gz`, and its
+    /// siblings `metadata.gz` and `checksums.yaml.gz` are gzip streams that
+    /// are not tars. Sniffing them finds the gzip magic, fails to read a tar
+    /// header, and costs a skipped-archive warning per package — two per gem,
+    /// two thousand over the corpus, one of them quoting the package's YAML
+    /// into the message. Naming the member keeps the fetch log readable and
+    /// stops a package's own test fixtures from being walked into.
+    fn nested_archive_member(&self, rel: &Path) -> bool {
+        let _ = rel;
+        true
+    }
+
     /// What this language knows for certain about its own preprocessor, if
     /// it has one. `None` — the default — means the source is parsed exactly
     /// as written, which is right for every language without conditional
