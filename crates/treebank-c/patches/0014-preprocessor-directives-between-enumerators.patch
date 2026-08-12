@@ -1,0 +1,72 @@
+diff --git a/grammar.js b/grammar.js
+index 663d742..6ad6255 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -775,6 +775,14 @@ module.exports = grammar({
+         alias($.preproc_if_in_enumerator_list, $.preproc_if),
+         alias($.preproc_ifdef_in_enumerator_list, $.preproc_ifdef),
+         seq($.preproc_call, ','),
++        // A #define between two enumerators, which the kernel UAPI headers
++        // use to make every name testable with #ifdef:
++        //   FSCONFIG_SET_FLAG = 0,
++        //   #define FSCONFIG_SET_FLAG FSCONFIG_SET_FLAG
++        // It is a directive on its own line, so unlike an enumerator it is
++        // not followed by a comma.
++        $.preproc_def,
++        $.preproc_function_def,
+       )),
+       optional(seq(
+         choice(
+@@ -783,6 +791,7 @@ module.exports = grammar({
+           alias($.preproc_ifdef_in_enumerator_list_no_comma, $.preproc_ifdef),
+           $.preproc_call,
+         ),
++        repeat(choice($.preproc_def, $.preproc_function_def)),
+       )),
+       '}',
+     ),
+diff --git a/test/corpus/preprocessor.txt b/test/corpus/preprocessor.txt
+index f9adb3f..124b8a9 100644
+--- a/test/corpus/preprocessor.txt
++++ b/test/corpus/preprocessor.txt
+@@ -497,3 +497,40 @@ __has_include
+     (preproc_def
+       name: (identifier)
+       value: (preproc_arg))))
++
++================================================================================
++Directives between enumerators
++================================================================================
++
++enum fsconfig_command {
++	FSCONFIG_SET_FLAG = 0,
++#define FSCONFIG_SET_FLAG FSCONFIG_SET_FLAG
++	FSCONFIG_SET_STRING = 1,
++#define FSCONFIG_SET_STRING FSCONFIG_SET_STRING
++	FSCONFIG_LAST
++#define FSCONFIG_LAST FSCONFIG_LAST
++};
++
++--------------------------------------------------------------------------------
++
++(translation_unit
++  (enum_specifier
++    name: (type_identifier)
++    body: (enumerator_list
++      (enumerator
++        name: (identifier)
++        value: (number_literal))
++      (preproc_def
++        name: (identifier)
++        value: (preproc_arg))
++      (enumerator
++        name: (identifier)
++        value: (number_literal))
++      (preproc_def
++        name: (identifier)
++        value: (preproc_arg))
++      (enumerator
++        name: (identifier))
++      (preproc_def
++        name: (identifier)
++        value: (preproc_arg)))))

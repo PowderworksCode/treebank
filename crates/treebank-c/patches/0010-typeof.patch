@@ -1,0 +1,82 @@
+diff --git a/grammar.js b/grammar.js
+index 9d3cef0..e0b5e2c 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -650,10 +650,25 @@ module.exports = grammar({
+       $.enum_specifier,
+       $.macro_type_specifier,
+       $.sized_type_specifier,
++      $.typeof_specifier,
+       $.primitive_type,
+       $._type_identifier,
+     ),
+ 
++    // C23's typeof, which GCC has spelled __typeof/__typeof__ for decades.
++    // The operand is either a type or an expression — `__typeof (cmsg->len)`
++    // is the form macro_type_specifier could not reach, since a field access
++    // is no type descriptor.
++    typeof_specifier: $ => seq(
++      choice('typeof', 'typeof_unqual', '__typeof', '__typeof__'),
++      '(',
++      choice(
++        field('type', $.type_descriptor),
++        field('value', $.expression),
++      ),
++      ')',
++    ),
++
+     sized_type_specifier: $ => choice(
+       seq(
+         repeat(choice(
+diff --git a/test/corpus/types.txt b/test/corpus/types.txt
+index ecbb082..e4739d0 100644
+--- a/test/corpus/types.txt
++++ b/test/corpus/types.txt
+@@ -115,3 +115,47 @@ struct s { _Complex float cf; };
+         type: (sized_type_specifier
+           type: (primitive_type))
+         declarator: (field_identifier)))))
++
++========================================
++Typeof
++========================================
++
++__typeof (x->field) a;
++typeof(int) b;
++void f(void) {
++  int c = (__typeof__ (a + 1)) 0;
++}
++
++---
++
++(translation_unit
++  (declaration
++    type: (typeof_specifier
++      value: (field_expression
++        argument: (identifier)
++        field: (field_identifier)))
++    declarator: (identifier))
++  (declaration
++    type: (typeof_specifier
++      type: (type_descriptor
++        type: (primitive_type)))
++    declarator: (identifier))
++  (function_definition
++    type: (primitive_type)
++    declarator: (function_declarator
++      declarator: (identifier)
++      parameters: (parameter_list
++        (parameter_declaration
++          type: (primitive_type))))
++    body: (compound_statement
++      (declaration
++        type: (primitive_type)
++        declarator: (init_declarator
++          declarator: (identifier)
++          value: (cast_expression
++            type: (type_descriptor
++              type: (typeof_specifier
++                value: (binary_expression
++                  left: (identifier)
++                  right: (number_literal))))
++            value: (number_literal)))))))

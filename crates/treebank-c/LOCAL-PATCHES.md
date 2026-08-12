@@ -304,6 +304,45 @@ were rewritten after the oracle called them `indeterminate` rather than
 `invalid` — a negative file that the reference parser will not positively
 reject does not belong in the corpus.
 
+## The corpus since the pilot, and what the patches moved
+
+The pilot above is 20 packages. The corpus is now **100 Debian sid source
+packages, 84,455 files**, and `corpus/c/reports/REPORT.md` is a sweep of that:
+
+```
+upstream 0.24.2:  43,089 passed / 41,366 failed
+                  13,826 gap | 1,883 config-inherent | 25,657 noise, 1,035 clusters
++ patches 3-15:   44,021 passed / 40,434 failed
+                  13,199 gap | 1,889 config-inherent | 25,346 noise
+```
+
+**+932 files**, and the shape of what is left has not changed: the gap queue
+is still dominated by undefined macros in declaration and statement position,
+which no grammar rule can absorb without accepting arbitrary juxtaposed
+identifiers. The report's own sample puts ~70% of the gap queue in that class
+and another ~21% in the `#ifdef __cplusplus` brace asymmetry, which is
+configuration selection rather than parsing. The patches below are the
+remainder — the part that is language, not preprocessor state.
+
+## Adversarial review of the sweep fixes
+
+The thirteen grammar fixes were checked by generating invalid C aimed at each
+new rule, confirming the oracle rejects it, and then asking whether the grammar
+does too. Eight of ten probes were genuinely invalid; the grammar rejected
+seven of those eight.
+
+The eighth is a deliberate, inherent trade, now recorded in the ledger against
+patch 0013: parsing `va_arg(ap, char *)` requires accepting a type with an
+abstract declarator as a call argument, which necessarily also accepts
+`g(char *)` — invalid C when `g` is a function. Nothing in the token stream
+distinguishes the two. The guard that *does* hold is that a bare type name
+stays an error.
+
+The review's substantive finding was procedural: thirteen permissive rules
+arrived with **no new negative-corpus files**, which is precisely the direction
+`GRAMMARS.md` says sweeps cannot catch. Six were added, one per new accept
+surface, each verified oracle-invalid and grammar-rejected.
+
 ## Patches
 
 ### 0001 — treebank redistribution notice
@@ -315,8 +354,8 @@ Applies first, per the contract in `GRAMMARS.md`.
 
 ### 0002 — treebank crate identity
 
-Packaging only, no grammar code, and the last patch in the series per
-`GRAMMARS.md`. Upstream owns `tree-sitter-c` on crates.io, so the
+Packaging only, no grammar code, and the last *packaging* patch in the series
+per `GRAMMARS.md`. Upstream owns `tree-sitter-c` on crates.io, so the
 redistribution publishes as `treebank-grammar-c` with its own `repository`,
 `homepage` and `description`, and `include` grows to carry `ledger.json`,
 `LOCAL-PATCHES.md` and `patches/*` inside the published tarball so provenance
@@ -331,7 +370,178 @@ replacement. `tools/consumer-test` asserts exactly that against
 The published version is deliberately absent — `publish.sh` derives it from
 crates.io at publish time. See [PUBLISHING.md](../../PUBLISHING.md).
 
-**No grammar patches yet.** Both patches are `"kind": "packaging"`. The pilot
-sweep's gap clusters are recorded above and in `corpus/c/reports/REPORT.md`;
-none has been turned into a parser fix, so this grammar is currently upstream
-0.24.2 plus a README notice and a crate rename.
+## Grammar patches
+
+Thirteen, all from one sweep of `corpus/c` (100 Debian sid source packages,
+84,455 files). Every one is a construct the C standard or the GNU dialect
+defines, or a place a preprocessor directive is allowed to stand — no macro
+knowledge is involved in any of them, which is the line this grammar holds.
+The report's largest clusters are undefined macros in declaration or
+statement position (`_INLINE_ void f(...)`, `list_for_each(li, &q->ifaces) {`,
+`THREAD_LOCAL int x;`) and none of them is fixable without either expanding
+macros or accepting arbitrary juxtaposed identifiers, which is exactly what
+`test/negative/` exists to prevent. What follows is what a parser *can* fix.
+
+### 0003 — anonymous bit-fields
+
+C11 6.7.2.1 writes struct-declarator as `declarator` or `declarator_opt :
+constant-expression`, so a bit-field may be unnamed: `unsigned int :3;` is
+padding, `int :0;` forces alignment to the next storage unit.
+`_field_declaration_declarator` required a declarator before the
+`bitfield_clause`, so every such member came out as `MISSING
+field_identifier` — the whole `field_declaration > MISSING field_identifier`
+cluster, first seen at `glibc/include/struct___timespec64.h:19`
+(`__int32_t :32;`) and all over the kernel UAPI headers systemd vendors. The
+rule is now the two-way choice the standard writes.
+
+### 0004 — GNU attributes in declaration positions
+
+Three positions GCC accepts and the grammar did not:
+
+- after the declarator of an object declaration —
+  `int x __attribute__((unused)) = 0;`, `int a, b __attribute__((aligned(4)));`
+- after the `*` of a pointer declarator —
+  `static inline void * __attribute__((nonnull (1))) l_memcpy(...)`
+- on either side of the type in a typedef —
+  `typedef unsigned long int __attribute__ ((__may_alias__)) op_t;`
+
+The first is a new rule, `gnu_attributed_declarator`, aliased back to
+`attributed_declarator` so the node name consumers query is unchanged, and
+deliberately limited to the object declarators (identifier, pointer, array,
+parenthesized). Every other declarator position already absorbs a trailing
+attribute — function declarators through `_function_declaration_declarator`,
+parameters through `parameter_declaration`, members through
+`field_declaration`, typedefs through `type_definition` — and letting the
+general `attributed_declarator` take `__attribute__` made all four ambiguous:
+generation failed outright on three of them, and once the conflict was
+declared, `void f(int x __attribute__((unused)))` re-parsed into a different
+tree and broke upstream's own `Attributes` and `Type qualifiers` corpus
+tests. Keeping the new rule out of those positions leaves every existing
+parse untouched.
+
+The typedef half is the same asymmetry from the other side: an ordinary
+declaration already admits an attribute on either side of the type specifier
+through `_declaration_modifiers`, and a typedef is that declaration with
+`typedef` in the storage-class slot, so `_type_definition_type` now takes the
+same choice.
+
+### 0005 — named variadic macro parameters
+
+`#define check(FMT...) do { … } while (0)` is the GNU spelling of a variadic
+macro: the parameter name stands for the rest of the argument list, where ISO
+C writes `...` and `__VA_ARGS__`. `preproc_params` took `identifier` or
+`...` but not an identifier carrying one, so the `#define` itself failed —
+and with it every use of the macro below it.
+
+### 0006 — complex types
+
+`_Complex` and `_Imaginary` (C99 6.7.2) appear *beside* float/double rather
+than instead of them — `_Complex float`, `double _Complex`, `long double
+_Complex` — which is why they belong with signed/unsigned/long/short in
+`sized_type_specifier` and not in `primitive_type`. `__complex__` is GCC's
+spelling, accepted in every dialect. Without them `_Complex float cf;` read
+as two juxtaposed type names and failed.
+
+### 0007 — case ranges
+
+`case 'a' ... 'z':` and `case 0 ... 2:` — a GNU extension used by every
+character-classification switch in the corpus (glibc's locale reader, grub's
+script executor, mesa, iptables). The range end is a new `end` field on
+`case_statement`, so a plain `case` is unchanged.
+
+### 0008 — alternate asm qualifier keywords
+
+GCC's alternate keywords come in two spellings, `__volatile__` and
+`__volatile`, and glibc's per-architecture headers use the short one:
+`__asm __volatile ("flush %0" : : "r"(reloc_addr));`. `gnu_asm_qualifier`
+knew only the doubled form. `__inline`/`__inline__` are added for the same
+reason.
+
+### 0009 — `__has_include` in preprocessor conditionals
+
+`#if __has_include(<stdcountof.h>)` is C23, and a GNU/clang extension long
+before that. Its operand is a header name rather than an expression, so like
+`defined` it cannot go through `preproc_call_expression`: the `<…>` form is a
+`system_lib_string`, which inside an `#if` would otherwise lex as a less-than
+operator. New `preproc_has_include` node, mirroring `preproc_defined`.
+
+### 0010 — typeof
+
+C23's `typeof`, which GCC has spelled `__typeof`/`__typeof__` for decades.
+`typeof(x)` on a bare name already parsed, by accident: the operand looked
+like a type descriptor, so it came out as a `macro_type_specifier`. Anything
+else did not — `(__typeof (cmsg->cmsg_len)) SIZE_MAX` has a field access for
+an operand, and no type descriptor holds one. The new `typeof_specifier`
+takes either a type or an expression, and now carries the bare-name case too.
+
+### 0011 — `_Atomic(T)`
+
+C11 6.7.2.4 gives `_Atomic` two jobs: the qualifier `_Atomic int x;`, which
+the grammar had, and the atomic type specifier `_Atomic(int) x;`, which it
+did not. mimalloc, vendored inside CPython, is written in the second form
+throughout.
+
+### 0012 — a label at the end of a compound statement
+
+C23 6.8.1 allows a label with no statement after it at the end of a block —
+the `out:` immediately before the closing brace that the `goto out;` idiom
+produces — and GCC and clang accept it in every dialect. `labeled_statement`
+required a statement, so the block ended with a `MISSING ;`. The new
+`trailing_label` is admitted in that one position only, so a label with no
+statement anywhere else stays an error.
+
+### 0013 — a type as a call argument, when it carries an abstract declarator
+
+`va_arg(ap, char *)` is not a call: `va_arg` is a macro and its second
+argument is a type. `argument_list` already admits a `compound_statement` for
+exactly this reason — upstream's comment says "macros taking statements as
+arguments" — and this extends it to a type descriptor, but only one carrying
+an abstract declarator (`char *`, `int (*)(void)`, `long []`), none of which
+can be read as an expression.
+
+Two things it deliberately does not do. A bare type name is not accepted, so
+`test/negative/type-in-plain-call-argument.c` (`g(struct s)`) stays rejected —
+that negative file is the guard on this exact fix. And a *leading* qualifier
+is not accepted: making `const` valid at the start of an argument makes the
+lexer prefer the keyword inside `__attribute__((const))`, which breaks
+upstream's `Attributes` test, so `va_arg(ap, const char *)` still fails while
+`va_arg(ap, char const *)` parses. The alias carries `prec.dynamic(-2)` so
+`macro_type_specifier` keeps winning wherever upstream's tests say it should.
+
+### 0014 — preprocessor directives between enumerators
+
+`enumerator_list` already admitted `#if`/`#ifdef` and a bare `#directive`,
+but not `#define` — and the kernel UAPI headers systemd vendors wholesale put
+one after every enumerator, so each name can be tested with `#ifdef`:
+
+```c
+enum fsconfig_command {
+	FSCONFIG_SET_FLAG	= 0,
+#define FSCONFIG_SET_FLAG FSCONFIG_SET_FLAG
+	FSCONFIG_SET_STRING	= 1,
+#define FSCONFIG_SET_STRING FSCONFIG_SET_STRING
+};
+```
+
+Unlike an enumerator the directive is not followed by a comma, and it can
+also follow the *last* enumerator, so it needed a slot both in the repeat and
+in the comma-less tail.
+
+### 0015 — preprocessor conditionals and directives in an initializer list
+
+A braced initializer whose elements are guarded by `#ifdef` is one of the
+commonest shapes in this corpus — tables of syscalls, ioctls, partition
+types, colour names — and `initializer_list` was a plain `commaSep` with no
+preprocessor slot at all, so the whole declaration failed. It is now shaped
+like `enumerator_list`: element-then-comma, or a conditional, or a directive,
+with the same comma-less tail, and `preprocIf` gets two more instantiations,
+`_in_initializer_list` and `_in_initializer_list_no_comma` — exactly how
+upstream already handles enumerators and struct members.
+
+The `#include` slot is for the list-fragment header (util-linux's
+`pt-mbr-partnames.h`, `#include`d in the middle of a `{ … }`). The fragment
+itself stays invalid on its own, which `test/negative/` asserts and still
+does. The one new conflict, `[expression, concatenated_string]`, is the
+identifier-then-string ambiguity `concatenated_string` has always carried; it
+becomes reachable now that an `#ifdef` name can sit directly before an
+element.

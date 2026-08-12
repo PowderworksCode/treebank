@@ -1,0 +1,50 @@
+diff --git a/grammar.js b/grammar.js
+index add7a9d..1168d4d 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -147,8 +147,14 @@ module.exports = grammar({
+       token.immediate(/\r?\n/),
+     ),
+ 
++    // A named variadic parameter — `#define check(FMT...)` — is the GNU
++    // spelling of `...` plus `__VA_ARGS__`: the name stands for the rest of
++    // the argument list. Only the last parameter may carry it, which the
++    // preprocessor enforces, not the grammar.
+     preproc_params: $ => seq(
+-      token.immediate('('), commaSep(choice($.identifier, '...')), ')',
++      token.immediate('('),
++      commaSep(choice(seq($.identifier, optional('...')), '...')),
++      ')',
+     ),
+ 
+     preproc_call: $ => seq(
+diff --git a/test/corpus/preprocessor.txt b/test/corpus/preprocessor.txt
+index 8ae9319..543b7f9 100644
+--- a/test/corpus/preprocessor.txt
++++ b/test/corpus/preprocessor.txt
+@@ -447,3 +447,25 @@ uint32_t a;
+     (declaration
+       (primitive_type)
+       (identifier))))
++
++================================================================================
++Named Variadic Macro Parameters
++================================================================================
++
++#define check(FMT...) do { } while (0)
++#define log(fmt, args...) printf(fmt, ##args)
++
++--------------------------------------------------------------------------------
++
++(translation_unit
++  (preproc_function_def
++    name: (identifier)
++    parameters: (preproc_params
++      (identifier))
++    value: (preproc_arg))
++  (preproc_function_def
++    name: (identifier)
++    parameters: (preproc_params
++      (identifier)
++      (identifier))
++    value: (preproc_arg)))

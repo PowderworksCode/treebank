@@ -1,0 +1,183 @@
+diff --git a/grammar.js b/grammar.js
+index f4d919f..add7a9d 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -274,7 +274,15 @@ module.exports = grammar({
+       repeat($.attribute_specifier),
+       ';',
+     ),
+-    _type_definition_type: $ => seq(repeat($.type_qualifier), field('type', $.type_specifier), repeat($.type_qualifier)),
++    // `typedef unsigned long int __attribute__ ((__may_alias__)) op_t;` —
++    // an ordinary declaration already admits an attribute on either side of
++    // the type specifier (_declaration_modifiers), and a typedef is the same
++    // declaration with `typedef` in the storage class slot.
++    _type_definition_type: $ => seq(
++      repeat(choice($.type_qualifier, $.attribute_specifier)),
++      field('type', $.type_specifier),
++      repeat(choice($.type_qualifier, $.attribute_specifier)),
++    ),
+     _type_definition_declarators: $ => commaSep1(field('declarator', $._type_declarator)),
+ 
+     _declaration_modifiers: $ => choice(
+@@ -373,6 +381,7 @@ module.exports = grammar({
+ 
+     _declaration_declarator: $ => choice(
+       $.attributed_declarator,
++      alias($.gnu_attributed_declarator, $.attributed_declarator),
+       $.pointer_declarator,
+       alias($._function_declaration_declarator, $.function_declarator),
+       $.array_declarator,
+@@ -446,11 +455,30 @@ module.exports = grammar({
+       repeat1($.attribute_declaration),
+     )),
+ 
++    // GNU C lets an attribute follow the declarator of an ordinary object
++    // declaration: `int x __attribute__((unused)) = 0;`, `int a, b
++    // __attribute__((aligned(4)));`. The other declarator positions already
++    // take one — function declarators through
++    // _function_declaration_declarator, parameters through
++    // parameter_declaration, members through field_declaration, typedefs
++    // through type_definition — so this rule is deliberately limited to the
++    // object declarators, which leaves every existing parse untouched.
++    gnu_attributed_declarator: $ => prec.right(seq(
++      field('declarator', choice(
++        $.pointer_declarator,
++        $.array_declarator,
++        $.parenthesized_declarator,
++        $.identifier,
++      )),
++      repeat1($.attribute_specifier),
++    )),
++
+     pointer_declarator: $ => prec.dynamic(1, prec.right(seq(
+       optional($.ms_based_modifier),
+       '*',
+       repeat($.ms_pointer_modifier),
+       repeat($.type_qualifier),
++      repeat($.attribute_specifier),
+       field('declarator', $._declarator),
+     ))),
+     pointer_field_declarator: $ => prec.dynamic(1, prec.right(seq(
+@@ -458,6 +486,7 @@ module.exports = grammar({
+       '*',
+       repeat($.ms_pointer_modifier),
+       repeat($.type_qualifier),
++      repeat($.attribute_specifier),
+       field('declarator', $._field_declarator),
+     ))),
+     pointer_type_declarator: $ => prec.dynamic(1, prec.right(seq(
+@@ -465,11 +494,13 @@ module.exports = grammar({
+       '*',
+       repeat($.ms_pointer_modifier),
+       repeat($.type_qualifier),
++      repeat($.attribute_specifier),
+       field('declarator', $._type_declarator),
+     ))),
+     abstract_pointer_declarator: $ => prec.dynamic(1, prec.right(seq('*',
+       repeat($.ms_pointer_modifier),
+       repeat($.type_qualifier),
++      repeat($.attribute_specifier),
+       field('declarator', optional($._abstract_declarator)),
+     ))),
+ 
+@@ -542,7 +573,10 @@ module.exports = grammar({
+     )),
+ 
+     init_declarator: $ => seq(
+-      field('declarator', $._declarator),
++      field('declarator', choice(
++        $._declarator,
++        alias($.gnu_attributed_declarator, $.attributed_declarator),
++      )),
+       '=',
+       field('value', choice($.initializer_list, $.expression)),
+     ),
+diff --git a/test/corpus/declarations.txt b/test/corpus/declarations.txt
+index 30d3ea9..8e2fdad 100644
+--- a/test/corpus/declarations.txt
++++ b/test/corpus/declarations.txt
+@@ -1293,3 +1293,84 @@ struct s {
+         (bitfield_clause
+           (number_literal))
+         declarator: (field_identifier)))))
++
++================================================================================
++GNU Attributes on Declarators
++================================================================================
++
++int a __attribute__((unused));
++int b, c __attribute__((aligned(4)));
++static int d __attribute__((section("x"))) = 1;
++int *e __attribute__((weak)) = 0;
++int * __attribute__((nonnull)) f;
++typedef unsigned long int __attribute__((__may_alias__)) op_t;
++typedef __attribute__((__aligned__(8))) int a8_int_t;
++
++--------------------------------------------------------------------------------
++
++(translation_unit
++  (declaration
++    type: (primitive_type)
++    declarator: (attributed_declarator
++      declarator: (identifier)
++      (attribute_specifier
++        (argument_list
++          (identifier)))))
++  (declaration
++    type: (primitive_type)
++    declarator: (identifier)
++    declarator: (attributed_declarator
++      declarator: (identifier)
++      (attribute_specifier
++        (argument_list
++          (call_expression
++            function: (identifier)
++            arguments: (argument_list
++              (number_literal)))))))
++  (declaration
++    (storage_class_specifier)
++    type: (primitive_type)
++    declarator: (init_declarator
++      declarator: (attributed_declarator
++        declarator: (identifier)
++        (attribute_specifier
++          (argument_list
++            (call_expression
++              function: (identifier)
++              arguments: (argument_list
++                (string_literal
++                  (string_content)))))))
++      value: (number_literal)))
++  (declaration
++    type: (primitive_type)
++    declarator: (init_declarator
++      declarator: (attributed_declarator
++        declarator: (pointer_declarator
++          declarator: (identifier))
++        (attribute_specifier
++          (argument_list
++            (identifier))))
++      value: (number_literal)))
++  (declaration
++    type: (primitive_type)
++    declarator: (pointer_declarator
++      (attribute_specifier
++        (argument_list
++          (identifier)))
++      declarator: (identifier)))
++  (type_definition
++    type: (sized_type_specifier
++      type: (primitive_type))
++    (attribute_specifier
++      (argument_list
++        (identifier)))
++    declarator: (type_identifier))
++  (type_definition
++    (attribute_specifier
++      (argument_list
++        (call_expression
++          function: (identifier)
++          arguments: (argument_list
++            (number_literal)))))
++    type: (primitive_type)
++    declarator: (type_identifier)))
