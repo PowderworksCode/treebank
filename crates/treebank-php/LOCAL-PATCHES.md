@@ -104,3 +104,67 @@ namespace` failed in lowercase too. Only the class-level rule is widened —
 measured against `php -l`, the two levels genuinely differ, and at top level
 `array`, `callable`, `false`, `null`, `true`, `static` and `namespace` are
 all rejected. **10 files; 16 gaps → 6.**
+
+### 0005 — keywords as property names in string interpolation (grammar)
+
+The interpolation twin of 0004's problem, and it has a shorter fix. A
+property name after `->` is a plain identifier, so PHP accepts every keyword
+there — `"$item->class"` is as legal as `$item->class` outside a string.
+Upstream lifts the reserved-word restriction for the ordinary member access
+(`_member_name` uses `reserved('nothing', $.name)`) but not for
+`_simple_string_member_access_expression`, which spells the name as a bare
+`$.name`. `$.name` is the grammar's `word` token, so the parser-level
+reserved set applies and the keyword reading wins: `"$item->class"`,
+`"$item->print"` and `"$item->list"` all errored.
+
+Making the twin match the original is the whole patch. It fixes the
+primitive types too — `"$item->int"`, `"$item->mixed"` — without 0004's
+extra `alias()` alternatives, because in this parse state no `primitive_type`
+token is valid, so nothing beats `$.name` in the lexer once the reserved set
+is lifted. Checked against `php -l` over a 39-keyword battery in both an
+encapsed string and a heredoc. **1 file; 2 gaps → 1.**
+
+### 0006 — cast operands: require, require_once, match and yield (grammar)
+
+PHP casts an `expr`, so every alternative of `$.expression` is a legal cast
+operand. `cast_expression` instead lists its operands and the list was short
+by four. The alternatives that begin with the operand itself — assignment,
+binary, conditional — never needed listing: they arrive via
+`$._unary_expression` and extend rightwards under `PREC.CAST`, which is what
+keeps `(int) $x + 1` parsing as `((int) $x) + 1`. What has to be listed is
+the constructs that lead with a *keyword* and swallow to the right, and
+upstream listed two of the six: `include` and `include_once`.
+
+Missing were `require` and `require_once` — the other half of the same pair,
+so `(bool) require_once $file;` failed while `(bool) include $file;` parsed
+— plus `match` and `yield` / `yield from`. `match` is the one this corpus
+hits, reported from the far side as `return_statement > MISSING ;` because
+the parser ends the return statement at the cast and then finds `match`
+where it wants a semicolon. All 14 alternatives were checked against
+`php -l`, which accepts every one as a cast operand; adding the four closes
+the set instead of alternating in the single file that failed. **1 file;
+1 gap → 0.**
+
+## The 499-package cut — measured
+
+`ledger.json`'s corpus block records the corpus the daily job actually
+sweeps: the top **100** Packagist packages, 7,431 files. Patches 0003 and
+0004 were measured on an earlier one-off cut of the top **500** (499
+resolved; roave/security-advisories publishes no tagged release and the
+fetch driver skips it), 86,308 files, and their `sweep_before` /
+`sweep_after` in the ledger are still that corpus's numbers because that is
+what they were measured on. The pair kept in the corpus block has to be
+comparable to each other, so it moves with the corpus; the 499-package
+totals are kept here instead of being overwritten:
+
+| tree | passed | failed | gap files | noise |
+|---|---|---|---|---|
+| pristine `v0.24.2` | 86,223 | 85 | 81 | 4 |
+| patches 0003–0004 | 86,298 | 10 | 6 | 4 |
+
+Of the 6 gap files that cut still had, patches 0005 and 0006 close three
+causes (cast-of-`require`, cast-of-`match`, `"\0$item->class"`). The two
+that remain — friendsofphp/php-cs-fixer failing at the very top of the file,
+and a symfony/cache class name containing a non-ASCII byte — are in packages
+outside the top 100, so they are not measurable on the current corpus and
+were not patched blind.
