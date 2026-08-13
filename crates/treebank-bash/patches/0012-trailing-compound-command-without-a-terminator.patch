@@ -1,0 +1,85 @@
+diff --git a/grammar.js b/grammar.js
+index 692d19b..9284663 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -129,10 +129,33 @@ module.exports = grammar({
+       optional($._terminator),
+     )),
+ 
+-    _terminated_statement: $ => repeat1(seq(
+-      $._statement,
+-      $._terminator,
+-    )),
++    _terminated_statement: $ => choice(
++      repeat1(seq(
++        $._statement,
++        $._terminator,
++      )),
++      // bash lets the LAST statement of a `{ }`, `do ... done`, `if ... fi`
++      // etc. drop its terminator when it is a bare compound command, because
++      // the compound's own closing token ends it: `f() {( echo hi )}` and
++      // `if (test $? -eq 0) then`. A redirected or piped compound does NOT
++      // get this — `f() { ( x ) >/dev/null }` is a syntax error in bash too.
++      seq(
++        repeat(seq($._statement, $._terminator)),
++        $._compound_command,
++      ),
++    ),
++
++    _compound_command: $ => choice(
++      $.subshell,
++      $.compound_statement,
++      $.if_statement,
++      $.while_statement,
++      $.for_statement,
++      $.c_style_for_statement,
++      $.case_statement,
++      $.test_command,
++      $.function_definition,
++    ),
+ 
+     // Statements
+ 
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index c260bef..902d5ad 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -2046,3 +2046,38 @@ a=1 b=2 >/dev/null
+       value: (number))
+     redirect: (file_redirect
+       destination: (word))))
++
++================================================================================
++Trailing compound command without a terminator
++================================================================================
++
++f() {(
++  echo hi
++)}
++if (test 1 -eq 0) then
++  echo no
++fi
++
++--------------------------------------------------------------------------------
++
++(program
++  (function_definition
++    name: (word)
++    body: (compound_statement
++      (subshell
++        (command
++          name: (command_name
++            (word))
++          argument: (word)))))
++  (if_statement
++    condition: (subshell
++      (command
++        name: (command_name
++          (word))
++        argument: (number)
++        argument: (word)
++        argument: (number)))
++    (command
++      name: (command_name
++        (word))
++      argument: (word))))

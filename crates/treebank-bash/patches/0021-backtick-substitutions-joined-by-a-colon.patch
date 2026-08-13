@@ -1,0 +1,54 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index 620cb79..cb7edd1 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -391,7 +391,12 @@ static bool scan(Scanner *scanner, TSLexer *lexer, const bool *valid_symbols) {
+                 if (lexer->lookahead == '`') {
+                     advance(lexer);
+                 }
+-                return iswspace(lexer->lookahead) || lexer->eof(lexer);
++                // Whitespace after the pair is the clearest sign that it
++                // really was one substitution; so is punctuation that
++                // continues a word but does not start a command, which is
++                // how `case $a:`c`:`d` in` and `p=$dir/`hostname`.pid` get
++                // their concatenation.
++                return iswspace(lexer->lookahead) || lexer->eof(lexer) || lexer->lookahead == ':';
+             }
+             // strings w/ expansions that contains escaped quotes or
+             // backslashes need this to return a concat
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index b4bebbf..cda5e1f 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -2047,3 +2047,31 @@ echo x$/
+     argument: (concatenation
+       (word)
+       (word))))
++
++================================================================================
++Backtick substitutions joined by a colon
++================================================================================
++
++case $a:`c`:`d` in
++  x) ;;
++esac
++
++--------------------------------------------------------------------------------
++
++(program
++  (case_statement
++    value: (concatenation
++      (simple_expansion
++        (variable_name))
++      (word)
++      (command_substitution
++        (command
++          name: (command_name
++            (word))))
++      (word)
++      (command_substitution
++        (command
++          name: (command_name
++            (word)))))
++    (case_item
++      value: (word))))

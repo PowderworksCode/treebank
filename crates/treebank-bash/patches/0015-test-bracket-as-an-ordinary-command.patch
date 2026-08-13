@@ -1,0 +1,61 @@
+diff --git a/grammar.js b/grammar.js
+index 9bfc57f..9413eee 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -52,6 +52,7 @@ module.exports = grammar({
+     [$.redirected_statement, $.command_substitution],
+     [$.function_definition, $.command_name],
+     [$.pipeline],
++    [$.command_name, $.test_command],
+     [$.command],
+     [$.list, $.command, $.variable_assignments],
+   ],
+@@ -549,7 +550,14 @@ module.exports = grammar({
+       ),
+     )),
+ 
+-    command_name: $ => $._literal,
++    command_name: $ => choice(
++      $._literal,
++      // `[` is an ordinary command, and bash parses
++      // `[ docker --help |& grep -q podman ]` as a pipeline of two of them.
++      // test_command outranks this by dynamic precedence, so `[ x ]` is
++      // still a test.
++      prec.dynamic(-1, alias('[', $.word)),
++    ),
+ 
+     variable_assignment: $ => seq(
+       field('name', choice(
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index c0945f9..2b6d017 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -2109,3 +2109,28 @@ exec {lock}<>/tmp/noexit
+         (word)))
+     redirect: (file_redirect
+       destination: (word))))
++
++================================================================================
++Test bracket as an ordinary command in a pipeline
++================================================================================
++
++[ a ]
++[ docker --help |& grep -q podman ]
++
++--------------------------------------------------------------------------------
++
++(program
++  (test_command
++    (word))
++  (pipeline
++    (command
++      name: (command_name
++        (word))
++      argument: (word)
++      argument: (word))
++    (command
++      name: (command_name
++        (word))
++      argument: (word)
++      argument: (word)
++      argument: (word))))

@@ -260,6 +260,675 @@
         "evidence_note": "22 files on Debian and 13 on GitHub, zero regressions: noise stayed at 148 and 592, and the c-style `for ((i=0;i<3;i++))` header and ordinary `$((a + b * 2))` were regression-tested explicitly, since this rule feeds both.",
         "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
       }
+    },
+    {
+      "id": 9,
+      "title": "spurious concat before a closing backtick",
+      "file": "patches/0009-backtick-concat-at-a-closing-backtick.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "x=`date`\ny=` echo hi`\n",
+        "diagnosis": "The scanner emits a zero-width CONCAT before a backtick so that `a`b`` is a concatenation rather than two arguments. It decides by scanning forward to the NEXT backtick and asking whether whitespace follows it. At a CLOSING backtick that scan pairs this substitution's terminator with the OPENING backtick of the next substitution in the file, and if that next body happens to start with whitespace (`y=` echo hi``) the answer is yes, so a CONCAT lands where the closing backtick belongs and the whole file becomes one ERROR. That is why the reported first-error line was 1 and why the cluster looked like a mystery: the offending pair can be thousands of lines apart. The scan now refuses when the character immediately after the first backtick is one of ; newline | & ) -- a command substitution body cannot begin with a command terminator, so such a backtick cannot be an opening one.",
+        "first_seen": {
+          "package": "alsa-lib",
+          "version": "1.2.16.1-1",
+          "path": "configure"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8917,
+          "failed": 177,
+          "gap_files": 142
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8925,
+          "failed": 169,
+          "gap_files": 134
+        },
+        "evidence_note": "8 files and 2 whole clusters: every `install-sh` in the corpus (autoconf ships it verbatim), rocksdb's coverage_test.sh, libzstd's gzip test harness, and two autotools configure scripts. All 104 upstream corpus tests still pass and the negative corpus is unchanged; two narrower variants were measured and discarded first -- bailing out of the forward scan on a newline or semicolon anywhere in the body costs 300 files, and letting the grammar absorb a stray concat before the closing backtick (optional($._concat)) silently loses the shift that makes ``echo `a$b` `` a concatenation and costs 300 more.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0006. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 10,
+      "title": "assignment with a redirection and no command name",
+      "file": "patches/0010-assignment-with-a-redirect-and-no-command-name.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "x=1 >/dev/null\n__PLUSEQ_TEST+=\" b\" 2>/dev/null && echo yes\n",
+        "diagnosis": "bash runs `x=1 >/dev/null` as a command whose only lasting effect is the assignment, and libtool's ltmain.sh probes shell features with exactly that shape. `command` took the assignment as a prefix and then demanded a name, so the parser inserted a MISSING word. TWO or more assignments already parsed, through variable_assignments -> redirected_statement; exactly one did not. The fix gives `command` a second alternative with no name field: one or more assignments followed by one or more redirections. Two conflicts have to be declared for it -- [$.command] for the two prefix repeats, and [$.list, $.command, $.variable_assignments] for the same choice reached through a list -- and the new branch has to take repeat1 over the assignments: restricting it to exactly one assignment generates cleanly and fixes nothing, which is what makes the general shape load-bearing rather than decorative.",
+        "first_seen": {
+          "package": "iptables",
+          "version": "1.8.13-1",
+          "path": "build-aux/ltmain.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8925,
+          "failed": 169,
+          "gap_files": 134
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8938,
+          "failed": 156,
+          "gap_files": 121
+        },
+        "evidence_note": "13 files: twelve copies of libtool's ltmain.sh and mariadb's columnstore backup script. Zero regressions in the sweep, all 105 corpus tests pass and the negative corpus is unchanged. ONE deliberate tree change: `a=1 b=2 >/dev/null` now comes out as a `command` with two assignments and a redirect rather than a `redirected_statement` wrapping `variable_assignments`, so the one-assignment and many-assignment forms of the same bash construct finally have the same shape. The earlier attempt recorded in remaining_gaps_note -- a separate `_assignment_redirect` rule aliased to redirected_statement -- was re-tried first and abandoned again: it fixes the herestring form only, and forcing the file_redirect form through it needs a static precedence that cascades into a chain of new conflicts (list, then pipeline).",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0007. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 11,
+      "title": "expansion default values containing parentheses",
+      "file": "patches/0011-expansion-default-values-containing-parentheses.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "x=\"${A-ALIGN(8)}\"\ny=\"${CPP-\\$(CC) -E}\"\nz=\"${SHLIB+PROVIDE (}\"\n",
+        "diagnosis": "Three holes in how EXPANSION_WORD is reached and scanned, all on the default value of `${var-...}`. (1) The variable-name scan runs first, eats `ALIGN`, finds no variable-name terminator at `(` and returns false, so the internal lexer emits a bare `word` and the `(8)` that follows has nowhere to go; it now hands over to the expansion-word scan, telling it the word is already behind it. (2) The expansion-word scan only entered its paren branch when `(` was the FIRST character, because a `(...)` filling the whole value is an array and the grammar has a rule for that -- it now enters wherever the paren is, and only defers to the array rule when nothing precedes it. An unbalanced `(` (ld's `${CREATE_SHLIB+PROVIDE (}`) stops at the closing brace and stays text, and a quote inside a paren that follows text still bails out, which is what keeps `${foo:+--arg <(printf '%s' \"$foo\")}` a process substitution rather than one flat word. (3) A leading backslash was `skip`ped by the variable-name scan, which silently dropped it, and `\\$(` then read as a command substitution; a backslash now hands over to the expansion-word scan before anything is consumed, and that scan tracks the escape so `\\$` is text.",
+        "first_seen": {
+          "package": "binutils",
+          "version": "2.47-2",
+          "path": "ld/emulparams/hppa64linux.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8938,
+          "failed": 156,
+          "gap_files": 121
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8946,
+          "failed": 148,
+          "gap_files": 113
+        },
+        "evidence_note": "8 files: four autotools configure scripts writing `${CPP_FOR_BUILD-\\$(CC_FOR_BUILD) -E}` and four binutils ld emulparams scripts writing linker-script fragments like `${CREATE_SHLIB-${CREATE_PIE-ALIGN(8)}}`. Zero regressions, all 106 corpus tests pass, negative corpus unchanged. Two intermediate versions were measured and rejected: handing EVERY failed variable-name scan to the expansion-word scan costs 20 binutils files, and consuming backslash pairs inside the expansion-word loop breaks upstream's own `${selvecs:+-DSELECT_VECS=\\\"$selvecs\\\"}` test.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0008. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 12,
+      "title": "trailing compound command without a terminator",
+      "file": "patches/0012-trailing-compound-command-without-a-terminator.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "f() {(\n  echo hi\n)}\nif (test 1 -eq 0) then\n  echo no\nfi\n",
+        "diagnosis": "_terminated_statement made EVERY statement carry a terminator, so `)}` (systemd writes all its helper functions as `f() {( ... )}`) and `if (test $? -eq 0) then` had no path. bash lets the last statement of a `{ }`, `do ... done` or `if ... fi` drop its terminator when it is a bare compound command, because the compound's own closing token ends it. The rule gains a second alternative: any number of terminated statements followed by one unterminated compound. The set is deliberately the bare compounds only -- subshell, compound_statement, if/while/for/c-style-for/case, test_command and function_definition -- because bash does NOT extend the licence to a compound that is redirected or piped: `f() { ( x ) >/dev/null }` and `f() { { :; } | cat }` are syntax errors in bash and are still rejected here, as is `f() { echo hi }`.",
+        "first_seen": {
+          "package": "systemd",
+          "version": "261.2-1",
+          "path": "test/units/util.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8946,
+          "failed": 148,
+          "gap_files": 113
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8957,
+          "failed": 137,
+          "gap_files": 102
+        },
+        "evidence_note": "11 files across two reported clusters at once (`compound_statement > MISSING ;` and `if_statement > MISSING ;`): seven systemd test units, binutils' gprofng example, curl's maketgz and ghostscript's ps2ascii. Zero regressions, 107 corpus tests pass, and the three shapes bash really rejects were checked explicitly \u2014 this is a widening, which is the direction over-acceptance hides in.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0009. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 13,
+      "title": "read-write redirection (<>)",
+      "file": "patches/0013-read-write-redirection.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "exec 4<>/tmp/lockfile\nexec {lock}<>/tmp/noexit\n",
+        "diagnosis": "file_redirect's operator list had every redirection operator bash defines except `<>`, which opens a file for both reading and writing. One token added to the choice. The `{fd}<>file` form comes along for free -- the brace form is already a concatenation in the argument position, and it only failed because the operator itself did not lex.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "tests/ts/flock/flock"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8961,
+          "failed": 133,
+          "gap_files": 98
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8966,
+          "failed": 128,
+          "gap_files": 93
+        },
+        "evidence_note": "5 files across three reported clusters (`redirected_statement > ERROR(<)`, `file_redirect > ERROR(>)`, `file_redirect > ERROR(> word)`): three systemd test units, util-linux's flock test and git's t9300-fast-import. Zero regressions, 109 corpus tests pass, negative corpus unchanged.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0011. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 14,
+      "title": "bracket in an expansion pattern",
+      "file": "patches/0014-bracket-in-an-expansion-pattern.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "x=${SPARE%%]*}\nHOST=$(f \"${HOST%%\\]}\")\n",
+        "diagnosis": "The external regex scanner treats an unmatched `]` as a terminator, and it has to: the same REGEX token carries the right-hand side of `[[ $x =~ ... ]]`, where the `]]` is what ends it. Inside `${var%%pattern}` a `]` is an ordinary pattern character, so the scanner stopped having consumed nothing, returned false, and the expansion had no path. _expansion_regex's operand repeat already carries `alias(')', $.regex)` for exactly this reason on the other bracket; this adds `alias(']', $.regex)` beside it, so the `]` is lexed as an ordinary token and the repeat picks the pattern up on either side of it. `[[ $x =~ a ]]` and `[[ $x =~ ^[a-z]+$ ]]` still parse, which is the check that matters -- the terminator behaviour the scanner needs is untouched, because this is a grammar-side alternative rather than a change to the scan.",
+        "first_seen": {
+          "package": "lvm2",
+          "version": "2.03.31-2",
+          "path": "test/shell/lvconvert-repair-thin-raid.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8966,
+          "failed": 128,
+          "gap_files": 93
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8972,
+          "failed": 122,
+          "gap_files": 87
+        },
+        "evidence_note": "6 files: lvm2's repair test and five mariadb scripts (wsrep_notify, mysqld_safe, mysql.server and friends all trim an IPv6 bracket with `${HOST%%\\]}`). Zero regressions, 110 corpus tests pass, negative corpus unchanged. The sibling form `${var/]/x}` is NOT fixed here: it goes through REGEX_NO_SLASH, where the same alternative has no effect, and it is one file.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0012. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 15,
+      "title": "test bracket as an ordinary command",
+      "file": "patches/0015-test-bracket-as-an-ordinary-command.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "[ a ]\n[ docker --help |& grep -q podman ]\n",
+        "diagnosis": "`[` is not syntax in bash, it is a command, and the shell parses `[ docker --help |& grep -q podman ]` as a PIPELINE of two commands -- `[ docker --help` and `grep -q podman ]` -- where the `]` is just grep's last argument. The grammar made `[` the opening token of test_command and nothing else, so any pipe inside the brackets was an error. command_name gains `[` as an alternative at prec.dynamic(-1), and the [$.command_name, $.test_command] conflict lets both live until the parse decides: `[ a ]` and `[ -n \"$x\" ]` still come out as test_command, and the piped form comes out as the pipeline bash actually means rather than a test_command with a pipeline stuffed inside it.",
+        "first_seen": {
+          "package": "gobject-introspection",
+          "version": "1.86.0-6",
+          "path": ".gitlab-ci/run-docker.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8972,
+          "failed": 122,
+          "gap_files": 87
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8979,
+          "failed": 115,
+          "gap_files": 80
+        },
+        "evidence_note": "7 files: the four gitlab-ci run-docker scripts of the reported cluster plus three more that pipe inside brackets. Zero regressions, 111 corpus tests pass, negative corpus unchanged -- and the tree was inspected rather than assumed, because the cheap fix here (allowing a pipeline INSIDE test_command's brackets) would have passed the same sweep while recording a parse bash does not perform.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0013. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 16,
+      "title": "arithmetic base prefix followed by an expansion",
+      "file": "patches/0016-arithmetic-base-prefix-followed-by-an-expansion.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "x=$((0x$(a)))\ny=$((16#$P))\n",
+        "diagnosis": "`number` already knew that the digits after an explicit base can be computed -- `seq(/-?(0x)?[0-9]+#/, choice($.expansion, $.command_substitution))` -- but the choice omitted simple_expansion, so `$((16#$PID1_ADDR))` failed, and the whole alternative demands digits BEFORE the `#`, so the `0x` prefix form `$((0x$(setpci ...)))` had no path at all. simple_expansion joins the choice and a second alternative covers a bare `0x`/`0X` prefix.",
+        "first_seen": {
+          "package": "gnupg2",
+          "version": "2.4.9-7",
+          "path": "autogen.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8979,
+          "failed": 115,
+          "gap_files": 80
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8984,
+          "failed": 110,
+          "gap_files": 75
+        },
+        "evidence_note": "5 files across two reported clusters (`arithmetic_expansion > ERROR(variable_name)` and `arithmetic_expansion > ERROR '16#'`): gnupg2 and libgpg-error's autogen.sh reading a hex revision, lm-sensors' SMBus unhider, and systemd's fsaccess test. Zero regressions, 112 corpus tests pass.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0014. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 17,
+      "title": "parenthesised text in an expansion value",
+      "file": "patches/0017-parenthesised-text-in-an-expansion-value.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "echo \"$1${2:+ (from $2)}\"\n",
+        "diagnosis": "`${2:+ (from $2)}` splits into word ` (from `, a simple_expansion, and then a `)` that has nowhere to go. Two things blocked it. The CONCAT scanner refuses to emit a concatenation join before `)` anywhere, which is right outside `${...}` (there a `)` closes a subshell or a case pattern) and wrong inside it, so the guard now exempts the case where a closing brace is what the parser is waiting for. And _concatenation_in_expansion had no alternative that could BE a `)`, so it gains `alias(')', $.word)` -- which is the same assumption _expansion_regex already makes with `alias(')', $.regex)` for the pattern operands.",
+        "first_seen": {
+          "package": "git",
+          "version": "1:2.55.0-1",
+          "path": "t/lib-pack.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8984,
+          "failed": 110,
+          "gap_files": 75
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8987,
+          "failed": 107,
+          "gap_files": 72
+        },
+        "evidence_note": "3 files: git's lib-pack.sh, systemd's alias-corruption test and libnl3's configure, all of them printing an optional parenthesised suffix. Zero regressions, 113 corpus tests pass, negative corpus unchanged -- the CLOSING_BRACE guard is what keeps the change inside `${...}`.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0015. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 18,
+      "title": "at sign as an ordinary word character",
+      "file": "patches/0018-at-sign-as-an-ordinary-word-character.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "@bindir@/replace a b\n[ @PORT@ -eq 0 ]\necho ${x@U}\n",
+        "diagnosis": "The variable-name scanner ended a name at `@` unconditionally, for `${x@U}`'s transform operator. Outside `${...}` `@` is an ordinary word character, and autotools templates are made of it -- `@bindir@/replace`, `` `@HOSTNAME@` ``, `@DIFF@ -u`, `[ @MYSQL_TCP_PORT_DEFAULT@ -eq 0 ]`. Even `a@b` as a command name failed. The terminator is now conditional on valid_symbols[CLOSING_BRACE], which is exactly the `${...}` context the operator lives in; `${x@U}`, `${x@Q}`, `${arr[@]}` and `$@` all still parse.",
+        "first_seen": {
+          "package": "mariadb",
+          "version": "1:11.8.8-1",
+          "path": "support-files/mysql.server.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8987,
+          "failed": 107,
+          "gap_files": 72
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8994,
+          "failed": 100,
+          "gap_files": 66
+        },
+        "evidence_note": "6 gap files across five reported clusters (`<root> > ERROR(comment comment comment comment ...)`, `test_command > ERROR(variable_name @)`, `command > ERROR(variable_name @ -)`, `compound_statement > ERROR(variable_name @ - u ...)`, `program > ERROR(variable_name)`): mariadb's .sh templates and git's git-filter-branch/git-sh-setup. Zero regressions, 114 corpus tests pass. ONE HONEST COST, and it is the accepts-invalid direction: noise_files falls 35 -> 34 because mariadb's support-files/mariadb.logrotate.sh -- a logrotate config with a .sh extension, which bash rejects -- now parses. The laxness that admits it is upstream's, already recorded in this ledger's over_acceptance_note as item (1): the grammar lets `x { y }` be a command followed by a brace group where bash requires `{` in command position. This patch did not create that; it removed a lexical accident (`@` ending a word) that happened to mask it in this one file. Tightening it needs its own before/after sweep and is not attempted here.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "over_acceptance": "mariadb-1:11.8.8-1/support-files/mariadb.logrotate.sh moves from correctly-rejected to accepted; cause is upstream's compound-body laxness, see corpus.over_acceptance_note item (1)",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0016. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 19,
+      "title": "heredoc delimiter ends at a metacharacter",
+      "file": "patches/0019-heredoc-delimiter-ends-at-a-metacharacter.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "cat <<HELP; exit\nhi\nHELP\n",
+        "diagnosis": "Two halves of the same construct. advance_word, which reads the heredoc delimiter, stopped only at WHITESPACE, so `<<HELP; exit` took `HELP;` as the delimiter and then never found a line matching it - MISSING heredoc_end, thousands of lines later. An unquoted delimiter is a shell WORD and ends at a metacharacter, so the scan now stops at ; & | < > ( ) as well; the quoted form (<<\"E O F\") is untouched. That alone is not enough: heredoc_redirect lists what may follow the delimiter on the same line (a pipeline, redirects, && / ||, more arguments) and `;` was not among them, so it gains seq(';', optional($._statement)). With a space (`cat <<HELP ; exit`) only the grammar half was missing, which is why the two were found together.",
+        "first_seen": {
+          "package": "mariadb",
+          "version": "1:11.8.8-1",
+          "path": "storage/rocksdb/rocksdb/tools/dbench_monitor"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8994,
+          "failed": 100,
+          "gap_files": 66
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 8998,
+          "failed": 96,
+          "gap_files": 62
+        },
+        "evidence_note": "4 files: rocksdb's dbench_monitor and pflag, git's t9500-gitweb test and lvm2's test/lib/aux.sh. Zero regressions, 115 corpus tests pass, negative corpus unchanged; `<<EOF | grep x`, `<<EOF>out` and the quoted-delimiter form were all checked by hand, because the scanner half changes what a delimiter IS.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0017. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 20,
+      "title": "literal dollar before a non-expansion character",
+      "file": "patches/0020-literal-dollar-before-a-non-expansion-character.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "sed -e s/.ct$//\necho x$/\n",
+        "diagnosis": "scan_bare_dollar accepted a literal `$` only when whitespace, EOF or a double quote followed it. bash treats a `$` as literal whenever what follows CANNOT begin an expansion, and sed one-liners rely on it constantly: `s/.ct$//`, `$\\|`, `$)`. The test is now stated the other way round -- a `$` is literal unless the next character is one of { ( ' _ @ * # ? - ! $ or alphanumeric, the characters that actually start an expansion or name a special parameter. BARE_DOLLAR is only valid in argument and concatenation positions, so the widening is bounded by the grammar rather than by the scan.",
+        "first_seen": {
+          "package": "krb5",
+          "version": "1.22.1-3",
+          "path": "src/util/ss/mk_cmds.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 8998,
+          "failed": 96,
+          "gap_files": 62
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9003,
+          "failed": 91,
+          "gap_files": 57
+        },
+        "evidence_note": "5 files: krb5's mk_cmds.sh and compile_et.sh, cairo's check-doc-syntax.sh and two more. Zero regressions, 116 corpus tests pass, negative corpus unchanged; `$x`, `${x}`, `$(x)`, `\"$x\"` and a trailing `$` were all re-checked, since this loosens the token that decides when a `$` is NOT an expansion.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0018. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 21,
+      "title": "backtick substitutions joined by a colon",
+      "file": "patches/0021-backtick-substitutions-joined-by-a-colon.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "case $a:`c`:`d` in\n  x) ;;\nesac\n",
+        "diagnosis": "The CONCAT-before-a-backtick heuristic emitted its join only when WHITESPACE followed the backtick pair, so `case $in_lang:$latex2html:`out_lang_tex`:`$SED '1q' \"$1\"` in` lost the join after the first substitution and the case subject fell apart -- a case takes exactly one value, so where `echo` would merely have produced two arguments, this was an ERROR. A `:` now counts as well. Deliberately ONLY a colon: a wider set of word-continuing punctuation (. , = % + @ ] }) was measured first and costs 17 files, because the same lookahead is what stops the heuristic mis-pairing one substitution's closing backtick with the next one's opening backtick. Stated honestly, `:` is also the no-op builtin, so a substitution body CAN start with one; the guard is empirical, and the empirical result over 9094 files is +1 and no regressions.",
+        "first_seen": {
+          "package": "readline",
+          "version": "8.3-4",
+          "path": "doc/texi2dvi"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9003,
+          "failed": 91,
+          "gap_files": 57
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9004,
+          "failed": 90,
+          "gap_files": 56
+        },
+        "evidence_note": "1 file. Kept because it is one of the reported cluster's remaining members and because the wider version of the same change was measured and rejected on evidence rather than taste. 117 corpus tests pass, negative corpus unchanged.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0019. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 22,
+      "title": "case pattern with an escaped bracket",
+      "file": "patches/0022-case-pattern-with-an-escaped-bracket.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "case $1 in\n  *\\]:*) real_server=\"${1}\" ;;\nesac\n",
+        "diagnosis": "The extglob scan tracks bracket depth so a pattern ends at an unmatched `]`. Its backslash branch already advanced past an escaped SPACE or DOUBLE QUOTE so those would not end the pattern, but not past an escaped BRACKET, so `*\\]:*` ended at the `]` and the case item fell apart. The bracket characters join the same branch. Three narrower and wider versions were measured first: a general escape-skip at the top of the loop costs 93 files and breaks upstream's `bar\\ baz)` test, and adding a mark_end on the fall-through costs 107, because this scan uses exactly where it stopped to decide what a case pattern IS.",
+        "first_seen": {
+          "package": "samba",
+          "version": "2:4.24.5+dfsg-1",
+          "path": "ctdb/tests/UNIT/eventscripts/stubs/ipvsadm"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9004,
+          "failed": 90,
+          "gap_files": 56
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9005,
+          "failed": 89,
+          "gap_files": 55
+        },
+        "evidence_note": "1 file. 118 corpus tests pass, negative corpus unchanged. The sibling in the same reported cluster -- curl's wcurl, `*[!${2}]* | '')` -- is NOT fixed: there the bracket is unescaped and holds an expansion, which the scan ends at the `${`, and that is a different change.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0020. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 23,
+      "title": "trailing list ending in a compound command",
+      "file": "patches/0023-trailing-list-ending-in-a-compound-command.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "enabled x && { require y && { test z || die \"e\"; } }\n",
+        "diagnosis": "Patch 0009 let the last statement of a `{ }` drop its terminator when it is a bare compound command. bash also allows it when the compound is the right-hand side of an && / || list -- `{ enabled avisynth && { require_headers ...; } }`, which is how ffmpeg's configure writes every optional dependency. The unterminated alternative gains a recursive `_unterminated_list`: any statement, an && or ||, and then either a compound or another such list. The limits stay where bash puts them, and were re-checked: `f() { { :; } | cat }`, `f() { echo hi }` and `{ a && b }` are syntax errors in bash and are still rejected here.",
+        "first_seen": {
+          "package": "ffmpeg",
+          "version": "7:8.1.2-2",
+          "path": "configure"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9005,
+          "failed": 89,
+          "gap_files": 55
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9006,
+          "failed": 88,
+          "gap_files": 54
+        },
+        "evidence_note": "1 file in this sweep (mono's update_submodules.sh) on top of ffmpeg's configure, which the same construct had already been blocking. 119 corpus tests pass, negative corpus unchanged. Found by window-scanning the configure cluster -- parsing each 30-line window of the file on its own, keeping the ones bash accepts and the grammar rejects -- after delta reduction over the whole file failed to converge.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0021. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 24,
+      "title": "substring offset with a comparison and a conditional",
+      "file": "patches/0024-substring-offset-with-a-comparison-and-a-conditional.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "address=${address: ${#address} < 8 ? 0 : -8}\n",
+        "diagnosis": "The offset in `${var:offset:length}` is an arithmetic expression in bash, but _expansion_max_length modelled it as a short list -- name, number, arithmetic expansion, expansion, parenthesised expression, command substitution, or a binary expression over + - * / % -- so it could add but not compare, and had no conditional at all. Comparison operators join the binary table and a ternary is added alongside it. The ternary has to be listed in _expansion_max_length's own two choice lists as well as in the shared _expansion_max_length_expression helper: with only the helper it parses and is then wrapped in an ERROR, because the `:` of the conditional is the same token that separates offset from length and the parser needs the ternary to be a candidate at the top level of the offset to prefer it.",
+        "first_seen": {
+          "package": "qtbase-opensource-src",
+          "version": "5.15.19+dfsg-4",
+          "path": "mkspecs/features/data/mac/objc_namespace.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9006,
+          "failed": 88,
+          "gap_files": 54
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9007,
+          "failed": 87,
+          "gap_files": 53
+        },
+        "evidence_note": "1 file. 120 corpus tests pass, negative corpus unchanged; `${a:1:2}`, `${a: -8}` and `${a:$b:$c}` were re-checked because the offset/length separator is the token this change makes ambiguous.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0022. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 25,
+      "title": "double equals as a command argument",
+      "file": "patches/0025-double-equals-as-a-command-argument.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "{\n  if true; then\n    echo R == E\n  fi\n}\n",
+        "diagnosis": "`command` let the operand after either `=~` or `==` be a regex. The regex is an external token whose scan deliberately runs to the enclosing `}` -- that is how `[[ $x =~ a ]]` knows where to stop -- so inside a compound statement `echo R == E` swallowed `E`, the `fi` and everything up to the closing brace, and the whole file became one ERROR reported at line 1. At top level the same line parsed, because there the greedy scan simply ran to the end of the file. `==` now takes an ordinary literal and only `=~` keeps the regex alternative.",
+        "first_seen": {
+          "package": "util-linux",
+          "version": "2.42.2-2",
+          "path": "tests/ts/lsfd/mkfds-inotify"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9007,
+          "failed": 87,
+          "gap_files": 53
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9013,
+          "failed": 81,
+          "gap_files": 47
+        },
+        "evidence_note": "6 files across the reported `if_statement > MISSING fi` cluster and others: util-linux's lsfd mkfds tests, systemd's TEST-03-JOBS and more. 121 corpus tests pass, negative corpus unchanged, `[[ $x =~ ^a ]]` and `echo $x =~ a.*b` re-checked. Found by hand-bisecting a 13-line 1-minimal reduction: every single-line deletion made it invalid bash, so the shape had to be varied element by element rather than shrunk.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0023. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 26,
+      "title": "brace inside a bracket expression in a pattern",
+      "file": "patches/0026-brace-inside-a-bracket-expression-in-a-pattern.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "CONF[\"${v%%[={ ]*}\"]=1\n",
+        "diagnosis": "The regex scan counts brace depth so a nested `${...}` does not end the pattern early. A `{` inside a BRACKET EXPRESSION is an ordinary character, so `[={ ]` opened a brace that never closed and the expansion's own `}` was consumed as its match, running the token past the end of the statement. The `{` case now skips the increment while bracket_depth is non-zero -- but only for a BARE brace: a `{` preceded by `$` still counts, which is what keeps `${n%[ \"${nl}\"]*}` (samba's onnode) working. Both halves are needed and each was found by the other breaking: gating the `}` and `)` cases the same way costs 5 mariadb files that write `${HOST##\\[}` with an unmatched bracket, and gating `{` without the dollar exception costs samba's onnode.",
+        "first_seen": {
+          "package": "lvm2",
+          "version": "2.03.31-2",
+          "path": "test/lib/aux.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9013,
+          "failed": 81,
+          "gap_files": 47
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9014,
+          "failed": 80,
+          "gap_files": 46
+        },
+        "evidence_note": "1 file. 122 corpus tests pass, negative corpus unchanged.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0024. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
+    },
+    {
+      "id": 27,
+      "title": "semicolon inside an expansion default value",
+      "file": "patches/0027-semicolon-inside-an-expansion-default-value.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank daily fix agent (PR #42), replayed onto the 0006-0008 series by the bash session",
+      "evidence": {
+        "repro": "x=${A-${B-__h = ${C};}}\n",
+        "diagnosis": "binutils' ld emulparams build linker-script fragments inside expansion default values, and those fragments end their statements with `;`. Three places refused it, for the same reason patch 0015 had to fix for `)`: the variable-name scan stopped at the `;` and returned false rather than handing over to the expansion-word scan; the CONCAT scanner will not join across a `;`, which is right outside `${...}` and wrong inside it; and _concatenation_in_expansion had no alternative that could BE a `;`. All three now treat a semicolon inside `${...}` the way they already treat a `)`.",
+        "first_seen": {
+          "package": "binutils",
+          "version": "2.47-2",
+          "path": "ld/emulparams/elf32bmipn32.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 9014,
+          "failed": 80,
+          "gap_files": 46
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 9016,
+          "failed": 78,
+          "gap_files": 44
+        },
+        "evidence_note": "2 files, both binutils ld emulparams. 123 corpus tests pass, negative corpus unchanged. A near-miss worth recording: the first version of this patch also deleted `;` from the heredoc-delimiter metacharacter list added by patch 0017, which cost rocksdb's dbench_monitor and pflag -- caught by the sweep diff, not by the corpus tests.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
+        "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0025. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
+      }
     }
   ],
   "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). Noted for this grammar in particular: upstream's committed src/parser.c is byte-identical to what 0.25.10 generates, so materialization changes no generated file until a patch does.",
@@ -296,11 +965,11 @@
       "clusters": 209
     },
     "sweep_patched": {
-      "passed": 25020,
-      "failed": 642,
-      "gap_files": 494,
-      "noise_files": 148,
-      "clusters": 202
+      "passed": 25314,
+      "failed": 348,
+      "gap_files": 202,
+      "noise_files": 146,
+      "clusters": 136
     },
     "github_corpus": {
       "what": "The same sweep against the other artifact source: 492 of the top 500 repositories GitHub's linguist calls Shell, ranked by stars, pinned at a commit sha. TREEBANK_BASH_CORPUS=github; corpus/bash-github/.",
@@ -314,11 +983,11 @@
         "clusters": 277
       },
       "sweep_patched": {
-        "passed": 39907,
-        "failed": 1370,
-        "gap_files": 778,
-        "noise_files": 592,
-        "clusters": 259
+        "passed": 40328,
+        "failed": 949,
+        "gap_files": 361,
+        "noise_files": 588,
+        "clusters": 205
       },
       "finding": "THE TWO POPULATIONS DISAGREE, and the patch series is the proof rather than the assertion. Over the whole series the split is even (Debian 942 -> 494, GitHub 1010 -> 778), but no single patch helps both equally: 0003 fixed 392 Debian files and ZERO GitHub ones because it is an autoconf construct; 0007 fixed 142 GitHub files and 5 Debian ones because a herestring after a redirect is modern hand-written bash; 0006 fixed 12 GitHub and 0 Debian. A corpus of one population would have found perhaps half of these.",
       "ranking_bias": "Stars are attention, not use: the weakest popularity metric in this repo, and it does not decay. `language:Shell` is linguist's majority vote over a repository, which put ohmyzsh (zsh), d3 (JavaScript) and papers-we-love (a reading list) in the top ten. Gap files are also concentrated \u2014 839 of 1,388 come from three repositories \u2014 where Debian's spread across 492 independently-maintained sources.",
@@ -329,6 +998,8 @@
     "over_acceptance_note": "The negative corpus is 14 files, not 18. FOUR candidates were rejected by bash and ACCEPTED by the grammar, so they cannot be committed as negative tests without failing verify.sh, and they are recorded here instead because they are the accepts-invalid-code direction GRAMMARS.md warns about: (1) `f() { }` and every other empty compound body \u2014 bash requires at least one command in `{ }`, `( )`, `do ... done` and `then ... fi`, and the grammar makes all of them optional (`case x in esac` is the one bash really does allow, and the grammar is right there); (2) a stray `done`, (3) a stray `esac`, and (4) `: if test -d /x; then` \u2014 all three the same root cause, which is that the grammar lets a reserved word be an ordinary command_name where bash treats it as a syntax error in command position. Both are upstream's, both are real, and neither was patched here: (1) is a one-token change per rule but a tightening, which needs its own before/after sweep to show it breaks nothing, and (2)-(4) need the reserved-word set threaded through the external scanner.",
     "oracle_reject_statuses": "[1, 2], and the 1 is measured rather than anticipated. `bash -n` exits 2 for a syntax error nearly everywhere and 1 when the error is inside an ARRAY-ASSIGNMENT WORD LIST: `x=( a+([0-9]) )` exits 1 where `echo a+([0-9])` and `case $y in a+([0-9])) ;; esac` exit 2. Exactly one file in the 67,586 across both corpora does this \u2014 linux's tools/testing/selftests/wireguard/netns.sh \u2014 and with only 2 in the list it would abort the whole sweep. 126 (bash refuses a binary or a directory) and 127 (no such file) stay OUTSIDE the list on purpose: if every non-zero status meant invalid, a mistyped corpus root would score every file invalid, gap_files would fall to zero and the sweep would report a flawless grammar. admit() scans the whole file for a NUL, not a leading window, so a 126 cannot reach the oracle; no admitted file in either corpus contains one.",
     "template_filter": "A file carrying a Jinja/Django STATEMENT tag \u2014 `{% if \u2026 %}`, `{%- from \u2026 %}`, and the `{{% \u2026 %}}` delimiters ComplianceAsCode configures \u2014 is a template that renders to a shell script, not a shell script, and admit() drops it. This is the one filter here that exists because of an ORACLE limit rather than a corpus one: `bash -n` calls those files VALID, since the tags happen to lex as shell words, so they arrive as grammar GAPS rather than as noise. No two-valued per-file oracle can tell the difference.\n\nAnchored on a keyword, not on `{%`, and that was measured rather than assumed. A bare `{%\u2026%}` rule matched 10 Debian files of which EIGHT were false positives: `{%s%}` in gettext's OCaml format-string fixtures, `{%%k1%}` in libgcrypt's and grub2's configure, `{% %%}` in gitk. All are valid shell. Interpolation alone is a worse discriminator still \u2014 `{{ \u2026 }}` matches 1,818 GitHub files of which only 461 fail, because `docker inspect -f '{{.Config.Image}}'` is ordinary shell \u2014 so it is deliberately NOT filtered on. `comment` is left out of the keyword list because ceph ships a shell script that emits a Jekyll post containing `{% comment %}`.\n\nMeasured effect: Debian loses ONE file (a ceph bootstrap script that really is a template, `/mnt/{{ ceph_dev_folder }}/src/\u2026`, 13 tags), gaps 522 -> 521. GitHub loses 646 files, gaps 1,388 -> 945 and noise 817 -> 592. Residual: 31 GitHub gap files still carry a bare `{{ }}`, and sampled they are docker/kubectl Go-template format strings \u2014 real shell, correctly kept \u2014 plus 7 ComplianceAsCode files with no statement tag. Zero gap files in either corpus still carry a statement tag.",
-    "patch_evidence_note": "The per-patch sweep_before/sweep_after numbers below were measured on the PRE-TEMPLATE-FILTER Debian corpus of 25,663 files (943 gaps down to 522). The filter later removed one file from it, and that file was a gap, so every patch-level figure is one lower against the current 25,662-file corpus. Left as measured rather than silently restated."
+    "patch_evidence_note": "The per-patch sweep_before/sweep_after numbers below were measured on the PRE-TEMPLATE-FILTER Debian corpus of 25,663 files (943 gaps down to 522). The filter later removed one file from it, and that file was a gap, so every patch-level figure is one lower against the current 25,662-file corpus. Left as measured rather than silently restated.",
+    "replayed_series_note": "Patches 0009-0027 are the daily fix agent's series from PR #42, replayed onto 0006-0008 rather than merged. The agent authored them against 0005, so the numbering collided and its 0010 (herestring after a file redirect) was the SAME FIX as our 0007 \u2014 same rule, same placement, same reasoning \u2014 and was dropped. Its 0014 was kept: it fixes `$((0x$(...)))` through the number token where our 0008 fixes it through concatenation, and the two are complementary (theirs also covers `$((2#$x))`, ours also covers `$((a$(id -u)))`). Where both match, theirs wins and produces a `number` node, so the corpus test our 0008 added was updated by the patch that changed it, which is why 0016 carries a test-shape diff. Series measured as a whole on both corpora: debian 494 -> 202 gap files, github 778 -> 361.",
+    "accepts_invalid_cost": "THE PRICE, MEASURED, because a 19-patch series that only ever reports pass-rate gains is exactly the drift GRAMMARS.md warns about. Four files in the 67k across both corpora are rejected by `bash -n` and accepted by the patched grammar where the 0001-0008 tree rejected them. Attributed by replaying the series one patch at a time against those files: 0012 +2, 0015 +1, 0023 +1. Read individually:\n  (1) gimp build/macos/1_build-deps-macports.sh \u2014 `&& { [ a ] || [ b ] }; then`, a brace group with no `;` before the `}`. bash rejects it and is right to; the script has a real syntax error. This one is a GENUINE loosening, from 0012.\n  (2) pyenv plugins/python-build \u2014 `pypy[0-9].+([0-9])-*` in a case pattern. That is extglob, which bash accepts only with `shopt -s extglob` in effect and `bash -n` does not honour; the grammar is arguably RIGHT here and the oracle is the limited one.\n  (3,4) two ComplianceAsCode `*.fail.sh` \u2014 bare Jinja macro CALLS (`bash_ensure_pam_module_configuration('/etc/pam.d/password-auth',`) with no `{% %}` statement tag, so the template filter in admit() does not catch them. Corpus contamination, not grammar drift, and it marks the gap in that filter.\nSo: one real over-acceptance, one oracle limit, two templates. 0012 and 0023 are a COUPLED PAIR \u2014 0023 does not apply without 0012's grammar.js change \u2014 so dropping the genuine loosening costs both, which is the trade a reviewer should weigh. All 14 negative-corpus files still reject."
   }
 }

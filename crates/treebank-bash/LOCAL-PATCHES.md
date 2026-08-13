@@ -113,3 +113,58 @@ Aliased to the existing `concatenation` node so the tree shape is one consumers
 already know. The c-style `for ((i=0;i<3;i++))` header and plain
 `$((a + b * 2))` were regression-tested explicitly, since this rule feeds both.
 22 files on Debian, 13 on GitHub.
+
+## 0009–0027 — the daily fix agent's series, replayed
+
+Nineteen patches from the daily sweep (PR #42), replayed onto 0006–0008
+rather than merged: the agent authored them against 0005, so the numbering
+collided and one of them was already ours.
+
+- **Dropped:** its `herestring after a file redirect` was the *same fix* as
+  our 0007 — same rule, same placement, same reasoning.
+- **Kept, and complementary:** its arithmetic base-prefix patch (now 0016)
+  fixes `$((0x$(...)))` through the `number` token where our 0008 fixes it
+  through concatenation. Theirs also covers `$((2#$x))`, ours also covers
+  `$((a$(id -u)))`. Where both match, theirs wins and yields a `number` node,
+  so 0016 also carries the corpus-test update for the shape it changed.
+
+| | |
+|---|---|
+| 0009 | spurious concat before a closing backtick |
+| 0010 | assignment with a redirection and no command name |
+| 0011 | expansion default values containing parentheses |
+| 0012 | trailing compound command without a terminator |
+| 0013 | read-write redirection (<>) |
+| 0014 | bracket in an expansion pattern |
+| 0015 | test bracket as an ordinary command |
+| 0016 | arithmetic base prefix followed by an expansion |
+| 0017 | parenthesised text in an expansion value |
+| 0018 | at sign as an ordinary word character |
+| 0019 | heredoc delimiter ends at a metacharacter |
+| 0020 | literal dollar before a non-expansion character |
+| 0021 | backtick substitutions joined by a colon |
+| 0022 | case pattern with an escaped bracket |
+| 0023 | trailing list ending in a compound command |
+| 0024 | substring offset with a comparison and a conditional |
+| 0025 | double equals as a command argument |
+| 0026 | brace inside a bracket expression in a pattern |
+| 0027 | semicolon inside an expansion default value |
+
+Measured as a series on both corpora: **debian 494 → 202** gap files,
+**github 778 → 361**. Per-patch numbers in `ledger.json` are the daily agent's,
+from its own corpus, and are labelled as such.
+
+### What it costs
+
+Four files across the two corpora are rejected by `bash -n` and accepted by
+the patched grammar where the 0001–0008 tree rejected them — attributed by
+replaying one patch at a time (0012 +2, 0015 +1, 0023 +1). One is a genuine
+loosening (gimp's `{ [ a ] || [ b ] }` with no `;` before the brace, a real
+syntax error); one is an oracle limit, not a grammar fault (pyenv's extglob
+case pattern, which needs `shopt -s extglob` that `bash -n` does not honour);
+two are Jinja templates whose bare macro calls carry no `{% %}` tag, so the
+corpus filter misses them.
+
+0012 and 0023 are a coupled pair — 0023 does not apply without 0012's
+`grammar.js` change — so dropping the one genuine loosening costs both.
+All 14 negative-corpus files still reject.
