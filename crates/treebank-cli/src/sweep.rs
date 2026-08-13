@@ -112,10 +112,20 @@ fn signature_of(node: Node, src: &[u8]) -> String {
     format!("{parent} > ERROR({})", kinds.join(" "))
 }
 
+/// The line number is counted in the RAW BYTES rather than in the lossy
+/// string, and that is not a style choice. `from_utf8_lossy` replaces each
+/// invalid byte with U+FFFD, which is three bytes, so every index past the
+/// first bad byte means something different in the two strings — slicing the
+/// lossy text at a byte offset taken from the source panicked outright
+/// ("end byte index 15427 is not a char boundary") the first time a corpus
+/// contained non-UTF-8. HTML is the language that found it: a repository
+/// ships whatever encoding its author saved, and 26 files of the 132,492 in
+/// this corpus are not UTF-8. Counting newlines in the bytes is both
+/// panic-free and correct, because a newline is one byte in every encoding
+/// this can meet.
 fn snippet_at(src: &[u8], byte: usize) -> (usize, String) {
     let text = String::from_utf8_lossy(src);
-    let upto = &text[..text.len().min(byte.min(text.len()))];
-    let line_no = upto.matches('\n').count() + 1;
+    let line_no = src[..byte.min(src.len())].iter().filter(|b| **b == b'\n').count() + 1;
     let line = text.lines().nth(line_no - 1).unwrap_or("");
     let line: String = line.trim().chars().take(160).collect();
     (line_no, line)
