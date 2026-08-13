@@ -25,7 +25,13 @@
     "dialect": "HTML5 well-formed markup \u2014 NOT conformance",
     "flags": [],
     "note": "TWO-VALUED: valid / invalid, where invalid means the byte sequence is not well-formed markup. It is NOT a conformance verdict: a file with no doctype, no alt attributes, stray end tags, mis-nested elements and obsolete presentational markup is VALID here, because a grammar should parse all of that. In-process rather than a script under tools/, like rust's syn oracle and for the same reason \u2014 the reference parser is a Rust library, so there is no interpreter to start and no line protocol to speak.",
-    "unreadable_note": "An unreadable file is NOT an invalid file: validate() propagates the I/O error and the sweep dies, rather than emitting a verdict. On this language that rule is even more load-bearing than usual \u2014 the oracle's whole job is to keep the noise column honest, and a mistyped corpus root that scored every file invalid would report a flawless grammar on a language where a flawless-looking grammar is the expected failure."
+    "unreadable_note": "An unreadable file is NOT an invalid file: validate() propagates the I/O error and the sweep dies, rather than emitting a verdict. On this language that rule is even more load-bearing than usual \u2014 the oracle's whole job is to keep the noise column honest, and a mistyped corpus root that scored every file invalid would report a flawless grammar on a language where a flawless-looking grammar is the expected failure.",
+    "smoke": {
+      "requires": [],
+      "valid": "tools/consumer-test/fixtures/patched.html",
+      "invalid": "tools/consumer-test/fixtures/must-reject.html",
+      "note": "Nothing to require and nothing to build: the reference parser is html5ever compiled into the treebank binary, like rust's syn, so there is no interpreter that CI could be missing. The two consumer-test fixtures are the natural pair here and are used unchanged \u2014 patched.html is every spec-recovered construct the oracle must call VALID (no doctype, mis-nesting, stray end tags, duplicate attributes), and must-reject.html is malformed markup syntax. So one assertion covers both the oracle and the thing this language most easily gets wrong."
+    }
   },
   "oracle_why_this_field_exists": "generate_cli exists because regenerating with a different tree-sitter-cli silently changes what the grammar accepts. This field exists because running a different reference parser silently changes what 'invalid' means. HTML is the language that makes the point hardest, because here the reference parser does not merely have a dialect \u2014 it has a CHOICE OF QUESTION, and the two available questions give answers that differ by an order of magnitude. See oracle_design.",
   "oracle_design": {
