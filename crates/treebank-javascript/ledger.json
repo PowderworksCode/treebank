@@ -20,7 +20,15 @@
       "--experimental-vm-modules",
       "--no-warnings"
     ],
-    "note": "Two legs because one parser does not cover what this grammar covers: V8 (CJS wrapper or SourceTextModule, picked by Node's own module rules) construction-only, never linked or evaluated; plus babel restricted to the JSX plugin for the JSX that V8 rejects and tree-sitter-javascript parses. Deliberately NOT the TypeScript parser, which would call `const x: number = 1` valid and turn this grammar's correct rejection of TypeScript into a reported gap."
+    "note": "Two legs because one parser does not cover what this grammar covers: V8 (CJS wrapper or SourceTextModule, picked by Node's own module rules) construction-only, never linked or evaluated; plus babel restricted to the JSX plugin for the JSX that V8 rejects and tree-sitter-javascript parses. Deliberately NOT the TypeScript parser, which would call `const x: number = 1` valid and turn this grammar's correct rejection of TypeScript into a reported gap.",
+    "smoke": {
+      "requires": [
+        "node"
+      ],
+      "build": "npm ci --no-audit --no-fund --prefix tools/js-oracle",
+      "valid": "tools/consumer-test/fixtures/patched.js",
+      "invalid": "crates/treebank-javascript/test/negative/export-reserved-local-name.mjs"
+    }
   },
   "docs_note": "JSX included",
   "corpus": {

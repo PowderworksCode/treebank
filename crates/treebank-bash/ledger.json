@@ -979,7 +979,14 @@
     "flags": [
       "-n"
     ],
-    "note": "Values restructured from this ledger's own corpus.oracle / oracle_version / oracle_version_note by the treebank-lua change that made this field mandatory; no fact here is new. bash's own parser, which reads the whole script and executes nothing; TWO-VALUED. The shell's version fixes the DIALECT as well as the language version: this is the reference parser for the sh/bash/dash files admit() admits and for nothing else, and pointing it at zsh, ksh, fish or csh would turn the grammar's correct rejection of another language into a reported gap. Reject statuses are [1, 2] and are measured, not anticipated \u2014 see corpus.oracle_reject_statuses; 126 and 127 stay outside that list on purpose, so a mistyped corpus root fails loudly instead of marking every file invalid."
+    "note": "Values restructured from this ledger's own corpus.oracle / oracle_version / oracle_version_note by the treebank-lua change that made this field mandatory; no fact here is new. bash's own parser, which reads the whole script and executes nothing; TWO-VALUED. The shell's version fixes the DIALECT as well as the language version: this is the reference parser for the sh/bash/dash files admit() admits and for nothing else, and pointing it at zsh, ksh, fish or csh would turn the grammar's correct rejection of another language into a reported gap. Reject statuses are [1, 2] and are measured, not anticipated \u2014 see corpus.oracle_reject_statuses; 126 and 127 stay outside that list on purpose, so a mistyped corpus root fails loudly instead of marking every file invalid.",
+    "smoke": {
+      "requires": [
+        "bash"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.sh",
+      "invalid": "crates/treebank-bash/test/negative/case-without-esac.sh"
+    }
   },
   "corpus": {
     "source": "Debian sid source packages (.orig.tar.*, upstream's own release archive, not the distro-patched tree), ranked by popcon installs per SOURCE package. Bash is the first language here with no package registry at all, so the corpus has to come from artifacts. Two artifact sources are implemented and BOTH are measured, because they are different populations: lang/debian.rs (default) and lang/github.rs, selected by TREEBANK_BASH_CORPUS.",

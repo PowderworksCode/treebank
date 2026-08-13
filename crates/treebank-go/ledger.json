@@ -77,7 +77,15 @@
     "flags": [
       "parser.SkipObjectResolution"
     ],
-    "note": "Values restructured from this ledger's own corpus.oracle / oracle_version / oracle_version_note by the treebank-lua change that made this field mandatory; no fact here is new. The parser the Go toolchain itself runs. TWO-VALUED. It never type-checks, resolves an import or assembles a package, so an unresolved identifier is not an error; SkipObjectResolution additionally turns off the ast.Object/ast.Scope graph, the one part of ParseFile that tries to link identifiers to declarations a single file cannot have. The toolchain version is load-bearing: Go 1.26's new(expr) is the feature behind patch 0003, and on go1.25 those same files would be oracle-invalid and recorded as noise rather than as the grammar gap they are."
+    "note": "Values restructured from this ledger's own corpus.oracle / oracle_version / oracle_version_note by the treebank-lua change that made this field mandatory; no fact here is new. The parser the Go toolchain itself runs. TWO-VALUED. It never type-checks, resolves an import or assembles a package, so an unresolved identifier is not an error; SkipObjectResolution additionally turns off the ast.Object/ast.Scope graph, the one part of ParseFile that tries to link identifiers to declarations a single file cannot have. The toolchain version is load-bearing: Go 1.26's new(expr) is the feature behind patch 0003, and on go1.25 those same files would be oracle-invalid and recorded as noise rather than as the grammar gap they are.",
+    "smoke": {
+      "requires": [
+        "go"
+      ],
+      "build": "tools/go-oracle/build.sh",
+      "valid": "tools/consumer-test/fixtures/patched.go",
+      "invalid": "crates/treebank-go/test/negative/chan-arrow-garbage.go"
+    }
   },
   "corpus": {
     "source": "The Go module proxy: proxy.golang.org/<module>/@v/<version>.zip, one immutable zip per version. There is no tarball registry for Go and this is a cleaner source than any already wired up \u2014 content-addressed, notarised by the checksum database, never re-uploaded or deleted, and one URL per version rather than a wheel-vs-sdist choice (PyPI), a conventionally-named sources jar that may not exist (Maven), or three decompressors (Debian). Versions are resolved from the proxy's @latest at fetch time.",

@@ -186,6 +186,8 @@ pub struct Oracle {
     /// verdicts are relative to. Prose, so it is not modelled further.
     #[serde(default)]
     pub position: Option<serde_json::Value>,
+    /// How `scripts/oracle-smoke.sh` exercises this oracle.
+    pub smoke: Smoke,
 }
 
 /// See `Oracle::authority`.
@@ -195,6 +197,41 @@ pub enum Authority {
     #[default]
     Reference,
     Position,
+}
+
+/// What the oracle smoke test needs in order to run this language's oracle.
+///
+/// The check itself is uniform — `treebank oracle --lang <x>` — so nothing
+/// here says how to *invoke* anything. What varies between languages is only
+/// what must be installed first, what must be built first, and which two
+/// files stand in for "valid" and "invalid".
+///
+/// The fixtures are declared rather than derived, and that was a measured
+/// decision rather than a shortcut. Deriving them from `test/negative/` and
+/// the consumer-test fixtures works for ten of the twelve languages and
+/// fails for two, for reasons that are each correct: rust's negative corpus
+/// is judged by *rustc*, which rejects `safe fn` in a plain `extern` block
+/// while `syn` — the oracle — accepts it; and lua's `patched.lua` pins the
+/// LuaJIT dialect on purpose, so the 5.4 oracle rejects the very file the
+/// grammar must parse clean. A rule with two principled exceptions is not a
+/// rule, so each language names its own pair.
+#[derive(Debug, Deserialize)]
+pub struct Smoke {
+    /// What must be present before the oracle can run: a bare name is a
+    /// command that must be on PATH (`node`, `go`), a `$`-prefixed one is an
+    /// environment variable that must be set (`$TREEBANK_ZIG_ORACLE`).
+    /// Empty for oracles that run in-process.
+    #[serde(default)]
+    pub requires: Vec<String>,
+    /// Shell command run once before the assertions, for oracles that must
+    /// be compiled or have dependencies installed. Empty when there is
+    /// nothing to build.
+    #[serde(default)]
+    pub build: String,
+    /// A file this oracle must call `valid`.
+    pub valid: String,
+    /// A file this oracle must call `invalid`.
+    pub invalid: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -304,6 +341,8 @@ pub fn check(grammar_dir: &Path) -> Result<Vec<String>> {
                 ("tool", &o.tool),
                 ("version", &o.version),
                 ("dialect", &o.dialect),
+                ("smoke.valid", &o.smoke.valid),
+                ("smoke.invalid", &o.smoke.invalid),
             ] {
                 if value.trim().is_empty() {
                     bad.push(format!("oracle.{field} is empty"));
@@ -328,6 +367,18 @@ pub fn check(grammar_dir: &Path) -> Result<Vec<String>> {
                          why this one and what the verdicts are relative to"
                             .to_string(),
                     );
+                }
+            }
+            // The fixtures must exist here rather than only when the smoke
+            // test runs, so a rename is caught by `treebank ledger` in every
+            // grammar's CI job instead of by one workflow that may skip.
+            for (field, rel) in [("valid", &o.smoke.valid), ("invalid", &o.smoke.invalid)] {
+                // Fixture paths are repo-root-relative; the ledger lives at
+                // crates/treebank-<lang>/, two levels down.
+                if !rel.trim().is_empty() && !grammar_dir.join("../..").join(rel).exists() {
+                    bad.push(format!(
+                        "oracle.smoke.{field} names {rel}, which does not exist"
+                    ));
                 }
             }
         }

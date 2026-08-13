@@ -10,3 +10,7 @@ tools/cs-oracle/obj/
 # materialized grammar trees (scripts/materialize.sh) — never committed
 crates/*/build/
 tools/php-oracle/php-*
+
+# c-oracle writes its per-file verdict dump beside the corpus; running the
+# smoke test from the repo root drops one here.
+/oracle-verdicts.json

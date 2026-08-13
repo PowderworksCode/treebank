@@ -19,7 +19,14 @@
       "-proc:none",
       "-XDshould-stop.ifError=PARSE"
     ],
-    "note": "javac's own parser, stopped after PARSE so no attribution, no classpath resolution and no annotation processing happen; a missing dependency is not an error. Verified on 1000 files ripped out of their source trees with no classpath: 1000 valid. The JDK version is the source level and is load-bearing the way an interpreter version is elsewhere."
+    "note": "javac's own parser, stopped after PARSE so no attribution, no classpath resolution and no annotation processing happen; a missing dependency is not an error. Verified on 1000 files ripped out of their source trees with no classpath: 1000 valid. The JDK version is the source level and is load-bearing the way an interpreter version is elsewhere.",
+    "smoke": {
+      "requires": [
+        "javac"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.java",
+      "invalid": "crates/treebank-java/test/negative/CSharpNamespace.java"
+    }
   },
   "corpus": {
     "source": "Maven Central top-100 by dependent repositories (ecosyste.ms index of repo1.maven.org), fetched 2026-08-06; each artifact's -sources.jar at the version maven-metadata.xml calls <release>; .java files",

@@ -12,7 +12,12 @@
     "version": "syn 2.0.119",
     "dialect": "Rust 2021 edition",
     "flags": [],
-    "note": "Parse-only and in-process, so it is the one oracle with no fork cost and the one that runs in parallel (rayon). syn parses the whole file to an AST and never resolves a name, expands a macro body, or type-checks."
+    "note": "Parse-only and in-process, so it is the one oracle with no fork cost and the one that runs in parallel (rayon). syn parses the whole file to an AST and never resolves a name, expands a macro body, or type-checks.",
+    "smoke": {
+      "valid": "tools/consumer-test/fixtures/patched.rs",
+      "invalid": "tools/consumer-test/fixtures/must-reject.rs",
+      "note": "The negative corpus is NOT usable as the invalid fixture here: it is judged by rustc, which rejects `safe fn` in a plain extern block, while this oracle is syn and accepts it. consumer-test's must-reject.rs is syn-invalid and is used instead."
+    }
   },
   "corpus": {
     "source": "crates.io top-1000 by all-time downloads, db dump 2026-08-06",

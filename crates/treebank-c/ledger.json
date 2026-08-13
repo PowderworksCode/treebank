@@ -21,7 +21,13 @@
       "-ferror-limit=0",
       "-w"
     ],
-    "note": "THREE-VALUED: valid / invalid / indeterminate, the only oracle that is. See crates/treebank-c/ORACLE.md; the claim is 'no syntax error, in GNU C, given these include paths', NOT 'this compiles'. Lang::validate collapses indeterminate to false, so gap_files is a FLOOR. This is the language that proves `flags` has to exist: -std=gnu17 selects the dialect and the libclang version alone does not settle it. The include-path flags are per-file and are described in corpus.oracle_flags rather than here."
+    "note": "THREE-VALUED: valid / invalid / indeterminate, the only oracle that is. See crates/treebank-c/ORACLE.md; the claim is 'no syntax error, in GNU C, given these include paths', NOT 'this compiles'. Lang::validate collapses indeterminate to false, so gap_files is a FLOOR. This is the language that proves `flags` has to exist: -std=gnu17 selects the dialect and the libclang version alone does not settle it. The include-path flags are per-file and are described in corpus.oracle_flags rather than here.",
+    "smoke": {
+      "build": "tools/c-oracle/build.sh",
+      "valid": "tools/consumer-test/fixtures/patched.c",
+      "invalid": "crates/treebank-c/test/negative/atomic-without-a-type.c",
+      "note": "No `requires`: c-oracle needs libclang headers to BUILD, which build.sh reports on, and nothing on PATH to run."
+    }
   },
   "corpus": {
     "source": "Debian sid, source packages ranked by popcon (popularity-contest) installs aggregated per source package, filtered to packages whose sources.debian.org SLOC is >=2000 ansic and ansic >= cpp; upstream .orig.tar.* only (never the .debian.tar.* patch tarball); .c and .h files, C++ headers excluded by content",

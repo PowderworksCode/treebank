@@ -111,7 +111,15 @@
     "flags": [
       ".zig mode; binary named by TREEBANK_ZIG_ORACLE, never `zig` from PATH"
     ],
-    "note": "Values restructured from this ledger's own corpus.oracle / oracle_version / oracle_version_note by the treebank-lua change that made this field mandatory; no fact here is new. The call the compiler itself makes to turn a file's text into a syntax tree; TWO-VALUED; resolves no @import, runs no comptime, links nothing. This is the language that makes the strongest case for the field existing at all: measured on 11,672 files, 801 (6.86%) do not get the same verdict from 0.11.0 through 0.16.0, and 363 (3.11%) differ across 0.13-0.16 alone \u2014 against 0.23% for Lua across 5.1/5.4/LuaJIT. Deliberately Ast.parse and NOT `zig ast-check`, which enforces lint-grade rules; and deliberately not `zig` from PATH, because silently adjudicating with whatever compiler is installed is the exact failure this field exists to prevent."
+    "note": "Values restructured from this ledger's own corpus.oracle / oracle_version / oracle_version_note by the treebank-lua change that made this field mandatory; no fact here is new. The call the compiler itself makes to turn a file's text into a syntax tree; TWO-VALUED; resolves no @import, runs no comptime, links nothing. This is the language that makes the strongest case for the field existing at all: measured on 11,672 files, 801 (6.86%) do not get the same verdict from 0.11.0 through 0.16.0, and 363 (3.11%) differ across 0.13-0.16 alone \u2014 against 0.23% for Lua across 5.1/5.4/LuaJIT. Deliberately Ast.parse and NOT `zig ast-check`, which enforces lint-grade rules; and deliberately not `zig` from PATH, because silently adjudicating with whatever compiler is installed is the exact failure this field exists to prevent.",
+    "smoke": {
+      "requires": [
+        "$TREEBANK_ZIG_ORACLE"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.zig",
+      "invalid": "crates/treebank-zig/test/negative/c-for-loop.zig",
+      "note": "requires an env var rather than a command: the binary is version-pinned and TREEBANK_ZIG_ORACLE names it, because resolving `zig` from PATH is the exact failure this grammar's oracle field exists to prevent."
+    }
   },
   "corpus": {
     "source": "GitHub repositories, shallow tarball of the default branch's head commit. Zig has no package registry: build.zig.zon dependencies are URLs with content hashes rather than registry coordinates, so there is nothing to rank by downloads and nothing that resolves a name to a release. The artifact-corpus path in crates/treebank-cli/src/lang/github.rs is used instead \u2014 the same module the bash grammar uses for the same reason, taken byte-identical from that branch rather than reimplemented.",

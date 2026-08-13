@@ -21,7 +21,15 @@
       "DocumentationMode.None",
       "SourceCodeKind.Regular"
     ],
-    "note": "ParseText with no Compilation: syntax only, no binding, no references, no .csproj. Verified on 1000 files with no project context: 999 valid. The Roslyn package is pinned in tools/cs-oracle/cs-oracle.csproj precisely so verdicts do not drift with whatever SDK is installed; this field records the same pin where the sweep numbers can see it."
+    "note": "ParseText with no Compilation: syntax only, no binding, no references, no .csproj. Verified on 1000 files with no project context: 999 valid. The Roslyn package is pinned in tools/cs-oracle/cs-oracle.csproj precisely so verdicts do not drift with whatever SDK is installed; this field records the same pin where the sweep numbers can see it.",
+    "smoke": {
+      "requires": [
+        "dotnet"
+      ],
+      "build": "dotnet build -c Release --nologo tools/cs-oracle/cs-oracle.csproj",
+      "valid": "tools/consumer-test/fixtures/patched.cs",
+      "invalid": "crates/treebank-csharp/test/negative/EmptyTypeParameters.cs"
+    }
   },
   "corpus": {
     "source": "NuGet top-100 by downloads (azuresearch), fetched 2026-08-06, resolved through each package's nuspec SourceLink <repository url + commit> to a GitHub source archive at that exact commit; .cs files",
