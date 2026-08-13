@@ -14,6 +14,7 @@ grammars:
 - `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
 - `crates/treebank-elixir` — tree-sitter-elixir 0.3.5, 1 grammar patch
 - `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
+- `crates/treebank-haskell` — tree-sitter-haskell 0.23.1 (2 parser fixes, both tab handling; the third only updates one error-recovery test tree for the pinned CLI), 3 grammar patches
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX included), 2 grammar patches
 - `crates/treebank-lua` — tree-sitter-lua 0.5.0, 1 grammar patch

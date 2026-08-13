@@ -1,0 +1,65 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index dc6348a..7306c0f 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -2929,7 +2929,14 @@ static void newline_lookahead(Env *env, Newline *newline) {
+         break;
+       case '\t':
+         skip_over(env, 0);
+-        newline->indent += 8;
++        // One column, not eight. The report's tab stops are every eighth column, but the only
++        // other measure of a column in this scanner is `column()`, i.e. tree-sitter's
++        // `get_column`, which counts a tab as one like any other character. Counting eight here
++        // and one there makes the two incomparable, and layout is nothing but comparing them:
++        // a `let` on a tab-indented line inside a `do` opened a context whose recorded indent
++        // no interior column could ever match. Consistency is what layout needs; the residual
++        // divergence from the report is described in LOCAL-PATCHES.md.
++        newline->indent += 1;
+         break;
+       default:
+         if (is_space_char(peek0(env))) {
+diff --git a/test/corpus/layout.txt b/test/corpus/layout.txt
+index 089237e..da93afc 100644
+--- a/test/corpus/layout.txt
++++ b/test/corpus/layout.txt
+@@ -3431,3 +3431,40 @@ f = 1
+       (match
+         (literal
+           (integer))))))
++
++================================================================================
++layout: let inside a tab-indented do block
++================================================================================
++
++module M where
++f = do
++	r <- a
++	let c = g r
++	pure c
++
++--------------------------------------------------------------------------------
++
++(haskell
++  (header
++    (module
++      (module_id)))
++  (declarations
++    (bind
++      (variable)
++      (match
++        (do
++          (bind
++            (variable)
++            (variable))
++          (let
++            (local_binds
++              (bind
++                (variable)
++                (match
++                  (apply
++                    (variable)
++                    (variable))))))
++          (exp
++            (apply
++              (variable)
++              (variable))))))))

@@ -1,0 +1,23 @@
+diff --git a/test/corpus/varsym.txt b/test/corpus/varsym.txt
+index cb35d16..efd6ffe 100644
+--- a/test/corpus/varsym.txt
++++ b/test/corpus/varsym.txt
+@@ -113,12 +113,13 @@ f = a =>> a
+   (declarations
+     (bind
+       (variable)
++      (ERROR
++        (match
++          (variable)))
+       (match
+-        (apply
+-          (variable)
+-          (ERROR
+-            (UNEXPECTED '>'))
+-          (variable))))
++        (ERROR
++          (UNEXPECTED '>'))
++        (variable)))
+     (bind
+       (variable)
+       (match

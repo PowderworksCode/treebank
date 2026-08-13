@@ -10,3 +10,8 @@ tools/cs-oracle/obj/
 # materialized grammar trees (scripts/materialize.sh) — never committed
 crates/*/build/
 tools/php-oracle/php-*
+# hs-oracle build products (GHC leaves .hi/.o beside the source)
+tools/hs-oracle/hs-oracle
+tools/hs-oracle/explain
+tools/hs-oracle/*.hi
+tools/hs-oracle/*.o

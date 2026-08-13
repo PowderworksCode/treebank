@@ -5,12 +5,14 @@
 
 mod bash;
 mod c;
+mod cabal;
 mod csharp;
 mod debian;
 mod elixir;
 mod exec_oracle;
 mod github;
 mod go;
+mod haskell;
 mod java;
 mod javascript;
 mod lua;
@@ -56,6 +58,29 @@ pub trait Lang: Sync {
     fn admit(&self, rel: &Path, content: &[u8]) -> bool {
         let _ = (rel, content);
         true
+    }
+
+    /// A non-source file the corpus must KEEP but must never parse, because
+    /// it carries configuration the reference parser needs.
+    ///
+    /// `classify` answers "is this a file the grammar should parse", and for
+    /// most languages that is the same question as "is this worth keeping".
+    /// It is not the same question for a language whose parser is configured
+    /// from outside the source file. Haskell's `LANGUAGE` extensions are
+    /// declared in the package's `.cabal` file: `\case` is a parse error
+    /// without `LambdaCase`, so the oracle needs the manifest, while the
+    /// manifest itself is not Haskell and would be a guaranteed parse
+    /// failure in every package if `classify` admitted it.
+    ///
+    /// Kept on disk beside the source, deliberately absent from the
+    /// manifest: the manifest is the sweep's work list, and configuration is
+    /// not work. Scala needs the same hook for the 2-vs-3 dialect it must
+    /// declare per file, and C++ would need it for a `compile_commands.json`.
+    ///
+    /// Default `false`, which is every language that parses what it fetches.
+    fn configuration(&self, rel: &Path) -> bool {
+        let _ = rel;
+        false
     }
 
     /// May an archive member be an archive worth walking into? Default `false`,
@@ -162,6 +187,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static LUA: lua::Lua = lua::Lua;
     static RUBY: ruby::Ruby = ruby::Ruby;
     static ELIXIR: elixir::Elixir = elixir::Elixir;
+    static HASKELL: haskell::Haskell = haskell::Haskell;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -177,5 +203,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Lua => &LUA,
         LangName::Ruby => &RUBY,
         LangName::Elixir => &ELIXIR,
+        LangName::Haskell => &HASKELL,
     }
 }

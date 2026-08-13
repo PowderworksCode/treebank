@@ -1,0 +1,175 @@
+{
+  "grammar": "haskell",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-haskell",
+    "sha": "0975ef72fc3c47b530309ca93937d7d143523628",
+    "version": "0.23.1",
+    "sha_note": "repository HEAD; the last release tag is 0.23.1 (c30d812b, 2024-11-10) and the two commits after it are a CI change and this one, which adds a LICENSE file. Pinned at HEAD rather than the tag because Helix pins this exact commit and it carries the LICENSE the crate identity patch's `include` list needs."
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "generate_deps_note": "grammar.js requires only its own grammar/*.js modules, no npm package, so generation needs no dependency install.",
+  "oracle": {
+    "tool": "tools/hs-oracle (GHC's own GHC.Parser.parseModule, one long-lived process)",
+    "version": "GHC 9.10.3",
+    "dialect": "GHC 9.10.3's parser, default language GHC2021, plus each file's package configuration",
+    "flags": [],
+    "note": "TWO-VALUED: valid / invalid. Parse-only \u2014 no import resolution, no interface files, no Template Haskell, no typechecking \u2014 so a missing dependency is not an error and each file is judged on its own text plus its package's declared LANGUAGE extensions. `flags` is empty because the dialect-selecting flags here are PER FILE rather than fixed; they are derived from the package's .cabal and are described in corpus.oracle_flags."
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank",
+      "note": "Prepends the standard warning to upstream's README so anyone who encounters a materialized or published copy knows it is a patched redistribution and where to report problems. Touches no grammar code."
+    },
+    {
+      "id": 2,
+      "title": "error-recovery tree for the pinned CLI",
+      "file": "patches/0002-error-recovery-tree-for-the-pinned-cli.patch",
+      "files": [
+        "test/corpus/varsym.txt"
+      ],
+      "kind": "cli-pin",
+      "origin": "treebank",
+      "evidence": {
+        "repro": "f = a => a",
+        "what_moved": "Upstream generated src/ with tree-sitter-cli 0.24.x (package.json devDependency ^0.24.4); this repo pins 0.25.10. Regenerated with the pin, one of upstream's 725 corpus tests fails: `varsym: error: carrow`, whose expected tree records how the parser RECOVERS from an invalid file. 0.24 recovered as (match (apply (variable) (ERROR (UNEXPECTED '>')) (variable))); 0.25.10 recovers as (ERROR (match (variable))) followed by (match (ERROR (UNEXPECTED '>')) (variable)).",
+        "not_a_behaviour_change": "The file is REJECTED either way \u2014 both trees carry ERROR nodes and `tree-sitter parse` exits 1 on it before and after. Only the shape of the recovery differs, which is a property of the CLI's error recovery rather than of this grammar. Verified by parsing the repro with the pinned CLI directly.",
+        "why_patch_rather_than_bump": "The CLI pin is not ours to move for a test-tree mismatch: 0.26.x ships Unicode identifier tables that wrongly drop XID_Start characters, which is why every grammar here pins 0.25.10. So the expected tree moves instead, and this entry is the record that it moved for generation reasons and not because the grammar changed.",
+        "sweep_before": null,
+        "sweep_after": null
+      },
+      "note": "Not a parser fix; kept out of the parser-fix count for the same reason the two packaging patches are."
+    },
+    {
+      "id": 3,
+      "title": "tab is whitespace when skipping layout",
+      "file": "patches/0003-tab-is-whitespace-when-skipping-layout.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/layout.txt"
+      ],
+      "origin": "treebank (not reported upstream yet)",
+      "evidence": {
+        "repro": "module M (\\n\\teval,\\n) where\\nf = 1\\n  \u2014 a tab-indented line whose first token starts with w, i, t, e, d or m",
+        "cause": "scanner.c skips layout whitespace with is_space_char(), which is not its own function: it comes from the GENERATED Unicode bitmap in src/unicode.h, whose bitmap_space_min_codepoint is 32. Tab is codepoint 9, so is_space_char('\\t') is FALSE and skip_space() stops dead at a tab. take_space_from()'s own doc comment says 'until the following character is neither space nor tab', which is the intent the predicate does not implement.",
+        "why_those_six_letters": "lex() dispatches on the FIRST character to try the layout keywords \u2014 'w' where, 'i' in, 't' then, 'e' else, 'd' deriving, 'm' module. Only that path sets newline.unsafe, which routes through newline_post() where the broken skip lives. Identifiers starting with any other letter never reach it, which is why `case`, `foreign` and `newtype` (c, f, n) parse and `eval`, `data` and `import` do not.",
+        "first_seen": {
+          "package": "git-annex",
+          "version": "10.20260717"
+        },
+        "diagnosis": "Traced with a TREE_SITTER_DEBUG build of the scanner: the tab-indented run ends its newline token at newline_post@0 where the space-indented run ends at newline_post@8, so the lexer never moves past the tab and the parser meets it as (ERROR (UNEXPECTED '\\t')).",
+        "sweep_before": {
+          "passed": 15069,
+          "failed": 908,
+          "gap_files": 719,
+          "noise_files": 189,
+          "clusters": 160
+        },
+        "sweep_after": {
+          "passed": 15429,
+          "failed": 548,
+          "gap_files": 414,
+          "noise_files": 134,
+          "clusters": 137
+        }
+      },
+      "note": "+360 files. Affects any tab-indented Haskell, which is a large minority of real code: git-annex, the most-downloaded package on Hackage, is tab-indented throughout."
+    },
+    {
+      "id": 4,
+      "title": "a tab counts as one column in layout, not eight",
+      "file": "patches/0004-tab-counts-as-one-column-in-layout.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/layout.txt"
+      ],
+      "origin": "treebank (not reported upstream yet)",
+      "evidence": {
+        "repro": "module M where\\nf = do\\n\\tr <- a\\n\\tlet c = g r\\n\\tpure c\\n",
+        "cause": "newline_lookahead() counted a tab as EIGHT columns of indent, following the report's tab stops. Every other column in the scanner comes from column(), i.e. tree-sitter's get_column(), which counts a tab as ONE character like any other. Layout is nothing but comparing those two numbers, so a context opened on a tab-indented line recorded an indent no interior column could match.",
+        "why_one_and_not_eight": "Eight is the report's answer and one is tree-sitter's, and the scanner cannot have both: get_column() is the lexer's own counter and takes no tab-width argument, so making the report's convention work everywhere would mean re-implementing column tracking across the whole scanner. Consistency is what layout actually needs \u2014 within a file indented one way, either convention orders the lines identically.",
+        "residual_divergence": "A file that mixes tabs and spaces AT THE SAME nesting level is where the two conventions disagree: GHC puts a tab and eight spaces at the same column, this does not. Measured on the corpus, the direction that would cost files (space-indented line, then a tab-indented line GHC considers equally indented) parses anyway, because tree-sitter's layout ends on a strictly smaller indent and a mixed file's tab lands deeper rather than shallower. Both mixed-indentation probes parse clean and the oracle calls them valid.",
+        "first_seen": {
+          "package": "git-annex",
+          "version": "10.20260717"
+        },
+        "sweep_before": {
+          "passed": 15429,
+          "failed": 548,
+          "gap_files": 414,
+          "noise_files": 134,
+          "clusters": 137
+        },
+        "sweep_after": {
+          "passed": 15576,
+          "failed": 401,
+          "gap_files": 296,
+          "noise_files": 105,
+          "clusters": 153
+        }
+      },
+      "note": "+147 files on top of patch 0003. The two together take passing files from 15069 to 15576 and gap_files from 719 to 296, and both are the same underlying defect: the scanner had one notion of a tab in newline_lookahead() and another everywhere else."
+    },
+    {
+      "id": 5,
+      "title": "treebank crate identity",
+      "file": "patches/0005-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "kind": "packaging",
+      "origin": "treebank",
+      "note": "Upstream owns tree-sitter-haskell on crates.io, so publishing needs our own name, repository, homepage and description, and an include list that carries ledger.json, LOCAL-PATCHES.md and patches/ inside the tarball. [lib] name is pinned to upstream's tree_sitter_haskell so the crate stays a drop-in replacement. One addition beyond the usual identity patch: upstream's include list names grammar.js but not grammar/*.js, and this grammar's grammar.js is a loader that requires 15 modules from grammar/ \u2014 so the published tarball advertised a grammar source it did not contain. The include list now carries them."
+    }
+  ],
+  "corpus": {
+    "source": "Hackage source tarballs (`/package/<name>-<version>/<name>-<version>.tar.gz`) for the top packages by recent downloads. Hackage publishes only author source \u2014 there is no wheel-equivalent and no build output to choose between, unlike PyPI.",
+    "ranking": "scraped from hackage.haskell.org/packages/top, a single HTML table of all 18,660 packages \u2014 no API key, no pagination, no dataset to reconstruct, which makes it the cheapest ranking source of any language here.",
+    "ranking_metric_note": "THE METRIC IS DOWNLOADS IN THE LAST 30 DAYS, NOT ALL-TIME, and the page does not say so. Verified against the per-package pages, which state both: git-annex reads 1,642 on /packages/top and '286,097 total (1,642 in the last 30 days)' on its own page. So this is a different KIND of number from crates.io's and LuaRocks' cumulative totals \u2014 it favours what is being installed now over what has been installed for a decade. That is the better bias for a corpus meant to reflect current code, but it is a bias and it is invisible in the number.",
+    "corpus_character_note": "The top of this ranking is applications rather than libraries \u2014 git-annex, pandoc, hlint, purescript, futhark \u2014 because Hackage counts tarball downloads and CI installs the tools it runs. Their code is ordinary Haskell, but it is bigger and less library-shaped than a crates.io top 40, and one package (git-annex) supplies a large share of the failures below.",
+    "versions_note": "Resolved at fetch time from each package's `preferred` document, whose `normal-version` list is the maintainer's undeprecated releases newest first \u2014 the release a user installing today would get.",
+    "files_note": ".hs only. tree-sitter.json also claims hs-boot and the grammar parses it, but it is excluded so classify() matches the corpus these numbers were measured on; adding it is a deliberate change with its own evidence. .lhs (literate Haskell) and .hsc (hsc2hs input) are NOT Haskell for this purpose: the first needs unliterating before any parser including GHC sees it and has its own grammar (tree-sitter-haskell-literate), the second is a template a code generator turns into Haskell.",
+    "fetched": "2026-08-13",
+    "packages": 200,
+    "files": 15977,
+    "bytes": "102 MB of .hs, mean 6.4 KB, median ~5 KB",
+    "oracle_flags": {
+      "summary": "This is the language that needed per-file oracle CONFIGURATION, and the machinery to carry it. GHC's parser is configured by LANGUAGE extensions that real packages declare in the .cabal file rather than in the source, so a file that parses inside its package fails alone: `\\case` is a parse error without LambdaCase. Lang::validate derives `-XExt` flags per file from the package's manifest and sends them alongside the path, the protocol tools/c-oracle already used for include paths, now shared as stdin_oracle::run_configured.",
+      "measured": "Turning the configuration on changes the sweep's gap/noise split on the SAME 401 failing files: 194 gap / 207 noise without it, 296 gap / 105 noise with it. So 102 files \u2014 a quarter of every failure, and 53% more work than was visible \u2014 were being written off as invalid Haskell when they are valid Haskell the grammar cannot parse. The number that matters is not how many files change verdict but how many change CLASSIFICATION, because noise is where a grammar gap goes to hide.",
+      "why_per_component": "The flags come from the component whose hs-source-dirs the file sits under, not from a union over the package. Measured on an earlier 40-package sample, unioning recovered the same files and BROKE one: cabal2nix's Fetch.hs, which uses `proc` as a function argument and which a test stanza's -XArrows invalidates by making `proc` a keyword. Package configuration is per component and applying one component's flags to a file outside it is as wrong as omitting them.",
+      "why_the_manifest_is_in_the_corpus": "A .cabal file is not Haskell and would fail every parse, so classify() cannot admit it; but the oracle needs it. Lang::configuration is the hook: written to disk beside the source, deliberately absent from the manifest, because the manifest is the sweep's work list and configuration is not work. Only the package's OWN manifest at depth one is kept \u2014 cabal2nix ships 357 .cabal files, 356 of them golden-test fixtures for itself, and a reader that took the tree would configure a package from another package's manifest.",
+      "approximations": "Conditionals (`if impl(ghc >= 9.4)`) are unioned rather than evaluated, since cabal resolves them against a compiler and flag assignment a corpus fetch does not have. Unknown extension names are passed through and GHC ignores what it does not know \u2014 verified in tools/hs-oracle/battery, because .cabal files in a real corpus name extensions GHC has removed (TypeInType) and a package must not become uniformly invalid for mentioning one. cpp-options are not read; see the CPP note."
+    },
+    "cpp_note": "The residual after configuration is a different mechanism and is NOT LANGUAGE's to fix. Measured on an earlier 1,000-file sample, 153 of 153 files still invalid after configuration contain #if/#ifdef lines, 105 of them declaring {-# LANGUAGE CPP #-}. GHC runs the C preprocessor over those files and this oracle does not, because the macros a package's build defines (MIN_VERSION_*) are build output rather than source. That is treebank_preprocessing's territory rather than this crate's, and `Lang::preprocessing` is deliberately left None until it is measured properly rather than guessed at.",
+    "sweep_upstream": {
+      "passed": 15069,
+      "failed": 908,
+      "gap_files": 719,
+      "noise_files": 189,
+      "clusters": 160,
+      "note": "upstream 0975ef72 with the packaging patches and the CLI error-recovery patch only, i.e. before 0003 and 0004. 94.31% of files parse."
+    },
+    "sweep_patched": {
+      "passed": 15576,
+      "failed": 401,
+      "gap_files": 296,
+      "noise_files": 105,
+      "clusters": 153,
+      "note": "with patches 0003 and 0004. 97.49% of files parse; gap_files down 59%."
+    },
+    "remaining_gaps_note": "296 gap files in 153 clusters remain and they are NOT one cause. The largest (66 files) is a third tab defect that survives both patches \u2014 a `let` bound to a `\\case` whose alternatives are indented by three tabs inside a tab-indented do block (git-annex Annex/ChangedRefs.hs) \u2014 and it is left for a diagnosis of its own rather than guessed at. The next two are Arrows syntax (`proc x -> do`, 18 files, pandoc's ODT reader) and a record-projection/tuple-section interaction (13 files, MISSING variable in field_name). git-annex supplies a disproportionate share of the total because it is both the most-downloaded package and tab-indented throughout."
+  },
+  "docs_note": "2 parser fixes, both tab handling; the third only updates one error-recovery test tree for the pinned CLI"
+}

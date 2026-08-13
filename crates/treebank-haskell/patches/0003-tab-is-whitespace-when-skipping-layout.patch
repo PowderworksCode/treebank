@@ -1,0 +1,90 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index 77ed9dc..dc6348a 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -1430,6 +1430,19 @@ static bool is_space_or_tab(int32_t c) {
+   return c == ' ' || c == '\t';
+ }
+ 
++/**
++ * Whitespace, including the tab character.
++ *
++ * `is_space_char` comes from the generated Unicode bitmap in `unicode.h`, whose
++ * `bitmap_space_min_codepoint` is 32 — so it answers FALSE for tab, which is codepoint 9.
++ * Every use of it to skip layout whitespace therefore stops dead at a tab, even though the
++ * report counts a tab as whitespace and this scanner's own `newline_lookahead` already
++ * handles one explicitly when measuring indent.
++ */
++static bool is_whitespace_char(int32_t c) {
++  return c == '\t' || is_space_char(c);
++}
++
+ /**
+  * Advance until the next newline or EOF, used to consume the body of a cpp directive.
+  * Escaped newlines are treated as line continuations, which allow spaces and tabs between backslash and newline.
+@@ -1454,9 +1467,9 @@ static void take_line_escaped_newline(Env *env) {
+  * Return whether any characters were skipped.
+  */
+ static bool skip_space(Env *env) {
+-  if (!is_space_char(PEEK)) return false;
++  if (!is_whitespace_char(PEEK)) return false;
+   S_SKIP;
+-  while(is_space_char(PEEK)) S_SKIP;
++  while(is_whitespace_char(PEEK)) S_SKIP;
+   return true;
+ }
+ 
+@@ -1497,7 +1510,7 @@ static Space skip_whitespace(Env *env) {
+  * return the index of the next character.
+  */
+ static uint32_t take_space_from(Env *env, uint32_t start) {
+-  return advance_while(env, start, is_space_char);
++  return advance_while(env, start, is_whitespace_char);
+ }
+ 
+ /**
+@@ -2472,7 +2485,7 @@ static Symbol comment_type(Env *env) {
+   while (not_eof(env)) {
+     int32_t c = peek(env, i++);
+     if (c == '|' || c == '^') return HADDOCK;
+-    else if (!is_space_char(c)) break;
++    else if (!is_whitespace_char(c)) break;
+   }
+   return COMMENT;
+ }
+diff --git a/test/corpus/layout.txt b/test/corpus/layout.txt
+index d5a41da..089237e 100644
+--- a/test/corpus/layout.txt
++++ b/test/corpus/layout.txt
+@@ -3403,3 +3403,31 @@ a = a
+               (variable)
+               (comment)
+               (variable))))))))
++
++================================================================================
++layout: tab-indented line starting with a keyword prefix
++================================================================================
++
++module M (
++	eval,
++	where',
++) where
++f = 1
++
++--------------------------------------------------------------------------------
++
++(haskell
++  (header
++    (module
++      (module_id))
++    (exports
++      (export
++        (variable))
++      (export
++        (variable))))
++  (declarations
++    (bind
++      (variable)
++      (match
++        (literal
++          (integer))))))

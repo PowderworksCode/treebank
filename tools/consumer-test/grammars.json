@@ -234,5 +234,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-haskell",
+    "dep": "tree-sitter-haskell",
+    "crate": "treebank-grammar-haskell",
+    "cases": [
+      {
+        "label": "haskell",
+        "language": "tree_sitter_haskell::LANGUAGE",
+        "fixture": "patched.hs",
+        "expect": "Clean"
+      },
+      {
+        "label": "haskell strictness (must reject)",
+        "language": "tree_sitter_haskell::LANGUAGE",
+        "fixture": "must-reject.hs",
+        "expect": "Error"
+      }
+    ]
   }
 ]

@@ -59,6 +59,44 @@ pub fn run(
     srcroot: &Path,
     paths: &[String],
 ) -> Result<HashMap<String, bool>> {
+    run_configured(program, args, hint, srcroot, paths, |_| Vec::new())
+}
+
+/// The same, for a reference parser whose answer depends on configuration
+/// that is not in the file.
+///
+/// `configure` returns the flags for one corpus-relative path, and they go
+/// on the request line after a tab: `<path>\t<flag>\t<flag>…`. The reply is
+/// unchanged (`<path>\tvalid|invalid`), so everything downstream is the same.
+///
+/// This exists because that class of language is not rare, and each member
+/// of it was about to grow its own copy of this plumbing:
+///
+/// - **C** already has one, inline in `c.rs`: a file's validity depends on
+///   the include paths it is compiled with, so it sends `-iquote…`/`-I…` per
+///   file. It keeps its own copy for now because its oracle is three-valued
+///   and speaks JSON rather than this two-valued line protocol.
+/// - **Haskell** needs it because GHC's parser is configured by `LANGUAGE`
+///   extensions that real packages declare in the `.cabal` file rather than
+///   in the source. Measured on 5,631 files from the top 40 Hackage
+///   packages: 575 of them (10.2%) change verdict when their package's
+///   configuration is applied, and every one of those changes is
+///   invalid → valid.
+/// - **Scala** is next: scalameta requires the dialect (2.13 vs 3) to be
+///   declared per file, and nothing in the path tells you which.
+///
+/// The configuration itself is per LANGUAGE and belongs in that language's
+/// module; what is shared is only this — the request shape, and the rule
+/// that a per-file flag list is derived from the package, memoized per
+/// package, and never guessed from the file's own text.
+pub fn run_configured(
+    program: &str,
+    args: &[&str],
+    hint: &str,
+    srcroot: &Path,
+    paths: &[String],
+    configure: impl Fn(&str) -> Vec<String>,
+) -> Result<HashMap<String, bool>> {
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::piped())
@@ -71,7 +109,14 @@ pub fn run(
     let mut stdin = child.stdin.take().context("oracle stdin")?;
     let lines: Vec<String> = paths
         .iter()
-        .map(|p| srcroot.join(p).display().to_string())
+        .map(|p| {
+            let mut line = srcroot.join(p).display().to_string();
+            for flag in configure(p) {
+                line.push('\t');
+                line.push_str(&flag);
+            }
+            line
+        })
         .collect();
     let writer = std::thread::spawn(move || -> std::io::Result<()> {
         for line in &lines {

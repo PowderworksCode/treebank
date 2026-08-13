@@ -141,7 +141,17 @@ fn record(
     rel: &Path,
     buf: &[u8],
 ) -> Result<Option<ManifestFile>> {
-    let Some(dialect) = lang.classify(rel) else { return Ok(None) };
+    let Some(dialect) = lang.classify(rel) else {
+        // Configuration files are written but not recorded: the oracle reads
+        // them per package, and the manifest is the sweep's work list, which
+        // configuration is not part of. See `Lang::configuration`.
+        if lang.configuration(rel) {
+            let dest = pkgdir.join(rel);
+            std::fs::create_dir_all(dest.parent().unwrap())?;
+            std::fs::write(&dest, buf)?;
+        }
+        return Ok(None);
+    };
     if !lang.admit(rel, buf) {
         return Ok(None);
     }
