@@ -113,19 +113,42 @@ document"). It is deliberately absent from
 `tools/consumer-test/fixtures/patched.yaml`, because a positive control should
 not assert one side of a live dialect disagreement.
 
-## Cost
+## Cost, and a correction to how this repo measures it
 
-**0.13 s / 1000 files**, one long-lived process, over the 3,217-file corpus
-(0.41 s total, of which 0.06 s is Node startup). Reject path 0.18 s/1000 over
-the same files truncated to 60%, so there is no penalty of javascript's 10.6×
-kind. **Quote the throughput with it: 17 MB/s.**
+**0.061 s / 1000 files at 45.7 MB/s**, one long-lived process, over the real
+ranked corpus (26,634 files, 74.0 MB). Reject path 0.18 s/1000, so there is no
+penalty of javascript's 10.6× kind.
 
-ROADMAP §1 puts Tier A at 0.2–2 s per 1000 files and this lands under the
-floor, but not because the oracle is fast — 17 MB/s is unremarkable. The
-corpus's files are small (mean 1,824 B, median 214 B); the same oracle over the
-300 largest (mean 15.8 KB, java-like) costs **0.93 s/1000**, dead centre of the
-band. `s / 1000 files` is a bytes/second measurement wearing a per-file label,
-and configuration languages are where that breaks. `tbtoml` measured the
+An earlier version of this document said 0.13 s/1000 at 17 MB/s. That figure
+was measured on a 5.87 MB corpus and it was **wrong by 2.7× in the oracle's
+favour to state as throughput**, because a JIT runtime has *two* fixed costs
+and only one of them is what `ROADMAP` §9 tells you to subtract:
+
+| slice of the real corpus | best of 3 | MB/s |
+|---|---|---|
+| 2.0 MB | 0.20 s | 11.6 |
+| 6.0 MB | 0.25 s | 27.3 |
+| 20.0 MB | 0.49 s | 43.6 |
+| 40.0 MB | 0.93 s | 44.6 |
+| 74.0 MB | 1.65 s | 45.7 |
+
+Process startup is 0.03 s and constant. **JIT warm-up is not constant** — it is
+amortised over the batch, and V8 needs roughly 20 MB of input before it reaches
+steady state. §9's method ("run each oracle with empty stdin to get its startup
+cost, then subtract") removes the first and leaves the second inside the
+per-file number. Every figure in §2 was taken at 1000 files, so the js, ts and
+java oracles — all JIT'd — are all likely to be understating their throughput
+the same way.
+
+ROADMAP §1 puts Tier A at 0.2–2 s per 1000 files and this lands well under the
+floor. Two independent reasons, and they pull in the same direction, so the
+number is not comparable to the ones beside it in that table. First, YAML files
+are small: mean 2,780 B and median 458 B on the real corpus, so a per-*file*
+figure buys a lot less work than it does for java. The same oracle over the 300
+largest measurement-corpus files (mean 15.8 KB, java-like) costs **0.93
+s/1000**, dead centre of the band. Second, the warm-up above. `s / 1000 files`
+is a bytes/second measurement wearing a per-file label, and configuration
+languages are where that breaks. `tbtoml` measured the
 identical effect independently (48 MB/s, 2.55 KB mean, 0.096 s/1000), so it is
 a property of the class rather than of YAML.
 
@@ -152,6 +175,47 @@ about the wrong thing:
 
 So `unreadable_note` in the ledger records **which direction** a tool fails in,
 not merely that it was handled.
+
+## What the position costs, on 26,634 real files
+
+The suite says the four parsers disagree on 67 of 402. The real corpus says
+they disagree on almost nothing — and pins down exactly what "almost" is.
+
+Over all 26,634 ranked-corpus files the oracle rejects **7**. The grammar
+rejects 1 of them (booked as noise, correctly) and **accepts the other 6**. But
+libyaml and go-yaml call all 6 of those *valid*:
+
+| | js-yaml | libyaml | go-yaml | grammar |
+|---|---|---|---|---|
+| 6 files | invalid | **valid** | **valid** | accepts |
+| `ooapiv6.yaml` | invalid | invalid | invalid | rejects |
+
+All six are one construct: a multi-line flow collection as a block mapping
+value whose continuation and closing bracket sit at the *same* indentation as
+the key —
+
+```yaml
+        daj_util_objects: [
+          { "objectType": "TS" }
+        ]
+```
+
+js-yaml calls that "deficient indentation", and YAML 1.2.2 requires flow
+content nested in a block context to be indented past its parent, so js-yaml
+appears to be right and the other two lenient. It is a common shape because it
+is what pasted JSON looks like.
+
+So: **`grammar accepts-invalid` is 6 under this oracle and would be 0 under
+either alternative**, while `gap_files` is 4 under all of them, because every
+gap file is one every parser calls valid. The headline number does not depend
+on the position; the number a future patch would be judged against does. That
+is what `verdicts_are_relative_to` is for, stated as a measurement rather than
+as a caveat.
+
+The other half of the same result is worth as much: **the three parsers agree
+on 26,628 of 26,634 real files, 99.98%.** The disagreement this whole document
+is about is a hard-tail phenomenon. Both numbers are true, and neither is
+quotable without the other.
 
 ## What the negative corpus is drawn from
 
