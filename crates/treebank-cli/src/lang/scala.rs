@@ -156,23 +156,31 @@ impl Lang for Scala {
 /// bugs. `rank` only ever emits Scala-suffixed coordinates, so a path that
 /// reaches here without one means the corpus and the ranking have diverged.
 fn dialect_for(path: &str) -> Result<&'static str> {
-    let pkgdir = path.split('/').next().unwrap_or(path);
-    // Match `_<binver>-` rather than splitting on the last '-': Maven
-    // versions contain hyphens (`2.0.0-M3`, `3.3.0-SNAP4`), so the version is
-    // not a suffix you can cut off first.
-    for bin in BINARY_VERSIONS {
-        if pkgdir.contains(&format!("_{bin}-")) {
-            return Ok(match bin {
-                "3" => "Scala3",
-                "2.13" => "Scala213",
-                "2.12" => "Scala212",
-                _ => "Scala211",
-            });
+    // Leftmost coordinate-shaped component wins. In a corpus path that is
+    // always the package directory, which is the only case the sweep
+    // produces. Scanning the rest as well is what lets a file OUTSIDE the
+    // corpus — the oracle smoke fixtures — declare its dialect the same way,
+    // by living under a directory named for a coordinate, rather than by
+    // this function acquiring a default. A default is the one thing it must
+    // not have.
+    for component in path.split('/') {
+        // Match `_<binver>-` rather than splitting on the last '-': Maven
+        // versions contain hyphens (`2.0.0-M3`, `3.3.0-SNAP4`), so the
+        // version is not a suffix you can cut off first.
+        for bin in BINARY_VERSIONS {
+            if component.contains(&format!("_{bin}-")) {
+                return Ok(match bin {
+                    "3" => "Scala3",
+                    "2.13" => "Scala213",
+                    "2.12" => "Scala212",
+                    _ => "Scala211",
+                });
+            }
         }
     }
     bail!(
-        "cannot tell which Scala dialect {pkgdir} is: no _2.11/_2.12/_2.13/_3 in the \
-         Maven coordinate. This is a routing failure, not a verdict — refusing to guess."
+        "cannot tell which Scala dialect {path} is: no _2.11/_2.12/_2.13/_3 Maven \
+         coordinate in the path. This is a routing failure, not a verdict — refusing to guess."
     )
 }
 
@@ -316,6 +324,26 @@ mod tests {
     fn an_undeclarable_dialect_is_an_error_not_a_guess() {
         let e = dialect_for("com.google.guava__guava-33.0.0/com/google/A.scala").unwrap_err();
         assert!(e.to_string().contains("refusing to guess"), "{e}");
+        // The oracle smoke test hands validate() repo-relative paths rather
+        // than corpus ones, so this is the shape that must not silently
+        // acquire a dialect either.
+        let e = dialect_for("tools/consumer-test/fixtures/patched.scala").unwrap_err();
+        assert!(e.to_string().contains("refusing to guess"), "{e}");
+    }
+
+    #[test]
+    fn a_coordinate_deeper_in_the_path_still_declares() {
+        // How the smoke fixtures declare theirs, outside any corpus.
+        assert_eq!(
+            dialect_for("tools/scala-oracle/fixtures/com.example__smoke_3-1.0.0/Valid.scala")
+                .unwrap(),
+            "Scala3"
+        );
+        // The leftmost one wins, so a corpus path is unaffected by the scan.
+        assert_eq!(
+            dialect_for("org.example__lib_2.13-1.0/src/vendor_3-9/A.scala").unwrap(),
+            "Scala213"
+        );
     }
 
     #[test]

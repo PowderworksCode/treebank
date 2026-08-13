@@ -27,6 +27,14 @@
     "stage": "parse",
     "stage_note": "Parse.parseSource() builds a Source tree and stops: no typing, no symbol resolution, no macro expansion. The stage is worth recording even though Scala's stages do not disagree the way yaml's parse-vs-load did — an unresolved import or a missing classpath is not an error here, which is exactly what makes a file judgeable on its own.",
     "note": "scalameta's parser, the one Metals and scalafmt are built on. It parses without typing, so unresolved imports and a missing classpath are not errors and each file is judged on its own, exactly like JavacTask.parse() for Java. `Parsed.Error` is the verdict `invalid`; anything THROWN out of the parser is an oracle failure and exits non-zero rather than becoming a verdict.",
+    "smoke": {
+      "requires": ["java"],
+      "build": "tools/scala-oracle/fetch-jars.sh",
+      "valid": "tools/scala-oracle/fixtures/com.example__smoke_3-1.0.0/Valid.scala",
+      "invalid": "tools/scala-oracle/fixtures/com.example__smoke_3-1.0.0/Invalid.scala",
+      "note": "Dedicated fixtures rather than the consumer-test pair, for a reason particular to this language: the smoke test hands validate() REPO-relative paths, and a Scala file's dialect comes from the Maven coordinate in its path. tools/consumer-test/fixtures/patched.scala has no coordinate, so the oracle correctly refuses to give it a verdict at all — and patched.scala is deliberately valid under NO single dialect anyway, since it pins the grammar's Scala 2 + Scala 3 union. These two live under a directory named for a coordinate instead, which is how any file outside the corpus declares its dialect. Valid.scala is Scala 3 ONLY, so the smoke test also fails if dialect routing breaks and sends it to a Scala 2 dialect.",
+      "build_note": "fetch-jars.sh verifies the sha256 of all nine pinned jars on every run, so a truncated or republished jar is caught here rather than becoming a verdict."
+    },
     "dialect_is_the_whole_problem": {
       "claim": "Scala 2 and Scala 3 are different languages sharing the .scala extension, and scalameta requires the dialect per file. Nothing in a file's path settles it — but the Maven coordinate does, and the corpus directory carries it: cats-core_3 is Scala 3, spark-core_2.11 is Scala 2.11. So the dialect is declared per package by crates/treebank-cli/src/lang/scala.rs and passed to the oracle per file. The oracle never picks a dialect and never falls back to another one.",
       "measured_2026_08_13": {
