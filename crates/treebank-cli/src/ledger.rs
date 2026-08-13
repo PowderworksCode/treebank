@@ -73,6 +73,9 @@ pub enum LangName {
     #[serde(rename = "yaml")]
     #[value(name = "yaml")]
     Yaml,
+    #[serde(rename = "toml")]
+    #[value(name = "toml")]
+    Toml,
 }
 
 impl LangName {
@@ -93,6 +96,7 @@ impl LangName {
             LangName::Ruby => "ruby",
             LangName::Elixir => "elixir",
             LangName::Yaml => "yaml",
+            LangName::Toml => "toml",
         }
     }
 }

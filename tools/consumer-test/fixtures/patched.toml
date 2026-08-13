@@ -1,0 +1,28 @@
+# treebank-grammar-toml consumer fixture.
+# Both patches in the series are packaging, so there is no grammar fix to
+# probe here yet; this exercises the constructs the corpus actually contains.
+title = "treebank"
+enabled = true
+count = 42
+ratio = 3.14
+hex = 0xdead_beef
+when = 1979-05-27T07:32:00Z
+local-date = 1979-05-27
+tags = ["a", "b"]
+inline = { name = "x", n = 1 }
+multi = """
+a
+b
+"""
+literal = 'C:\path\no\escapes'
+"quoted key" = 1
+dotted.key.here = 2
+
+[table]
+nested = { deep = { deeper = true } }
+
+[[array-of-tables]]
+i = 1
+
+[[array-of-tables]]
+i = 2

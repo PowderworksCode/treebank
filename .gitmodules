@@ -43,3 +43,6 @@
 [submodule "crates/treebank-yaml/upstream"]
 	path = crates/treebank-yaml/upstream
 	url = https://github.com/tree-sitter-grammars/tree-sitter-yaml
+[submodule "crates/treebank-toml/upstream"]
+	path = crates/treebank-toml/upstream
+	url = https://github.com/tree-sitter-grammars/tree-sitter-toml

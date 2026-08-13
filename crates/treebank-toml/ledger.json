@@ -1,0 +1,210 @@
+{
+  "grammar": "toml",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter-grammars/tree-sitter-toml",
+    "sha": "64b56832c2cffe41758f28e05c756a3a98d16f41",
+    "version": "0.7.0",
+    "sha_note": "commit target of tag v0.7.0; submodule pointers are commits, not annotated tag objects"
+  },
+  "upstream_choice": {
+    "summary": "tree-sitter-grammars/tree-sitter-toml is the grammar. nvim-treesitter and Helix pin not merely the same repository but the SAME COMMIT, 64b56832 (v0.7.0), which is the commit pinned here.",
+    "evidence": "nvim-treesitter lua/nvim-treesitter/parsers.lua -> tree-sitter-grammars/tree-sitter-toml @ 64b56832, tier 2, maintainer @tk-shirasaka; Helix languages.toml [[grammar]] name=\"toml\" -> same repo @ 64b56832. crates.io: the crate is published as tree-sitter-toml-ng (NOT tree-sitter-toml, which upstream does not own) with 1,407,306 downloads all-time and 690,780 in 90 days. The ROADMAP's '1.37 M crates.io' figure for toml is this crate under that name.",
+    "alternatives_considered": "ikatyang/tree-sitter-toml (58 stars, last pushed 2024-05-01) is the ANCESTOR of the pinned repo, not a rival: tree-sitter-grammars/tree-sitter-toml is its continuation and still credits Ika as author. It owns neither the nvim nor the Helix pin, and its crates.io name tree-sitter-toml now points at a third party (Mathspy/tree-sitter-toml, 185,023 downloads all-time, 27,783 in 90 days) \u2014 7.6x fewer all-time and 24.9x fewer recent than the pinned grammar. Zed LOOKS like a third opinion and is not: zed-extensions/toml pins tree-sitter/tree-sitter-toml @ 342d9be, which is an ARCHIVED FORK of ikatyang last pushed 2022-04-21, 10 stars. Recorded because 'all three editors' in the ROADMAP would otherwise imply three live pins; there are two, and they agree exactly.",
+    "staleness_note": "docs/data/grammar-health-2026-08-10.tsv records this repo at 395 days since push. Its DEFAULT BRANCH has not moved in 617 days: master HEAD is 64b56832, dated 2024-12-03, and the 2025-07-10 push that days_since_push measures went to a side branch named `update`. GitHub's pushed_at counts any branch. ROADMAP section 3's stale-grammar analysis is built on days_since_push and therefore reads every repo with a live side branch and a dead default branch as healthier than it is. Stated here rather than as a ROADMAP edit because six sessions were editing that file concurrently."
+  },
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger)",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "generate_deps_note": "null, verified rather than assumed: grammar.js contains no require() of another grammar, so generation needs no node_modules. The package.json devDependency on tree-sitter-cli is upstream's own tooling and is not what generate_deps is for.",
+  "oracle": {
+    "tool": "the `toml` crate's toml::Table parse, in-process, driven by rayon",
+    "version": "toml 1.1.4+spec-1.1.0",
+    "dialect": "TOML 1.1.0",
+    "flags": [],
+    "authority": "reference",
+    "spec": "TOML 1.1.0",
+    "stage": "parse-to-table",
+    "note": "TWO-VALUED: valid / invalid. In-process like treebank-rust's syn, so there is no fork and no stdin protocol. Parsing to a Table rather than to a syntax tree is not an optimisation choice, it is the only honest stage: duplicate keys, a table redefined over a key, a dotted-key conflict and a calendar-invalid datetime (2024-02-30) are all SPEC-level invalid TOML, not a later type-check, so a syntax-only TOML parser silently accepts about a dozen classes of invalid TOML. That is exactly the treebank-php trap and the reason `stage` is recorded.",
+    "unreadable_note": "An unreadable file is NOT an invalid file: the oracle writes the path and the OS error to stderr and exits 1 rather than emitting a verdict. Ill-formed UTF-8 IS a verdict (invalid), not an I/O failure, because the bytes arrived intact and TOML 1.1.0 requires the document be valid UTF-8 \u2014 see driver_owns_utf8 below. Direction of failure, which matters more than the fact of handling it: this oracle fails CLOSED. Anything it cannot decode is called invalid, which books as corpus noise, so the worst case is an understated gap count and never a fix agent dispatched at a file nothing can parse.",
+    "driver_owns_utf8": "toml::Table implements FromStr only \u2014 the crate has no bytes-taking entry point \u2014 so the driver decodes and therefore owns one spec rule: UTF-8 well-formedness, via str::from_utf8. Audited rather than assumed, by feeding the crate already-valid &str and watching where verdicts come from. The crate owns ALL BOM handling and gets it right unaided: leading BOM valid, BOM-only document valid, mid-stream BOM invalid, doubled BOM invalid, BOM inside a basic string treated as content \u2014 matching toml-test's utf8-bom-01/02 and bom-not-at-start-01/02/03. UTF-16 rejection falls out of the UTF-8 rule without the driver naming UTF-16 at all. DO NOT strip a leading BOM in the driver: it looks like an improvement, it is what a js-yaml-shaped oracle genuinely needs, and here it would turn a doubled BOM into a leading one and silently flip an invalid file to valid. Recorded as a don't because it is exactly the tidying a later agent would do unprompted.",
+    "considered": [
+      {
+        "tool": "toml::de::DeTable::parse",
+        "version": "toml 1.1.4",
+        "spec": "TOML 1.1.0",
+        "stage": "document parse",
+        "disagreement": {
+          "populations": [
+            {
+              "name": "adversarial battery",
+              "n": 25,
+              "differ": 0,
+              "how_measured": "25 hand-built cases: 13 always-invalid, 5 always-valid, 7 spec-divergent",
+              "blind_to": "real-world file-size distribution"
+            }
+          ]
+        },
+        "why_not": "identical verdicts; toml::Table is the more obvious call and no cheaper stage is honest"
+      },
+      {
+        "tool": "toml_edit::DocumentMut",
+        "version": "toml_edit 0.25.13",
+        "spec": "TOML 1.1.0",
+        "stage": "format-preserving parse",
+        "disagreement": {
+          "populations": [
+            {
+              "name": "adversarial battery",
+              "n": 25,
+              "differ": 0,
+              "how_measured": "same 25 cases",
+              "blind_to": "same"
+            }
+          ]
+        },
+        "why_not": "identical verdicts. Checked because it is the LSP-shaped parse and the one most likely to have error recovery; it does not. That all three stages coincide is why `stage` here records a checked non-choice rather than a lever."
+      },
+      {
+        "tool": "toml (the 1.0.0 spec line)",
+        "version": "toml 0.8.23",
+        "spec": "TOML 1.0.0",
+        "stage": "parse-to-table",
+        "disagreement": {
+          "populations": [
+            {
+              "name": "real corpus",
+              "n": 1427,
+              "differ": 0,
+              "how_measured": "every .toml in the local extracted crates.io registry",
+              "blind_to": "BOM, ill-formed UTF-8, NUL, lone CR and tab indentation \u2014 measured zeros, all of them; a zero here is not reassurance"
+            },
+            {
+              "name": "toml-test, 1.0.0 vs 1.1.0 expectations",
+              "n": 709,
+              "differ": 9,
+              "how_measured": "toml-lang/toml-test ships version-partitioned manifests (files-toml-1.0.0, files-toml-1.1.0)",
+              "blind_to": "real-world file-size distribution and cargo-normalized output, which is 72% of what the sweep will see"
+            }
+          ]
+        },
+        "why_not": "REJECTED, and the reasoning is the load-bearing decision in this ledger \u2014 see spec_revision_choice below. Scores 709/709 against the 1.0.0 expectations, i.e. it is an exact 1.0.0 parser, and it is the safer-looking choice because it produces 3 gap files against this grammar where 1.1.4 produces 18. That is the wrong thing to optimise."
+      },
+      {
+        "tool": "python tomllib",
+        "version": "CPython 3.12.3",
+        "spec": "TOML 1.0.0",
+        "stage": "parse-to-dict",
+        "disagreement": {
+          "populations": [
+            {
+              "name": "toml-test 1.0.0",
+              "n": 709,
+              "differ": 2,
+              "how_measured": "scored against the 1.0.0 expectations",
+              "blind_to": "1.1.0 constructs entirely"
+            },
+            {
+              "name": "encoding battery",
+              "n": 21,
+              "differ": 3,
+              "how_measured": "BOM/CRLF/NUL/control/UTF-8 cases",
+              "blind_to": "nothing found"
+            }
+          ]
+        },
+        "why_not": "REJECTED on a defect, not on spec: it rejects a leading UTF-8 BOM, which TOML permits and toml-test encodes as valid (utf8-bom-01/02). All three of its encoding-battery failures are that one bug. Over-rejecting hides gaps as noise. Also 0.43 s/1000 against 0.053."
+      },
+      {
+        "tool": "taplo",
+        "version": "taplo 0.10.0 (taplo lint --no-schema)",
+        "spec": "TOML 1.0.0",
+        "stage": "lint (syntax + semantic, no schema)",
+        "disagreement": {
+          "populations": [
+            {
+              "name": "toml-test 1.0.0",
+              "n": 709,
+              "differ": 11,
+              "how_measured": "one process per file, verdict from exit status",
+              "blind_to": "1.1.0 constructs"
+            },
+            {
+              "name": "encoding battery",
+              "n": 21,
+              "differ": 3,
+              "how_measured": "same battery",
+              "blind_to": "nothing found"
+            }
+          ]
+        },
+        "why_not": "DISQUALIFIED, and NOT on speed \u2014 that has to be said explicitly because the obvious objection is wrong here. Parallelized the way lang::exec_oracle already runs php and bash, taplo is 0.78 s/1000 at 16 workers (14.1 serial), firmly Tier A. It fails on two other things. (1) Conformance: 698/709, of which 2 are accepts-invalid (table/append-with-dotted-keys-04, table/super-twice) and 9 are rejects-valid (BOM x2, non-ASCII in comments/keys/strings, uppercase float exponent, date-like keys, datetime edge). (2) Fatal: `taplo lint` takes GLOBS, so a path matching nothing collects zero files and EXITS 0. A directory does the same. Under exec_oracle status 0 means valid, so a mistyped corpus root would call every file valid, turn every grammar failure into a GAP, and dispatch a fix agent at each. GRAMMARS.md states this defect in the opposite polarity \u2014 mistyped root, everything invalid, gap_files falls to zero, flawless grammar \u2014 and exec_oracle's reject_statuses catches a tool that spells rejection with an unexpected status but structurally cannot catch a tool that spells 'I found nothing to check' as 0. This is the more expensive direction of the same defect and, on its own, disqualifying."
+      }
+    ]
+  },
+  "oracle_why_reference_and_not_position": "authority is `reference` and the `position` block is deliberately absent. TOML has ONE authority \u2014 toml-lang \u2014 and no dispute about who decides, which is what separates it from treebank-yaml, where libyaml, go-yaml, PyYAML and snakeyaml genuinely disagree and the choice is a stated position rather than a fact. What TOML has instead is TWO RELEASED SPEC REVISIONS, and that is a `spec` question, not an `authority` one. The two fields were designed together with the tbyaml session precisely so this case could be expressed without bending either: the boring case should look boring.",
+  "spec_revision_choice": {
+    "summary": "TOML 1.1.0, not 1.0.0. This is the single most consequential field in this ledger and the reasoning inverts the obvious one.",
+    "the_two_specs": "TOML 1.0.0 released 2021-01-12; TOML 1.1.0 released 2025-12-24. Both are final releases of toml-lang/toml. 1.1.0 adds: seconds optional in times, linebreaks inside inline tables, trailing commas in inline tables, \\e and \\x escapes in basic strings.",
+    "tools_have_already_split": "The `toml` crate is 1.1.0 from 0.9 onward and 1.0.0 at 0.8; taplo 0.10.0 and CPython tomllib are 1.0.0. Measured against toml-test: toml 1.1.4 scores 712/712 on the 1.1.0 expectations and 700/709 on the 1.0.0 ones, its 9 divergences being exactly the 1.1.0 additions; toml 0.8.23 scores 709/709 on 1.0.0 and 701/712 on 1.1.0.",
+    "version_string_trap": "toml 0.9.9 ships on crates.io as literally `0.9.9+spec-1.0.0` and is NOT a 1.0.0 parser \u2014 measured, it accepts all nine 1.1.0-only constructs and scores 712/712 against the 1.1.0 expectations. The build metadata is stale. Never read a spec revision off a package version string. 0.8.23 is the last exact 1.0.0 line.",
+    "why_not_the_safer_looking_1_0_0": "A 1.0.0 oracle produces 3 gap files against this grammar over the 777-file conformance suite; a 1.1.0 oracle produces 18. Optimising for the smaller number would be exactly the drift GRAMMARS.md warns about, because the 15 extra are NOT phantom: this grammar genuinely does not implement TOML 1.1.0 (its own README targets v1.0.0, and it rejects 7 of the 9 divergent constructs). DESIGN.md exists because grammars fall behind; pinning the oracle to the superseded spec is the one choice that guarantees the sweep can never say so. Second and independent: under a 1.0.0 oracle the 1.1.0 constructs become ELIGIBLE for test/negative/, since the oracle rejects them and the grammar rejects them, which is the entry criterion. test/negative holds files the grammar must KEEP rejecting \u2014 so a later agent could legitimately add `a = { b = 1, }` there and cement this grammar at 1.0.0, making a future upgrade fail CI. Pinning 1.0.0 does not merely fail to surface the gap, it builds the mechanism to lock it in. Under 1.1.0 those constructs are oracle-valid and therefore structurally barred from test/negative.",
+    "cost_today": "Zero. On the 1427-file real corpus the two oracles agree on every file, gap_files is 0 under both, and the grammar parses 1427/1427 clean. The choice costs nothing measurable today and only starts to matter as 1.1.0 adoption appears in published packages \u2014 at which point it is the difference between the sweep reporting a real, bounded, correct work item and the sweep saying nothing."
+  },
+  "grammar_is_narrower_than_the_oracle": {
+    "summary": "The inverse of treebank-lua's grammar_is_broader_than_the_oracle, and it must be read as the DANGEROUS direction rather than the safe one. Lua's grammar accepts a superset of what its oracle calls valid, which can never manufacture a gap. This grammar accepts a SUBSET: it targets TOML 1.0.0 while the oracle is 1.1.0, so every 1.1.0-only construct is 'grammar rejects AND oracle says valid', which is the definition of a gap.",
+    "measured": "Verified by parsing, not by reading upstream's README. Of the 9 constructs that separate the specs, the grammar REJECTS 7 \u2014 inline-table linebreak x4, inline-table trailing comma, local-time without seconds, \\x byte escapes \u2014 and ACCEPTS 2 (offset and local datetimes without seconds, because its rfc3339_time regex is looser than the spec it claims). Over the 777-file union of the toml-test manifests: 18 gap / 368 noise / 132 grammar-broader / 259 clean against the 1.1.0 oracle, against 3 / 383 / 137 / 254 for a 1.0.0 oracle. The 15-file difference is enumerated in the sweep notes.",
+    "this_is_intended": "These gaps are the system working, not numbers to tune away. The correct response to any of them appearing in a real package is a grammar patch bringing tree-sitter-toml up to TOML 1.1.0 \u2014 a coherent, bounded, upstreamable change of roughly four rules \u2014 and NOT a reclassification to noise or a swap of the oracle back to 1.0.0.",
+    "negative_corpus_consequence": "test/negative/ must contain ONLY syntax invalid in BOTH revisions. No 1.1.0-only construct may appear there: the oracle calls them valid, so they are barred by the entry criterion, and putting them there would freeze this grammar at 1.0.0. Same rule treebank-lua reached about LuaJIT literals, arrived at from the opposite side.",
+    "second_axis_semantic_rules": "As with lua, the oracle also rejects a class of files the grammar accepts and by its nature cannot reject: duplicate keys, a table redefined over a key, dotted-key conflicts, and calendar-invalid datetimes are semantic, not syntactic. This runs in the SAFE direction \u2014 grammar accepts, oracle rejects \u2014 so it cannot manufacture a gap, but it bounds test/negative further: a negative test may only use a pure syntax error, never a semantic one, because the grammar will not reject the latter."
+  },
+  "oracle_cost": "0.053 s per 1000 files serial and 0.006 s per 1000 at 16 rayon workers, measured on 1427 real .toml files (3.73 MB) replayed 10x to get past timer resolution; process startup is unmeasurable (0.00 s) because the oracle is in-process. Throughput 48 MB/s serial. State that number WITH the corpus shape, because for a config language seconds-per-1000-FILES is a bytes/second measurement in disguise: mean 2.55 KB, median 1.59 KB. On go-sized files (22.9 KB mean) the same code would read ~0.5 s/1000. The reject path \u2014 every file truncated to 60%, which is the input validate() actually sees \u2014 is 0.022 s/1000, ~2.4x FASTER than the valid path, the same bail-at-first-error shape rust's syn and go/parser show. The ROADMAP's Tier A band is 0.2-2 s/1000 and gives toml no specific figure; this is roughly 4x below the floor of that band and the cheapest oracle in the repo, but the throughput number is the honest one to compare.",
+  "oracle_conformance": "712/712 against toml-lang/toml-test's TOML 1.1.0 expectations, and 21/21 on a hand-built encoding and whitespace battery (BOM alone / BOM x LF / BOM x CRLF, CRLF inside and outside multi-line strings, lone CR, no final newline, empty and whitespace-only documents, NUL and form feed in comments and strings, tab as the one permitted control character, non-BMP literals, \\U0010FFFF vs \\U00110000, lone surrogate, Latin-1 bytes in comments and strings). Both populations were needed and neither bounds the other: toml-test covers BOMs thoroughly and the real corpus contains none, while toml-test is blind to file-size distribution. The tbyaml session hit the mirror image \u2014 its suite has zero BOM cases while its corpus caught one \u2014 which is why each population records what it is blind to.",
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "kind": "packaging",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "n/a \u2014 packaging",
+        "note": "Prepends the redistribution warning to upstream's README. Touches no grammar code, so no sweep numbers move."
+      }
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "kind": "packaging",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml",
+        "Cargo.lock"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "n/a \u2014 packaging",
+        "note": "Upstream publishes as tree-sitter-toml-ng and does NOT own tree-sitter-toml on crates.io (that name belongs to Mathspy/tree-sitter-toml). Renames to treebank-grammar-toml and pins [lib] name = tree_sitter_toml_ng, which upstream leaves implicit \u2014 cargo derives it from the package name, so the rename would otherwise silently rename the library and break every consumer. Verified by building: emits libtree_sitter_toml_ng.rlib."
+      }
+    }
+  ],
+  "grammar_accepts_invalid": {
+    "summary": "Measured before any patch: over the 777-file union of toml-test's two manifests the grammar ACCEPTS 132 files the oracle rejects. Recorded up front because this is the direction GRAMMARS.md names as where agents drift when optimising pass rates, and a sweep can never see it \u2014 a sweep only looks at files the grammar FAILED.",
+    "how_much_is_structural": "A large part is semantic and no tree-sitter grammar can reject it: duplicate keys, a table redefined over a key, dotted-key type conflicts, calendar-invalid datetimes. By toml-test category: table 30, key 19, datetime 18, inline-table 14, local-datetime 13, array 4, local-date 4, local-time 3 \u2014 these mix semantic cases the grammar cannot reach with syntax cases it should. The plainly-syntactic remainder is string 11, float 6, spec-1.0.0 5, spec-1.1.0 5.",
+    "three_found_by_hand": "Three came out of building test/negative and are minimal enough to patch directly. (1) `a = [, 1]` \u2014 a leading comma in an array parses clean and invents a ZERO-WIDTH integer node at [0,5]-[0,5]. (2) `a = 1 b = 2` \u2014 two pairs on one line parse as two pairs; the grammar does not require a newline after a key/value pair. (3) a UTF-16LE file parses as bare_key/integer pairs, the interleaved NUL bytes being absorbed into the tokens. All three were written as negative-corpus candidates, failed the entry check, and were removed from test/negative rather than committed as expected-failures.",
+    "consequence_for_test_negative": "test/negative/ may only hold files the grammar ALREADY rejects, so these 132 are barred from it by construction until each is patched. That is the correct order \u2014 patch, then add the negative test in the same commit \u2014 and it is why the negative corpus is 29 files rather than 32.",
+    "not_a_gap": "None of this can inflate gap_files: a gap is grammar-rejects + oracle-valid, and this is the opposite direction. It costs nothing in the sweep and everything in trustworthiness, which is exactly why it is written down rather than left to be discovered."
+  },
+  "test_negative": {
+    "files": 29,
+    "rule": "PURE SYNTAX errors only, invalid under BOTH TOML 1.0.0 and 1.1.0, and verified rejected by the grammar.",
+    "why_both_revisions": "The oracle is 1.1.0. A 1.1.0-only construct is oracle-VALID, so it cannot enter by the stated criterion \u2014 and if it could, it would freeze this grammar at 1.0.0 and make a future upgrade fail CI. See spec_revision_choice.",
+    "why_not_semantic": "Duplicate keys, table redefinition, dotted-key conflicts and calendar-invalid datetimes are all oracle-invalid, but the grammar cannot reject them and by its nature never will. A negative test built from one would be testing the oracle, not the grammar. Same rule treebank-lua reached about scope errors.",
+    "verified": "Each of the 29 was checked against three things independently: toml 1.1.4 (invalid), toml 0.8.23 (invalid), and `tree-sitter parse` against the pinned grammar (rejects). 32 candidates were written; 3 were removed because the grammar accepts them \u2014 see grammar_accepts_invalid.three_found_by_hand."
+  }
+}

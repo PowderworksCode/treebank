@@ -20,6 +20,7 @@ mod python;
 mod ruby;
 mod rust;
 mod stdin_oracle;
+mod toml;
 mod typescript;
 mod yaml;
 mod zig;
@@ -164,6 +165,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static RUBY: ruby::Ruby = ruby::Ruby;
     static ELIXIR: elixir::Elixir = elixir::Elixir;
     static YAML: yaml::Yaml = yaml::Yaml;
+    static TOML: toml::Toml = toml::Toml;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -180,5 +182,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Ruby => &RUBY,
         LangName::Elixir => &ELIXIR,
         LangName::Yaml => &YAML,
+        LangName::Toml => &TOML,
     }
 }
