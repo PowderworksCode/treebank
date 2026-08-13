@@ -138,14 +138,10 @@ impl Lang for Scala {
                 .unwrap_or_else(|_| path.to_string());
             map.insert(rel, verdict == "valid");
         }
-        // Every path must come back. A missing verdict is read as `false` by
-        // the sweep — i.e. as noise — so silence here would hide gaps.
-        anyhow::ensure!(
-            map.len() == paths.len(),
-            "scala-oracle returned {} verdicts for {} paths",
-            map.len(),
-            paths.len()
-        );
+        // Every path must come back, because a missing verdict reads as
+        // `false` — as noise — and hides a gap. That invariant is checked
+        // for every language in sweep.rs, which names the paths that went
+        // missing, so this does not repeat it.
         Ok(map)
     }
 }
