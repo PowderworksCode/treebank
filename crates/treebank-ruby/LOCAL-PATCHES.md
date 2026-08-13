@@ -9,10 +9,10 @@ serialization buffer overflows* — a correctness fix in the external scanner,
 in a language where heredocs are everywhere. The other three commits touch
 the Rust/wasm bindings and the LICENSE include, not the parser.
 
-Twelve patches: two packaging, ten grammar. On the 1000-gem, 42,706-file
-corpus they take the sweep from 42,627 passing with 28 grammar gaps to
-**42,655 passing with 0**. The 51 files still failing are ERB templates that
-CRuby also rejects. `noise_files` was 51 before the first patch and 51 after
+Twelve patches: two packaging, ten grammar. On the 1000-gem, 44,292-file
+corpus they take the sweep from 44,210 passing with 28 grammar gaps to
+**44,238 passing with 0**. The 54 files still failing are ERB templates that
+CRuby also rejects. `noise_files` was 54 before the first patch and 54 after
 every one of the ten — measured at each patch level — so no patch bought a
 passing file by accepting something the reference parser rejects.
 

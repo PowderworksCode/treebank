@@ -82,13 +82,31 @@ impl Lang for Ruby {
         rel == Path::new("data.tar.gz")
     }
 
-    /// `.rb` only — the single extension tree-sitter-ruby's
-    /// tree-sitter.json claims, following the same rule as python and
-    /// javascript. Ruby has plenty of other files this grammar also parses
-    /// (`.rake`, `.gemspec`, `Rakefile`, `Gemfile`, `config.ru`); they are
-    /// left out for now so `classify()` matches what the grammar
-    /// advertises, and adding them is a deliberate change with its own
-    /// sweep evidence rather than a silent widening.
+    /// Ruby source, by extension or by filename.
+    ///
+    /// `.rb` alone was the starting point, matching the single extension
+    /// tree-sitter-ruby's tree-sitter.json claims. That undercounts the
+    /// language badly: Ruby's build and configuration files are Ruby
+    /// programs, not a config format, and this grammar parses them. Every
+    /// entry below is present in the top-1000 gem corpus AND is a recognised
+    /// Ruby filename convention (GitHub linguist's Ruby set), and every one
+    /// was checked against CRuby before being added — see the ledger for the
+    /// per-type counts and verdicts.
+    ///
+    /// Two neighbours are deliberately NOT here, both of which look like
+    /// they belong:
+    ///
+    /// `.rbs` is the big one — 2,216 files in this corpus, more than every
+    /// extension added here combined. RBS is Ruby's *type signature*
+    /// language, a separate grammar with its own tree-sitter parser, and
+    /// CRuby rejects 35 of 40 sampled files. Taking it would have added two
+    /// thousand files that are not Ruby and recorded them as corpus noise,
+    /// burying any real gap in the report.
+    ///
+    /// `Pluginfile` appears once and parses, but one gem's choice of name is
+    /// not a convention; it is in no editor's Ruby list, and admitting names
+    /// on a single sighting is how a corpus acquires files nobody can
+    /// attribute.
     ///
     /// `vendor/` is excluded for the reason python excludes `_vendor/` and
     /// javascript excludes bundles: gems that vendor a dependency ship
@@ -96,13 +114,54 @@ impl Lang for Ruby {
     /// package and the same code is already in the corpus under its real
     /// owner.
     fn classify(&self, rel: &Path) -> Option<Option<String>> {
+        /// Extensions whose files are Ruby programs.
+        const EXTENSIONS: &[&str] = &[
+            "rb",       // the language's own
+            "rake",     // rake tasks
+            "gemspec",  // a gem's manifest, evaluated as Ruby
+            "ru",       // rackup: config.ru
+            "gemfile",  // appraisal's per-matrix gemfiles, e.g. rails_7.gemfile
+            "rbi",      // sorbet type stubs — Ruby syntax, unlike .rbs
+            "eye",      // eye process-monitor configs
+            "podspec",  // cocoapods
+            "god",      // god process-monitor configs
+            "jbuilder", // jbuilder views
+        ];
+        /// Extensionless files that are Ruby by convention.
+        const FILENAMES: &[&str] = &[
+            "Rakefile",
+            "rakefile",
+            "Gemfile",
+            "Guardfile",
+            "Appraisals",
+            "Steepfile",
+            "Dangerfile",
+            "Capfile",
+            "Brewfile",
+            "Vagrantfile",
+            "Thorfile",
+            "Fastfile",
+            "Berksfile",
+            "Puppetfile",
+            "Podfile",
+            ".simplecov",
+        ];
         if rel
             .components()
             .any(|c| c.as_os_str().to_str() == Some("vendor"))
         {
             return None;
         }
-        (rel.extension()?.to_str()? == "rb").then_some(None)
+        // Filename first: `.simplecov` has no extension in the sense
+        // `Path::extension` means, and `Gemfile.lock` is a lockfile rather
+        // than a Gemfile, so an exact match on the whole name is the only
+        // thing that admits one without the other.
+        let name = rel.file_name()?.to_str()?;
+        if FILENAMES.contains(&name) {
+            return Some(None);
+        }
+        let ext = rel.extension()?.to_str()?;
+        EXTENSIONS.contains(&ext).then_some(None)
     }
 
     fn grammar_dirs(&self) -> &'static [&'static str] {
