@@ -1,0 +1,14 @@
+<!DOCTYPE html>
+<!--
+  Malformed MARKUP, not merely non-conforming HTML: the byte sequence is not
+  well-formed tag syntax, so html5ever reports a markup-syntax parse error and
+  the grammar must refuse it. Every case here is one of the classes in
+  crates/treebank-html/test/negative/, and each was verified rejected by both
+  the oracle and the grammar. See that ledger's negative_corpus.
+-->
+<html lang="en">
+  <head><meta charset="utf-8"><title>t</title></head>
+  <body>
+    <a hre"f="/x">a quote inside an attribute NAME</a>
+  </body>
+</html>

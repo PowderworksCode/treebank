@@ -272,5 +272,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-html",
+    "dep": "tree-sitter-html",
+    "crate": "treebank-grammar-html",
+    "cases": [
+      {
+        "label": "html (spec-recovered constructs must PARSE)",
+        "language": "tree_sitter_html::LANGUAGE",
+        "fixture": "patched.html",
+        "expect": "Clean"
+      },
+      {
+        "label": "html strictness (malformed markup must reject)",
+        "language": "tree_sitter_html::LANGUAGE",
+        "fixture": "must-reject.html",
+        "expect": "Error"
+      }
+    ]
   }
 ]
