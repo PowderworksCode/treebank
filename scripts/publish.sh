@@ -339,12 +339,18 @@ head, n = re.subn(r'(?m)^description = ".*"$', 'description = %s' % toml_str(des
 assert n == 1, 'expected exactly one description key in [package], found %d' % n
 open(p, 'w').write(head + sep + tail)
 
+# Not every upstream ships a lockfile -- tree-sitter-elixir is the first here
+# that does not -- and a library does not need one to publish: cargo resolves
+# and writes its own. When there IS one it must be kept in step with the
+# version rewritten above, so the entry is still asserted rather than
+# best-effort; it is only the FILE that is optional.
 p = os.path.join(d, 'Cargo.lock')
-s = open(p).read()
-s, n = re.subn(r'(?m)^(name = "%s"\nversion = )"[^"]*"' % re.escape(name),
-               r'\1"%s"' % version, s, count=1)
-assert n == 1, 'package %s not found in Cargo.lock' % name
-open(p, 'w').write(s)
+if os.path.exists(p):
+    s = open(p).read()
+    s, n = re.subn(r'(?m)^(name = "%s"\nversion = )"[^"]*"' % re.escape(name),
+                   r'\1"%s"' % version, s, count=1)
+    assert n == 1, 'package %s not found in Cargo.lock' % name
+    open(p, 'w').write(s)
 PY
 
   # ---- package / publish ---------------------------------------------------
