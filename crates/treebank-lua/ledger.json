@@ -51,20 +51,21 @@
     "namespace_note": "LuaRocks is not a flat namespace: `luasocket` exists under both `lunarmodules` and `luasocket`, `lua_cliargs` under both `lunarmodules` and `amireh`, and both of each are real rocks with real downloads. Packages are therefore named `author/module` throughout, and fetch::pkg_dir turns the slash into `__` for the corpus directory.",
     "versions_note": "Development rows (scm-1, dev-1, flagged `development_flag` on the module page) are skipped in favour of the newest release. They track a VCS branch, so what they contain depends on when you asked, which is not a corpus anyone can re-measure.",
     "files_note": ".lua only, the single extension tree-sitter-lua's tree-sitter.json claims. .rockspec files are also Lua syntax and this grammar parses them, and every package ships one; they are excluded for now so classify() matches what the grammar advertises, and including them would change the corpus's character (a rockspec is a data table, not code). Adding them would be a deliberate change with its own sweep evidence. Paths containing a __MACOSX component are excluded: they are AppleDouble resource forks (._name) that macOS's zip writer stores beside every real entry, carrying a .lua extension while being binary metadata rather than source. Measured: 7 in this corpus, all from one rock published from a Mac; without the exclusion they are noise forever.",
-    "fetched": "2026-08-11 (luarocks.org module listing and module pages of that date)",
-    "packages": 383,
-    "packages_note": "500 requested; 383 resolved. 113 of the 117 skips are a 404 on the .src.rock: those rocks publish only a .rockspec, whose source is fetched from git or an upstream URL at install time rather than carried by LuaRocks. That is the LuaRocks analogue of a PyPI package publishing no sdist, and the fetch driver skips them for the same reason rather than chasing an external source of unknown provenance.",
-    "files": 8582,
+    "fetched": "2026-08-13 (luarocks.org module listing and module pages of that date)",
+    "packages": 88,
+    "packages_note": "1,000 modules requested (top-k.json carries the full ranked list); 88 resolved into the corpus. The dominant skip reason is unchanged from the earlier fetch: a 404 on the .src.rock, for rocks that publish only a .rockspec whose source is fetched from git or an upstream URL at install time. That is the LuaRocks analogue of a PyPI package publishing no sdist, and the fetch driver skips them rather than chasing an external source of unknown provenance.",
+    "files": 1598,
     "nested_archives_note": "A .src.rock is a zip carrying the rockspec plus the source, and how the source is carried is the packager's choice. Roughly a quarter of rocks (12 of the top 50 by downloads, including argparse, lpeg, luasocket and lua_cliargs) drop in upstream's release TARBALL rather than an unpacked tree, so the extractor has to walk one level deeper or those packages come out empty. Measured effect on the first 50 packages: 974 files before, 1189 after (+22%). Lang::nested_archives opts in; recursion is one level, and a member whose magic bytes say 'archive' but which does not parse as one is skipped rather than fatal (luarocks itself ships deliberately corrupt archives as fixtures for its own error handling).",
     "sweep_upstream": {
-      "passed": 8545,
-      "failed": 37,
-      "gap_files": 3,
-      "noise_files": 34,
-      "clusters": 31,
-      "note": "upstream 10fe0054 with the two packaging patches only, i.e. before patch 0003. Measured over the 8,582-file / 383-package fetch described by the files and packages fields above."
+      "corpus": "luarocks-1598",
+      "passed": 1588,
+      "failed": 10,
+      "gap_files": 2,
+      "noise_files": 8,
+      "clusters": 10,
+      "note": "upstream 10fe0054 with the two packaging patches only. RE-MEASURED over the 1,598-file corpus above by moving 0003/0004/0005 out of patches/, materializing, sweeping and restoring them, so this number and sweep_patched are the same experiment with one variable changed. The 2 gap files are exactly the first-seen files of 0003 and 0004 - luacheck spec/lexer_spec.lua (`arguments > ERROR(number string_content ]] string_content ...)`) and net-url tests/query_test.lua (`string > ERROR(ERROR identifier)`) - which is the independent check that the patch series is what moves this number."
     },
-    "remaining_gaps_note": "0 gap files remain. The last one was a literal NUL byte inside a string literal (net-url tests/query_test.lua), fixed by patch 0004: Lua reads source as a length-delimited buffer and accepts embedded NULs, and tree-sitter's lexer reports codepoint 0 for BOTH a NUL byte and end-of-input, so a scanner loop written as `lookahead != 0` ends the token at the NUL and the remainder of the file is ERROR. An EXTERNAL token can tell the two apart - lexer->eof(lexer) is false at a NUL and true at end of input - so wherever the scanner owns the token this IS expressible, which is what 0004 does for quoted strings. It was previously recorded here (and in LOCAL-PATCHES.md) as a tree-sitter CORE limitation affecting both remaining gap files; that was wrong for the string half, and the correction is patch 0004. What genuinely cannot be fixed from grammar.js or scanner.c is a NUL in a token the INTERNAL lexer owns - a line comment (`-- a<NUL>b`, the shape of the openssl test/root_ca.lua gap the 8,582-file fetch found), where codepoint 0 is EOF with no eof() to consult; moving line comments into the scanner is not a minimal change and no file in the current sweep corpus needs it. `[[a<NUL>b]]` and `--[[a<NUL>b]]` are scanner-owned and would take the same one-line idiom in scan_block_content, but not one file in the sweep corpus exercises them, so that change is left uncaptured rather than made without evidence. Incidence of NUL bytes in the current corpus: exactly 1 file of 1,598, the one 0004 fixes.",
+    "remaining_gaps_note": "0 gap files remain. Both of the NUL-byte gaps this note used to call unfixable are fixed: 0004 for quoted strings, 0005 for long strings and long comments. Lua reads source as a length-delimited buffer and accepts embedded NULs; tree-sitter's lexer reports codepoint 0 for BOTH a NUL and end-of-input, so any scanner loop written as `lookahead != 0` ends its token at the NUL and the rest of the file becomes ERROR. An EXTERNAL token can tell the two apart - lexer->eof(lexer) is false at a NUL and true only at end of input - so every token the SCANNER owns is fixable, and after 0005 all of them are fixed. What remains genuinely unfixable from grammar.js or scanner.c is a NUL in a token the INTERNAL lexer owns: a line comment (`-- a<NUL>b`), which is the shape of the openssl test/root_ca.lua gap the earlier 8,582-file fetch found. There codepoint 0 is EOF with no eof() to consult, and the only fix is moving line comments into the scanner, which is not a minimal change and which no file in the current corpus needs. NUL bytes in the current corpus: exactly 1 file of 1,598, the one 0004 fixes.",
     "sweep_patched": {
       "corpus": "luarocks-1598",
       "passed": 1590,
@@ -72,7 +73,29 @@
       "gap_files": 0,
       "noise_files": 8,
       "clusters": 8,
-      "note": "with patches 0003 and 0004. Measured over the 1,598-file / 88-package LuaRocks sweep corpus the daily job currently fetches, NOT the 8,582-file fetch that corpus.files, corpus.packages and sweep_upstream above describe - the two are different fetches and their pass counts are not comparable. 99.50% of files parse and ZERO gap files remain: all 8 failures are corpus noise (invalid Lua that luac 5.4 rejects too)."
+      "note": "with patches 0003, 0004 and 0005. 99.50% of files parse and ZERO gap files remain: all 8 failures are corpus noise (invalid Lua that luac 5.4 rejects too). 0005 moves no file in this corpus - see its entry."
+    },
+    "previous_fetch": {
+      "note": "The fetch this ledger's prose was originally written against, kept because the 0003 evidence block and several notes quote its numbers. It is NOT the corpus the sweep fields above and below describe, and the two pass counts are not comparable - a smaller corpus is not a regression.",
+      "fetched": "2026-08-11",
+      "packages": 383,
+      "packages_note": "500 requested; 383 resolved.",
+      "files": 8582,
+      "sweep_upstream": {
+        "passed": 8545,
+        "failed": 37,
+        "gap_files": 3,
+        "noise_files": 34,
+        "clusters": 31
+      },
+      "sweep_patched": {
+        "passed": 8546,
+        "failed": 36,
+        "gap_files": 2,
+        "noise_files": 34,
+        "clusters": 28,
+        "note": "with patch 0003 only; 0004 and 0005 postdate this fetch."
+      }
     }
   },
   "patches": [
@@ -173,6 +196,42 @@
         },
         "evidence_note": "One file, and it is the last gap file in the corpus: the sweep goes to 0 gaps, with all 8 remaining failures corpus noise. Zero regressions - upstream's own corpus tests go 42/42 to 43/43 (the new case is the 43rd), the 76 syntax highlighting assertions and 24 tag assertions are unchanged, and the 16-file negative corpus is still fully rejected. Worth knowing for whoever captures the next patch: the corpus test file now contains a literal NUL, so git treats test/corpus/expressions.txt as binary and a plain `git -C build diff` emits `Bin ... bytes` instead of a hunk, silently dropping the test from the patch. This patch was captured with `git diff -a`, which keeps it a readable text patch carrying the raw byte, and `git apply` round-trips it - verified by materializing from scratch and reading the NUL back out of the materialized file.",
         "upstream_status": "not reported upstream yet; applies to the pinned sha on top of PR #80 (patch 0003)"
+      }
+    },
+    {
+      "id": 5,
+      "title": "NUL byte inside a long string or long comment",
+      "file": "patches/0005-nul-byte-inside-a-long-string-or-long-comment.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/expressions.txt",
+        "test/corpus/comments.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; the other half of 0004, which 0004's own ledger entry named and deliberately left uncaptured for want of corpus evidence. Captured now on the reasoning that the defect is one bug in three token types and leaving two of them broken is a worse invariant than a patch with no sweep delta.",
+      "evidence": {
+        "repro": "x = [[a\u0000b]]\n--[==[c\u0000d]==]\n",
+        "repro_note": "each pair of letters is separated by a literal NUL, encoded here as \\u0000. Both lines are valid to luac 5.4 and both failed to parse before this patch.",
+        "diagnosis": "Identical to 0004 one function over: scan_block_content looped on `lexer->lookahead != 0`, so a NUL ended the content token and the rest of the file became ERROR. One condition, `!lexer->eof(lexer)`, fixes BOTH long strings and long comments because scan_block_content is the single producer of BLOCK_STRING_CONTENT and BLOCK_COMMENT_CONTENT. Noted while reading it, and deliberately NOT changed: the sibling loop in scan_comment_content is unreachable. scanner->ending_char is only ever assigned 0 (reset_state) or restored from a serialized buffer that can only hold 0, so the `ending_char == 0` branch above it always wins - vestigial upstream state, and removing it is a separate change with its own justification.",
+        "first_seen_note": "No file in the sweep corpus exercises this - see sweep_before/sweep_after, which are identical. The evidence is the repro plus the oracle verdict, not a sweep delta, and that is stated rather than dressed up. The earlier 8,582-file fetch did contain a NUL-in-comment file (openssl test/root_ca.lua), but it is a LINE comment, which 0005 does not fix and nothing at this layer can.",
+        "sweep_before": {
+          "corpus": "luarocks-1598",
+          "passed": 1590,
+          "failed": 8,
+          "gap_files": 0,
+          "noise_files": 8,
+          "clusters": 8
+        },
+        "sweep_after": {
+          "corpus": "luarocks-1598",
+          "passed": 1590,
+          "failed": 8,
+          "gap_files": 0,
+          "noise_files": 8,
+          "clusters": 8
+        },
+        "evidence_note": "ZERO files moved: this patch buys no sweep improvement and is not claimed to. What it buys is that the NUL fix is now true of every token the scanner owns rather than one of three. Verified by repro and by the reference parser: `[[a<NUL>b]]`, `--[[a<NUL>b]]`, `[=[a<NUL>b]]c]=]`, `[[a]<NUL>b]]` and `--[==[a<NUL>b]==]` are all valid to luac 5.4 and all now parse clean, having all failed before. The EOF path is unregressed, which is the risk this condition carries: an unterminated `[[`, an unterminated `--[[` and a file ending immediately after `[[` are each still REJECTED, and luac 5.4 rejects all three too (unfinished long string / long comment). Corpus tests 43/43 -> 45/45, highlight and tag assertions unchanged, negative corpus still fully rejected.",
+        "upstream_status": "not reported upstream yet; applies to the pinned sha on top of PR #80 (patch 0003) and patch 0004"
       }
     }
   ]
