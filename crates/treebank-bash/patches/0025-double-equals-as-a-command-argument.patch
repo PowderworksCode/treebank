@@ -1,0 +1,53 @@
+diff --git a/grammar.js b/grammar.js
+index 7bd948b..47d882f 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -543,9 +543,13 @@ module.exports = grammar({
+           repeat(choice(
+             field('argument', $._literal),
+             field('argument', alias($._bare_dollar, '$')),
+-            field('argument', seq(
+-              choice('=~', '=='),
+-              choice($._literal, $.regex),
++            field('argument', choice(
++              // `==` in ARGUMENT position takes an ordinary word:
++              // `echo R == E`. Only `=~` takes a regex, whose scan runs to
++              // the enclosing `}` and would otherwise swallow the rest of a
++              // compound statement.
++              seq('==', $._literal),
++              seq('=~', choice($._literal, $.regex)),
+             )),
+             field('redirect', $.herestring_redirect),
+           )),
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index cea08c4..da02ce1 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -2224,3 +2224,27 @@ enabled x && { require y && { test z || die "e"; } }
+                 (word))
+               argument: (string
+                 (string_content)))))))))
++
++================================================================================
++Double equals as a command argument inside a compound
++================================================================================
++
++{
++  if true; then
++    echo R == E
++  fi
++}
++
++--------------------------------------------------------------------------------
++
++(program
++  (compound_statement
++    (if_statement
++      condition: (command
++        name: (command_name
++          (word)))
++      (command
++        name: (command_name
++          (word))
++        argument: (word)
++        argument: (word)))))

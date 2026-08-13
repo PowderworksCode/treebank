@@ -1,0 +1,76 @@
+diff --git a/grammar.js b/grammar.js
+index 47d882f..79a136c 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1202,9 +1202,10 @@ module.exports = grammar({
+           $.ansi_c_string,
+           $.command_substitution,
+           alias($._expansion_word, $.word),
+-          // a bare `)` inside `${...}` is text, as `_expansion_regex`
++          // a bare `)` or `;` inside `${...}` is text, as `_expansion_regex`
+           // already assumes for the pattern operands
+           alias(')', $.word),
++          alias(';', $.word),
+           $.array,
+           $.process_substitution,
+         ),
+diff --git a/src/scanner.c b/src/scanner.c
+index 43cb60e..208880d 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -364,11 +364,13 @@ static bool scan(Scanner *scanner, TSLexer *lexer, const bool *valid_symbols) {
+     if (valid_symbols[CONCAT] && !in_error_recovery(valid_symbols)) {
+         if (!(lexer->lookahead == 0 || iswspace(lexer->lookahead) || lexer->lookahead == '>' ||
+               lexer->lookahead == '<' ||
+-              // inside `${...}` a `)` is ordinary text, so a concatenation
+-              // may continue across it: `${A:+ (git:$B)}`
++              // inside `${...}` a `)` or `;` is ordinary text, so a
++              // concatenation may continue across it: `${A:+ (git:$B)}`,
++              // `${A-${B-x = ${C};}}`
+               (lexer->lookahead == ')' && !valid_symbols[CLOSING_BRACE]) ||
++              (lexer->lookahead == ';' && !valid_symbols[CLOSING_BRACE]) ||
+               lexer->lookahead == '(' ||
+-              lexer->lookahead == ';' || lexer->lookahead == '&' || lexer->lookahead == '|' ||
++              lexer->lookahead == '&' || lexer->lookahead == '|' ||
+               (lexer->lookahead == '}' && valid_symbols[CLOSING_BRACE]) ||
+               (lexer->lookahead == ']' && valid_symbols[CLOSING_BRACKET]))) {
+             lexer->result_symbol = CONCAT;
+@@ -718,7 +720,7 @@ static bool scan(Scanner *scanner, TSLexer *lexer, const bool *valid_symbols) {
+         // can still be the text of an expansion word (`${A-ALIGN(8)}`), and
+         // that scan starts where this one stopped rather than at the token
+         // start, so tell it the word is already behind us.
+-        if (valid_symbols[EXPANSION_WORD] && lexer->lookahead == '(') {
++        if (valid_symbols[EXPANSION_WORD] && (lexer->lookahead == '(' || lexer->lookahead == ';')) {
+             expansion_word_advanced = true;
+             goto expansion_word;
+         }
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index 49bde21..a0eee12 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -2114,3 +2114,25 @@ CONF["${v%%[={ ]*}"]=1
+           (variable_name)
+           (regex))))
+     value: (number)))
++
++================================================================================
++Semicolon inside an expansion default value
++================================================================================
++
++x=${A-${B-__h = ${C};}}
++
++--------------------------------------------------------------------------------
++
++(program
++  (variable_assignment
++    name: (variable_name)
++    value: (expansion
++      (variable_name)
++      (expansion
++        (variable_name)
++        (concatenation
++          (word)
++          (word)
++          (expansion
++            (variable_name))
++          (word))))))

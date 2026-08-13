@@ -293,7 +293,7 @@ version decides what is valid.
 
 **4. Bash** · npm **13.3 M/month, the single most-downloaded tree-sitter
 grammar on npm** · all 3 editors
-Oracle `bash -n`, **2.4 s/1000 forked, re-measured; 0.12 s/1000 at -P16;
+Oracle `bash -n`, **2.4 s/1000 forked, re-measured; 0.11 s/1000 in parallel;
 does not execute** — verified that `source /absent/file` and `rm -rf` in a
 script are not run, along with command and process substitution, heredoc
 bodies, `eval` and `BASH_ENV`.

@@ -1,0 +1,133 @@
+diff --git a/grammar.js b/grammar.js
+index cfdf9f9..692d19b 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -52,6 +52,8 @@ module.exports = grammar({
+     [$.redirected_statement, $.command_substitution],
+     [$.function_definition, $.command_name],
+     [$.pipeline],
++    [$.command],
++    [$.list, $.command, $.variable_assignments],
+   ],
+ 
+   inline: $ => [
+@@ -495,23 +497,32 @@ module.exports = grammar({
+       )),
+     )),
+ 
+-    command: $ => prec.left(seq(
+-      repeat(choice(
+-        $.variable_assignment,
+-        field('redirect', $._redirect),
+-      )),
+-      field('name', $.command_name),
+-      choice(
++    command: $ => prec.left(choice(
++      seq(
+         repeat(choice(
+-          field('argument', $._literal),
+-          field('argument', alias($._bare_dollar, '$')),
+-          field('argument', seq(
+-            choice('=~', '=='),
+-            choice($._literal, $.regex),
+-          )),
+-          field('redirect', $.herestring_redirect),
++          $.variable_assignment,
++          field('redirect', $._redirect),
+         )),
+-        $.subshell,
++        field('name', $.command_name),
++        choice(
++          repeat(choice(
++            field('argument', $._literal),
++            field('argument', alias($._bare_dollar, '$')),
++            field('argument', seq(
++              choice('=~', '=='),
++              choice($._literal, $.regex),
++            )),
++            field('redirect', $.herestring_redirect),
++          )),
++          $.subshell,
++        ),
++      ),
++      // `x=1 >/dev/null` — assignments and a redirection with no command
++      // name. bash runs it as a command whose only lasting effect is the
++      // assignment.
++      seq(
++        repeat1($.variable_assignment),
++        field('redirect', repeat1($._redirect)),
+       ),
+     )),
+ 
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index 1cf6ea0..963bc8b 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -1824,8 +1824,7 @@ plain=$((0x12 + a * 2))
+   (variable_assignment
+     (variable_name)
+     (arithmetic_expansion
+-      (concatenation
+-        (variable_name)
++      (number
+         (command_substitution
+           (command
+             (command_name
+@@ -1834,8 +1833,7 @@ plain=$((0x12 + a * 2))
+   (variable_assignment
+     (variable_name)
+     (arithmetic_expansion
+-      (concatenation
+-        (variable_name)
++      (number
+         (expansion
+           (variable_name)))))
+   (variable_assignment
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index c8bdc3a..c260bef 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -2006,3 +2006,43 @@ if [ "$a" = "$b" ]; then :; fi
+     (command
+       (command_name
+         (word)))))
++
++================================================================================
++Assignment with a redirection and no command name
++================================================================================
++
++x=1 >/dev/null
++__PLUSEQ_TEST+=" b" 2>/dev/null && echo yes
++a=1 b=2 >/dev/null
++
++--------------------------------------------------------------------------------
++
++(program
++  (command
++    (variable_assignment
++      name: (variable_name)
++      value: (number))
++    redirect: (file_redirect
++      destination: (word)))
++  (list
++    (command
++      (variable_assignment
++        name: (variable_name)
++        value: (string
++          (string_content)))
++      redirect: (file_redirect
++        descriptor: (file_descriptor)
++        destination: (word)))
++    (command
++      name: (command_name
++        (word))
++      argument: (word)))
++  (command
++    (variable_assignment
++      name: (variable_name)
++      value: (number))
++    (variable_assignment
++      name: (variable_name)
++      value: (number))
++    redirect: (file_redirect
++      destination: (word))))

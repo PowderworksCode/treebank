@@ -1,0 +1,51 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index f31082e..620cb79 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -206,7 +206,13 @@ static inline bool scan_bare_dollar(TSLexer *lexer) {
+         advance(lexer);
+         lexer->result_symbol = BARE_DOLLAR;
+         lexer->mark_end(lexer);
+-        return iswspace(lexer->lookahead) || lexer->eof(lexer) || lexer->lookahead == '\"';
++        // A `$` is literal whenever what follows it cannot begin an
++        // expansion — `sed -e s/.ct$//`, `$\|`, `$)`.
++        return iswspace(lexer->lookahead) || lexer->eof(lexer) || lexer->lookahead == '\"' ||
++               !(lexer->lookahead == '{' || lexer->lookahead == '(' || lexer->lookahead == '\'' ||
++                 lexer->lookahead == '_' || lexer->lookahead == '@' || lexer->lookahead == '*' ||
++                 lexer->lookahead == '#' || lexer->lookahead == '?' || lexer->lookahead == '-' ||
++                 lexer->lookahead == '!' || lexer->lookahead == '$' || iswalnum(lexer->lookahead));
+     }
+ 
+     return false;
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index 4f92731..b4bebbf 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -2023,3 +2023,27 @@ echo ${x@U}
+       (word))
+     argument: (expansion
+       (variable_name))))
++
++================================================================================
++Literal dollar before a non-expansion character
++================================================================================
++
++sed -e s/.ct$//
++echo x$/
++
++--------------------------------------------------------------------------------
++
++(program
++  (command
++    name: (command_name
++      (word))
++    argument: (word)
++    argument: (concatenation
++      (word)
++      (word)))
++  (command
++    name: (command_name
++      (word))
++    argument: (concatenation
++      (word)
++      (word))))
