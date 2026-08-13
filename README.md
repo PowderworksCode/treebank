@@ -15,7 +15,7 @@ grammars:
 - `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX included), 2 grammar patches
-- `crates/treebank-lua` — tree-sitter-lua 0.5.0, 1 grammar patch
+- `crates/treebank-lua` — tree-sitter-lua 0.5.0, 2 grammar patches
 - `crates/treebank-php` — tree-sitter-php 0.24.2 (php + php_only grammars), 4 grammar patches
 - `crates/treebank-python` — tree-sitter-python 0.25.0, 6 grammar patches
 - `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
