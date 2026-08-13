@@ -1,0 +1,45 @@
+diff --git a/grammar.js b/grammar.js
+index 6ca9e42..c110e12 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -66,7 +66,7 @@ module.exports = grammar({
+ 
+     number: _ => {
+       const decimalDigits = /\d+/;
+-      const signedInteger = seq(optional('-'), decimalDigits);
++      const signedInteger = seq(optional(choice('-', '+')), decimalDigits);
+       const exponentPart = seq(choice('e', 'E'), signedInteger);
+ 
+       const decimalIntegerLiteral = seq(
+diff --git a/test/corpus/main.txt b/test/corpus/main.txt
+index 45da5cc..b1b7e29 100644
+--- a/test/corpus/main.txt
++++ b/test/corpus/main.txt
+@@ -140,3 +140,27 @@ Multiple top-level objects
+ (document
+   (object)
+   (object))
++
++================================================================================
++Exponents, including the plus sign RFC 8259 allows
++================================================================================
++
++[
++  1e1,
++  1E1,
++  0.5e-1,
++  0.5e+1,
++  2E+10,
++  -3.25E-7
++]
++
++--------------------------------------------------------------------------------
++
++(document
++  (array
++    (number)
++    (number)
++    (number)
++    (number)
++    (number)
++    (number)))

@@ -49,3 +49,6 @@
 [submodule "crates/treebank-html/upstream"]
 	path = crates/treebank-html/upstream
 	url = https://github.com/tree-sitter/tree-sitter-html
+[submodule "crates/treebank-json/upstream"]
+	path = crates/treebank-json/upstream
+	url = https://github.com/tree-sitter/tree-sitter-json

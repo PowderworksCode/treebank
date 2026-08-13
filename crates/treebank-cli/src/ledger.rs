@@ -79,6 +79,9 @@ pub enum LangName {
     #[serde(rename = "html")]
     #[value(name = "html")]
     Html,
+    #[serde(rename = "json")]
+    #[value(name = "json")]
+    Json,
 }
 
 impl LangName {
@@ -101,6 +104,7 @@ impl LangName {
             LangName::Yaml => "yaml",
             LangName::Toml => "toml",
             LangName::Html => "html",
+            LangName::Json => "json",
         }
     }
 }

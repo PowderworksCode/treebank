@@ -291,5 +291,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-json",
+    "dep": "tree-sitter-json",
+    "crate": "treebank-grammar-json",
+    "cases": [
+      {
+        "label": "json (exponent plus sign, patch 0003)",
+        "language": "tree_sitter_json::LANGUAGE",
+        "fixture": "patched.json",
+        "expect": "Clean"
+      },
+      {
+        "label": "json strictness (must reject)",
+        "language": "tree_sitter_json::LANGUAGE",
+        "fixture": "must-reject.json",
+        "expect": "Error"
+      }
+    ]
   }
 ]
