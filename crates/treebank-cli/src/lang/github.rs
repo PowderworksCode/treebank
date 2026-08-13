@@ -91,8 +91,18 @@ fn token() -> Option<String> {
     (out.status.success() && !t.is_empty()).then_some(t)
 }
 
+/// Timeouts for the same measured reason `fetch::download` carries them, and
+/// found the same way: a `resolve()` call to `/repos/{repo}/commits/{branch}`
+/// wedged mid-request during the html corpus fetch — socket alive, zero bytes
+/// read, no progress for six minutes — and ureq's default agent has no read
+/// timeout, so the whole serial fetch stopped behind one API call. The
+/// download path was already immune to this; the API path was not.
 fn get(url: &str) -> Result<serde_json::Value> {
-    let mut req = ureq::get(url)
+    let mut req = ureq::AgentBuilder::new()
+        .timeout_connect(std::time::Duration::from_secs(30))
+        .timeout_read(std::time::Duration::from_secs(60))
+        .build()
+        .get(url)
         .set("Accept", "application/vnd.github+json")
         .set("User-Agent", "treebank-corpus");
     if let Some(t) = token() {
