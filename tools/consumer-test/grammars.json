@@ -215,5 +215,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-elixir",
+    "dep": "tree-sitter-elixir",
+    "crate": "treebank-grammar-elixir",
+    "cases": [
+      {
+        "label": "elixir",
+        "language": "tree_sitter_elixir::LANGUAGE",
+        "fixture": "patched.ex",
+        "expect": "Clean"
+      },
+      {
+        "label": "elixir strictness (must reject)",
+        "language": "tree_sitter_elixir::LANGUAGE",
+        "fixture": "must-reject.ex",
+        "expect": "Error"
+      }
+    ]
   }
 ]

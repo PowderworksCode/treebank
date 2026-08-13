@@ -7,6 +7,7 @@ mod bash;
 mod c;
 mod csharp;
 mod debian;
+mod elixir;
 mod exec_oracle;
 mod github;
 mod go;
@@ -160,6 +161,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static ZIG: zig::Zig = zig::Zig;
     static LUA: lua::Lua = lua::Lua;
     static RUBY: ruby::Ruby = ruby::Ruby;
+    static ELIXIR: elixir::Elixir = elixir::Elixir;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -174,5 +176,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Zig => &ZIG,
         LangName::Lua => &LUA,
         LangName::Ruby => &RUBY,
+        LangName::Elixir => &ELIXIR,
     }
 }

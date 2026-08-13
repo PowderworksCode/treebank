@@ -15,5 +15,6 @@ exclude = [
     "crates/treebank-zig",
     "crates/treebank-lua",
     "crates/treebank-ruby",
+    "crates/treebank-elixir",
 ]
 resolver = "2"

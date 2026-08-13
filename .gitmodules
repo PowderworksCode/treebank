@@ -37,3 +37,6 @@
 [submodule "crates/treebank-ruby/upstream"]
 	path = crates/treebank-ruby/upstream
 	url = https://github.com/tree-sitter/tree-sitter-ruby
+[submodule "crates/treebank-elixir/upstream"]
+	path = crates/treebank-elixir/upstream
+	url = https://github.com/elixir-lang/tree-sitter-elixir
