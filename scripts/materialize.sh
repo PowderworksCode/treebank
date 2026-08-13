@@ -143,7 +143,17 @@ git -C build add -A
 git -C build -c user.name=treebank -c user.email=treebank@localhost \
   commit -qm "upstream @ $SHA"
 
-for p in "$ROOT"/patches/*.patch; do
+# Collected once, into an array, and counted from it below. The count used
+# to be a second `ls "$ROOT"/patches/*.patch | wc -l`, which is wrong in the
+# one case it matters: `shopt -s nullglob` is set at the top, so for a
+# grammar whose patches/ is still empty the pattern expands to NOTHING, `ls`
+# runs with no arguments, and it counts the entries of the grammar directory
+# instead. Observed while bootstrapping treebank-go: build/'s commit said
+# "+ 5 patches" over a patch series of zero. That message is what tells an
+# agent reading `git -C build log` which tree it is looking at, so it should
+# not be able to say a number nobody applied.
+patches=("$ROOT"/patches/*.patch)
+for p in "${patches[@]}"; do
   echo "   applying $(basename "$p")"
   git -C build apply --whitespace=nowarn "$p"
 done
@@ -163,6 +173,6 @@ done
 
 git -C build add -A
 git -C build -c user.name=treebank -c user.email=treebank@localhost \
-  commit -qm "materialized: upstream $SHA + $(ls "$ROOT"/patches/*.patch 2>/dev/null | wc -l) patches + generate (CLI $CLI_WANT)"
+  commit -qm "materialized: upstream $SHA + ${#patches[@]} patches + generate (CLI $CLI_WANT)"
 
 echo "materialize: ok — $GRAMMAR_DIR/build (upstream $SHA, CLI $CLI_WANT)"
