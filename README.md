@@ -12,6 +12,7 @@ grammars:
 - `crates/treebank-bash` — tree-sitter-bash 0.25.1, 6 grammar patches
 - `crates/treebank-c` — tree-sitter-c 0.24.2, 13 grammar patches
 - `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
+- `crates/treebank-elixir` — tree-sitter-elixir 0.3.5, 1 grammar patch
 - `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX included), 2 grammar patches

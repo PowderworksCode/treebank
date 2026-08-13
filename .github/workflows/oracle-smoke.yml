@@ -70,5 +70,19 @@ jobs:
           sudo apt-get install -y -qq llvm-dev libclang-dev
           echo "TREEBANK_LLVM_DIR=$(llvm-config --prefix)" >> "$GITHUB_ENV"
 
+      # The BEAM, for elixir-oracle. Deliberately this repo's own pinned
+      # installer rather than erlef/setup-beam: it fetches from the same host
+      # that action does (builds.hex.pm), verifies checksums, and installs the
+      # exact OTP and Elixir that crates/treebank-elixir's ledger names — so
+      # CI and a laptop adjudicate with the same parser. `--otp-only` is the
+      # half the erlang oracle will need when it lands.
+      - name: Install the BEAM toolchain
+        run: |
+          set -euo pipefail
+          IFS=: read -r otp_bin elixir_bin < <(tools/beam-toolchain/fetch.sh)
+          echo "$otp_bin" >> "$GITHUB_PATH"
+          echo "$elixir_bin" >> "$GITHUB_PATH"
+          echo "TREEBANK_ELIXIR=$elixir_bin/elixir" >> "$GITHUB_ENV"
+
       - name: Oracle smoke test
         run: scripts/oracle-smoke.sh --require-all

@@ -204,6 +204,27 @@ if [ -d tools/php-oracle ]; then
   fi
 fi
 
+# ----------------------------------------------------------------- elixir
+# The pinned Elixir is installed under ~/.local/beam by
+# tools/beam-toolchain/fetch.sh rather than into the system, so this looks
+# where elixir.rs looks: $TREEBANK_ELIXIR first, then PATH.
+#
+# Worth guarding twice over. check.exs is a BATCH oracle -- one long-lived VM
+# for the whole run -- so a bug in it does not fail one file, it votes on all
+# of them, and its first draft did exactly that: a mistyped option raised, a
+# blanket rescue caught it, and every file came back `invalid`. Assertion (2)
+# is what catches that shape.
+if [ -f tools/elixir-oracle/check.exs ]; then
+  ELIXIR_BIN="${TREEBANK_ELIXIR:-elixir}"
+  if command -v "$ELIXIR_BIN" >/dev/null; then
+    printf 'defmodule A do\n  def f, do: 1\nend\n' > "$TMP/good.ex"
+    printf 'defmodule A do\n' > "$TMP/evil.ex"
+    assert_oracle elixir-oracle "$TMP/good.ex" "$TMP/evil.ex" "$ELIXIR_BIN" tools/elixir-oracle/check.exs
+  else
+    skipped elixir-oracle "no elixir (tools/beam-toolchain/fetch.sh installs the pinned one)"
+  fi
+fi
+
 echo
 if [ "$fail" -gt 0 ]; then
   echo "oracle smoke: $fail failed, $pass passed, $skip skipped"

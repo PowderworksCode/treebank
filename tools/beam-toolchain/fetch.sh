@@ -50,6 +50,11 @@ OTP_SHA256=e3476633cae6fef8e1bb53576832b15823f715e70e3d4d1e66a6be908804f967
 ELIXIR_VERSION=1.20.3
 ELIXIR_OTP_MAJOR=28
 ELIXIR_SHA256=8100b91201ddf75f760954e570069b7d43a1c27a3099d65e27a1cd9d539ae51b
+# builds.hex.pm publishes OTP per distribution rather than as one generic
+# tarball, so this names the distribution it was pinned against. It is also
+# what GitHub's ubuntu-latest runner is today; if that moves and the build
+# stops loading, change this line to the new distribution and re-pin the
+# checksum from builds.txt rather than reaching for a source build.
 DISTRO=ubuntu-24.04
 
 PREFIX="${TREEBANK_BEAM_PREFIX:-$HOME/.local/beam}"

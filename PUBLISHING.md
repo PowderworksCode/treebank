@@ -64,6 +64,7 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-bash` | `treebank-grammar-bash` | `tree_sitter_bash` |
 | `crates/treebank-c` | `treebank-grammar-c` | `tree_sitter_c` |
 | `crates/treebank-csharp` | `treebank-grammar-csharp` | `tree_sitter_c_sharp` |
+| `crates/treebank-elixir` | `treebank-grammar-elixir` | `tree_sitter_elixir` |
 | `crates/treebank-go` | `treebank-grammar-go` | `tree_sitter_go` |
 | `crates/treebank-java` | `treebank-grammar-java` | `tree_sitter_java` |
 | `crates/treebank-javascript` | `treebank-grammar-javascript` | `tree_sitter_javascript` |
