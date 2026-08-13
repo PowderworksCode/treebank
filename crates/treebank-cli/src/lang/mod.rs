@@ -16,6 +16,7 @@ mod lua;
 mod npm;
 mod php;
 mod python;
+mod ruby;
 mod rust;
 mod stdin_oracle;
 mod typescript;
@@ -65,6 +66,23 @@ pub trait Lang: Sync {
     /// packages extract to zero files and look empty. Recursion is one level.
     fn nested_archives(&self) -> bool {
         false
+    }
+
+    /// Which member is the payload, for a language that knows. Default: any
+    /// member that looks like an archive, which is right for LuaRocks, where
+    /// whether the source arrives as a tree or as upstream's tarball is the
+    /// packager's choice and the name varies.
+    ///
+    /// A `.gem` is not like that: the source is always `data.tar.gz`, and its
+    /// siblings `metadata.gz` and `checksums.yaml.gz` are gzip streams that
+    /// are not tars. Sniffing them finds the gzip magic, fails to read a tar
+    /// header, and costs a skipped-archive warning per package — two per gem,
+    /// two thousand over the corpus, one of them quoting the package's YAML
+    /// into the message. Naming the member keeps the fetch log readable and
+    /// stops a package's own test fixtures from being walked into.
+    fn nested_archive_member(&self, rel: &Path) -> bool {
+        let _ = rel;
+        true
     }
 
     /// What this language knows for certain about its own preprocessor, if
@@ -141,6 +159,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static BASH: bash::Bash = bash::Bash;
     static ZIG: zig::Zig = zig::Zig;
     static LUA: lua::Lua = lua::Lua;
+    static RUBY: ruby::Ruby = ruby::Ruby;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -154,5 +173,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Bash => &BASH,
         LangName::Zig => &ZIG,
         LangName::Lua => &LUA,
+        LangName::Ruby => &RUBY,
     }
 }

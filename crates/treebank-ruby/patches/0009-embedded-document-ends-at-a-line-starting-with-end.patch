@@ -1,0 +1,67 @@
+diff --git a/grammar.js b/grammar.js
+index bd9716e..6117cc4 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1127,17 +1127,34 @@ module.exports = grammar({
+       field('alias', $._method_name),
+     ),
+ 
++    // An embedded document ends at a line that BEGINS with `=end` and has
++    // whitespace or a line ending after it — Ruby's rule, and the reason
++    // this is written line by line rather than character by character.
++    // Scanning for `=end` anywhere ended the document at the first mention
++    // of the string wherever it sat: rdoc's block_parser.rb has
++    // `parse_subtree(["=begin\\n", "<<< #{basename}\\n", "=end\\n"])` inside
++    // an embedded document and lost the rest of the file to it.
++    //
++    // The old `[\s*]*=end` also let an INDENTED `=end` close the document.
++    // CRuby does not: `=begin` / `doc` / `  =end` is an unterminated embedded
++    // document and a syntax error, which this now reports as one. Likewise
++    // `=endless` at column 0 is content, not a terminator.
+     comment: _ => token(prec(PREC.COMMENT, choice(
+       seq('#', /.*/),
+       seq(
+         /=begin.*\r?\n/,
+         repeat(choice(
+-          /[^=]/,
+-          /=[^e]/,
+-          /=e[^n]/,
+-          /=en[^d]/,
++          /[^=\n][^\n]*\r?\n/,
++          /=[^e\n][^\n]*\r?\n/,
++          /=e[^n\n][^\n]*\r?\n/,
++          /=en[^d\n][^\n]*\r?\n/,
++          /=end[^\s\n][^\n]*\r?\n/,
++          /\r?\n/,
++          /=\r?\n/,
++          /=e\r?\n/,
++          /=en\r?\n/,
+         )),
+-        /[\s*]*=end.*/,
++        /=end([ \t\v\f][^\n]*)?/,
+       ),
+     ))),
+ 
+diff --git a/test/corpus/comments.txt b/test/corpus/comments.txt
+index 2c7c763..5c7f5f9 100644
+--- a/test/corpus/comments.txt
++++ b/test/corpus/comments.txt
+@@ -103,3 +103,18 @@ comment
+ ---
+ 
+ (program (comment))
++
++===========
++embedded document ends only at a line starting with =end
++===========
++
++=begin
++subtree = parse_subtree(["=begin\\n", "<<< #{basename}\\n", "=end\\n"])
++  =end
++=endless
++=end
++puts 1
++
++---
++
++(program (comment) (call method: (identifier) arguments: (argument_list (integer))))

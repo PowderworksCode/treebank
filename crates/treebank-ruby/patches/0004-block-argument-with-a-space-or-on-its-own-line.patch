@@ -1,0 +1,83 @@
+diff --git a/grammar.js b/grammar.js
+index a8b6ca6..7064ae0 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -872,7 +872,25 @@ module.exports = grammar({
+     forward_argument: _ => '...',
+     splat_argument: $ => prec.right(seq(alias($._splat_star, '*'), optional($._arg))),
+     hash_splat_argument: $ => prec.right(seq(alias($._hash_splat_star_star, '**'), optional($._arg))),
+-    block_argument: $ => prec.right(seq(alias($._block_ampersand, '&'), optional($._arg))),
++    // The external `_block_ampersand` only fires when `&` is followed
++    // immediately by a non-space, because in a paren-less command call
++    // `a & b` is genuinely ambiguous — binary `and` if `a` is a local
++    // variable, a block-pass if `a` is a method — and CRuby resolves it with
++    // local-variable knowledge a grammar does not have.
++    //
++    // Inside a parenthesised argument list there is no such ambiguity: after
++    // `(` or `,` there is no left operand, so `&` can only be a block-pass.
++    // `foo(& block)` and a bare `&` on its own line before the closing paren
++    // (anonymous block forwarding, Ruby 3.1) both hit that case. Offering the
++    // plain `&` token as a second alternative puts the decision in the LR
++    // automaton, which knows whether a binary operator is possible here; the
++    // scanner, called before the parser state is consulted, does not.
++    // prec(-1) so that wherever both readings are available — exactly the
++    // `a & b` command-call case — binary still wins.
++    block_argument: $ => prec.right(seq(
++      choice(alias($._block_ampersand, '&'), prec(-1, '&')),
++      optional($._arg),
++    )),
+ 
+     do_block: $ => seq(
+       'do',
+diff --git a/test/corpus/expressions.txt b/test/corpus/expressions.txt
+index f584792..a22f66c 100644
+--- a/test/corpus/expressions.txt
++++ b/test/corpus/expressions.txt
+@@ -2881,3 +2881,47 @@ multiline regex
+ (program
+   (regex
+     (string_content)))
++
++===========
++block argument with a space, and anonymous forwarding on its own line
++===========
++
++def self.execute(args, & block)
++  new(args).execute(& block)
++end
++
++def forward(&)
++  target(
++    key: value,
++    &
++  )
++end
++
++a & b
++foo a & b
++
++---
++
++(program
++  (singleton_method
++    object: (self)
++    name: (identifier)
++    parameters: (method_parameters (identifier) (block_parameter name: (identifier)))
++    body: (body_statement
++      (call
++        receiver: (call method: (identifier) arguments: (argument_list (identifier)))
++        method: (identifier)
++        arguments: (argument_list (block_argument (identifier))))))
++  (method
++    name: (identifier)
++    parameters: (method_parameters (block_parameter))
++    body: (body_statement
++      (call
++        method: (identifier)
++        arguments: (argument_list
++          (pair key: (hash_key_symbol) value: (identifier))
++          (block_argument)))))
++  (binary left: (identifier) right: (identifier))
++  (call
++    method: (identifier)
++    arguments: (argument_list (binary left: (identifier) right: (identifier)))))

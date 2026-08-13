@@ -167,7 +167,17 @@ fn decompress(archive: &Path) -> Result<Box<dyn Read>> {
         let mut f = std::fs::File::open(archive)?;
         let _ = f.read(&mut magic)?;
     }
+    let mut head = vec![0u8; 512];
+    {
+        use std::io::Read as _;
+        let mut f = std::fs::File::open(archive)?;
+        let n = f.read(&mut head)?;
+        head.truncate(n);
+    }
     let file = std::fs::File::open(archive)?;
+    if matches!(shape(&head), Shape::PlainTar) {
+        return Ok(Box::new(file));
+    }
     Ok(match magic {
         [0xfd, b'7', b'z', b'X', b'Z', 0x00] => Box::new(liblzma::read::XzDecoder::new(file)),
         [b'B', b'Z', b'h', ..] => Box::new(bzip2::read::BzDecoder::new(file)),
@@ -177,6 +187,9 @@ fn decompress(archive: &Path) -> Result<Box<dyn Read>> {
 
 /// Decompress an in-memory archive the same way `decompress` does a file.
 fn decompress_bytes(buf: Vec<u8>) -> Box<dyn Read> {
+    if matches!(shape(&buf), Shape::PlainTar) {
+        return Box::new(std::io::Cursor::new(buf));
+    }
     match buf.first_chunk::<6>() {
         Some([0xfd, b'7', b'z', b'X', b'Z', 0x00]) => {
             Box::new(liblzma::read::XzDecoder::new(std::io::Cursor::new(buf)))
@@ -192,10 +205,21 @@ fn decompress_bytes(buf: Vec<u8>) -> Box<dyn Read> {
 enum Shape {
     Zip,
     Tar,
+    /// An uncompressed tar. Nothing is *published* in this shape — it is what
+    /// a container looks like. A RubyGems `.gem` is one: a plain tar holding
+    /// `metadata.gz`, `checksums.yaml.gz` and `data.tar.gz`, with every source
+    /// file inside that last member.
+    PlainTar,
     NotAnArchive,
 }
 
 fn shape(buf: &[u8]) -> Shape {
+    // `ustar` sits at offset 257 of a tar header, so this needs more than the
+    // magic-byte prefix the compressed shapes need. A buffer too short to
+    // reach it simply is not a plain tar.
+    if buf.len() >= 262 && &buf[257..262] == b"ustar" {
+        return Shape::PlainTar;
+    }
     match buf.first_chunk::<6>() {
         Some([b'P', b'K', ..]) => Shape::Zip,
         Some([0x1f, 0x8b, ..]) | Some([b'B', b'Z', b'h', ..]) => Shape::Tar,
@@ -321,7 +345,7 @@ fn walk(
                 take(lang, inner, pkgdir, prefix, &rel, false, files)?;
             }
         }
-        Shape::Tar => {
+        Shape::Tar | Shape::PlainTar => {
             let mut tar = tar::Archive::new(decompress_bytes(buf));
             for entry in tar.entries()? {
                 let mut entry = entry?;
@@ -357,7 +381,11 @@ fn take(
     outermost: bool,
     files: &mut Vec<ManifestFile>,
 ) -> Result<()> {
-    if outermost && lang.nested_archives() && !matches!(shape(&buf), Shape::NotAnArchive) {
+    if outermost
+        && lang.nested_archives()
+        && lang.nested_archive_member(rel)
+        && !matches!(shape(&buf), Shape::NotAnArchive)
+    {
         // Nest under the archive's own path so two inner archives cannot
         // overwrite each other, and so the manifest shows the provenance.
         let nested_prefix = prefix.join(rel);

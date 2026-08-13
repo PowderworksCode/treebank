@@ -1,0 +1,85 @@
+diff --git a/grammar.js b/grammar.js
+index 6117cc4..41a9a5a 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -836,12 +836,31 @@ module.exports = grammar({
+           args,
+         );
+ 
++      // `foo.(args)` is sugar for `foo.call(args)`. `argument_list` opens
++      // with token.immediate('(') so that `foo (1)` stays a command call
++      // whose single argument happens to be parenthesised — but after a call
++      // operator with no method name there is no such ambiguity, and Ruby
++      // allows a line break between the `.` and the `(`. representable
++      // splits exactly there:
++      //
++      //   Collect[*bin.default_render_fragment_functions].
++      //     (represented, {doc: doc, fragment: represented})
++      const spacedDotArguments =
++        prec.left(PREC.CALL, seq(
++          field('receiver', $._primary),
++          field('operator', $._call_operator),
++          field('arguments', alias($._spaced_argument_list, $.argument_list)),
++        ));
++
+       const block = field('block', $.block);
+       const doBlock = field('block', $.do_block);
+       return choice(
+         receiverArguments,
++        spacedDotArguments,
+         prec(PREC.CURLY_BLOCK, seq(receiverArguments, block)),
+         prec(PREC.DO_BLOCK, seq(receiverArguments, doBlock)),
++        prec(PREC.CURLY_BLOCK, seq(spacedDotArguments, block)),
++        prec(PREC.DO_BLOCK, seq(spacedDotArguments, doBlock)),
+         prec(PREC.CURLY_BLOCK, seq(receiver, block)),
+         prec(PREC.DO_BLOCK, seq(receiver, doBlock)),
+       );
+@@ -855,6 +874,14 @@ module.exports = grammar({
+       ')',
+     )),
+ 
++    // argument_list, minus the token.immediate on the opening paren; only
++    // reachable straight after a call operator. See `call`.
++    _spaced_argument_list: $ => prec.right(seq(
++      '(',
++      optional($._argument_list_with_trailing_comma),
++      ')',
++    )),
++
+     _argument_list_with_trailing_comma: $ => prec.right(seq(
+       commaSep1($._argument),
+       optional(','),
+diff --git a/test/corpus/expressions.txt b/test/corpus/expressions.txt
+index a22f66c..080e67a 100644
+--- a/test/corpus/expressions.txt
++++ b/test/corpus/expressions.txt
+@@ -2925,3 +2925,29 @@ foo a & b
+   (call
+     method: (identifier)
+     arguments: (argument_list (binary left: (identifier) right: (identifier)))))
++
++===========
++call with a line break between the dot and the arguments
++===========
++
++x = Collect[*bin.fns].
++  (represented, {doc: doc})
++y = foo (1)
++
++---
++
++(program
++  (assignment
++    left: (identifier)
++    right: (call
++      receiver: (element_reference
++        object: (constant)
++        (splat_argument (call receiver: (identifier) method: (identifier))))
++      arguments: (argument_list
++        (identifier)
++        (hash (pair key: (hash_key_symbol) value: (identifier))))))
++  (assignment
++    left: (identifier)
++    right: (call
++      method: (identifier)
++      arguments: (argument_list (parenthesized_statements (integer))))))

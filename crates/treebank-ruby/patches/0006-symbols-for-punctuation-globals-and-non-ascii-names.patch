@@ -1,0 +1,100 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index d583585..410da13 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -336,10 +336,35 @@ static inline bool scan_operator(TSLexer *lexer) {
+     }
+ }
+ 
+-static inline bool is_iden_char(char c) {
++// Ruby treats every non-ASCII character as an identifier character, and so
++// does grammar.js's IDENTIFIER_CHARS — it excludes a list of ASCII specials
++// and nothing else. Taking a `char` truncated the codepoint to its low byte,
++// so any character whose low byte collided with one of those specials was
++// wrongly rejected: U+2620 SKULL AND CROSSBONES ends in 0x20, the byte for a
++// space, which made `alias_method :\u2620, :exit` unlexable.
++static inline bool is_iden_char(int32_t c) {
++    if (c > 0x7F) {
++        return true;
++    }
+     return memchr(&NON_IDENTIFIER_CHARS, c, sizeof(NON_IDENTIFIER_CHARS)) == NULL;
+ }
+ 
++// The one-character global variables, as parse.y lists them. Most also
++// happen to be operators and so reached scan_operator below ($!, $&, $~),
++// but the ones that are not — $: $; $' $" $, and friends — did not, so
++// `:$:` and `:$'` failed to lex at all.
++static inline bool is_special_global_name(int32_t c) {
++    switch (c) {
++        case '!': case '@': case '&': case '`': case '\'': case '+':
++        case '~': case '=': case '/': case '\\': case ',': case ';':
++        case '.': case '<': case '>': case '*': case '$': case '?':
++        case ':': case '"':
++            return true;
++        default:
++            return false;
++    }
++}
++
+ static inline bool scan_symbol_identifier(TSLexer *lexer) {
+     if (lexer->lookahead == '@') {
+         advance(lexer);
+@@ -348,15 +373,22 @@ static inline bool scan_symbol_identifier(TSLexer *lexer) {
+         }
+     } else if (lexer->lookahead == '$') {
+         advance(lexer);
++        // Checked before the identifier and operator paths below, both of
++        // which would take too much: scan_operator would read `$<` as `<<`
++        // or `<=`, and `$_` is an ordinary identifier that must keep going.
++        if (!is_iden_char(lexer->lookahead) && is_special_global_name(lexer->lookahead)) {
++            advance(lexer);
++            return true;
++        }
+     }
+ 
+-    if (is_iden_char((char)lexer->lookahead)) {
++    if (is_iden_char(lexer->lookahead)) {
+         advance(lexer);
+     } else if (!scan_operator(lexer)) {
+         return false;
+     }
+ 
+-    while (is_iden_char((char)lexer->lookahead)) {
++    while (is_iden_char(lexer->lookahead)) {
+         advance(lexer);
+     }
+ 
+diff --git a/test/corpus/literals.txt b/test/corpus/literals.txt
+index b4f59a3..df0944e 100644
+--- a/test/corpus/literals.txt
++++ b/test/corpus/literals.txt
+@@ -2300,3 +2300,29 @@ Cß
+   (class_variable)
+   (simple_symbol)
+   (identifier))
++
++===========
++symbols for punctuation globals and non-ASCII names
++===========
++
++x = :$:
++y = :$;
++z = :☠
++alias_method :☠, :exit
++h = {:$: => [:$LOAD_PATH]}
++
++---
++
++(program
++  (assignment left: (identifier) right: (simple_symbol))
++  (assignment left: (identifier) right: (simple_symbol))
++  (assignment left: (identifier) right: (simple_symbol))
++  (call
++    method: (identifier)
++    arguments: (argument_list (simple_symbol) (simple_symbol)))
++  (assignment
++    left: (identifier)
++    right: (hash
++      (pair
++        key: (simple_symbol)
++        value: (array (simple_symbol))))))
