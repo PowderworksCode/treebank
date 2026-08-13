@@ -17,51 +17,62 @@
     "."
   ],
   "generate_deps": null,
-  "generate_deps_note": "null: tree-sitter-html imports no other grammar, so `tree-sitter generate` needs nothing installed. Its package.json devDependencies name a tree-sitter-cli of their own (^0.24.4); that is upstream's development pin and is deliberately not used — generation here is done with the CLI in generate_cli.",
+  "generate_deps_note": "null: tree-sitter-html imports no other grammar, so `tree-sitter generate` needs nothing installed. Its package.json devDependencies name a tree-sitter-cli of their own (^0.24.4); that is upstream's development pin and is deliberately not used \u2014 generation here is done with the CLI in generate_cli.",
   "oracle": {
     "tool": "in-process html5ever, crates/treebank-cli/src/lang/html.rs (markup_syntax_error)",
     "version": "html5ever 0.35.0",
-    "dialect": "HTML5 well-formed markup — NOT conformance",
+    "dialect": "HTML5 well-formed markup \u2014 NOT conformance",
     "flags": [],
-    "note": "TWO-VALUED: valid / invalid, where invalid means the byte sequence is not well-formed markup. It is NOT a conformance verdict: a file with no doctype, no alt attributes, stray end tags, mis-nested elements and obsolete presentational markup is VALID here, because a grammar should parse all of that. In-process rather than a script under tools/, like rust's syn oracle and for the same reason — the reference parser is a Rust library, so there is no interpreter to start and no line protocol to speak.",
-    "unreadable_note": "An unreadable file is NOT an invalid file: validate() propagates the I/O error and the sweep dies, rather than emitting a verdict. On this language that rule is even more load-bearing than usual — the oracle's whole job is to keep the noise column honest, and a mistyped corpus root that scored every file invalid would report a flawless grammar on a language where a flawless-looking grammar is the expected failure."
+    "note": "TWO-VALUED: valid / invalid, where invalid means the byte sequence is not well-formed markup. It is NOT a conformance verdict: a file with no doctype, no alt attributes, stray end tags, mis-nested elements and obsolete presentational markup is VALID here, because a grammar should parse all of that. In-process rather than a script under tools/, like rust's syn oracle and for the same reason \u2014 the reference parser is a Rust library, so there is no interpreter to start and no line protocol to speak.",
+    "unreadable_note": "An unreadable file is NOT an invalid file: validate() propagates the I/O error and the sweep dies, rather than emitting a verdict. On this language that rule is even more load-bearing than usual \u2014 the oracle's whole job is to keep the noise column honest, and a mistyped corpus root that scored every file invalid would report a flawless grammar on a language where a flawless-looking grammar is the expected failure."
   },
-  "oracle_why_this_field_exists": "generate_cli exists because regenerating with a different tree-sitter-cli silently changes what the grammar accepts. This field exists because running a different reference parser silently changes what 'invalid' means. HTML is the language that makes the point hardest, because here the reference parser does not merely have a dialect — it has a CHOICE OF QUESTION, and the two available questions give answers that differ by an order of magnitude. See oracle_design.",
+  "oracle_why_this_field_exists": "generate_cli exists because regenerating with a different tree-sitter-cli silently changes what the grammar accepts. This field exists because running a different reference parser silently changes what 'invalid' means. HTML is the language that makes the point hardest, because here the reference parser does not merely have a dialect \u2014 it has a CHOICE OF QUESTION, and the two available questions give answers that differ by an order of magnitude. See oracle_design.",
   "oracle_design": {
-    "problem": "HTML is recovery-by-spec. The HTML5 parsing algorithm defines a recovery for EVERY byte sequence, so html5ever and parse5 return a document tree for random bytes and there is no such thing as a parse failure. The naive validate() returns true for everything, every grammar failure becomes a gap, and gap_files stops meaning anything — the exact failure GRAMMARS.md forbids, arrived at honestly rather than by cheating.",
+    "problem": "HTML is recovery-by-spec. The HTML5 parsing algorithm defines a recovery for EVERY byte sequence, so html5ever and parse5 return a document tree for random bytes and there is no such thing as a parse failure. The naive validate() returns true for everything, every grammar failure becomes a gap, and gap_files stops meaning anything \u2014 the exact failure GRAMMARS.md forbids, arrived at honestly rather than by cheating.",
     "escape": "The spec defines parse ERRORS separately from parse failure: a conforming parser must recover AND report that an error occurred. So there is something to read, and the question becomes which errors to act on.",
     "measurement": "Two candidate oracles were stood up and measured on real files BEFORE anything was vendored, because if neither rejected meaningfully the right answer was to ship no HTML grammar at all. Sample: 6,015 .html/.htm files from 470 GitHub language:HTML repositories (top 500 by stars, non-fork, non-archived, repos under 150 MB), at most 30 files per repository, deduped by content sha1, 260 MB, median file 4.2 KB, fetched 2026-08-13. Reference grammar for the cross-tab: tree-sitter-html at the pinned sha, generated with CLI 0.25.10, which fails 1,010 of the 6,015 (16.8%).",
     "candidates": {
       "html5ever_any_parse_error": "rejects 57.5% of the sample; 76.8% of the files the grammar fails, but also 53.5% of the files the grammar parses perfectly.",
       "vnu_any_error": "W3C Nu Html Checker 26.8.6 (vnu.jar, sha1 289996b367cbc8fceb412e0b610cbf6a674851ea), --format json. Rejects 80.3% of the sample; 93.8% of grammar failures and 77.6% of grammar successes.",
-      "verdict": "NEITHER candidate failed for lack of rejection power. Both failed for having far too much of it, which is the same disaster from the other side: with naive vnu, 947 of the 1,010 grammar failures would be written off as noise and the gap queue would be 63 files — a whitewash produced by an oracle whose verdict is nearly independent of parseability."
+      "verdict": "NEITHER candidate failed for lack of rejection power. Both failed for having far too much of it, which is the same disaster from the other side: with naive vnu, 947 of the 1,010 grammar failures would be written off as noise and the gap queue would be 63 files \u2014 a whitewash produced by an oracle whose verdict is nearly independent of parseability."
     },
-    "what_they_disagree_about": "vnu's rejects are a STRICT SUPERSET of html5ever's: 3,456 files rejected by both, 1,373 by vnu only, ZERO by html5ever only, 1,186 by neither. The 1,373 vnu-only files are pure conformance — a missing alt attribute, an obsolete doctype, a skipped heading level, a CSS property typo, a missing required child. That is 22.8% of the sample, and none of it is a claim about whether the bytes are markup. Conformance and parseability are different questions and this is the size of the difference.",
-    "the_line_taken": "treebank asks parseability, so the oracle is html5ever's parse errors filtered to those that say the MARKUP SYNTAX ITSELF is malformed: a character that cannot appear in the tokenizer state the parser is in when that state is a tag, a comment or a doctype, plus end-of-file inside any construct, plus attributes on an end tag, a self-closing end tag, and bytes that are not valid UTF-8. Everything else — every tree-construction error, every character-reference complaint — is the spec recovering from well-formed markup in the wrong shape, which a grammar must parse.",
+    "what_they_disagree_about": "vnu's rejects are a STRICT SUPERSET of html5ever's: 3,456 files rejected by both, 1,373 by vnu only, ZERO by html5ever only, 1,186 by neither. The 1,373 vnu-only files are pure conformance \u2014 a missing alt attribute, an obsolete doctype, a skipped heading level, a CSS property typo, a missing required child. That is 22.8% of the sample, and none of it is a claim about whether the bytes are markup. Conformance and parseability are different questions and this is the size of the difference.",
+    "the_line_taken": "treebank asks parseability, so the oracle is html5ever's parse errors filtered to those that say the MARKUP SYNTAX ITSELF is malformed: a character that cannot appear in the tokenizer state the parser is in when that state is a tag, a comment or a doctype, plus end-of-file inside any construct, plus attributes on an end tag, a self-closing end tag, and bytes that are not valid UTF-8. Everything else \u2014 every tree-construction error, every character-reference complaint \u2014 is the spec recovering from well-formed markup in the wrong shape, which a grammar must parse.",
     "measured_result": "8.6% of the sample rejected (518 files), 43.6% of the grammar's failures, and 1.5% of the files the grammar parses cleanly. That last number is the one that matters: it is the rate at which this oracle would wrongly write a grammar bug off as noise, and it is what fell from 53.5% (naive html5ever) and 77.6% (naive vnu).",
-    "residual_bias_is_deliberate": "The oracle under-rejects by construction, and the direction is chosen: an under-rejection surfaces as a gap file somebody has to look at, while an over-rejection hides a grammar bug in the noise column where nobody would ever see it. Every ambiguous class is resolved towards valid — duplicate attributes, obsolete HTML4 doctypes, <div/>, character references without semicolons, stray end tags, unclosed elements. One measured consequence, kept rather than papered over: an unterminated <script> is rejected by the grammar and called valid here (html5ever emits no EOF error in the raw-text states), so it arrives as a gap rather than as noise.",
-    "circularity_warning": "The error classes above were chosen on the tokenizer/tree-builder line, which is a property of the SPEC and not of this grammar — but the cross-tab against tree-sitter-html was on screen while that choice was made, so it is corroboration and not independent evidence. The independent evidence is test/negative/ and the unit battery in lang/html.rs, which is exactly why GRAMMARS.md says a batch oracle is proved by a negative battery rather than by agreement."
+    "residual_bias_is_deliberate": "The oracle under-rejects by construction, and the direction is chosen: an under-rejection surfaces as a gap file somebody has to look at, while an over-rejection hides a grammar bug in the noise column where nobody would ever see it. Every ambiguous class is resolved towards valid \u2014 duplicate attributes, obsolete HTML4 doctypes, <div/>, character references without semicolons, stray end tags, unclosed elements. One measured consequence, kept rather than papered over: an unterminated <script> is rejected by the grammar and called valid here (html5ever emits no EOF error in the raw-text states), so it arrives as a gap rather than as noise.",
+    "circularity_warning": "The error classes above were chosen on the tokenizer/tree-builder line, which is a property of the SPEC and not of this grammar \u2014 but the cross-tab against tree-sitter-html was on screen while that choice was made, so it is corroboration and not independent evidence. The independent evidence is test/negative/ and the unit battery in lang/html.rs, which is exactly why GRAMMARS.md says a batch oracle is proved by a negative battery rather than by agreement."
   },
   "corpus": {
-    "source": "GitHub repositories GitHub classifies as HTML, non-fork and non-archived, ranked by stars, fetched as codeload tarballs pinned at the default branch's head sha — the artifact-corpus path treebank-bash built (see lang::github for what it biases toward).",
+    "source": "GitHub repositories GitHub classifies as HTML, non-fork and non-archived, ranked by stars, fetched as codeload tarballs pinned at the default branch's head sha \u2014 the artifact-corpus path treebank-bash built (see lang::github for what it biases toward).",
     "why_repository_html": "HTML has no package registry, so there is no download count and no release to pin, and two populations were available on this machine: HTML in source repositories, and HTML from the live web (there is a Common Crawl store at ~/powderworks/crawldb). They are not the same language. Web HTML is overwhelmingly machine-generated, minified tag soup; repository HTML is closer to what a developer edits. treebank is a tool about source code, so a gap queue built from crawl output would be a queue of minifier artefacts, and this corpus is the repositories. What it biases toward is stated rather than hidden: stars are attention rather than use, and `language:HTML` selects repositories that are MOSTLY HTML.",
     "generated_output_check": "The obvious objection to `language:HTML` is that it should select generated documentation trees rather than hand-written pages. Measured on the 6,015-file sample rather than assumed: only 315 files (5.2%) carry a <meta name=\"generator\"> (gitbook 91, doxygen 38, docusaurus 30, honkit 30, jsdoc 22, bookdown 16, pandoc 8, ...), and the grammar fails 14.9% of those against 16.9% of everything else. Generated output is therefore neither a large share of this corpus nor a distorting one, and no generator filter is applied.",
-    "templating_note": "The single largest correction to the corpus, and the trap this language sets. .html files in real repositories are frequently Jinja, Django, Twig, Liquid, Handlebars, Mustache, Go templates, ERB, EJS, Blade or Svelte, and none of those is HTML. Measured on the sample, 1,219 files (20.3%) carry a template marker, and the grammar fails 28.6% of them against 13.8% of everything else — so left in, templating would be roughly a third of the gap queue and none of it would be a grammar bug. admit() drops them on content, not on path, for the reason treebank-go gives for build tags: nothing about templates/index.html distinguishes it from docs/index.html.",
-    "templating_rule_is_looser_than_bash": "treebank-bash requires a Jinja KEYWORD after {% because printf '{%s%}' is real shell. HTML needs no such care: a bare {%, {{, <%, <?php, {#if or @section in a .html file is a template with negligible exception, and the cost of the loose rule falls in the safe direction — a wrongly excluded file is one file missing from the corpus, where a wrongly included one is a permanent phantom gap that no oracle can adjudicate.",
+    "templating_note": "The single largest correction to the corpus, and the trap this language sets. .html files in real repositories are frequently Jinja, Django, Twig, Liquid, Handlebars, Mustache, Go templates, ERB, EJS, Blade or Svelte, and none of those is HTML. Measured on the sample, 1,219 files (20.3%) carry a template marker, and the grammar fails 28.6% of them against 13.8% of everything else \u2014 so left in, templating would be roughly a third of the gap queue and none of it would be a grammar bug. admit() drops them on content, not on path, for the reason treebank-go gives for build tags: nothing about templates/index.html distinguishes it from docs/index.html.",
+    "templating_rule_is_looser_than_bash": "treebank-bash requires a Jinja KEYWORD after {% because printf '{%s%}' is real shell. HTML needs no such care: a bare {%, {{, <%, <?php, {#if or @section in a .html file is a template with negligible exception, and the cost of the loose rule falls in the safe direction \u2014 a wrongly excluded file is one file missing from the corpus, where a wrongly included one is a permanent phantom gap that no oracle can adjudicate.",
     "files_note": ".html only, the single extension tree-sitter-html's own tree-sitter.json claims under file-types, following the rule ruby, lua, python and javascript follow: classify() matches what the grammar advertises. .htm, .xhtml and the server-page extensions Helix additionally lists (.jsp, .asp, .aspx, .rhtml, .cshtml, .volt) are out; the last five are template languages in any case. node_modules/ and vendor/ are excluded because a repository that vendors a dependency ships somebody else's source.",
     "max_artifact_bytes": 250000000,
     "max_artifact_note": "250 MB, the same cap and the same reasoning as bash: a repository artifact has no size discipline, and the largest language:HTML repositories are course-note and textbook dumps whose bulk is PDFs and images rather than markup. 112 of the top 600 exceed 150 MB. Every skip is logged by the fetch driver.",
-    "fetched": "PENDING",
-    "repositories": 0,
-    "files": 0,
+    "fetched": "2026-08-13 (GitHub search + codeload tarballs of that date)",
+    "repositories": 471,
+    "files": 132492,
     "sweep_upstream": {
-      "passed": 0,
-      "failed": 0,
-      "gap_files": 0,
-      "noise_files": 0,
-      "clusters": 0,
-      "note": "PENDING"
-    }
+      "passed": 121684,
+      "failed": 10808,
+      "gap_files": 9707,
+      "noise_files": 1101,
+      "clusters": 207,
+      "note": "upstream 73a3947 with the two packaging patches only, i.e. before patches 0003 and 0004."
+    },
+    "repositories_note": "500 requested; 471 resolved. All 29 skips are the 250 MB artifact cap and every one is logged by the fetch driver \u2014 course-note and textbook repositories whose bulk is PDFs and images.",
+    "files_measured_note": "132,492 .html files after classify() (extension, minus node_modules/ and vendor/) and admit() (template markers). 1.9 GB extracted.",
+    "sweep_patched": {
+      "passed": 128618,
+      "failed": 3874,
+      "gap_files": 2823,
+      "noise_files": 1051,
+      "clusters": 162,
+      "note": "with patches 0003 and 0004. 97.1% of files parse, and the gap queue is 71% smaller than it was."
+    },
+    "noise_share_note": "1,051 of 3,874 failures (27%) are noise on this corpus, against the oracle's 8.6% base rejection rate on the earlier sample \u2014 so the oracle IS discriminating rather than rejecting at random, which is the property the whole design was chosen for."
   },
   "negative_corpus": {
     "why_it_carries_the_weight_here": "On every other grammar the sweep does the work: the oracle rejects freely, so 'grammar failed AND oracle said valid' is a sharp instrument. Here the oracle rejects 8.6% of a real corpus by design, so the sweep is a blunt one and test/negative/ is the main defence against a grammar that accepts anything. It is built deliberately rather than harvested, and every file was verified in BOTH directions: the oracle calls it invalid, and the grammar rejects it.",
@@ -70,14 +81,14 @@
       "end tags": "attributes-on-an-end-tag (</div class=\"y\">), self-closing-end-tag (</div/>), end-tag-with-no-name (</ >), empty-end-tag (</>)",
       "a < that opens nothing": "lt-then-equals-in-text (<p>a <= b</p>), tag-open-then-question-mark (<?xml ... ?>)",
       "comments": "comment-abrupt-close (<!-->)",
-      "truncation": "truncated-inside-a-tag, truncated-attribute-value, unterminated-comment, unterminated-cdata, unterminated-doctype — the document ends inside a construct. Checked against the grammar rather than assumed: tree-sitter-html rejects an unterminated comment, <script>, <style>, CDATA section and doctype alike, which is why the oracle's EOF rule is 'inside any construct' rather than an allowlist of a few."
+      "truncation": "truncated-inside-a-tag, truncated-attribute-value, unterminated-comment, unterminated-cdata, unterminated-doctype \u2014 the document ends inside a construct. Checked against the grammar rather than assumed: tree-sitter-html rejects an unterminated comment, <script>, <style>, CDATA section and doctype alike, which is why the oracle's EOF rule is 'inside any construct' rather than an allowlist of a few."
     },
-    "what_it_may_not_contain": "Nothing the HTML5 spec recovers from, because the grammar parses all of it and should: no missing doctype, no mis-nesting, no stray end tag, no unclosed element, no duplicate attribute, no <div/>, no obsolete element, no character reference without a semicolon. Those belong in tools/consumer-test/fixtures/patched.html, which asserts the opposite property — that they still PARSE. A negative test built from any of them would be testing conformance, which is not the question this grammar is measured against.",
-    "rejected_candidates": "Three candidate files were built, measured and thrown out rather than quietly kept, each for a different reason: duplicate-attribute and stray-end-tag (the oracle calls them valid, correctly — they are well-formed markup); quote-in-unquoted-attribute-value, <a href=/x\"y\">, which the grammar rejects but html5ever reports nothing for, so it is a gap rather than a negative case; and unterminated-script, same shape. An earlier draft of the oracle listed AttributeValue(Unquoted) among the markup states on the strength of the spec; the measurement showed html5ever never emits that error, so the state was removed rather than left in as a claim nothing supports."
+    "what_it_may_not_contain": "Nothing the HTML5 spec recovers from, because the grammar parses all of it and should: no missing doctype, no mis-nesting, no stray end tag, no unclosed element, no duplicate attribute, no <div/>, no obsolete element, no character reference without a semicolon. Those belong in tools/consumer-test/fixtures/patched.html, which asserts the opposite property \u2014 that they still PARSE. A negative test built from any of them would be testing conformance, which is not the question this grammar is measured against.",
+    "rejected_candidates": "Three candidate files were built, measured and thrown out rather than quietly kept, each for a different reason: duplicate-attribute and stray-end-tag (the oracle calls them valid, correctly \u2014 they are well-formed markup); quote-in-unquoted-attribute-value, <a href=/x\"y\">, which the grammar rejects but html5ever reports nothing for, so it is a gap rather than a negative case; and unterminated-script, same shape. An earlier draft of the oracle listed AttributeValue(Unquoted) among the markup states on the strength of the spec; the measurement showed html5ever never emits that error, so the state was removed rather than left in as a claim nothing supports."
   },
   "accepts_invalid_markup": {
     "summary": "The finding that the sweep could not have produced, and the reason the negative battery is worth building on this language: SIX classes where the oracle says the markup is malformed and tree-sitter-html accepts it anyway. These are the fix queue on the strict side, and they are candidate patches rather than negative-corpus files, because test/negative/ holds what the grammar already rejects.",
-    "incidence": "77 of the 6,015 sample files (1.3%) are accepted by the grammar and called malformed by the oracle; 59 after excluding templated files. Among them are javadoc output (twitter/twitter-text java/docs/api/*.html), a Bulma template page, and a Lua-for-Windows manual page.",
+    "incidence": "77 of the 6,015 sample files (1.3%) were accepted by the grammar and called malformed by the oracle before any grammar patch; 59 after excluding templated files. On the full 132,492-file corpus after patches 0003 and 0004 the whole noise column is 1,051 files, of which the grammar rejects all but this class. Among the examples are javadoc output (twitter/twitter-text java/docs/api/*.html), a Bulma template page and a Lua-for-Windows manual page. All six repros below were re-checked after both grammar patches and all six are still accepted \u2014 the patches loosened `text`, which is a different part of the grammar from the tag syntax these live in.",
     "classes": [
       {
         "repro": "<input type=\"text\" placeholder=\"Username\"require>",
@@ -104,7 +115,8 @@
         "diagnosis": "bytes that are not valid UTF-8. html5ever: invalid byte sequence. tree-sitter's lexer takes them as text, so the grammar has nothing to object to; this one may well be unfixable in grammar.js and is recorded rather than queued."
       }
     ],
-    "how_to_fix_one": "Each needs a corpus test in build/test/corpus/, before/after sweep numbers, and a check that the fix does not make the grammar reject anything in tools/consumer-test/fixtures/patched.html — on a recovery-by-spec language, a strictness patch that overshoots turns valid pages into gaps, which is the more expensive mistake."
+    "how_to_fix_one": "Each needs a corpus test in build/test/corpus/, before/after sweep numbers, and a check that the fix does not make the grammar reject anything in tools/consumer-test/fixtures/patched.html \u2014 on a recovery-by-spec language, a strictness patch that overshoots turns valid pages into gaps, which is the more expensive mistake.",
+    "patch_side_effect": "Both grammar patches moved a handful of files from the noise column into passing \u2014 12 for 0003 and 38 for 0004 \u2014 because a file can carry a bare `&` or `>` AND malformed tag syntax elsewhere, and a looser `text` rule lets the recovery reach further. That is a real (small) increase in accepts-invalid and it is recorded rather than netted out. The guard against it is test/negative/, which was re-run after each patch: all 20 files still reject."
   },
   "patches": [
     {
@@ -128,7 +140,78 @@
       "kind": "packaging",
       "origin": "treebank; upstream owns the tree-sitter-html name on crates.io, so the redistribution publishes under its own: package name, repository, homepage and description. [lib] name stays tree_sitter_html so the crate is a drop-in replacement. include gains LOCAL-PATCHES.md, ledger.json and patches/* so provenance travels inside the published tarball. Cargo.lock carries the matching rename and nothing else. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time. See PUBLISHING.md.",
       "note": "Unlike lua's equivalent patch this one does not have to correct upstream's include list: LICENSE reached it in cbb91a0 (PR #117), one of the five commits between the v0.23.2 tag and the pinned sha."
+    },
+    {
+      "id": 3,
+      "title": "a bare ampersand in text",
+      "file": "patches/0003-a-bare-ampersand-in-text.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by this crate's first sweep, which is also the first sweep of a recovery-by-spec language. No upstream issue covers it \u2014 tree-sitter-html #45/#50/#10 are about parsing entities, #51 and #108 about entities in ATTRIBUTES, none about an ampersand that is not an entity. Worth offering upstream.",
+      "evidence": {
+        "repro": "<p>Privacy & Terms</p>\n",
+        "diagnosis": "HTML5 requires no escaping of `&`: a lone ampersand is character data, and it is only the 'ambiguous ampersand' parse error when it LOOKS like a named reference and is not one. The grammar had no token that could match it. `text` is /[^<>&\\s]([^<>&]*[^<>&\\s])?/, which cannot start on `&`, and `entity` is /&(#([xX][0-9a-fA-F]{1,6}|[0-9]{1,5})|[A-Za-z]{1,30});?/, which needs a `#` or a letter next \u2014 so `& Terms` matched neither and the enclosing element went to ERROR. The asymmetry is visible in the small: `R&D` parses (entity matches `&D`) while `R & D` does not. The fix adds '&' as a second alternative of `text`; `entity` still wins wherever it applies because tree-sitter prefers the longest match, and `&amp;` is five characters to this rule's one.",
+        "first_seen": {
+          "package": "google/material-design-lite",
+          "version": "85f29d30e648",
+          "path": "templates/portfolio/index.html:196"
+        },
+        "sweep_before": {
+          "passed": 121684,
+          "failed": 10808,
+          "gap_files": 9707,
+          "noise_files": 1101,
+          "clusters": 207
+        },
+        "sweep_after": {
+          "passed": 127397,
+          "failed": 5095,
+          "gap_files": 4006,
+          "noise_files": 1089,
+          "clusters": 194
+        },
+        "evidence_note": "5,713 more files parse and the gap queue falls from 9,707 to 4,006 \u2014 59% of it, and by a wide margin the largest single cluster this corpus has. The tree shape follows what upstream already does around entities: `a &amp; b` is text, entity, text, and now `a & b` is text, text, text. Upstream's own corpus tests stay green (21/21 with the new case) and its highlight assertions are unchanged. 12 files moved from the noise column to passing, which is the honest cost of a looser text rule and is recorded rather than netted out."
+      }
+    },
+    {
+      "id": 4,
+      "title": "a bare greater-than in text",
+      "file": "patches/0004-a-bare-greater-than-in-text.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; same sweep, found once patch 0003 uncovered the clusters underneath it.",
+      "evidence": {
+        "repro": "<p>a > b</p>\n",
+        "diagnosis": "A `>` in text is not a parse error in HTML5 at all \u2014 not even the recoverable kind. Only `<` and `&` begin anything, so a lone `>` is ordinary character data. The grammar excluded it from `text` along with `<` and `&`, so any page displaying code was rejected. It cannot swallow a tag's own `>`: inside a tag the lexer is in a tag state where `text` is not a valid token.",
+        "first_seen": {
+          "package": "agenda/agenda",
+          "version": "c5e89738b243",
+          "path": "docs-legacy/4.x/agenda_jobs.js.html:124"
+        },
+        "sweep_before": {
+          "passed": 127397,
+          "failed": 5095,
+          "gap_files": 4006,
+          "noise_files": 1089,
+          "clusters": 194
+        },
+        "sweep_after": {
+          "passed": 128618,
+          "failed": 3874,
+          "gap_files": 2823,
+          "noise_files": 1051,
+          "clusters": 162
+        },
+        "evidence_note": "1,183 more files, measured with patch 0003 already applied. Almost all of them display code \u2014 `SELECT ... WHERE o.created_at > NOW()`, `(job) => utils_1.createJob(...)` \u2014 inside <pre>, <code> or a paragraph, where an author had no reason to write &gt;. 38 files moved from noise to passing, a larger side effect than 0003's and the reason the negative corpus was re-run rather than assumed: all 20 files still reject, and tools/consumer-test/fixtures/must-reject.html still rejects while patched.html still parses clean."
+      }
     }
   ],
-  "docs_note": "Oracle judges well-formed markup, not conformance"
+  "docs_note": "Oracle judges well-formed markup, not conformance",
+  "remaining_gaps_note": "2,823 gap files remain and the queue has a clear head. The largest cluster by far (955 files) is a single class: an element left UNCLOSED at end of document. tree-sitter-html closes a tag implicitly only through its external _implicit_end_tag, which fires for the tags HTML says are optional-close; a page that simply stops with <div> and <html> open \u2014 which the HTML5 spec closes at EOF and every browser renders \u2014 goes to ERROR. The example is htr-tech/zphisher .sites/dropbox/login.html, which has 48 <div> and 47 </div> and no </html> at all. It is a real gap and deliberately NOT attempted here: making EOF close arbitrary open elements is a change to the scanner's end-tag logic that touches every file in the corpus, and on a recovery-by-spec language a strictness change that overshoots turns valid pages into gaps. The next four clusters are a stray </head> or </body> after the section closed implicitly (798), <pre> content (231), and two more unclosed-element shapes (114 and 87). One at 66 files is not a gap at all on inspection \u2014 <spanclass=...> is a missing space in a real page, which the grammar is right to reject and the oracle also calls malformed; it is counted here because its sibling errors in the same file are what the cluster keyed on."
 }

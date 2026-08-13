@@ -1,0 +1,69 @@
+diff --git a/grammar.js b/grammar.js
+index 657b78d..70d7d40 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -136,6 +136,25 @@ module.exports = grammar({
+       seq('"', optional(alias(/[^"]+/, $.attribute_value)), '"'),
+     ),
+ 
+-    text: _ => /[^<>&\s]([^<>&]*[^<>&\s])?/,
++    // A bare `&` is TEXT unless it begins an entity. HTML5 has no
++    // requirement that an ampersand be escaped — it is only an "ambiguous
++    // ampersand" parse error when it looks like a named reference and is not
++    // one — so `Privacy & Terms` is an ordinary paragraph, and every browser,
++    // html5ever and the Nu checker all read it that way.
++    //
++    // Without the second alternative the first regex cannot start on `&` and
++    // the `entity` token cannot match one that is followed by a space, so the
++    // ampersand is left with no token at all and the enclosing element goes
++    // to ERROR. Measured on a 132,492-file corpus of GitHub HTML: 5,627 files,
++    // 58% of the whole gap queue and by a wide margin its largest cluster.
++    //
++    // `entity` still wins wherever it applies, because tree-sitter prefers
++    // the longest match: `&amp;` is five characters to this rule's one. The
++    // tree shape follows what upstream already does around entities —
++    // `a &amp; b` is text, entity, text, and now `a & b` is text, text, text.
++    text: _ => choice(
++      /[^<>&\s]([^<>&]*[^<>&\s])?/,
++      '&',
++    ),
+   },
+ });
+diff --git a/test/corpus/main.txt b/test/corpus/main.txt
+index ce0a336..740e3b0 100644
+--- a/test/corpus/main.txt
++++ b/test/corpus/main.txt
+@@ -380,3 +380,33 @@ Omitted end tags for html and head
+     (element
+       (start_tag
+         (tag_name)))))
++
++================================================================================
++A bare ampersand in text
++================================================================================
++
++<p>Privacy & Terms</p>
++<p>Tom & Jerry &amp; Co</p>
++<p>&</p>
++
++--------------------------------------------------------------------------------
++
++(document
++  (element
++    (start_tag (tag_name))
++    (text)
++    (text)
++    (text)
++    (end_tag (tag_name)))
++  (element
++    (start_tag (tag_name))
++    (text)
++    (text)
++    (text)
++    (entity)
++    (text)
++    (end_tag (tag_name)))
++  (element
++    (start_tag (tag_name))
++    (text)
++    (end_tag (tag_name))))
