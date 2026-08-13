@@ -14,3 +14,7 @@ tools/php-oracle/php-*
 # c-oracle writes its per-file verdict dump beside the corpus; running the
 # smoke test from the repo root drops one here.
 /oracle-verdicts.json
+
+# scala oracle jars (tools/scala-oracle/fetch-jars.sh, pinned by jars.lock)
+tools/scala-oracle/jars/
+tools/scala-oracle/classpath

@@ -11,7 +11,7 @@ use crate::rank::RankedCrate;
 
 pub struct Java;
 
-const CENTRAL: &str = "https://repo1.maven.org/maven2";
+pub(super) const CENTRAL: &str = "https://repo1.maven.org/maven2";
 
 impl Lang for Java {
     fn name(&self) -> LangName {
@@ -104,7 +104,7 @@ impl Lang for Java {
 }
 
 /// First `<tag>…</tag>` body in an XML document.
-fn tag(xml: &str, name: &str) -> Option<String> {
+pub(super) fn tag(xml: &str, name: &str) -> Option<String> {
     let open = format!("<{name}>");
     let close = format!("</{name}>");
     let start = xml.find(&open)? + open.len();

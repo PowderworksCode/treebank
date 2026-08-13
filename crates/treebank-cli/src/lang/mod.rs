@@ -22,6 +22,7 @@ mod python;
 mod rbs;
 mod ruby;
 mod rust;
+mod scala;
 mod stdin_oracle;
 mod toml;
 mod typescript;
@@ -172,6 +173,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static TOML: toml::Toml = toml::Toml;
     static HTML: html::Html = html::Html;
     static JSON: json::Json = json::Json;
+    static SCALA: scala::Scala = scala::Scala;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -192,5 +194,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Toml => &TOML,
         LangName::Html => &HTML,
         LangName::Json => &JSON,
+        LangName::Scala => &SCALA,
     }
 }
