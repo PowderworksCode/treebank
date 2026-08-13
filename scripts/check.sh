@@ -36,6 +36,24 @@ JOB_FILE="${JOB_FILE:-}"
 SWEEP_OUT=/tmp/agent-check-sweep.json
 fail=0
 
+# PASS_BEFORE is a pass COUNT, so it only means anything against the corpus it
+# was counted on. If the manifest on disk is a different size from the one the
+# ledger's numbers came from, "beat the baseline" is unreachable no matter how
+# many gaps get fixed, and the only way an agent can go green is to overwrite
+# corpus.sweep_patched with whatever the current corpus gives — silently
+# replacing the recorded evidence with numbers from a different measurement.
+# That is not hypothetical: on 2026-08-12 the bash daily run swept 99 packages
+# / 9,094 files against a 25,662-file baseline and did exactly that. Say so
+# loudly rather than let it be discovered in a diff.
+ledger_files=$(jq -r '.corpus.files // empty' ledger.json)
+manifest_files=$(jq -r '[.packages[].files | length] | add // 0' "$MANIFEST" 2>/dev/null || echo 0)
+if [ -n "$ledger_files" ] && [ "$manifest_files" -gt 0 ] && [ "$ledger_files" != "$manifest_files" ]; then
+  echo "corpus: WARNING — sweeping $manifest_files files but ledger.json's numbers are from $ledger_files."
+  echo "corpus:   PASS_BEFORE=$PASS_BEFORE is not comparable. Fetch the ledger's corpus"
+  echo "corpus:   (corpus.fetch_limit, honoured by scripts/daily.sh), or set PASS_BEFORE"
+  echo "corpus:   explicitly. Do NOT 'fix' this by rewriting corpus.sweep_patched."
+fi
+
 if "$TREEBANK_BIN" ledger "$ROOT" >/tmp/agent-check-ledger.log 2>&1; then
   echo "ledger: ok"
 else

@@ -427,7 +427,21 @@ for ledger in "$ROOT"/crates/treebank-*/ledger.json; do
     continue
   fi
 
-  if ! "$TB" fetch --lang "$lang" --limit "$LIMIT" 2>&1 | tail -1; then
+  # How many packages this grammar's numbers were measured at. check.sh takes
+  # its PASS_BEFORE baseline from the ledger's corpus.sweep_patched.passed, so
+  # if the daily corpus is a different size from the one that produced those
+  # numbers the comparison is meaningless and the fix agent can never go green
+  # — its only way out is to overwrite corpus.sweep_patched with whatever the
+  # smaller corpus gave, which silently replaces the recorded evidence.
+  # Measured: bash's ledger said 492 packages / 25,662 files / 25,313 passed
+  # while the daily job fetched 99 / 9,094 / 9,016, and the agent duly rewrote
+  # the ledger to the smaller figures. So the size lives next to the numbers
+  # it produced. Grammars that do not set it keep $TREEBANK_LIMIT exactly as
+  # before.
+  limit=$(jq -r '.corpus.fetch_limit // empty' "$ledger")
+  [ -n "$limit" ] || limit="$LIMIT"
+  [ "$limit" = "$LIMIT" ] || echo "daily: $lang fetches $limit packages (ledger corpus.fetch_limit)"
+  if ! "$TB" fetch --lang "$lang" --limit "$limit" 2>&1 | tail -1; then
     echo "daily: $lang fetch failed, sweeping the existing corpus anyway"
   fi
   if ! scripts/materialize.sh "$grammar" >/dev/null 2>&1; then
