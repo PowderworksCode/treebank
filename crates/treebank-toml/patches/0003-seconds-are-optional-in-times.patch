@@ -1,0 +1,42 @@
+diff --git a/grammar.js b/grammar.js
+index 7b77558..2e625b4 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -13,7 +13,7 @@ const float_exponent_part = seq(/[eE]/, decimal_integer_in_float_exponent_part);
+ 
+ const rfc3339_date = /([0-9]+)-(0[1-9]|1[012])-(0[1-9]|[12][0-9]|3[01])/;
+ const rfc3339_delimiter = /[ tT]/;
+-const rfc3339_time = /([01][0-9]|2[0-3]):([0-5][0-9]):([0-5][0-9]|60)([.][0-9]+)?/;
++const rfc3339_time = /([01][0-9]|2[0-3]):([0-5][0-9])(:([0-5][0-9]|60)([.][0-9]+)?)?/;
+ const rfc3339_offset = /([zZ])|([+-]([01][0-9]|2[0-3]):[0-5][0-9])/;
+ 
+ module.exports = grammar({
+diff --git a/test/corpus/tour.txt b/test/corpus/tour.txt
+index a11eab1..2e2c1e5 100644
+--- a/test/corpus/tour.txt
++++ b/test/corpus/tour.txt
+@@ -353,3 +353,24 @@ lt2 = 00:32:00.999999
+   (pair
+     (bare_key)
+     (local_time)))
++
++==========================================
++Dates and Times: seconds are optional (1.1)
++==========================================
++
++lt3 = 07:32
++odt5 = 1979-05-27 07:32Z
++ldt3 = 1979-05-27T07:32
++
++---
++
++(document
++  (pair
++    (bare_key)
++    (local_time))
++  (pair
++    (bare_key)
++    (offset_date_time))
++  (pair
++    (bare_key)
++    (local_date_time)))

@@ -253,5 +253,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-toml",
+    "dep": "tree-sitter-toml-ng",
+    "crate": "treebank-grammar-toml",
+    "cases": [
+      {
+        "label": "toml",
+        "language": "tree_sitter_toml_ng::LANGUAGE",
+        "fixture": "patched.toml",
+        "expect": "Clean"
+      },
+      {
+        "label": "toml strictness (must reject)",
+        "language": "tree_sitter_toml_ng::LANGUAGE",
+        "fixture": "must-reject.toml",
+        "expect": "Error"
+      }
+    ]
   }
 ]
