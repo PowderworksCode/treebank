@@ -4,8 +4,8 @@ Upstream:
 [tree-sitter-grammars/tree-sitter-lua](https://github.com/tree-sitter-grammars/tree-sitter-lua)
 pinned at `10fe0054734eec83049514ea2e718b2a56acd0c9` (v0.5.0).
 
-Four patches: two packaging, one grammar fix taken from an open upstream PR
-whose base commit is exactly the sha pinned above, and one of our own.
+Five patches: two packaging, one grammar fix taken from an open upstream PR
+whose base commit is exactly the sha pinned above, and two of our own.
 
 ## 0001 — treebank redistribution notice
 
@@ -148,7 +148,55 @@ reading the NUL back out of the materialized file. The same byte makes
 `Bin` — read it with `cat -v` (or `git show --text`), and diff it the same
 way if it ever needs editing.
 
-## Why there is no 0005
+## 0005 — NUL byte inside a long string or long comment
+
+The other half of 0004, and the one patch here with **no sweep delta at
+all** — which is stated plainly rather than dressed up.
+
+```lua
+x = [[a<NUL>b]]
+--[==[c<NUL>d]==]
+```
+
+Both are valid to `luac 5.4`; both failed to parse. The cause is 0004's,
+one function over: `scan_block_content` looped on `lexer->lookahead != 0`, so
+a NUL ended the content token and the rest of the file became `ERROR`. One
+condition fixes **both** constructs, because that function is the single
+producer of `BLOCK_STRING_CONTENT` and `BLOCK_COMMENT_CONTENT`:
+
+```c
+while (!lexer->eof(lexer)) {
+```
+
+| | passed | failed | gaps | clusters |
+|---|---|---|---|---|
+| before | 1,590 | 8 | 0 | 8 |
+| after | 1,590 | 8 | 0 | 8 |
+
+Zero files moved. 0004's ledger entry named this case and deliberately left
+it uncaptured for want of corpus evidence; it is captured now on the view
+that the defect is one bug across three token types, and leaving two of them
+broken is a worse invariant than a patch whose evidence is a repro and an
+oracle verdict rather than a sweep delta.
+
+The evidence that it is real, in place of that delta: `[[a<NUL>b]]`,
+`--[[a<NUL>b]]`, `[=[a<NUL>b]]c]=]`, `[[a]<NUL>b]]` and `--[==[a<NUL>b]==]`
+are all valid to `luac 5.4` and all now parse clean, having all failed
+before. The EOF path is the risk this condition carries, so it was tested
+from the other side too: an unterminated `[[`, an unterminated `--[[`, and a
+file ending immediately after `[[` are each still **rejected**, and `luac
+5.4` rejects all three as well (unfinished long string / long comment).
+Corpus tests go 43/43 → 45/45, highlight and tag assertions are unchanged,
+and the negative corpus is still fully rejected.
+
+One thing found while reading and deliberately **not** changed: the sibling
+loop in `scan_comment_content` is unreachable. `scanner->ending_char` is only
+ever assigned `0` (by `reset_state`) or restored from a serialized buffer
+that can only hold `0`, so the `ending_char == 0` branch above it always
+wins. It is vestigial upstream state; deleting it is a separate change with
+its own justification, not something to smuggle into a NUL fix.
+
+## Why there is no 0006
 
 The upstream grammar is chosen, not settled for. All three editors that ship
 a Lua grammar pin **the same commit** this crate pins — nvim-treesitter,
@@ -157,21 +205,22 @@ with any current maintenance: the alternatives (`tjdevries/tree-sitter-lua`,
 131 stars, last pushed 2024-10; `Azganoth/tree-sitter-lua`, 53 stars, 2022)
 are dormant.
 
-After 0004 the sweep corpus has **no gap files left**: 1,590 of 1,598 parse
-and the 8 failures are all invalid Lua that `luac 5.4` rejects too.
+The sweep corpus has **no gap files left**: 1,590 of 1,598 parse, and the 8
+failures are all invalid Lua that `luac 5.4` rejects too. Upstream at the
+pinned sha, with only the two packaging patches applied, passes 1,588 of the
+same 1,598 — and its 2 gap files are exactly the first-seen files of 0003 and
+0004, which is the independent check that this patch series is what moves the
+number.
 
-What remains is the other half of the NUL story, and it is worth being
-precise about because this file previously got it wrong in the other
-direction. A NUL is still fatal wherever the **internal** lexer owns the
-token — a line comment (`-- a<NUL>b`), which is the shape of the openssl
-`root_ca.lua` gap the larger 8,582-file fetch found. There the internal lexer
-sees codepoint 0, has no `eof()` to consult, and ends the token; moving line
-comments into the scanner to fix it is not a minimal change, and no file in
-the current sweep corpus needs it. `[[a<NUL>b]]` and `--[[a<NUL>b]]` are
-scanner-owned and would take 0004's one-line idiom in `scan_block_content`,
-but not one file in the sweep corpus exercises them, so that change is left
-uncaptured rather than made without evidence. NUL bytes in the current
-corpus: exactly one file of 1,598, the one 0004 fixes.
+What remains of the NUL story is the half nothing at this layer can reach. A
+NUL is still fatal wherever the **internal** lexer owns the token — a line
+comment (`-- a<NUL>b`), which is the shape of the openssl `root_ca.lua` gap
+the larger 8,582-file fetch found. There the internal lexer sees codepoint 0,
+has no `eof()` to consult, and ends the token; the only fix is moving line
+comments into the scanner, which is not a minimal change and which no file in
+the current corpus needs. Every token the **scanner** owns is now fixed —
+0004 for quoted strings, 0005 for long strings and long comments — so the
+remaining exposure is one construct the corpus does not contain.
 
 ## The dialect question, and why it is settled the way it is
 
