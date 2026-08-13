@@ -62,16 +62,17 @@
       "gap_files": 3,
       "noise_files": 34,
       "clusters": 31,
-      "note": "upstream 10fe0054 with the two packaging patches only, i.e. before patch 0003."
+      "note": "upstream 10fe0054 with the two packaging patches only, i.e. before patch 0003. Measured over the 8,582-file / 383-package fetch described by the files and packages fields above."
     },
-    "remaining_gaps_note": "2 gap files remain, both the SAME cause and neither a grammar.js bug: a literal NUL byte, one inside a string literal (net-url tests/query_test.lua) and one inside a comment (openssl test/root_ca.lua). Lua reads source as a length-delimited buffer and accepts embedded NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token ends at the NUL and the remainder of the file is ERROR. Verified minimal: `x = \"a<NUL>b\"` is valid to luac 5.4 and fails to parse. This is a tree-sitter CORE limitation, not something grammar.js or scanner.c can express, and it is recorded as such rather than counted as a grammar gap it is not. Patch 0003 does not help and was never going to: its scan_quote_string_content loop also terminates on 0. Incidence 2 of 8582 (0.02%), after excluding the 7 __MACOSX resource forks which also open with a NUL. The third gap the first sweep found - a quoted string beginning with a long-comment opener - is fixed by patch 0003.",
+    "remaining_gaps_note": "0 gap files remain. The last one was a literal NUL byte inside a string literal (net-url tests/query_test.lua), fixed by patch 0004: Lua reads source as a length-delimited buffer and accepts embedded NULs, and tree-sitter's lexer reports codepoint 0 for BOTH a NUL byte and end-of-input, so a scanner loop written as `lookahead != 0` ends the token at the NUL and the remainder of the file is ERROR. An EXTERNAL token can tell the two apart - lexer->eof(lexer) is false at a NUL and true at end of input - so wherever the scanner owns the token this IS expressible, which is what 0004 does for quoted strings. It was previously recorded here (and in LOCAL-PATCHES.md) as a tree-sitter CORE limitation affecting both remaining gap files; that was wrong for the string half, and the correction is patch 0004. What genuinely cannot be fixed from grammar.js or scanner.c is a NUL in a token the INTERNAL lexer owns - a line comment (`-- a<NUL>b`, the shape of the openssl test/root_ca.lua gap the 8,582-file fetch found), where codepoint 0 is EOF with no eof() to consult; moving line comments into the scanner is not a minimal change and no file in the current sweep corpus needs it. `[[a<NUL>b]]` and `--[[a<NUL>b]]` are scanner-owned and would take the same one-line idiom in scan_block_content, but not one file in the sweep corpus exercises them, so that change is left uncaptured rather than made without evidence. Incidence of NUL bytes in the current corpus: exactly 1 file of 1,598, the one 0004 fixes.",
     "sweep_patched": {
-      "passed": 8546,
-      "failed": 36,
-      "gap_files": 2,
-      "noise_files": 34,
-      "clusters": 28,
-      "note": "with patch 0003. 99.58% of files parse."
+      "corpus": "luarocks-1598",
+      "passed": 1590,
+      "failed": 8,
+      "gap_files": 0,
+      "noise_files": 8,
+      "clusters": 8,
+      "note": "with patches 0003 and 0004. Measured over the 1,598-file / 88-package LuaRocks sweep corpus the daily job currently fetches, NOT the 8,582-file fetch that corpus.files, corpus.packages and sweep_upstream above describe - the two are different fetches and their pass counts are not comparable. 99.50% of files parse and ZERO gap files remain: all 8 failures are corpus noise (invalid Lua that luac 5.4 rejects too)."
     }
   },
   "patches": [
@@ -133,6 +134,45 @@
         },
         "evidence_note": "One file in 8,582 and zero regressions, both measured over the identical corpus with only this patch removed and restored. Regression-tested well beyond the sweep, because the patch changes how EVERY quoted string is lexed: the 2,606-file external corpus (neovim, nvim-treesitter, awesome, lua-resty-core, koreader, luvit) fails exactly the same 3 files as before and no others; upstream's own corpus tests stay 42/42 with highlight assertions rising 58 -> 76; the 16-file negative corpus is still fully rejected; the oracle's 20-file adversarial battery still agrees 20/20; and the tree SHAPE is unchanged - string_content still wraps escape_sequence children, which is what consumers' queries depend on and the thing a lexer change most easily breaks.",
         "upstream_status": "open as PR #80 against the pinned sha; retire this patch on merge"
+      }
+    },
+    {
+      "id": 4,
+      "title": "NUL byte inside a quoted string",
+      "file": "patches/0004-nul-byte-inside-a-quoted-string.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/expressions.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the daily LuaRocks sweep as the only gap cluster in corpus/lua/reports/REPORT.md, `string_content > ERROR(ERROR)`. Not reported upstream yet; the patch applies directly to the pinned sha (on top of 0003, which is upstream PR #80 and owns the same function).",
+      "evidence": {
+        "repro": "x = \"a\u0000b\"\n",
+        "repro_note": "the three bytes between the quotes are 'a', a literal NUL, 'b' - encoded here as \\u0000, which is the byte itself and not an escape Lua would interpret.",
+        "diagnosis": "Lua reads source as a length-delimited buffer, so a NUL byte inside a string literal is ordinary content and luac 5.4 accepts it. tree-sitter's lexer reports lookahead == 0 for BOTH a NUL byte and end-of-input, and scan_quote_string_content looped on `lexer->lookahead != 0`, so the content token ended at the NUL and the rest of the string - and of the file - came out as ERROR. The fix is one condition: `!lexer->eof(lexer)`, which an EXTERNAL scanner can ask and which is false at a NUL and true only at end of input. That is why the bug is fixable at all, and it is specific to external tokens: the same NUL in a line comment is lexed by the INTERNAL lexer, which has no eof() to consult, and still ends the token (see remaining_gaps_note). Verified not to regress the EOF path, which is the thing this condition could plausibly break: `x = \"abc` and a file ending immediately after the opening quote still terminate and still report MISSING '\"' rather than hanging, and a string mixing escapes with a NUL still yields string_content wrapping its escape_sequence children, so the tree SHAPE consumers query is unchanged. Patch 0003 owns the same function and does not help here and never could: it moved quoted-string content into the scanner, but its loop terminates on 0 exactly as upstream's internal token did.",
+        "first_seen": {
+          "package": "golgote/net-url",
+          "version": "1.2-1",
+          "path": "neturl/tests/query_test.lua"
+        },
+        "sweep_before": {
+          "corpus": "luarocks-1598",
+          "passed": 1589,
+          "failed": 9,
+          "gap_files": 1,
+          "noise_files": 8,
+          "clusters": 9
+        },
+        "sweep_after": {
+          "corpus": "luarocks-1598",
+          "passed": 1590,
+          "failed": 8,
+          "gap_files": 0,
+          "noise_files": 8,
+          "clusters": 8
+        },
+        "evidence_note": "One file, and it is the last gap file in the corpus: the sweep goes to 0 gaps, with all 8 remaining failures corpus noise. Zero regressions - upstream's own corpus tests go 42/42 to 43/43 (the new case is the 43rd), the 76 syntax highlighting assertions and 24 tag assertions are unchanged, and the 16-file negative corpus is still fully rejected. Worth knowing for whoever captures the next patch: the corpus test file now contains a literal NUL, so git treats test/corpus/expressions.txt as binary and a plain `git -C build diff` emits `Bin ... bytes` instead of a hunk, silently dropping the test from the patch. This patch was captured with `git diff -a`, which keeps it a readable text patch carrying the raw byte, and `git apply` round-trips it - verified by materializing from scratch and reading the NUL back out of the materialized file.",
+        "upstream_status": "not reported upstream yet; applies to the pinned sha on top of PR #80 (patch 0003)"
       }
     }
   ]
