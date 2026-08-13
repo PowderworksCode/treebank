@@ -272,13 +272,15 @@ removed, `-idirafter` is worth +81 valid files per 1,500 sampled.
 The lesson still worth keeping is the one that caught it: when two
 measurements of the same thing disagree, the disagreement is the finding.
 
-The 26% (generated config headers) remains open and is *not* addressed.
-Stubbing an empty `config.h` would resolve the include, but the macros it
-would have defined stay undefined, so a file failing on one of them would
-flip from "cannot say" to a confident **invalid** — the oracle inventing a
-syntax verdict about valid C. If it is ever done, it needs a guard that
-forbids `invalid` for any file whose includes were stubbed, so stubs can only
-promote indeterminate → valid, never indeterminate → invalid.
+The 26% (generated config headers) is **not addressable at all**, which took
+a further round of measuring to establish. Stubbing an empty `config.h`
+resolves the include, but `valid` requires `parse == 0` and an empty stub
+supplies none of the macros whose absence caused the parse error — so it
+cannot promote anything, and its only possible effect is to turn
+indeterminate into a confident, wrong `invalid`. Measured: 0 verdict changes
+in 500 files. The guard this paragraph used to propose would not rescue the
+idea; there is nothing to rescue. See
+[ORACLE.md](ORACLE.md#stubbing-configh-cannot-work-and-the-reason-is-structural).
 
 The 24.3% is tractable *for this corpus specifically*: Debian declares each
 source package's `Build-Depends`, and the Sources index already parsed by
