@@ -1,0 +1,70 @@
+diff --git a/grammar.js b/grammar.js
+index a9d8a63..c5c8773 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -652,6 +652,24 @@ module.exports = grammar({
+           field('operator', choice('==', '!=')),
+           field('right', $._extglob_blob),
+         )),
++        // `=` is a synonym for `==` in a test command — bash's manual says
++        // so — and the glob-pattern reading was available only to `==`/`!=`,
++        // so `[ "$arg" = -- ]` had no path. Its own branch at ASSIGN rather
++        // than joining the one above, because `=` already sits at ASSIGN in
++        // the operator table and one operator cannot hold two precedences.
++        //
++        // This reaches `[ … ]` only. Inside `[[ … ]]` the dedicated
++        // _test_command_binary_expression rule routes `=` to the external
++        // _regex_no_space token, which the lexer resolves before the parser
++        // can choose this branch, so `[[ $x = *"a b"* ]]` is still rejected.
++        // Offering _extglob_blob there as well generates cleanly and changes
++        // nothing, because the scanner has already decided; a real fix is a
++        // scanner change and is not attempted here.
++        prec(PREC.ASSIGN, seq(
++          field('left', $._expression),
++          field('operator', '='),
++          field('right', $._extglob_blob),
++        )),
+       );
+     },
+ 
+diff --git a/test/corpus/statements.txt b/test/corpus/statements.txt
+index ab870d6..c8bdc3a 100644
+--- a/test/corpus/statements.txt
++++ b/test/corpus/statements.txt
+@@ -1973,3 +1973,36 @@ done
+         (string
+           (simple_expansion
+             (variable_name)))))))
++
++================================================================================
++Test command: = is a synonym for ==
++================================================================================
++
++if [ "$arg" = -- ]; then :; fi
++if [ "$a" = "$b" ]; then :; fi
++
++--------------------------------------------------------------------------------
++
++(program
++  (if_statement
++    (test_command
++      (binary_expression
++        (string
++          (simple_expansion
++            (variable_name)))
++        (extglob_pattern)))
++    (command
++      (command_name
++        (word))))
++  (if_statement
++    (test_command
++      (binary_expression
++        (string
++          (simple_expansion
++            (variable_name)))
++        (string
++          (simple_expansion
++            (variable_name)))))
++    (command
++      (command_name
++        (word)))))

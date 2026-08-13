@@ -146,6 +146,120 @@
         "evidence_note": "38 files on Debian, 5 on GitHub \u2014 POSIX-sh idiom, so it lives where the shell has to run under dash as well as bash.",
         "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
       }
+    },
+    {
+      "id": 6,
+      "title": "= is a synonym for == in a test command",
+      "file": "patches/0006-equals-is-a-synonym-for-double-equals-in-a-test-command.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the GitHub sweep",
+      "evidence": {
+        "repro": "if [ \"$arg\" = -- ]; then :; fi\n",
+        "diagnosis": "binary_expression offered the glob-pattern right-hand side ($._extglob_blob) to `==` and `!=` only. bash treats `=` as a synonym for `==` in a test command, so `[ \"$arg\" = -- ]` had no path at all. The new branch sits at PREC.ASSIGN rather than joining the `==`/`!=` one at PREC.EQUALITY, because `=` already occupies ASSIGN in the operator table and one operator cannot hold two precedences \u2014 tree-sitter reports that as an unresolvable conflict on `[ x || y = z ]`. SCOPE, STATED: this reaches single-bracket `[ \u2026 ]` only. Inside `[[ \u2026 ]]` the dedicated _test_command_binary_expression rule routes `=` to the external _regex_no_space token, which the LEXER resolves before the parser can pick this branch, so `[[ $x = *\"a b\"* ]]` is still rejected. Offering _extglob_blob there too was tried: it generates cleanly, needs a [$.binary_expression, $._test_command_binary_expression] conflict, and changes nothing at all, because the scanner has already decided. That is a scanner fix and was not attempted blind.",
+        "first_seen": {
+          "package": "HariSekhon/DevOps-Bash-tools",
+          "version": "3abd843c58b6",
+          "path": ".bash.d/git.sh"
+        },
+        "sweep_before": {
+          "corpus": "github",
+          "passed": 39740,
+          "failed": 1537,
+          "gap_files": 945
+        },
+        "sweep_after": {
+          "corpus": "github",
+          "passed": 39752,
+          "failed": 1525,
+          "gap_files": 933
+        },
+        "evidence_note": "12 files on GitHub, 0 on Debian, zero regressions \u2014 noise stayed at 592 and 148 and all 103 upstream corpus tests still pass. Small, and stated as measured: the large `[[ ]]` half of this construct is the part the scanner still owns.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 7,
+      "title": "herestring after another redirect",
+      "file": "patches/0007-herestring-after-another-redirect.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/commands.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the GitHub sweep",
+      "evidence": {
+        "repro": "cat - 2>/dev/null <<< \"$xml\"\nresult=$(cat 2>/dev/null <<< \"$x\")\n",
+        "diagnosis": "redirected_statement's redirect list was repeat1(choice(file_redirect, heredoc_redirect)) \u2014 no herestring. A command with an inline herestring parses through `command`, but once a file_redirect has pulled the command into a redirected_statement the herestring has nowhere left to attach. The herestring hangs off the END of that repeat1 rather than joining it, and that placement is the whole patch: joining the repeat also matches a LONE herestring, which re-shapes `node <<< foo` from an inline child of `command` into a redirected_statement wrapper \u2014 a tree-shape change consumers' queries would feel, and upstream's own Herestrings corpus test catches it. Measured: the joined version failed that test, the appended version passes all 103.",
+        "first_seen": {
+          "package": "dockur/windows",
+          "version": "0d7e26adad4f",
+          "path": "src/image.sh"
+        },
+        "sweep_before": {
+          "corpus": "github",
+          "passed": 39752,
+          "failed": 1525,
+          "gap_files": 933
+        },
+        "sweep_after": {
+          "corpus": "github",
+          "passed": 39894,
+          "failed": 1383,
+          "gap_files": 791
+        },
+        "sweep_before_debian": {
+          "gap_files": 521
+        },
+        "sweep_after_debian": {
+          "gap_files": 516
+        },
+        "evidence_note": "142 files on GitHub and 5 on Debian, zero regressions: noise stayed at 592 and 148. The largest single patch in this grammar after 0003.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
+    },
+    {
+      "id": 8,
+      "title": "arithmetic operands built by concatenation",
+      "file": "patches/0008-arithmetic-operands-built-by-concatenation.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/literals.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by the top-500 Debian sweep",
+      "evidence": {
+        "repro": "rvd=$((0x$(echo 1234)))\nn=$((0x${v}))\nm=$((a$(id -u)))\n",
+        "diagnosis": "The arithmetic rules had no notion of concatenation at all: _arithmetic_literal listed number, subscript, expansions, variable names and strings as ALTERNATIVES, so a literal glued to an expansion had no path. bash expands an arithmetic operand to text first and reads it as a number only afterwards, so `0x` + a command substitution is ordinary and gnupg2's autogen.sh uses it to turn `git describe` output into a revision number. The new hidden rule takes a number or variable name followed by one or more expansions or command substitutions, aliased to the existing `concatenation` node so the tree shape is one consumers already know.",
+        "first_seen": {
+          "package": "gnupg2",
+          "version": "2.4.9-7",
+          "path": "autogen.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 24998,
+          "failed": 664,
+          "gap_files": 516
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 25020,
+          "failed": 642,
+          "gap_files": 494
+        },
+        "sweep_before_github": {
+          "gap_files": 791
+        },
+        "sweep_after_github": {
+          "gap_files": 778
+        },
+        "evidence_note": "22 files on Debian and 13 on GitHub, zero regressions: noise stayed at 148 and 592, and the c-style `for ((i=0;i<3;i++))` header and ordinary `$((a + b * 2))` were regression-tested explicitly, since this rule feeds both.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
     }
   ],
   "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). Noted for this grammar in particular: upstream's committed src/parser.c is byte-identical to what 0.25.10 generates, so materialization changes no generated file until a patch does.",
@@ -182,11 +296,11 @@
       "clusters": 209
     },
     "sweep_patched": {
-      "passed": 24993,
-      "failed": 669,
-      "gap_files": 521,
+      "passed": 25020,
+      "failed": 642,
+      "gap_files": 494,
       "noise_files": 148,
-      "clusters": 205
+      "clusters": 202
     },
     "github_corpus": {
       "what": "The same sweep against the other artifact source: 492 of the top 500 repositories GitHub's linguist calls Shell, ranked by stars, pinned at a commit sha. TREEBANK_BASH_CORPUS=github; corpus/bash-github/.",
@@ -200,13 +314,13 @@
         "clusters": 277
       },
       "sweep_patched": {
-        "passed": 39740,
-        "failed": 1537,
-        "gap_files": 945,
+        "passed": 39907,
+        "failed": 1370,
+        "gap_files": 778,
         "noise_files": 592,
-        "clusters": 269
+        "clusters": 259
       },
-      "finding": "THE TWO POPULATIONS DISAGREE, and the patch series is the proof rather than the assertion: patches 0003-0005 removed 45% of Debian's gaps (942 -> 521) and 6% of GitHub's (1010 -> 945). Patch 0003 alone fixed 392 Debian files and ZERO GitHub files, because it is an autoconf construct and GitHub's shell is not generated by autoconf. The noise rate still differs by 2.5x \u2014 1.43% on GitHub against 0.58% on Debian \u2014 and GitHub exercises more distinct constructs in far smaller files (269 clusters over a mean 3.9 KB, against Debian's 205 over 19.4 KB).",
+      "finding": "THE TWO POPULATIONS DISAGREE, and the patch series is the proof rather than the assertion. Over the whole series the split is even (Debian 942 -> 494, GitHub 1010 -> 778), but no single patch helps both equally: 0003 fixed 392 Debian files and ZERO GitHub ones because it is an autoconf construct; 0007 fixed 142 GitHub files and 5 Debian ones because a herestring after a redirect is modern hand-written bash; 0006 fixed 12 GitHub and 0 Debian. A corpus of one population would have found perhaps half of these.",
       "ranking_bias": "Stars are attention, not use: the weakest popularity metric in this repo, and it does not decay. `language:Shell` is linguist's majority vote over a repository, which put ohmyzsh (zsh), d3 (JavaScript) and papers-we-love (a reading list) in the top ten. Gap files are also concentrated \u2014 839 of 1,388 come from three repositories \u2014 where Debian's spread across 492 independently-maintained sources.",
       "template_contamination": "RESOLVED by the template filter; see corpus.template_filter. Before it, 419 of 1,388 GitHub gap files (30%) were Jinja templates that `bash -n` called valid. The number now excludes them at corpus-build time rather than carrying a caveat.",
       "drift_note": "A GitHub repository has no version, so `resolve()` pins whatever HEAD was at fetch time and a re-fetch moves the corpus. Between the 2026-08-11 and 2026-08-12 fetches several repositories advanced (community-scripts/ProxmoxVE 962dbbb -> 4bf3fda, ComplianceAsCode/content 0e64629 -> 86d9ab4). The before/after pair above was therefore re-measured on the SAME post-filter corpus, upstream grammar and patched, rather than compared across fetches. The filter's own effect was predicted on the pre-filter corpus at 678 files / 445 gaps and observed at 646 / 443, so drift accounts for little of it, but the honest way to state a GitHub sweep is with the fetch date attached."
