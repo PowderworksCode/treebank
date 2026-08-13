@@ -45,6 +45,12 @@ refuses to run if the submodule is dirty or off the pinned sha.
   `treebank ledger` fails without it and prints it on success. See below.
 - `patches[]` — one entry per patch file with origin and evidence
   (repro, first-seen package, before/after sweep numbers).
+- `corpus.fetch_limit` — optional; how many packages `scripts/daily.sh`
+  fetches for this grammar. It exists so the nightly corpus is the same one
+  `corpus.sweep_patched` was measured on, because `check.sh` takes its
+  baseline pass count from that field and a count is only meaningful against
+  the corpus it was counted on. Grammars that omit it use the global
+  `TREEBANK_LIMIT`. `check.sh` warns when the two disagree.
 
 ## Materialization invariant
 

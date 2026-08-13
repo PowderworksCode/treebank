@@ -996,6 +996,8 @@
     "fetched": "Debian sid index 2026-08-11; corpora re-extracted 2026-08-12 when the template filter landed (GitHub repos re-pinned to that day's HEADs)",
     "packages": 492,
     "packages_note": "500 requested; 492 fetched. The 8 missing are exactly the size-cap skips listed under size_cap.",
+    "fetch_limit": 500,
+    "fetch_limit_note": "What scripts/daily.sh fetches for this grammar, so the nightly corpus is the one corpus.sweep_patched was measured on. Without it the daily job used the global TREEBANK_LIMIT of 100, check.sh compared a 9,094-file sweep against a 25,313-file baseline, could never go green, and the fix agent's only escape was to overwrite corpus.sweep_patched with the small-corpus numbers \u2014 which is what happened on 2026-08-12 (99 packages, 9,016 passed, recorded as if it were this corpus). The GitHub corpus is deliberately NOT in the daily loop: daily.sh sweeps corpus/<lang>/ only, and for bash that is the Debian one.",
     "files": 25662,
     "sweep_upstream": {
       "passed": 24572,
