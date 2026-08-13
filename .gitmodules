@@ -40,3 +40,6 @@
 [submodule "crates/treebank-elixir/upstream"]
 	path = crates/treebank-elixir/upstream
 	url = https://github.com/elixir-lang/tree-sitter-elixir
+[submodule "crates/treebank-yaml/upstream"]
+	path = crates/treebank-yaml/upstream
+	url = https://github.com/tree-sitter-grammars/tree-sitter-yaml

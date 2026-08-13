@@ -1,0 +1,9 @@
+# treebank-grammar-yaml consumer fixture: must parse with an Error.
+#
+# A published grammar that has stopped rejecting this has regressed in the
+# direction GRAMMARS.md names: accepts-invalid. Every line below is rejected
+# by the ledger's oracle (js-yaml 5.2 parseEvents) and by libyaml.
+key: value
+ bad: indentation
+flow: [1, 2,, 3]
+unclosed: "a double quoted string that never ends
