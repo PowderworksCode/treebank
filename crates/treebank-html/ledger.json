@@ -3,8 +3,9 @@
   "upstream": {
     "git_url": "https://github.com/tree-sitter/tree-sitter-html",
     "sha": "73a3947324f6efddf9e17c0ea58d454843590cc0",
-    "version": "0.23.2+5",
-    "sha_note": "Five commits past the v0.23.2 tag (5a5ca855), and NONE of them touches the grammar: three CI action bumps, a FUNDING.yml, and cbb91a0 'Include LICENSE file' (PR #117), which is the one that matters to a redistribution because it is what puts the MIT text inside the published tarball. Pinned at HEAD rather than at the tag because HEAD is what the editors pin."
+    "version": "0.23.2",
+    "sha_note": "Five commits past the v0.23.2 tag (5a5ca855), and NONE of them touches the grammar: three CI action bumps, a FUNDING.yml, and cbb91a0 'Include LICENSE file' (PR #117), which is the one that matters to a redistribution because it is what puts the MIT text inside the published tarball. Pinned at HEAD rather than at the tag because HEAD is what the editors pin.",
+    "version_note": "Upstream's own version string, which is what Cargo.toml and tree-sitter.json carry and what publish.sh computes the published suffix against \u2014 NOT a description of the pin. The pinned sha is five commits past the v0.23.2 tag and upstream has cut no release since; see sha_note for what those five commits are."
   },
   "upstream_choice": {
     "summary": "tree-sitter/tree-sitter-html is the grammar; there is no second candidate with any following. The convergence is at the COMMIT, not merely the repository: nvim-treesitter and Helix both pin 73a3947, which is the sha pinned here.",
