@@ -168,3 +168,29 @@ corpus filter misses them.
 0012 and 0023 are a coupled pair — 0023 does not apply without 0012's
 `grammar.js` change — so dropping the one genuine loosening costs both.
 All 14 negative-corpus files still reject.
+
+## 0028 — only a compound command may end a list without a terminator
+
+`0012` lets the last statement of a `{ }` or `do … done` drop its terminator
+when it is a bare compound command — which is bash's real rule — and `0023`
+extends that through an `&&`/`||` list. Both are right. The *set* they named
+was not: `_compound_command` listed `$.test_command`, and that node covers both
+bracket forms. bash distinguishes them.
+
+```sh
+{ [[ -f x ]] }     # valid — [[ ]] is a compound command
+{ [ -f x ] }       # syntax error — [ is an ordinary builtin
+{ echo hi }        # syntax error, for the same reason
+```
+
+So naming all of `test_command` made the grammar accept gimp's
+`&& { [ a ] || [ b ] }`, a real syntax error in a shipped script. This splits
+the `[[ … ]]` branch into a hidden rule and names only that in the compound
+set, aliased back to `test_command` so the tree shape is unchanged.
+
+Verified against bash on twelve forms — subshell, brace group, if, while, for
+and case may all end a list unterminated; `[[ ]]` may; `[ ]` and a plain
+command may not. **It costs nothing:** `gap_files` is unchanged on both corpora
+(202 and 361), so nothing `0012`/`0023` fixed is lost, and the one file that
+moves is the gimp script returning to the noise bucket where it belongs. Both
+constructs are now in `test/negative/`, so it cannot come back silently.
