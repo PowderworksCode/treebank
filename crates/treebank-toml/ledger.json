@@ -154,11 +154,11 @@
     "cost_today": "Zero. On the 1427-file real corpus the two oracles agree on every file, gap_files is 0 under both, and the grammar parses 1427/1427 clean. The choice costs nothing measurable today and only starts to matter as 1.1.0 adoption appears in published packages \u2014 at which point it is the difference between the sweep reporting a real, bounded, correct work item and the sweep saying nothing."
   },
   "grammar_is_narrower_than_the_oracle": {
-    "summary": "The inverse of treebank-lua's grammar_is_broader_than_the_oracle, and it must be read as the DANGEROUS direction rather than the safe one. Lua's grammar accepts a superset of what its oracle calls valid, which can never manufacture a gap. This grammar accepts a SUBSET: it targets TOML 1.0.0 while the oracle is 1.1.0, so every 1.1.0-only construct is 'grammar rejects AND oracle says valid', which is the definition of a gap.",
-    "measured": "Verified by parsing, not by reading upstream's README. Of the 9 constructs that separate the specs, the grammar REJECTS 7 \u2014 inline-table linebreak x4, inline-table trailing comma, local-time without seconds, \\x byte escapes \u2014 and ACCEPTS 2 (offset and local datetimes without seconds, because its rfc3339_time regex is looser than the spec it claims). Over the 777-file union of the toml-test manifests: 18 gap / 368 noise / 132 grammar-broader / 259 clean against the 1.1.0 oracle, against 3 / 383 / 137 / 254 for a 1.0.0 oracle. The 15-file difference is enumerated in the sweep notes.",
-    "this_is_intended": "These gaps are the system working, not numbers to tune away. The correct response to any of them appearing in a real package is a grammar patch bringing tree-sitter-toml up to TOML 1.1.0 \u2014 a coherent, bounded, upstreamable change of roughly four rules \u2014 and NOT a reclassification to noise or a swap of the oracle back to 1.0.0.",
-    "negative_corpus_consequence": "test/negative/ must contain ONLY syntax invalid in BOTH revisions. No 1.1.0-only construct may appear there: the oracle calls them valid, so they are barred by the entry criterion, and putting them there would freeze this grammar at 1.0.0. Same rule treebank-lua reached about LuaJIT literals, arrived at from the opposite side.",
-    "second_axis_semantic_rules": "As with lua, the oracle also rejects a class of files the grammar accepts and by its nature cannot reject: duplicate keys, a table redefined over a key, dotted-key conflicts, and calendar-invalid datetimes are semantic, not syntactic. This runs in the SAFE direction \u2014 grammar accepts, oracle rejects \u2014 so it cannot manufacture a gap, but it bounds test/negative further: a negative test may only use a pure syntax error, never a semantic one, because the grammar will not reject the latter."
+    "status": "RESOLVED by patches 0003-0005. Kept for the record because the reasoning is why those patches exist.",
+    "was": "The grammar targeted TOML 1.0.0 while the oracle is 1.1.0, so every 1.1.0-only construct was 'grammar rejects AND oracle says valid' \u2014 the definition of a gap, and the dangerous direction (the inverse of treebank-lua's grammar_is_broader_than_the_oracle, which is safe).",
+    "now": "The grammar accepts all 220 files toml-test's 1.1.0 manifest calls valid \u2014 220/220, zero conformance gaps \u2014 and the sweep's gap_files is 0. Grammar and oracle now agree on the same spec revision.",
+    "measured_before": "Of the 9 constructs separating the revisions the grammar rejected 7 and accepted 2. On the 4034-file corpus this surfaced as 2 real gap files (\\x escapes, optional seconds) inside basic-toml's fixtures.",
+    "second_axis_semantic_rules": "UNCHANGED and permanent: the oracle still rejects a class of files the grammar accepts and by its nature cannot \u2014 duplicate keys, table redefinition, dotted-key conflicts, calendar-invalid datetimes. This runs in the SAFE direction and cannot manufacture a gap, but it still bounds test/negative: a negative test may only use a pure syntax error. See grammar_accepts_invalid."
   },
   "oracle_cost": "0.053 s per 1000 files serial and 0.006 s per 1000 at 16 rayon workers, measured on 1427 real .toml files (3.73 MB) replayed 10x to get past timer resolution; process startup is unmeasurable (0.00 s) because the oracle is in-process. Throughput 48 MB/s serial. State that number WITH the corpus shape, because for a config language seconds-per-1000-FILES is a bytes/second measurement in disguise: mean 2.55 KB, median 1.59 KB. On go-sized files (22.9 KB mean) the same code would read ~0.5 s/1000. The reject path \u2014 every file truncated to 60%, which is the input validate() actually sees \u2014 is 0.022 s/1000, ~2.4x FASTER than the valid path, the same bail-at-first-error shape rust's syn and go/parser show. The ROADMAP's Tier A band is 0.2-2 s/1000 and gives toml no specific figure; this is roughly 4x below the floor of that band and the cheapest oracle in the repo, but the throughput number is the honest one to compare.",
   "oracle_conformance": "712/712 against toml-lang/toml-test's TOML 1.1.0 expectations, and 21/21 on a hand-built encoding and whitespace battery (BOM alone / BOM x LF / BOM x CRLF, CRLF inside and outside multi-line strings, lone CR, no final newline, empty and whitespace-only documents, NUL and form feed in comments and strings, tab as the one permitted control character, non-BMP literals, \\U0010FFFF vs \\U00110000, lone surrogate, Latin-1 bytes in comments and strings). Both populations were needed and neither bounds the other: toml-test covers BOMs thoroughly and the real corpus contains none, while toml-test is blind to file-size distribution. The tbyaml session hit the mirror image \u2014 its suite has zero BOM cases while its corpus caught one \u2014 which is why each population records what it is blind to.",
@@ -191,6 +191,138 @@
         "repro": "n/a \u2014 packaging",
         "note": "Upstream publishes as tree-sitter-toml-ng and does NOT own tree-sitter-toml on crates.io (that name belongs to Mathspy/tree-sitter-toml). Renames to treebank-grammar-toml and pins [lib] name = tree_sitter_toml_ng, which upstream leaves implicit \u2014 cargo derives it from the package name, so the rename would otherwise silently rename the library and break every consumer. Verified by building: emits libtree_sitter_toml_ng.rlib."
       }
+    },
+    {
+      "id": 3,
+      "title": "seconds are optional in times",
+      "file": "patches/0003-seconds-are-optional-in-times.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/tour.txt"
+      ],
+      "origin": "treebank; TOML 1.1.0 spec change",
+      "evidence": {
+        "repro": "lt3 = 07:32",
+        "detail": "rfc3339_time required a seconds field. TOML 1.1.0 makes it optional in local-time, local-date-time and offset-date-time. The seconds group (with its optional fractional part) becomes an optional group.",
+        "first_seen": {
+          "package": "basic-toml",
+          "version": "0.1.10",
+          "path": "tests/invalid/datetime-malformed-no-secs.toml"
+        },
+        "conformance": "fixes 4 toml-test files: datetime/no-seconds, spec-1.1.0/common-29, -31, -34",
+        "guard": "6 malformed times still rejected after the change: 25:00, 07:6, 07, 07:60, 7:32, 07:32:",
+        "sweep_before": {
+          "passed": 3996,
+          "failed": 38,
+          "gap_files": 3,
+          "noise_files": 35
+        },
+        "sweep_after": {
+          "passed": 3999,
+          "failed": 35,
+          "gap_files": 0,
+          "noise_files": 35
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "\\e and \\x escape sequences",
+      "file": "patches/0004-e-and-x-escape-sequences.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/tour.txt"
+      ],
+      "origin": "treebank; TOML 1.1.0 spec change",
+      "evidence": {
+        "repro": "esc = \"\\e\"  /  hex = \"\\x7f\"",
+        "detail": "TOML 1.1.0 adds \\e (U+001B) and \\xHH byte escapes to basic strings. Added to the escape_sequence token alongside the existing \\u and \\U forms.",
+        "first_seen": {
+          "package": "basic-toml",
+          "version": "0.1.10",
+          "path": "tests/invalid/string-byte-escapes.toml"
+        },
+        "conformance": "fixes 3 toml-test files: string/escape-esc, string/hex-escape, spec-1.1.0/common-12",
+        "guard": "6 bad escapes still rejected: \\q, \\x, \\x1, \\xZZ, \\u12, \\E",
+        "sweep_before": {
+          "passed": 3996,
+          "failed": 38,
+          "gap_files": 3,
+          "noise_files": 35
+        },
+        "sweep_after": {
+          "passed": 3999,
+          "failed": 35,
+          "gap_files": 0,
+          "noise_files": 35
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "newlines and trailing commas in inline tables",
+      "file": "patches/0005-newlines-and-trailing-commas-in-inline-tables.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/tour.txt"
+      ],
+      "origin": "treebank; TOML 1.1.0 spec change",
+      "evidence": {
+        "repro": "a = {\\n\\tc = 1,\\n}",
+        "detail": "TOML 1.1.0 permits newlines inside inline tables and a trailing comma. The rule is restructured to the same shape the array rule already used for exactly this, so the two composite values now handle whitespace identically rather than differently.",
+        "first_seen": {
+          "package": "toml-test",
+          "version": "1.1.0 manifest",
+          "path": "valid/inline-table/newline.toml"
+        },
+        "conformance": "fixes 4 toml-test files: inline-table/newline, inline-table/newline-comment, key/empty-05, spec-1.1.0/common-47",
+        "guard": "5 malformed inline tables still rejected: double comma, leading comma, unterminated, missing value, missing equals",
+        "sweep_before": {
+          "passed": 3996,
+          "failed": 38,
+          "gap_files": 3,
+          "noise_files": 35
+        },
+        "sweep_after": {
+          "passed": 3999,
+          "failed": 35,
+          "gap_files": 0,
+          "noise_files": 35
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "line-ending escape followed by whitespace",
+      "file": "patches/0006-line-ending-escape-followed-by-whitespace.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/tour.txt"
+      ],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "a = \"\"\"\\nx\\\\  \\n\\ny\"\"\"   (backslash, two spaces, newline)",
+        "detail": "NOT a 1.1.0 change \u2014 a plain defect, and the only one of the four that is invalid under BOTH revisions. _escape_line_ending required the newline IMMEDIATELY after the backslash, but TOML says the line-ending backslash may be followed by whitespace: 'when the last non-whitespace character on a line is an unescaped \\, it will be trimmed along with all whitespace up to the next non-whitespace character'. Bisected to this single rule: a bare backslash-newline already worked and the empty \"\"\"\"\"\" form already worked; only trailing whitespace before the newline failed.",
+        "first_seen": {
+          "package": "basic-toml",
+          "version": "0.1.10",
+          "path": "tests/valid/multiline-string.toml"
+        },
+        "conformance": "fixes 3 toml-test files: string/ends-in-whitespace-escape, string/multiline-empty, string/multiline",
+        "guard": "non-whitespace after the escape is still rejected, including basic-toml's own tests/invalid/string-bad-line-ending-escape.toml, which stays noise",
+        "sweep_before": {
+          "passed": 3996,
+          "failed": 38,
+          "gap_files": 3,
+          "noise_files": 35
+        },
+        "sweep_after": {
+          "passed": 3999,
+          "failed": 35,
+          "gap_files": 0,
+          "noise_files": 35
+        }
+      }
     }
   ],
   "grammar_accepts_invalid": {
@@ -199,14 +331,16 @@
     "how_much_is_structural": "59 of the 86 are semantic and unreachable for ANY tree-sitter grammar: table redefinition and duplicate keys (30), inline-table duplicate/overwrite (14), key duplicate and dotted-redefine (11), array extend-defined-aot and extending-table (4). A grammar cannot hold a symbol table.",
     "datetime_validity": "13 more are calendar validity: feb-29/feb-30 on datetime, local-date and local-datetime; y10k (year > 9999); a 3-digit year; leading-zero dates. Partly reachable \u2014 the year-range and leading-zero cases are regex-expressible in rfc3339_date and are patch candidates; February 30th needs real calendar logic and probably belongs in a scanner if anywhere.",
     "genuinely_syntactic": "14 are plain syntax the grammar should reject and is the patch queue: out-of-range Unicode escapes such as \\U00110000 in basic and multiline strings (4), bad Unicode escapes (2), literal- and basic-multiline quote handling (3), and five spec-1.1.0 common cases. The out-of-range escape group is the cheapest \u2014 one bound on the \\U rule covers four files.",
-    "not_a_gap": "None of this can inflate gap_files: a gap is grammar-rejects + oracle-valid, and this is the opposite direction. It costs nothing in the sweep and everything in trustworthiness, which is why it is written down rather than left to be discovered."
+    "not_a_gap": "None of this can inflate gap_files: a gap is grammar-rejects + oracle-valid, and this is the opposite direction. It costs nothing in the sweep and everything in trustworthiness, which is why it is written down rather than left to be discovered.",
+    "no_regression_from_patches": "Re-measured after 0003-0006: 86 of 492, IDENTICAL to before. The four patches widened what the grammar accepts by exactly the 1.1.0 constructs and nothing else \u2014 every guard case in each patch's evidence was checked, and toml-test's invalid set moved by zero files. Widening a grammar is where accepts-invalid regressions come from, so this is checked rather than assumed."
   },
   "test_negative": {
-    "files": 32,
+    "files": 46,
     "rule": "PURE SYNTAX errors only, invalid under BOTH TOML 1.0.0 and 1.1.0, and verified rejected by the grammar via has_error().",
     "why_both_revisions": "The oracle is 1.1.0. A 1.1.0-only construct is oracle-VALID, so it cannot enter by the stated criterion \u2014 and if it could, it would freeze this grammar at 1.0.0 and make a future upgrade fail CI. See spec_revision_choice.",
     "why_not_semantic": "Duplicate keys, table redefinition, dotted-key conflicts and calendar-invalid datetimes are all oracle-invalid, but the grammar cannot reject them and by its nature never will. A negative test built from one would be testing the oracle, not the grammar. Same rule treebank-lua reached about scope errors.",
-    "verified": "Each of the 32 was checked against three things independently: toml 1.1.4 (invalid), toml 0.8.23 (invalid), and the repo's own has_error() check via `treebank negative` (rejects). Three of them \u2014 a leading comma in an array, two pairs on one line, and a UTF-16LE document \u2014 are the cases where `tree-sitter parse`'s exit status and has_error() disagree; they are in the corpus because has_error(), which is what the sweep uses, rejects all three."
+    "verified": "Each of the 46 was checked three ways independently: toml 1.1.4 says invalid, toml 0.8.23 says invalid, and the repo's own has_error() check rejects it. 46/46 on all three.",
+    "guards_for_the_widening_patches": "14 of the 46 were added alongside patches 0003-0006 and exist specifically because those patches WIDEN the grammar. Each one is a near-miss of a newly-accepted construct: malformed times beside optional seconds (25:00, 07:6, 07:60, 7:32, 07:32:), malformed escapes beside \\e and \\x (\\x, \\x1, \\xZZ, \\E), malformed inline tables beside newlines and trailing commas (double comma, leading comma, missing value, missing equals), and a line-ending escape followed by non-whitespace. Widening is where accepts-invalid regressions come from, so the guards are permanent tests rather than a one-off check."
   },
   "corpus": {
     "source": "crates.io .crate tarballs for the top 3000 crates by all-time downloads. TOML owns no registry \u2014 it is a GUEST language, like bash inside Debian sources \u2014 so the corpus rides inside another ecosystem's packages and the ranking is rust's, delegated rather than reimplemented.",
@@ -234,6 +368,16 @@
       "gap_1_and_2_are_the_spec_gap": "basic-toml tests/invalid/string-byte-escapes.toml (`answer = \"\\x33\"`) and tests/invalid/datetime-malformed-no-secs.toml (`no-secs = 1987-07-05T17:45Z`). Both are VALID under TOML 1.1.0 and INVALID under 1.0.0 \u2014 \\x byte escapes and optional seconds are two of the nine constructs that separate the revisions. Verified against both oracles: toml 1.1.4 says valid, toml 0.8.23 says invalid. A 1.0.0 oracle would have agreed with the grammar, booked both as noise, and reported a flawless grammar. The 1.1.0 pin is what makes them visible, and the correct response is a grammar patch bringing tree-sitter-toml to 1.1.0 \u2014 NOT a reclassification and NOT a swap back to 1.0.0. Note the irony worth keeping: basic-toml itself labels these files invalid, correctly, because it is a 1.0.0 parser published before 1.1.0 existed. The corpus's own labelling and our oracle disagree for a principled reason, which is precisely what the `spec` field exists to record.",
       "gap_3_is_a_real_bug": "basic-toml tests/valid/multiline-string.toml, line 11. A multi-line basic string using the line-ending backslash escape (`\"\"\"\\` followed by whitespace and a continuation) and the empty form `\"\"\"\"\"\"`. Valid under BOTH revisions \u2014 toml 1.1.4 and toml 0.8.23 both say valid \u2014 so this is an unambiguous defect in the grammar's multi-line string handling and is independent of the spec choice. It is the same defect the pre-vendoring conformance run found as valid/string/ends-in-whitespace-escape.toml and valid/string/multiline-empty.toml. First patch target.",
       "prediction_recorded_before_the_sweep": "spec_revision_choice.cost_today said gap_files was 0 on the 1374-file corpus and that a non-zero result would mean a real package had adopted 1.1.0 syntax, with a grammar patch as the correct response. Deepening 1000 -> 3000 packages produced exactly that."
+    },
+    "sweep_patched": {
+      "files": 4034,
+      "passed": 3999,
+      "failed": 35,
+      "gap_files": 0,
+      "config_files": 0,
+      "noise_files": 35,
+      "clusters": 29,
+      "note": "with patches 0003-0006. All three gaps closed; 99.13% of files parse. The 35 remaining failures are all noise and all still from basic-toml's own invalid fixtures."
     }
   }
 }

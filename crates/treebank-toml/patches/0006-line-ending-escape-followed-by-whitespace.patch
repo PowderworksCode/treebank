@@ -1,0 +1,38 @@
+diff --git a/grammar.js b/grammar.js
+index 29a80bf..b879f88 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -120,7 +120,7 @@ module.exports = grammar({
+       ),
+     escape_sequence: $ =>
+       token.immediate(/\\([betnfr"\\]|x[0-9a-fA-F]{2}|u[0-9a-fA-F]{4}|U[0-9a-fA-F]{8})/),
+-    _escape_line_ending: $ => token.immediate(seq(/\\/, newline)),
++    _escape_line_ending: $ => token.immediate(seq(/\\/, /[ \t]*/, newline)),
+     _literal_string: $ =>
+       seq(
+         '\'',
+diff --git a/test/corpus/tour.txt b/test/corpus/tour.txt
+index 4c41a04..0851d66 100644
+--- a/test/corpus/tour.txt
++++ b/test/corpus/tour.txt
+@@ -425,3 +425,20 @@ multi = {
+       (pair
+         (bare_key)
+         (integer)))))
++
++===================================================
++String: line-ending escape with trailing whitespace
++===================================================
++
++a = """
++x\  
++
++y"""
++
++---
++
++(document
++  (pair
++    (bare_key)
++    (string
++      (escape_sequence))))
