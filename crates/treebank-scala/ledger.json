@@ -22,6 +22,10 @@
       "_2.12 -> Scala212",
       "_2.11 -> Scala211"
     ],
+    "authority": "reference",
+    "authority_note": "Scala HAS an implementation everyone appeals to — scalac — so a gap number here is a measurement rather than a measurement-relative-to-us, and `position` would overstate the uncertainty. But scalameta is not scalac, it is the parser Scala's own tooling appeals to in scalac's place, so the two can disagree and a disagreement is a bug in scalameta rather than a matter of opinion. One is known and recorded under `dialect_is_the_whole_problem.known_permissiveness`; it was found by the negative battery, not by the corpus. Stated explicitly rather than left to the field's default, because the default is a claim.",
+    "stage": "parse",
+    "stage_note": "Parse.parseSource() builds a Source tree and stops: no typing, no symbol resolution, no macro expansion. The stage is worth recording even though Scala's stages do not disagree the way yaml's parse-vs-load did — an unresolved import or a missing classpath is not an error here, which is exactly what makes a file judgeable on its own.",
     "note": "scalameta's parser, the one Metals and scalafmt are built on. It parses without typing, so unresolved imports and a missing classpath are not errors and each file is judged on its own, exactly like JavacTask.parse() for Java. `Parsed.Error` is the verdict `invalid`; anything THROWN out of the parser is an oracle failure and exits non-zero rather than becoming a verdict.",
     "dialect_is_the_whole_problem": {
       "claim": "Scala 2 and Scala 3 are different languages sharing the .scala extension, and scalameta requires the dialect per file. Nothing in a file's path settles it — but the Maven coordinate does, and the corpus directory carries it: cats-core_3 is Scala 3, spark-core_2.11 is Scala 2.11. So the dialect is declared per package by crates/treebank-cli/src/lang/scala.rs and passed to the oracle per file. The oracle never picks a dialect and never falls back to another one.",
