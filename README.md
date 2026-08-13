@@ -9,7 +9,7 @@ gitignored working tree `build/` that everything else consumes. Current
 grammars:
 
 <!-- BEGIN GENERATED: scripts/grammar-docs.sh -->
-- `crates/treebank-bash` — tree-sitter-bash 0.25.1, 25 grammar patches
+- `crates/treebank-bash` — tree-sitter-bash 0.25.1, 26 grammar patches
 - `crates/treebank-c` — tree-sitter-c 0.24.2, 13 grammar patches
 - `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
 - `crates/treebank-elixir` — tree-sitter-elixir 0.3.5, 1 grammar patch

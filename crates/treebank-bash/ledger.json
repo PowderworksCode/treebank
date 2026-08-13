@@ -929,6 +929,46 @@
         "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha",
         "measured_on": "Per-patch before/after is the daily fix agent's, measured on its own corpus where the series ran 142 -> 44 gap files and this patch was numbered 0025. Re-measured here as a SERIES on the 25,662-file Debian and 41,277-file GitHub corpora; per-patch attribution is not carried across the two runs and is not claimed."
       }
+    },
+    {
+      "id": 28,
+      "title": "only a compound command may end a list without a terminator",
+      "file": "patches/0028-only-a-compound-command-may-end-a-list-without-a-terminator.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/statements.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; tightening the accepts-invalid cost that 0012 and 0023 introduced, found by the sweep's own noise count",
+      "evidence": {
+        "repro": "{ [ -f x ] }\nif x && { [ a ] || [ b ] }; then :; fi\n",
+        "diagnosis": "0012 lets the last statement of a `{ }` or `do \u2026 done` drop its terminator when it is a bare COMPOUND command, which is bash's real rule, and 0023 extends that through an && / || list. Both are right; the set they named was not. `_compound_command` listed `$.test_command`, and that node covers BOTH bracket forms. bash distinguishes them: `[[ \u2026 ]]` is a compound command and `{ [[ -f x ]] }` is valid, while `[` is an ordinary builtin, so `{ [ -f x ] }` is a syntax error exactly like `{ echo hi }`. Naming all of test_command therefore made the grammar accept gimp's `&& { [ a ] || [ b ] }` \u2014 a real syntax error in a shipped script. The fix splits the `[[ \u2026 ]]` branch into a hidden rule and names only that in the compound set, aliased back to `test_command` so the tree shape is unchanged. Verified against bash on twelve forms: subshell, brace group, if, while, for and case may all end a list unterminated; `[[ ]]` may; `[ ]` and a plain command may not.",
+        "first_seen": {
+          "package": "gimp",
+          "version": "3.2.4-3",
+          "path": "build/macos/1_build-deps-macports.sh"
+        },
+        "sweep_before": {
+          "corpus": "debian",
+          "passed": 25314,
+          "failed": 348,
+          "gap_files": 202,
+          "noise_files": 146
+        },
+        "sweep_after": {
+          "corpus": "debian",
+          "passed": 25313,
+          "failed": 349,
+          "gap_files": 202,
+          "noise_files": 147
+        },
+        "sweep_after_github": {
+          "gap_files": 361,
+          "noise_files": 588
+        },
+        "evidence_note": "COSTS NOTHING AND BUYS CORRECTNESS: gap_files is unchanged on both corpora (202 and 361), so not one file that 0012 and 0023 fixed is lost; the single file that moves is the gimp script, which returns to the noise bucket where it belongs because bash rejects it too. The series' accepts-invalid count against the 268-file probe set drops from 4 to 3, and the three that remain are not grammar faults: one is an extglob case pattern that needs `shopt -s extglob`, which `bash -n` does not honour, and two are Jinja templates with bare macro calls that admit()'s filter does not catch. Both new constructs are now in test/negative/, so this cannot silently come back.",
+        "upstream_status": "not reported upstream yet; the patch applies directly to the pinned sha"
+      }
     }
   ],
   "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). Noted for this grammar in particular: upstream's committed src/parser.c is byte-identical to what 0.25.10 generates, so materialization changes no generated file until a patch does.",
@@ -965,11 +1005,11 @@
       "clusters": 209
     },
     "sweep_patched": {
-      "passed": 25314,
-      "failed": 348,
+      "passed": 25313,
+      "failed": 349,
       "gap_files": 202,
-      "noise_files": 146,
-      "clusters": 136
+      "noise_files": 147,
+      "clusters": 138
     },
     "github_corpus": {
       "what": "The same sweep against the other artifact source: 492 of the top 500 repositories GitHub's linguist calls Shell, ranked by stars, pinned at a commit sha. TREEBANK_BASH_CORPUS=github; corpus/bash-github/.",
@@ -1000,6 +1040,6 @@
     "template_filter": "A file carrying a Jinja/Django STATEMENT tag \u2014 `{% if \u2026 %}`, `{%- from \u2026 %}`, and the `{{% \u2026 %}}` delimiters ComplianceAsCode configures \u2014 is a template that renders to a shell script, not a shell script, and admit() drops it. This is the one filter here that exists because of an ORACLE limit rather than a corpus one: `bash -n` calls those files VALID, since the tags happen to lex as shell words, so they arrive as grammar GAPS rather than as noise. No two-valued per-file oracle can tell the difference.\n\nAnchored on a keyword, not on `{%`, and that was measured rather than assumed. A bare `{%\u2026%}` rule matched 10 Debian files of which EIGHT were false positives: `{%s%}` in gettext's OCaml format-string fixtures, `{%%k1%}` in libgcrypt's and grub2's configure, `{% %%}` in gitk. All are valid shell. Interpolation alone is a worse discriminator still \u2014 `{{ \u2026 }}` matches 1,818 GitHub files of which only 461 fail, because `docker inspect -f '{{.Config.Image}}'` is ordinary shell \u2014 so it is deliberately NOT filtered on. `comment` is left out of the keyword list because ceph ships a shell script that emits a Jekyll post containing `{% comment %}`.\n\nMeasured effect: Debian loses ONE file (a ceph bootstrap script that really is a template, `/mnt/{{ ceph_dev_folder }}/src/\u2026`, 13 tags), gaps 522 -> 521. GitHub loses 646 files, gaps 1,388 -> 945 and noise 817 -> 592. Residual: 31 GitHub gap files still carry a bare `{{ }}`, and sampled they are docker/kubectl Go-template format strings \u2014 real shell, correctly kept \u2014 plus 7 ComplianceAsCode files with no statement tag. Zero gap files in either corpus still carry a statement tag.",
     "patch_evidence_note": "The per-patch sweep_before/sweep_after numbers below were measured on the PRE-TEMPLATE-FILTER Debian corpus of 25,663 files (943 gaps down to 522). The filter later removed one file from it, and that file was a gap, so every patch-level figure is one lower against the current 25,662-file corpus. Left as measured rather than silently restated.",
     "replayed_series_note": "Patches 0009-0027 are the daily fix agent's series from PR #42, replayed onto 0006-0008 rather than merged. The agent authored them against 0005, so the numbering collided and its 0010 (herestring after a file redirect) was the SAME FIX as our 0007 \u2014 same rule, same placement, same reasoning \u2014 and was dropped. Its 0014 was kept: it fixes `$((0x$(...)))` through the number token where our 0008 fixes it through concatenation, and the two are complementary (theirs also covers `$((2#$x))`, ours also covers `$((a$(id -u)))`). Where both match, theirs wins and produces a `number` node, so the corpus test our 0008 added was updated by the patch that changed it, which is why 0016 carries a test-shape diff. Series measured as a whole on both corpora: debian 494 -> 202 gap files, github 778 -> 361.",
-    "accepts_invalid_cost": "THE PRICE, MEASURED, because a 19-patch series that only ever reports pass-rate gains is exactly the drift GRAMMARS.md warns about. Four files in the 67k across both corpora are rejected by `bash -n` and accepted by the patched grammar where the 0001-0008 tree rejected them. Attributed by replaying the series one patch at a time against those files: 0012 +2, 0015 +1, 0023 +1. Read individually:\n  (1) gimp build/macos/1_build-deps-macports.sh \u2014 `&& { [ a ] || [ b ] }; then`, a brace group with no `;` before the `}`. bash rejects it and is right to; the script has a real syntax error. This one is a GENUINE loosening, from 0012.\n  (2) pyenv plugins/python-build \u2014 `pypy[0-9].+([0-9])-*` in a case pattern. That is extglob, which bash accepts only with `shopt -s extglob` in effect and `bash -n` does not honour; the grammar is arguably RIGHT here and the oracle is the limited one.\n  (3,4) two ComplianceAsCode `*.fail.sh` \u2014 bare Jinja macro CALLS (`bash_ensure_pam_module_configuration('/etc/pam.d/password-auth',`) with no `{% %}` statement tag, so the template filter in admit() does not catch them. Corpus contamination, not grammar drift, and it marks the gap in that filter.\nSo: one real over-acceptance, one oracle limit, two templates. 0012 and 0023 are a COUPLED PAIR \u2014 0023 does not apply without 0012's grammar.js change \u2014 so dropping the genuine loosening costs both, which is the trade a reviewer should weigh. All 14 negative-corpus files still reject."
+    "accepts_invalid_cost": "Measured, then FIXED. The replayed series (0009-0027) made the grammar accept four files that `bash -n` rejects; 0028 removes the only one of those that was a genuine grammar fault, at a cost of zero gap files. Three remain and none is a grammar fault: (1) pyenv plugins/python-build, an extglob case pattern `pypy[0-9].+([0-9])-*` that bash accepts only with `shopt -s extglob` in effect, which `bash -n` does not honour \u2014 here the grammar is right and the ORACLE is the limited one; (2,3) two ComplianceAsCode `*.fail.sh` carrying bare Jinja macro CALLS with no `{% %}` statement tag, so the template filter in admit() misses them \u2014 corpus contamination, and a known gap in that filter. test/negative/ now holds 16 files, including the two constructs 0028 re-tightened."
   }
 }
