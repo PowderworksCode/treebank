@@ -46,3 +46,6 @@
 [submodule "crates/treebank-toml/upstream"]
 	path = crates/treebank-toml/upstream
 	url = https://github.com/tree-sitter-grammars/tree-sitter-toml
+[submodule "crates/treebank-erlang/upstream"]
+	path = crates/treebank-erlang/upstream
+	url = https://github.com/WhatsApp/tree-sitter-erlang

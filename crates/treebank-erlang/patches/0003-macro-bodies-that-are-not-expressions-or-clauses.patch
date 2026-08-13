@@ -1,0 +1,81 @@
+diff --git a/grammar.js b/grammar.js
+index 44e6eab..a46d477 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -1098,6 +1098,41 @@ module.exports = grammar({
+             prec.dynamic(PREC.DYN_GUARD_AND, $.replacement_guard_and),
+             prec.dynamic(PREC.DYN_EXPR_GUARD, $.replacement_expr_guard),
+             $.replacement_parens,
++            // A macro body only has to make sense where it is EXPANDED, so
++            // it is not required to be a form, an expression or a complete
++            // clause. The shapes below are the ones a Hex sweep actually
++            // found; each is valid Erlang that the compiler accepts.
++            $.replacement_clause_head,
++            $.replacement_leading_colon,
++            $.replacement_partial_clauses,
++            $.record_name,
++        ),
++
++        // `-define(WITH_STACKTRACE(T, R, S), T:R:S ->).`  (telemetry, epgsql,
++        // and the standard OTP-21-compatibility idiom). A clause head with no
++        // body: the caller supplies the body at the expansion site.
++        replacement_clause_head: $ => seq(
++            field("pat", $._expr),
++            optional($._clause_guard),
++            '->',
++        ),
++
++        // `-define(BIND_STACKTRACE(Var), :Var).`  (brod). The body starts
++        // mid-expression; expanded, it completes a `catch C:E:Stk ->` head.
++        replacement_leading_colon: $ => seq(':', field("expr", $._expr)),
++
++        // `-define(WITH_STACKTRACE(T, R, S), T:R -> S = erlang:get_stacktrace(), ).`
++        // Clauses left open with a trailing comma, so the expansion site can
++        // continue the body.
++        // Spelled out rather than reusing `clause_body`, which is prec.right
++        // and so swallows the trailing comma while waiting for another
++        // expression. Here the comma ENDS the body.
++        replacement_partial_clauses: $ => seq(
++            field("pat", $._expr),
++            optional($._clause_guard),
++            '->',
++            sepBy1(',', field("exprs", $._expr)),
++            ',',
+         ),
+ 
+         replacement_function_clauses: $ => sepBy1(';', field("clauses", $._function_or_macro_clause)),
+diff --git a/test/corpus/macros.txt b/test/corpus/macros.txt
+index b0210a5..c125afa 100644
+--- a/test/corpus/macros.txt
++++ b/test/corpus/macros.txt
+@@ -423,3 +423,30 @@ Macro type in call
+             (call
+               (atom)
+               (expr_args))))))))
++
++================================================================================
++Macro bodies that are not expressions or complete clauses
++================================================================================
++
++-define(WITH_STACKTRACE(T, R, S), T:R:S ->).
++-define(BIND_STACKTRACE(Var), :Var).
++-define(OPT, #decode_opt_v2).
++-define(CATCH(T, R, S), T:R -> S = erlang:get_stacktrace(), ).
++
++--------------------------------------------------------------------------------
++(source_file
++  (pp_define
++    (macro_lhs (var) (var_args (var) (var) (var)))
++    (replacement_clause_head
++      (remote (remote_module (var)) (remote (remote_module (var)) (var)))))
++  (pp_define
++    (macro_lhs (var) (var_args (var)))
++    (replacement_leading_colon (var)))
++  (pp_define
++    (macro_lhs (var))
++    (record_name (atom)))
++  (pp_define
++    (macro_lhs (var) (var_args (var) (var) (var)))
++    (replacement_partial_clauses
++      (remote (remote_module (var)) (var))
++      (match_expr (var) (remote (remote_module (atom)) (call (atom) (expr_args)))))))

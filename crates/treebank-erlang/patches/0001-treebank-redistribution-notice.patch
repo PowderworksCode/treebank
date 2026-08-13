@@ -1,0 +1,48 @@
+diff --git a/README.md b/README.md
+index c0ddf9d..7a25816 100644
+--- a/README.md
++++ b/README.md
+@@ -1,34 +1,10 @@
+-# Tree Sitter Erlang
++> [!WARNING]
++> **This is an automatically generated, patched redistribution of
++> [tree-sitter-erlang](https://github.com/WhatsApp/tree-sitter-erlang) — it is
++> not the upstream project.** It is produced by
++> [treebank](https://treebank.dev), which patches the upstream grammar at a
++> pinned commit so that it parses 100% of a real-world code corpus.
++> `ledger.json` records the pinned upstream commit and every patch with
++> evidence; `LOCAL-PATCHES.md` describes the patches. Report problems with
++> the patches to treebank, not to the upstream maintainers.
+ 
+-This represents tree-sitter grammar used for the Erlang language in the
+-ELP project.
+-
+-It started as a direct clone of
+-https://github.com/AbstractMachinesLab/tree-sitter-erlang at
+-[7b436e1ca50f0002f6765a9a2a00f6156b2cc881](https://github.com/AbstractMachinesLab/tree-sitter-erlang/commit/7b436e1ca50f0002f6765a9a2a00f6156b2cc881),
+-but was later heavily modified for completeness.
+-
+-## Usage
+-
+-Install the required toolchain with
+-
+-```
+-make deps
+-```
+-
+-Edit the `grammar.js` file and re-generate the code with:
+-
+-```
+-make gen
+-```
+-
+-Useful test command, parses `foo.erl` and opens a browser window to
+-show the process, with pretty pictures of the generated AST.
+-
+-```
+-npm run parse -- --debug-graph testdata/foo.erl
+-```
+-
+-## License
+-
+-tree-sitter-erlang is [Apache licensed](./LICENSE).

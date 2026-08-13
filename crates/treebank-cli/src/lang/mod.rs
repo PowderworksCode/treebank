@@ -8,8 +8,10 @@ mod c;
 mod csharp;
 mod debian;
 mod elixir;
+mod erlang;
 mod exec_oracle;
 mod github;
+mod hex;
 mod go;
 mod java;
 mod javascript;
@@ -166,6 +168,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static ELIXIR: elixir::Elixir = elixir::Elixir;
     static YAML: yaml::Yaml = yaml::Yaml;
     static TOML: toml::Toml = toml::Toml;
+    static ERLANG: erlang::Erlang = erlang::Erlang;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -183,5 +186,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Elixir => &ELIXIR,
         LangName::Yaml => &YAML,
         LangName::Toml => &TOML,
+        LangName::Erlang => &ERLANG,
     }
 }

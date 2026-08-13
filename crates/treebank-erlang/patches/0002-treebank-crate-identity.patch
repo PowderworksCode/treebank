@@ -1,0 +1,37 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index a201401..20eb5a6 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,23 +1,29 @@
+ [package]
+ categories = ["parsing", "text-editors"]
+-description = "erlang grammar for the tree-sitter parsing library"
+-repository = "https://github.com/WhatsApp/tree-sitter-erlang"
++description = "Patched redistribution of WhatsApp/tree-sitter-erlang: upstream at a pinned commit plus the treebank patch series. Not an upstream release."
++repository = "https://github.com/PowderworksCode/treebank"
++homepage = "https://treebank.dev"
+ edition = "2018"
+ keywords = ["incremental", "parsing", "erlang"]
+ license = "MIT"
+-name = "tree-sitter-erlang"
++name = "treebank-grammar-erlang"
+ version = "0.20.0"
+ 
+ build = "bindings/rust/build.rs"
+ include = [
+   "LICENSE",
++  "LOCAL-PATCHES.md",
+   "bindings/rust/*",
+   "grammar.js",
++  "ledger.json",
++  "patches/*",
+   "queries/*",
+   "src/*",
++  "tree-sitter.json",
+ ]
+ 
+ [lib]
++name = "tree_sitter_erlang"
+ path = "bindings/rust/lib.rs"
+ 
+ [dependencies]

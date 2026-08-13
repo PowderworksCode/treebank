@@ -76,6 +76,9 @@ pub enum LangName {
     #[serde(rename = "toml")]
     #[value(name = "toml")]
     Toml,
+    #[serde(rename = "erlang")]
+    #[value(name = "erlang")]
+    Erlang,
 }
 
 impl LangName {
@@ -97,6 +100,7 @@ impl LangName {
             LangName::Elixir => "elixir",
             LangName::Yaml => "yaml",
             LangName::Toml => "toml",
+            LangName::Erlang => "erlang",
         }
     }
 }

@@ -1,0 +1,158 @@
+{
+  "grammar": "erlang",
+  "upstream": {
+    "git_url": "https://github.com/WhatsApp/tree-sitter-erlang",
+    "sha": "6ba4c762eb3065495e3db85697ffeecdf364ce35",
+    "version": "0.20.0",
+    "sha_note": "four commits past the 0.20 tag; see upstream_choice for why the tag itself is not pinned. The version is upstream's Cargo.toml version (0.20.0), which is also what crates.io shows; the git tag is spelled 0.20."
+  },
+  "upstream_choice": {
+    "summary": "Unlike elixir, the editors genuinely disagree here: nvim-treesitter and Zed ship WhatsApp/tree-sitter-erlang, Helix ships the-mikedavis/tree-sitter-erlang. WhatsApp's is the grammar -- 97 stars against 11, pushed 2026-07-31 against 2025-09-24, and it is what crates.io's tree-sitter-erlang (316,266 downloads) is built from. It is also the parser inside WhatsApp's own Erlang language server (ELP), which is the strongest kind of evidence a grammar can have: someone runs it against a very large private corpus every day.",
+    "evidence": "nvim-treesitter parsers.lua -> WhatsApp/tree-sitter-erlang @ 6ba4c762 (the sha pinned here); zed-extensions/erlang extension.toml [grammars.erlang] -> same repo @ 836aa2b6; Helix languages.toml -> the-mikedavis/tree-sitter-erlang @ d85b18e7. VERIFIED: grammar.js and src/scanner.c are the SAME blobs (44e6eab5ae, 40e96f5a8f) at nvim's pin, at Zed's pin and at the 0.20 tag, so the two editors that agree on the repo are parsing identically despite pinning two months apart.",
+    "why_not_the_tag": "The 0.20 tag (67e7f7f) has identical grammar.js and scanner.c -- the four commits after it only bump the CLI -- but it predates upstream adding tree-sitter.json, without which the pinned CLI cannot run the highlight half of `tree-sitter test` (it exits 1 looking for a parser directory) and falls back to ABI 14. So the pin is nvim's commit: same parser, working test suite, ABI 15. The version string stays 0.20, which is what upstream's Cargo.toml and crates.io both say.",
+    "cli_divergence_note": "That last commit switches upstream to tree-sitter-cli 0.26.11 / ABI 15, while treebank pins 0.25.10 for the Unicode-identifier-table bug. It does not matter: generate_deps is null, nothing here runs upstream's package.json, and materialize regenerates src/ with the pinned CLI. Measured: 0.25.10 generates this grammar.js cleanly (one pre-existing `unnecessary conflicts` warning about list/list_comprehension, which is upstream's and not ours) and all 230 corpus tests pass."
+  },
+  "generate_cli": "0.25.10",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "toolchain": {
+    "summary": "Installed by tools/beam-toolchain/fetch.sh --otp-only, which the elixir grammar added and this one reuses unchanged. That was the point of writing it as a BEAM toolchain rather than an Elixir detail: erlang needed no new install step at all, because epp_dodger and epp both live in OTP itself (syntax_tools and stdlib).",
+    "otp": "28.5.0.5 (erts-16.4.0.5)",
+    "cost": "zero, on a box that already has the elixir grammar's toolchain; 77 MB and ~3 s from scratch"
+  },
+  "oracle": {
+    "tool": "tools/erl-oracle/check.escript (union of epp_dodger and epp)",
+    "version": "Erlang/OTP 28 (erts-16.4.0.5)",
+    "dialect": "Erlang/OTP 28",
+    "flags": [],
+    "note": "A UNION of OTP's two front ends: a file is valid if epp_dodger (parses WITHOUT the preprocessor -- macros dodged, no include needed) OR epp (the real preprocessor plus parser, given include dirs reconstructed from the corpus tree) accepts it. Neither is sufficient alone; see oracle_union_measured. TWO-VALUED: valid / invalid. Verified that neither leg evaluates anything and that dodger needs no project context: ?UNDEFINED_MACRO parses clean, and a missing -include and -include_lib are not errors.",
+    "unreadable_note": "An unreadable file is NOT an invalid file: the oracle exits 1 on I/O rather than emitting a verdict. Erlang makes this EASIER to get right than Lua did and harder to get right than it looks: epp_dodger's top-level {error, _} is ONLY I/O ({0,file,enoent}, {0,file,eisdir}), the exact inverse of loadfile's single nil for both -- but see oracle_error_forms for where the verdict actually hides.",
+    "smoke": {
+      "requires": [
+        "escript"
+      ],
+      "valid": "tools/consumer-test/fixtures/patched.erl",
+      "invalid": "crates/treebank-erlang/test/negative/unclosed-paren.erl",
+      "note": "Assertion (2) \u2014 that a known-VALID file still comes back valid \u2014 is the load-bearing half for this oracle, and not for the usual reason. epp_dodger:parse_file/1 returns {ok, Forms} for a file full of syntax errors (they arrive as error FORMS inside the list), so the obvious reading of the API is an oracle that calls everything valid; assertion (1) alone would not notice. The chosen invalid file is an unclosed argument list, which BOTH front ends of the union reject, so this covers the union rather than one leg of it. `requires` names the bare command because tools/beam-toolchain/fetch.sh --otp-only puts the pinned OTP on PATH; TREEBANK_ESCRIPT still overrides which binary runs."
+    }
+  },
+  "oracle_union_measured": {
+    "summary": "The roadmap says: 'Oracle: epp_dodger -- which exists precisely to parse without macro expansion. Blocker: none. Teaches: the preprocessor problem with a happy ending.' That is half right, and the half it misses would have cost 6% of the corpus.",
+    "measured": "1,715 files from 130 Hex packages, each judged by both front ends: epp_dodger alone 1,610 valid (105 rejects, 6.1%); epp alone 1,601 valid (114 rejects, 6.6%); UNION 1,706 valid (9 rejects, 0.52%). The two fail in nearly DISJOINT directions -- 105 files dodger accepts and epp cannot, 96 files epp accepts and dodger cannot -- which is why the union is worth having rather than a tie-breaker.",
+    "why_dodger_alone_fails": "epp_dodger parses a -define's BODY as though it were a form, and a macro body does not have to be one: it only has to make sense where it is expanded. Real headers are full of bodies that are not forms -- `-define(IS_ETAGC(C), C =:= 16#21; C >= 16#23, C =/= 16#7f).` (cowlib), `-define(BIND_STACKTRACE(Var), :Var).` (brod), `-define(CFMT(C, Col), f([$~,$!,C|S]) -> [Col|f(S)]; f(...) -> ...).` (cf). All three compile; dodger reports a syntax error for each.",
+    "why_that_direction_is_the_dangerous_one": "A false 'invalid' books the file as corpus NOISE, which HIDES grammar gaps rather than inventing them -- the direction GRAMMARS.md calls quietly agreeing with us. Concretely: the 11 gap files patch 0003 fixes are all -define bodies that epp_dodger rejects. Under a dodger-only oracle every one of them would have been noise and patch 0003 would never have been written. The union is what made those gaps visible.",
+    "why_epp_alone_fails": "epp needs the file's project: -include_lib(\"kafka_protocol/include/kpro_public.hrl\") cannot resolve to a sibling Hex package, and that is exactly the Tier-B hazard epp_dodger exists to avoid. Reconstructing include dirs from the corpus closes most of it but not all.",
+    "include_dirs": "There is no build system to ask, so the oracle walks every directory from the file up to the corpus root and offers each one plus its include/ and src/. Measured: identical to passing the true package root (9 residual rejects either way), where a fixed two-levels-up guess leaves 19 -- prometheus keeps modules three levels down in src/collectors/vm/.",
+    "residue": "9 files of 1,715 (0.52%) that neither front end can judge, and they are INDETERMINATE rather than invalid: dodger fails on a macro body, epp fails on a cross-package -include_lib. One is genuinely invalid (recon's script/app_deps.erl, an escript-shaped file), one is a fragment header that only parses with a macro its includer defines (hackney_methods.hrl). Recorded as invalid, i.e. as noise, because that is the conservative direction and because validate() only ever runs on files the grammar already failed."
+  },
+  "oracle_error_forms": {
+    "summary": "epp_dodger:parse_file/1 returns {ok, Forms} FOR A FILE WITH SYNTAX ERRORS IN IT. The errors arrive as `error` FORMS inside that list.",
+    "consequence": "The obvious reading -- `case epp_dodger:parse_file(F) of {ok,_} -> valid; _ -> invalid end` -- is an oracle that calls every syntactically broken file in the corpus VALID. In a sweep that means every grammar failure is a gap and no file is ever noise; it is the mirror of the failure GRAMMARS.md names, and it is the DEFAULT reading of this API. Both legs of the union therefore scan the forms rather than the return tag.",
+    "third_shape": "Found by feeding it 4 KB of /dev/urandom: on input the scanner cannot tokenize at all, parse_file returns {ok, []} -- zero forms, no error, and so 'valid' under any forms-scanning rule. An empty form list from a file with any non-whitespace byte is therefore a reject. A genuinely blank file stays valid; measured occurrences in the corpus: zero either way."
+  },
+  "oracle_quick_parse_rejected": {
+    "summary": "epp_dodger:quick_parse_file/1 was measured as a faster alternative and REJECTED. It is 11% faster (3.62 s vs 4.06 s per 1000 files) and it agrees with parse_file on ALL 1,715 corpus files -- zero disagreements.",
+    "why_rejected": "On the 33-file adversarial battery it silently accepts 21 of the 24 invalid files: a missing period, an empty function body, unclosed parens/braces/brackets, an unterminated binary, `case X of end`, `if end`, `fun() -> 1` with no end, a stray `end`, `f(1,,2)`, `1 = = 2`, `#{a =>}`, `#r{a =}`, `[X || ]`, a malformed try, `-module.` and more. quick_parse skips the full parse, so a syntax error inside a form is simply not looked for.",
+    "the_lesson_this_repeats": "treebank-php built a batch oracle that matched `php -l` on all 1,703 of its corpus files and was rejected anyway, because a 22-file negative battery caught it accepting ten classes of invalid PHP. This is the same result in a different language, reached the same way. Agreement on clean library code is worth nothing as evidence about a validity oracle -- 1,715 files of agreement here would have bought an oracle that calls almost any broken Erlang valid. Only the negative battery caught it, and it caught it in about a second."
+  },
+  "oracle_cost": {
+    "headline": "4.06 s per 1000 files (median of 5, on a 1,000-file subset averaging 16.5 KB/file), 0.33 s of which is one-time escript startup. Measured on the same corpus the sweep numbers come from.",
+    "above_the_tier_a_band": "The roadmap's Tier A band is 0.2-2 s per 1000 and this is outside it, which is a finding rather than a disqualification. Throughput is 4.4 MB/s against elixir's 9.4 MB/s on the same machine, and Erlang corpus files are large (16.5 KB mean against elixir's 11.1 KB), so both factors push the same way. It is still 8x cheaper than libclang's 35.5 and 260x cheaper than C++, i.e. firmly on the per-file-judgeable side of the tier boundary that actually matters.",
+    "the_union_is_nearly_free": "The epp leg runs only when dodger fails (short-circuit), so it costs 0.18 s per 1000 -- dodger alone is 3.88 s. The 6% of files that need the second parser are the entire price of halving the reject rate twelve-fold.",
+    "batched": "One escript process for the whole batch, like the elixir oracle and for the same measured reason: the BEAM costs ~0.33 s to start and a fork-per-file design would pay that per file."
+  },
+  "grammar_is_broader_than_the_oracle": {
+    "summary": "Four of the 24 hand-written invalid files are accepted by the grammar: `case X of end`, `if end`, a function with no terminating period, and invalid UTF-8 bytes in a string. This runs in the safe direction -- grammar accepts, oracle rejects -- so it can never manufacture a gap.",
+    "consequence": "test/negative/ holds the other 20, each verified rejected by the grammar (via `treebank negative`, the check CI runs) AND by the oracle. The four are excluded deliberately: a negative test built from them would be testing what an LR grammar cannot model rather than the grammar, and would fail forever."
+  },
+  "corpus": {
+    "source": "Hex package tarballs (repo.hex.pm) for the top packages by recent downloads, via the shared lang/hex.rs the elixir grammar added.",
+    "hex_is_not_an_erlang_registry": "It is the BEAM's registry, and the split is stark in both directions: of the top 1,000 packages by recent downloads, 747 (74.7%) contain no .erl/.hrl file at all -- they are Elixir. The elixir corpus measured the mirror image, 21.4% with no Elixir in the top 500. Each language's corpus is largely the other's discards, which is why the ranking, resolution and archive handling live in one shared module rather than two copies.",
+    "depth_note": "1,000 packages rather than elixir's 500, because Erlang is the sparser half of the registry: 1,000 packages yield 2,945 files where elixir's 500 yielded 9,423.",
+    "files_note": ".erl and .hrl. One grammar parses both, and headers are where the macro-heavy syntax lives -- which is the interesting half here, since every gap patch 0003 fixes is in a header or a macro definition. tree-sitter-erlang's tree-sitter.json claims four more types (app, app.src, escript, rebar.config); they are excluded for now because the first three and rebar.config are Erlang TERMS rather than modules -- build manifests and application specs, data with no functions in it -- and .escript additionally opens with a #! line that is not Erlang. Adding them is a deliberate change with its own sweep evidence.",
+    "archive_shape": "Identical to elixir's, and handled by the same shared code: a Hex tarball is an uncompressed outer tar holding contents.tar.gz, so archive_strip is 0 and nested_archives is on. Every corpus path therefore carries the contents.tar.gz/ prefix.",
+    "fetched": "2026-08-13 (hex.pm rankings and tarballs of that date)",
+    "packages": 1000,
+    "packages_with_erlang": 253,
+    "files": 2945,
+    "sweep_upstream": {
+      "passed": 2913,
+      "failed": 32,
+      "gap_files": 21,
+      "noise_files": 11,
+      "clusters": 20,
+      "note": "upstream 6ba4c762 with the two packaging patches only, i.e. before patch 0003."
+    },
+    "sweep_patched": {
+      "passed": 2919,
+      "failed": 26,
+      "gap_files": 16,
+      "noise_files": 10,
+      "clusters": 19,
+      "note": "with patch 0003. 99.12% of files parse."
+    },
+    "remaining_gaps_note": "16 gap files remain in 15 clusters, and they are one family with two members. The family is the macro EXPANSION site, where patch 0003 fixed the DEFINITION site: `?CATCH(_, _, _)` standing in for a try clause (luerl, telemetry, erlydtl), `?OPT{undefined_as_null = true}` where a macro supplies a record name (jsone), `?CAPTURE_STACKTRACE->` inside a catch clause (jsone), `?case_clause('#{fname := Var}' -> 'Body', ...)` (gpb). These are files whose TEXT is not a parse tree and only becomes one after expansion -- the Erlang analogue of C's conditional compilation, which treebank models with treebank_preprocessing rather than with grammar patches, and which is the right next question for this grammar rather than more grammar.js. The remainder are individually odd: `$\\x{4141}` char literals (jose, 2 files), `-export_type([(error/0)]).` (rfc3339), `-record mturk_locale, {` with no parens (erlcloud), and a header whose first line is an Emacs file-variable comment (proper)."
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": [
+        "README.md"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; README warning that this tree is a generated, patched redistribution (treebank.dev), applied first so every materialized tree carries it"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": [
+        "Cargo.toml"
+      ],
+      "kind": "packaging",
+      "origin": "treebank; upstream owns tree-sitter-erlang on crates.io, so the redistribution publishes as treebank-grammar-erlang with treebank's repository, homepage and description. [lib] name is pinned to tree_sitter_erlang so the crate stays a drop-in replacement -- upstream declares no [lib] name and relies on the package name. include gains LOCAL-PATCHES.md, ledger.json, patches/* and tree-sitter.json. Upstream ships no Cargo.lock, so like elixir this patch touches Cargo.toml alone. The published version string is deliberately NOT here: publish.sh derives it from crates.io at publish time.",
+      "note": "Unlike elixir there is no NOTICE file to rescue here: tree-sitter-erlang is MIT with a single LICENSE, which upstream's include list already carries."
+    },
+    {
+      "id": 3,
+      "title": "macro bodies that are not expressions or clauses",
+      "file": "patches/0003-macro-bodies-that-are-not-expressions-or-clauses.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/macros.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by this crate's first Hex sweep. Not reported upstream; offer it.",
+      "evidence": {
+        "repro": "-define(WITH_STACKTRACE(T, R, S), T:R:S ->).\n",
+        "diagnosis": "A -define body only has to make sense where it is EXPANDED. Upstream's _macro_def_replacement already allows six shapes -- an expression, function clauses, cr clauses, guard sequences, an expr-with-guard and a parenthesised body -- so the design already accepts that a body is not a form; the corpus simply contains four more shapes. Added: replacement_clause_head (`T:R:S ->`, a clause head whose body the expansion site supplies -- the standard OTP-21 stacktrace-compatibility idiom, shipped by telemetry and epgsql), replacement_leading_colon (`:Var`, brod), replacement_partial_clauses (`T:R -> S = erlang:get_stacktrace(), `, clauses left open with a trailing comma) and a bare record_name (`#decode_opt_v2`, jsone). replacement_partial_clauses is spelled out rather than reusing clause_body, which is prec.right and swallows the trailing comma while waiting for another expression.",
+        "conflicts": "None added. A first cut needed a declared conflict between _cr_clause_or_macro and _macro_body_expr; spelling the trailing-comma rule out removed the ambiguity, and the CLI confirms the conflict is unnecessary. The grammar's own pre-existing list/list_comprehension warning is untouched.",
+        "first_seen": {
+          "package": "telemetry",
+          "version": "1.4.2",
+          "path": "src/telemetry.hrl"
+        },
+        "sweep_before": {
+          "passed": 2913,
+          "failed": 32,
+          "gap_files": 21,
+          "noise_files": 11,
+          "clusters": 20
+        },
+        "sweep_after": {
+          "passed": 2919,
+          "failed": 26,
+          "gap_files": 16,
+          "noise_files": 10,
+          "clusters": 19
+        },
+        "evidence_note": "Six files fixed and zero regressions. Upstream's corpus tests go 229 -> 230 with the new case and nothing else moves; highlight parses stay 228/228; the 20-file negative corpus is still fully rejected. Every gap cluster whose signature was `pp_define > ERROR(...)` is gone.",
+        "upstream_status": "unreported; offer as a PR against WhatsApp/tree-sitter-erlang"
+      }
+    }
+  ]
+}

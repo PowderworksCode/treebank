@@ -272,5 +272,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-erlang",
+    "dep": "tree-sitter-erlang",
+    "crate": "treebank-grammar-erlang",
+    "cases": [
+      {
+        "label": "erlang",
+        "language": "tree_sitter_erlang::LANGUAGE",
+        "fixture": "patched.erl",
+        "expect": "Clean"
+      },
+      {
+        "label": "erlang strictness (must reject)",
+        "language": "tree_sitter_erlang::LANGUAGE",
+        "fixture": "must-reject.erl",
+        "expect": "Error"
+      }
+    ]
   }
 ]
