@@ -21,6 +21,7 @@ mod ruby;
 mod rust;
 mod stdin_oracle;
 mod typescript;
+mod yaml;
 mod zig;
 
 use std::collections::HashMap;
@@ -162,6 +163,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static LUA: lua::Lua = lua::Lua;
     static RUBY: ruby::Ruby = ruby::Ruby;
     static ELIXIR: elixir::Elixir = elixir::Elixir;
+    static YAML: yaml::Yaml = yaml::Yaml;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -177,5 +179,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Lua => &LUA,
         LangName::Ruby => &RUBY,
         LangName::Elixir => &ELIXIR,
+        LangName::Yaml => &YAML,
     }
 }

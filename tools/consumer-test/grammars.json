@@ -234,5 +234,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-yaml",
+    "dep": "tree-sitter-yaml",
+    "crate": "treebank-grammar-yaml",
+    "cases": [
+      {
+        "label": "yaml",
+        "language": "tree_sitter_yaml::LANGUAGE",
+        "fixture": "patched.yaml",
+        "expect": "Clean"
+      },
+      {
+        "label": "yaml strictness (must reject)",
+        "language": "tree_sitter_yaml::LANGUAGE",
+        "fixture": "must-reject.yaml",
+        "expect": "Error"
+      }
+    ]
   }
 ]

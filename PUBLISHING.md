@@ -74,6 +74,7 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-ruby` | `treebank-grammar-ruby` | `tree_sitter_ruby` |
 | `crates/treebank-rust` | `treebank-grammar-rust` | `tree_sitter_rust` |
 | `crates/treebank-typescript` | `treebank-grammar-typescript` | `tree_sitter_typescript` |
+| `crates/treebank-yaml` | `treebank-grammar-yaml` | `tree_sitter_yaml` |
 | `crates/treebank-zig` | `treebank-grammar-zig` | `tree_sitter_zig` |
 <!-- END GENERATED -->
 

@@ -70,6 +70,9 @@ pub enum LangName {
     #[serde(rename = "elixir")]
     #[value(name = "elixir")]
     Elixir,
+    #[serde(rename = "yaml")]
+    #[value(name = "yaml")]
+    Yaml,
 }
 
 impl LangName {
@@ -89,6 +92,7 @@ impl LangName {
             LangName::Lua => "lua",
             LangName::Ruby => "ruby",
             LangName::Elixir => "elixir",
+            LangName::Yaml => "yaml",
         }
     }
 }
@@ -134,6 +138,59 @@ pub struct Oracle {
     /// C's `-std=gnu17`. Empty when the tool's version settles it.
     #[serde(default)]
     pub flags: Vec<String>,
+
+    /// Whether this oracle's verdicts are a **fact** or a **choice**.
+    ///
+    /// `reference` — the default, and true of every grammar before yaml —
+    /// means the language has an implementation everyone appeals to: rust's
+    /// `syn`, CPython, `php -l`, PUC-Rio Lua, `std.zig.Ast`. Disagreement
+    /// there is a bug in something.
+    ///
+    /// `position` means it does not, and the choice is ours. YAML is the
+    /// first: measured over the official conformance suite, libyaml scores
+    /// 83.3%, go-yaml 81.8%, eemeli `yaml` 99.3% and js-yaml 100%, and they
+    /// disagree with each other on 67 of 402 cases. A reader has to be able
+    /// to tell those two situations apart in one word, because it decides
+    /// whether `gap_files` is a measurement or a measurement-relative-to-us.
+    #[serde(default)]
+    pub authority: Authority,
+
+    /// The specification revision the tool implements — "YAML 1.2.2",
+    /// "TOML 1.0.0" — which is NOT the tool's version and cannot be derived
+    /// from it. Optional because most languages have one live revision.
+    #[serde(default)]
+    pub spec: Option<String>,
+
+    /// Which stage of the parser is called: `parse`, `compose`, `load`,
+    /// `parse-to-table`. Optional, but fill it even when the stages agree:
+    /// yaml measured 73 of 3217 real files changing verdict between one
+    /// parser's parse and load stages, against 0 between two different
+    /// parsers at the same stage, and python's `ast.parse`-vs-`compile`
+    /// finding was the same axis. A field that records "checked, and it did
+    /// not matter" is worth having.
+    #[serde(default)]
+    pub stage: Option<String>,
+
+    /// Alternatives that were **measured** against, tools and stages alike.
+    /// Required non-empty when `authority` is `position`, allowed always: a
+    /// rejected candidate with a one-line excuse and no numbers is exactly
+    /// the evidence that evaporates.
+    #[serde(default)]
+    pub considered: Vec<serde_json::Value>,
+
+    /// Required when `authority` is `position`: why this one, and what the
+    /// verdicts are relative to. Prose, so it is not modelled further.
+    #[serde(default)]
+    pub position: Option<serde_json::Value>,
+}
+
+/// See `Oracle::authority`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Authority {
+    #[default]
+    Reference,
+    Position,
 }
 
 #[derive(Debug, Deserialize)]
@@ -248,6 +305,27 @@ pub fn check(grammar_dir: &Path) -> Result<Vec<String>> {
                     bad.push(format!("oracle.{field} is empty"));
                 }
             }
+            // An oracle declared a POSITION owes evidence, because that is
+            // the entire difference between the two values: "we chose this"
+            // with nothing measured against is indistinguishable from "we
+            // used whatever was installed". See yaml's ledger, which is the
+            // first to set it.
+            if o.authority == Authority::Position {
+                if o.considered.is_empty() {
+                    bad.push(
+                        "oracle.authority is \"position\" but oracle.considered is empty — a \
+                         disputed oracle must record the alternatives it was measured against"
+                            .to_string(),
+                    );
+                }
+                if o.position.is_none() {
+                    bad.push(
+                        "oracle.authority is \"position\" but oracle.position is missing — say \
+                         why this one and what the verdicts are relative to"
+                            .to_string(),
+                    );
+                }
+            }
         }
     }
 
@@ -338,7 +416,26 @@ pub fn run(grammar_dir: Option<&Path>) -> Result<()> {
                     } else {
                         format!(" [{}]", o.flags.join(" "))
                     };
-                    format!(" — oracle {} ({}){flags}", o.version, o.dialect)
+                    // `position` is printed and `reference` is not, so the
+                    // line stays as it was for the eleven grammars whose
+                    // oracle is nobody's opinion, and says so loudly for the
+                    // ones where "invalid" is a choice this repo made. The
+                    // spec revision and the stage ride along with it because
+                    // together they are what the verdicts are relative to.
+                    let stance = match o.authority {
+                        Authority::Reference => String::new(),
+                        Authority::Position => {
+                            let mut parts = vec!["POSITION".to_string()];
+                            if let Some(spec) = &o.spec {
+                                parts.push(format!("spec {spec}"));
+                            }
+                            if let Some(stage) = &o.stage {
+                                parts.push(format!("stage {stage}"));
+                            }
+                            format!(" [{}]", parts.join(", "))
+                        }
+                    };
+                    format!(" — oracle {} ({}){flags}{stance}", o.version, o.dialect)
                 })
                 .unwrap_or_default();
             println!("ledger: {} ok{oracle}", dir.display());
