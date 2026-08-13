@@ -75,7 +75,7 @@
     "noise": 0,
     "noise_note": "Every one of the 29 upstream failures was adjudicated VALID by scalameta under the file's declared dialect — 29 grammar gaps, 0 corpus noise. That is an unusually clean split, and it is what a per-package dialect buys: the same corpus judged entirely as Scala3 would have produced false `invalid` verdicts for 8.6% of files, each of which could have hidden a gap.",
     "remaining_gaps": 23,
-    "remaining_gaps_note": "23 files in 18 clusters, all adjudicated valid. The largest remaining are `template_body > MISSING ;` (3 files, Scala 2 procedure-syntax declarations in Flink), `block > ERROR(=> null_literal)` and `lambda_expression > ERROR(case integer_literal)` (2 each). They are the next patches, not defects in the numbers above."
+    "remaining_gaps_note": "23 files in 18 clusters, all adjudicated valid. The largest is `template_body > MISSING ;` (3 files, Flink), then `block > ERROR(=> null_literal)` and `lambda_expression > ERROR(case integer_literal)` (2 each). They are the next patches, not defects in the numbers above."
   },
   "patches": [
     {
@@ -115,6 +115,12 @@
       }
     }
   ],
+  "next_patch_diagnosed_not_shipped": {
+    "cluster": "template_body > MISSING ; — 3 files in org.apache.flink:flink-streaming-scala_2.12 1.20.5",
+    "looks_like": "Scala 2 procedure syntax being unsupported, which it is NOT: `def f(t: T) {}` and a lone `def f(t: T)` as a template's last member both parse today.",
+    "actually_is": "a bare Scala 2 declaration loses its inferred semicolon when another member follows. `trait A { def f(t: Throwable); val x = 1 }` parses; the same source with a newline instead of the `;` does not, and `def f: Int` (no parameter list) is fine either way. `_function_constructor` admits `optional($._automatic_semicolon)` before a FURTHER parameter list so that multi-line parameter lists work, and its `prec.right` makes the parser shift that semicolon into the repeat rather than reduce the declaration — after which `val`/`def` cannot follow and the file errors.",
+    "why_it_is_not_in_this_series": "the obvious fixes do not hold. Declaring [$._function_constructor] is reported as an unnecessary conflict, because prec.right has already resolved it; trading that prec.right for prec.dynamic plus [$.function_declaration, $._function_constructor] moves the failure to `def this` and cascades. It needs a considered change to how the parameter-list repeat ends, not a one-line conflict, and shipping a rushed one risks the multi-line parameter lists the repeat exists for. Written down here so the next agent starts from the mechanism rather than from the symptom."
+  },
   "negative_corpus": {
     "files": 14,
     "note": "Every file is rejected by scalameta under BOTH Scala213 and Scala3, not just one — which matters here more than for a single-dialect language. tree-sitter-scala is ONE grammar for TWO languages, so the grammar is deliberately the union of Scala 2 and Scala 3 while the oracle is per file. A file that only one dialect rejects is therefore not a strictness test at all: the grammar is supposed to accept it. `def f(using ) = 1` was cut from the battery for exactly that reason."
