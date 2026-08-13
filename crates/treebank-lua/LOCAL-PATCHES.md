@@ -4,8 +4,8 @@ Upstream:
 [tree-sitter-grammars/tree-sitter-lua](https://github.com/tree-sitter-grammars/tree-sitter-lua)
 pinned at `10fe0054734eec83049514ea2e718b2a56acd0c9` (v0.5.0).
 
-Three patches: two packaging, and one grammar fix taken from an open
-upstream PR whose base commit is exactly the sha pinned above.
+Four patches: two packaging, one grammar fix taken from an open upstream PR
+whose base commit is exactly the sha pinned above, and one of our own.
 
 ## 0001 — treebank redistribution notice
 
@@ -90,7 +90,65 @@ with only this patch removed and restored. Because the patch changes how
   `escape_sequence` children, which is what consumers' queries depend on and
   the thing a lexer change breaks most easily.
 
-## Why there is no 0004
+## 0004 — NUL byte inside a quoted string
+
+The last gap file in the sweep corpus, and the correction of a claim this
+document used to make.
+
+```lua
+x = "a<NUL>b"
+```
+
+That is three bytes between the quotes — `a`, a literal NUL, `b`. Lua reads
+source as a length-delimited buffer, so an embedded NUL is ordinary string
+content and `luac 5.4` accepts the file. The grammar ended the content token
+at the NUL and the rest of the file came out `ERROR`
+(`string_content > ERROR(ERROR)`, the sweep's cluster signature).
+
+The cause is that tree-sitter's lexer reports `lookahead == 0` for **both** a
+NUL byte and end-of-input, and `scan_quote_string_content` — the function
+0003 introduced — loops on `lexer->lookahead != 0`. The fix is one condition:
+
+```c
+while (!lexer->eof(lexer) && lexer->lookahead != ending_char && lexer->lookahead != '\\') {
+```
+
+`lexer->eof(lexer)` is the question an **external** scanner can ask and an
+internal one cannot: it is false at a NUL and true only at the real end of
+input. So the string half of this was never a core limitation, which is what
+this file said before — see "Why there is no 0005" for the half that is.
+
+The EOF path is the thing that condition could plausibly break, so it was
+tested rather than assumed: `x = "abc` and a file ending immediately after
+the opening quote both still terminate and still report a MISSING closing
+quote instead of hanging, and a string mixing escapes with a NUL still comes
+out as `string_content` wrapping its `escape_sequence` children — the tree
+shape consumers query is unchanged.
+
+| | passed | failed | gaps | clusters |
+|---|---|---|---|---|
+| before | 1,589 | 9 | 1 | 9 |
+| after | **1,590** | **8** | **0** | **8** |
+
+Measured over the 1,598-file LuaRocks sweep corpus — not the 8,582-file fetch
+0003's table is measured over; the two are different fetches and their pass
+counts are not comparable. Zero gap files remain: all 8 remaining failures
+are corpus noise. Upstream's corpus tests go 42/42 → 43/43, the 76 syntax
+highlighting and 24 tag assertions are unchanged, and the 16-file negative
+corpus is still fully rejected.
+
+One trap this patch leaves behind for the next one. The corpus test carries a
+real NUL byte, so **git now treats `test/corpus/expressions.txt` as binary**:
+a plain `git -C build diff` prints `Bin 16222 -> 16689 bytes` and the test
+silently does not reach the patch file. This patch was captured with
+`git diff -a`, which keeps it a readable text patch carrying the raw byte;
+`git apply` round-trips it, verified by materializing from scratch and
+reading the NUL back out of the materialized file. The same byte makes
+`patches/0004-*.patch` itself binary to git, so `git show` renders it as
+`Bin` — read it with `cat -v` (or `git show --text`), and diff it the same
+way if it ever needs editing.
+
+## Why there is no 0005
 
 The upstream grammar is chosen, not settled for. All three editors that ship
 a Lua grammar pin **the same commit** this crate pins — nvim-treesitter,
@@ -99,18 +157,21 @@ with any current maintenance: the alternatives (`tjdevries/tree-sitter-lua`,
 131 stars, last pushed 2024-10; `Azganoth/tree-sitter-lua`, 53 stars, 2022)
 are dormant.
 
-After 0003, **2 gap files remain out of 8,582 (99.58% pass)**, and both are
-the same cause: **a literal NUL byte**, one inside a string literal
-(net-url's `query_test.lua`) and one inside a comment (openssl's
-`root_ca.lua`). Lua reads source as a length-delimited buffer and accepts
-embedded NULs; tree-sitter's lexer reserves codepoint 0 for EOF, so the token
-ends there and the rest of the file is `ERROR`. Minimal: `x = "a<NUL>b"` is
-valid to `luac 5.4` and fails to parse.
+After 0004 the sweep corpus has **no gap files left**: 1,590 of 1,598 parse
+and the 8 failures are all invalid Lua that `luac 5.4` rejects too.
 
-This is a **tree-sitter core limitation**, not something `grammar.js` or
-`scanner.c` can express, and it is recorded as such rather than counted as a
-grammar gap it is not. Note that 0003 does not help here and was never going
-to: its `scan_quote_string_content` loop also terminates on `0`.
+What remains is the other half of the NUL story, and it is worth being
+precise about because this file previously got it wrong in the other
+direction. A NUL is still fatal wherever the **internal** lexer owns the
+token — a line comment (`-- a<NUL>b`), which is the shape of the openssl
+`root_ca.lua` gap the larger 8,582-file fetch found. There the internal lexer
+sees codepoint 0, has no `eof()` to consult, and ends the token; moving line
+comments into the scanner to fix it is not a minimal change, and no file in
+the current sweep corpus needs it. `[[a<NUL>b]]` and `--[[a<NUL>b]]` are
+scanner-owned and would take 0004's one-line idiom in `scan_block_content`,
+but not one file in the sweep corpus exercises them, so that change is left
+uncaptured rather than made without evidence. NUL bytes in the current
+corpus: exactly one file of 1,598, the one 0004 fixes.
 
 ## The dialect question, and why it is settled the way it is
 
