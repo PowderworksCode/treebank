@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<!--
+  No grammar patch: treebank-grammar-html is upstream tree-sitter-html at the
+  pinned sha plus the two packaging patches. What this fixture pins instead is
+  the LANGUAGE the ledger's sweep numbers are a claim about — HTML as the
+  HTML5 parsing algorithm recovers it, not HTML as a conformance checker
+  judges it.
+
+  Every construct below is a spec-defined PARSE ERROR that the grammar must
+  nevertheless parse cleanly, because the oracle in
+  crates/treebank-cli/src/lang/html.rs calls all of it valid. If an upstream
+  bump ever made the grammar strict about any of it, the gap/noise split in
+  ledger.json would quietly stop meaning what it says, and this catches it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>treebank consumer test</title>
+  </head>
+  <body>
+    <p>mis-nested, which is the textbook parse error<div>and recovered</p></div>
+    <div>a stray end tag follows</div></span>
+    <a href="/x" href="/y">duplicate attributes</a>
+    <div class=unquoted>an unquoted attribute value</div>
+    <div/>a void-style slash on a non-void element
+    <p>a character reference with no semicolon: Tom &amp Jerry &copy 2026</p>
+    <my-widget data-x="1">an element the spec has never heard of</my-widget>
+    <table><tr><td>foster-parented text</td></tr>stray<tr><td>x</td></tr></table>
+    <ul><li>an implicitly closed list item
+        <li>and another
+    </ul>
+    <p>an unclosed paragraph at the end of the body
+  </body>
+</html>

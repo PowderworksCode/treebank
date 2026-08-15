@@ -11,6 +11,7 @@ mod elixir;
 mod exec_oracle;
 mod github;
 mod go;
+mod html;
 mod java;
 mod javascript;
 mod lua;
@@ -166,6 +167,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static ELIXIR: elixir::Elixir = elixir::Elixir;
     static YAML: yaml::Yaml = yaml::Yaml;
     static TOML: toml::Toml = toml::Toml;
+    static HTML: html::Html = html::Html;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -183,5 +185,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Elixir => &ELIXIR,
         LangName::Yaml => &YAML,
         LangName::Toml => &TOML,
+        LangName::Html => &HTML,
     }
 }
