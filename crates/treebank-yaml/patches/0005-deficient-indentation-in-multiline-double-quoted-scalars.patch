@@ -1,0 +1,52 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index 30696b5..38911cd 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -927,7 +927,7 @@ static bool scan(Scanner *scanner, TSLexer *lexer, const bool *valid_symbols) {
+     }
+ 
+     if ((valid_symbols[R_DQT_STR_CTN] && is_r && scn_dqt_str_cnt(scanner, lexer, R_DQT_STR_CTN)) ||
+-        (valid_symbols[BR_DQT_STR_CTN] && (is_br || has_nwl) && scn_dqt_str_cnt(scanner, lexer, BR_DQT_STR_CTN))) {
++        (valid_symbols[BR_DQT_STR_CTN] && is_br && scn_dqt_str_cnt(scanner, lexer, BR_DQT_STR_CTN))) {
+         return true;
+     }
+ 
+diff --git a/test/corpus/99_issues.txt b/test/corpus/99_issues.txt
+index 2f19d67..9bd5e58 100644
+--- a/test/corpus/99_issues.txt
++++ b/test/corpus/99_issues.txt
+@@ -1,13 +1,30 @@
+-=================================
+-Double-quote newline escape (#10)
+-=================================
++=========================================================
++Double-quote newline escape, unindented at the root (#10)
++=========================================================
+ 
+-root: "a\
++"a\
+ b\
+ c"
+ 
+ ---
+ 
++(stream
++  (document
++    (flow_node
++      (double_quote_scalar
++        (escape_sequence)
++        (escape_sequence)))))
++
++=========================================================
++Double-quote newline escape, indented under a key (#10)
++=========================================================
++
++root: "a\
++ b\
++ c"
++
++---
++
+ (stream
+   (document
+     (block_node
