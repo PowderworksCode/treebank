@@ -328,19 +328,32 @@
     }
   },
   "sweep": {
+    "current": {
+      "as_of": "patch 0003",
+      "files": 26636,
+      "passed": 26635,
+      "failed": 1,
+      "gap_files": 0,
+      "config_files": 0,
+      "noise_files": 1,
+      "clusters": 1,
+      "headline": "ZERO GRAMMAR GAPS. The one remaining failure is corpus noise — open-education-api/specification ooapiv6.yaml, which this ledger's oracle rejects too. Everything below `ranked_corpus` is the history that got here and is deliberately NOT rewritten in place: it is patch 0003's before-picture.",
+      "measured_on": "the ranked corpus as it stood after the merge of 0003, 26,636 files — eight more than the 26,628 the controlled before/after in `corpus.sweep_*` was run on, because the corpus is refetched and drifts. Both give zero gaps.",
+      "what_is_left": "The sweep is EXHAUSTED for this grammar: it can only ever find rejects-valid, and there is nothing left to find. The remaining known defect is the other direction — `grammar_accepts_invalid` below."
+    },
     "ranked_corpus": {
-      "what": "The real corpus: top 100 GitHub repositories classified as YAML, fetched via `treebank fetch --lang yaml --limit 100`. 26,634 admitted files, 211 MB extracted.",
+      "what": "The real corpus: top 100 GitHub repositories classified as YAML, fetched via `treebank fetch --lang yaml --limit 100`. 26,634 admitted files, 211 MB extracted. MEASURED AT THE PINNED SHA WITH THE TWO PACKAGING PATCHES ONLY — i.e. BEFORE patch 0003. It is kept as the measurement that found the row overflow and as 0003's before-picture; `corpus.sweep_upstream` / `corpus.sweep_patched` hold the controlled before/after on the corpus as it stood when 0003 landed, and `sweep.current` is where the grammar is now.",
       "files": 26634,
       "passed": 26629,
       "failed": 5,
       "gap_files": 4,
       "noise_files": 1,
       "config_files": 0,
-      "headline": "26,629 of 26,634 (99.98%). ALL FOUR GAPS ARE ONE BUG — the int16 row overflow below. Truncating each of the four to exactly 32,768 lines makes it parse clean, so this is one root cause and not four coincidences; fixing it takes the grammar to zero gaps on this corpus.",
-      "gap_files_detail": "72,060 / 49,299 / 49,054 / 35,649 lines — kuberay operator resources, argoproj.io_workflows.yaml, kserve-crds.yaml, a kubeflow manifest set. Generated Kubernetes CRD bundles, which is exactly the population predicted when the bug was diagnosed on a 40,011-line prometheus rules file.",
+      "headline": "26,629 of 26,634 (99.98%) BEFORE patch 0003. ALL FOUR GAPS WERE ONE BUG — the int16 row overflow below. Truncating each of the four to exactly 32,768 lines made it parse clean, which is how one root cause was told from four coincidences. Patch 0003 fixed it and took this corpus to zero gaps, as predicted here; see `sweep.current`.",
+      "gap_files_detail": "72,060 / 49,299 / 49,054 / 35,649 lines — kuberay operator resources, argoproj.io_workflows.yaml, kserve-crds.yaml, a kubeflow manifest set. Generated Kubernetes CRD bundles, which is exactly the population predicted when the bug was diagnosed on a 40,011-line prometheus rules file. All four are fixed by patch 0003 and parse clean.",
       "noise_file": "open-education-api/specification ooapiv6.yaml, 25,567 lines — under the ceiling, ERROR at any truncation, and rejected by the oracle. Genuinely invalid, correctly booked as noise.",
       "admit_drop": "35,017 YAML files are present in the 100 archives and 26,634 were admitted: classify()+admit() dropped 8,383 (23.9%), almost all bare `{{ }}` templates. Verified on the admitted corpus rather than assumed: 0 files carrying a bare `{{` action, 0 Jinja `{% %}`, 0 NUL-bearing — and 293 files whose only `{{` is a GitHub Actions `${{ }}`, correctly kept. The `$` lookbehind is what keeps those 293.",
-      "issue": "https://github.com/PowderworksCode/treebank/issues/58; raised upstream at https://github.com/tree-sitter-grammars/tree-sitter-yaml/issues/49",
+      "issue": "https://github.com/PowderworksCode/treebank/issues/58, CLOSED by patch 0003; raised upstream at https://github.com/tree-sitter-grammars/tree-sitter-yaml/issues/49, which is still open and which we are not pursuing — the fix is carried as a local patch.",
       "what_the_oracle_choice_costs": {
         "summary": "THE ONE PLACE THE POSITION CHANGES THE ANSWER ON REAL DATA, measured. Over all 26,634 files the oracle rejects 7. The grammar rejects 1 of those (noise) and ACCEPTS the other 6 — but libyaml and go-yaml call all 6 of those VALID. So `grammar accepts-invalid = 6` under this oracle and would be 0 under either alternative.",
         "the_construct": "All 6 are one class: a multi-line flow collection as a block mapping value whose continuation and closing bracket sit at the SAME indentation as the key, e.g. `daj_util_objects: [` … `]` with the `]` in the key's column. js-yaml calls it \"deficient indentation\"; YAML 1.2.2 requires flow content nested in a block context to be indented past the parent, so js-yaml appears to be right and the other two lenient. It is a common shape because it is what pasted JSON looks like.",
@@ -348,19 +361,21 @@
         "consequence": "`gap_files` is unaffected — all four gaps are files every parser calls valid — so the headline number does not depend on the position. What depends on it is the accepts-invalid count, which is the number a future patch would be judged against."
       }
     },
-    "grammar_at_pinned_sha": "3217 measurement-corpus files, no admit() filter: 3114 clean, 103 ERROR. With admit() applied (2178 files): 4 ERROR, of which 3 are also rejected by the oracle (noise) and ONE is a gap.",
-    "gap_files": 1,
+    "grammar_at_pinned_sha": "3217 measurement-corpus files, no admit() filter: 3114 clean, 103 ERROR. With admit() applied (2178 files): 4 ERROR, of which 3 are also rejected by the oracle (noise) and ONE is a gap. AT THE PINNED SHA, i.e. before patch 0003; that one gap is the row overflow and 0003 closes it.",
+    "gap_files": 0,
     "the_one_gap": {
       "file": "prometheus/cmd/promtool/testdata/rules_large.yml (1.17 MB, 40,011 lines)",
       "verdict": "valid per js-yaml, libyaml AND go-yaml; ERROR per the grammar, spanning [0,0]-[32767,53]",
-      "diagnosis": "NOT a YAML construct — an integer overflow. `src/scanner.c` keeps its position state in `int16_t` fields (`row`, `col`, `blk_imp_row`, `blk_imp_col`, `blk_imp_tab`, and the two indent stacks). At row 32768 `row` wraps negative and every indentation comparison after it is wrong, so the rest of the file is one ERROR node.",
+      "diagnosis": "NOT a YAML construct — an integer overflow. At the pinned sha `src/scanner.c` kept ALL of its position state in `int16_t` (`row`, `col`, `blk_imp_row`, `blk_imp_col`, `blk_imp_tab`, and the two indent stacks). At row 32768 `row` wrapped negative and every indentation comparison after it was wrong, so the rest of the file became one ERROR node.",
       "minimal_repro": "32769 lines of `k<N>: <N>`. Bisected exactly: 32768 lines parse clean, 32769 do not, and 2**15 = 32768. A 200 KB single-line file parses clean, so it is rows and not bytes.",
-      "scope": "Any YAML document over 32768 lines, which is a normal size for generated manifests, CRD bundles and rule files. Not fixed in this commit: the fix is a scanner change (widen the row fields, and check the serialization stays inside TREE_SITTER_SERIALIZATION_BUFFER_SIZE) and it needs its own before/after sweep and a corpus test, per GRAMMARS.md."
+      "scope": "Any YAML document over 32768 lines, which is a normal size for generated manifests, CRD bundles and rule files.",
+      "fixed_by": "patch 0003, which widens `row`, `blk_imp_row`, the `cur_row`/`end_row` temporaries and the `bgn_row` local to `int32_t`, and orders serialize/deserialize so the two persistent 32-bit fields come first and every field stays naturally aligned (header 10 -> 14 bytes). The indent stacks are untouched, so the nesting depth that fits in TREE_SITTER_SERIALIZATION_BUFFER_SIZE is unchanged. THE COLUMNS ARE STILL int16_t AND WOULD WRAP THE SAME WAY PAST COLUMN 32767 — not fixed because no file in either corpus demonstrates it and fixing it properly means widening the two indent STACKS, which are serialized per indent level against a fixed buffer and would halve that depth. See patch 0003's `remaining_gaps_note`."
     },
     "grammar_accepts_invalid": {
       "count": 7,
       "note": "Measured against yaml-test-suite: of the suite's 94 expected-error cases the oracle rejects all 94 and the grammar rejects 87, so the grammar ACCEPTS 7 files that are not YAML — DK95/01 and Y79Y/000 (tabs that look like indentation), MUS6/01 and SF5V (directive variants, duplicate %YAML), QB6E (wrong-indented multiline quoted scalar), QLJ7 (tag shorthand defined only in the first document), S98Z (block scalar with more spaces than its first content line). This is the direction GRAMMARS.md says agents drift, so it is recorded as a number before any patch is written. The 87 that both reject are where test/negative was drawn from; these 7 are not in test/negative because they would fail on arrival, and putting them there would be a to-do disguised as a test."
     },
-    "measurement_corpus_note": "The `grammar_at_pinned_sha`, `the_one_gap` and `grammar_accepts_invalid` entries below were produced on the 3,217-file hand-assembled measurement corpus, before `Lang::rank` existed, so that the oracle could be chosen before anything was vendored. `ranked_corpus` above is the real one. The two agree on the finding that matters: the row overflow was the only gap in both."
+    "measurement_corpus_note": "The `grammar_at_pinned_sha`, `the_one_gap` and `grammar_accepts_invalid` entries below were produced on the 3,217-file hand-assembled measurement corpus, before `Lang::rank` existed, so that the oracle could be chosen before anything was vendored. `ranked_corpus` above is the real one. The two agree on the finding that matters: the row overflow was the only gap in both, and patch 0003 closes it in both.",
+    "gap_files_note": "0 since patch 0003. This counts the 3,217-file measurement corpus, where the row overflow was likewise the only gap (`the_one_gap` below). It was 1 at the pinned sha."
   }
 }
