@@ -251,6 +251,30 @@
         "language": "tree_sitter_yaml::LANGUAGE",
         "fixture": "must-reject.yaml",
         "expect": "Error"
+      },
+      {
+        "label": "yaml duplicate %YAML directive (0004, must reject)",
+        "language": "tree_sitter_yaml::LANGUAGE",
+        "fixture": "must-reject-duplicate-yaml-directive.yaml",
+        "expect": "Error"
+      },
+      {
+        "label": "yaml unindented multiline quoted scalar (0005, must reject)",
+        "language": "tree_sitter_yaml::LANGUAGE",
+        "fixture": "must-reject-unindented-quoted-scalar.yaml",
+        "expect": "Error"
+      },
+      {
+        "label": "yaml tab as block scalar indentation (0006, must reject)",
+        "language": "tree_sitter_yaml::LANGUAGE",
+        "fixture": "must-reject-tab-block-scalar-indent.yaml",
+        "expect": "Error"
+      },
+      {
+        "label": "yaml over-indented leading empty line (0007, must reject)",
+        "language": "tree_sitter_yaml::LANGUAGE",
+        "fixture": "must-reject-block-scalar-empty-line-indent.yaml",
+        "expect": "Error"
       }
     ]
   },

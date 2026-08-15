@@ -85,6 +85,200 @@
         "remaining_gaps_note": "COLUMNS ARE STILL int16_t, on purpose. `col`, `blk_imp_col`, `blk_imp_tab` and both indent stacks hold columns, and a line past column 32767 would wrap the same way. It is not fixed here because (a) no file in the 26,628-file corpus or the 3,217-file measurement corpus demonstrates it — a 200 KB single-line file parses clean — and (b) fixing it properly means widening the two indent STACKS, which are serialized per indent level against a fixed TREE_SITTER_SERIALIZATION_BUFFER_SIZE, so it would halve the nesting depth the scanner can round-trip. That is a real trade to make against evidence, and there is none yet. Widening the columns without the stacks would be worse than either: `push_ind` stores a column, so the truncation would just move.",
         "upstream_status": "reported upstream as tree-sitter-grammars/tree-sitter-yaml#49; no fix upstream at the pinned sha. Retire this patch if it merges."
       }
+    },
+    {
+      "id": 4,
+      "title": "at most one %YAML directive per document",
+      "file": "patches/0004-at-most-one-yaml-directive-per-document.patch",
+      "files": [
+        "grammar.js",
+        "src/scanner.c",
+        "test/corpus/99_issues.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found by scoring the grammar against yaml/yaml-test-suite data-2022-01-17 rather than by a corpus sweep, which cannot see this direction at all. Not reported upstream.",
+      "evidence": {
+        "repro": "%YAML 1.2\\n%YAML 1.2\\n---\\n  (suite case SF5V)",
+        "diagnosis": "`_drs_doc` was `seq(repeat1($._s_dir), $._exp_doc)` with `_s_dir` a plain choice of the three directive kinds, so any number of %YAML directives parsed. YAML 1.2.2 6.8.1 allows AT MOST ONE per document, while %TAG and reserved directives may repeat and may sit on either side of it — which is a regular language, so the fix is a restructured choice (`repeat(other) yaml repeat(other) | repeat1(other)`) and needs no new state. THE GRAMMAR CHANGE ALONE IS A REGRESSION, which is why this patch also touches the scanner: the '%' branch of the scanner's dispatch was gated on `valid_symbols[S_DIR_YML_BGN]` alone, even though `scn_dir_bgn` decides between all three directive-start symbols by reading the name. Once the grammar stopped accepting a second %YAML, that gate went false and the scanner went blind to '%' ENTIRELY, so a %TAG following a %YAML stopped scanning. The gate now admits any of the three. Caught by the new corpus test, which is a %YAML followed by two %TAG directives.",
+        "first_seen": {
+          "package": "yaml/yaml-test-suite",
+          "version": "data-2022-01-17",
+          "path": "SF5V/in.yaml",
+          "note": "Not a corpus file. No file in the 26,636-file ranked corpus carries a duplicate %YAML directive, which is why the sweep is silent on this patch and the suite is not."
+        },
+        "sweep_before": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "sweep_after": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "suite_before": {
+          "accepts_invalid": 6,
+          "rejects_valid": 0
+        },
+        "suite_after": {
+          "accepts_invalid": 5,
+          "rejects_valid": 0
+        },
+        "evidence_note": "Moves ZERO corpus files by design — this patch exists to stop the grammar accepting something invalid, and the corpus contains no instance. The number that moves is the suite's accepts-invalid, 6 -> 5, with rejects-valid still 0 across all 308 expect-valid cases. Corpus tests 132 -> 133."
+      }
+    },
+    {
+      "id": 5,
+      "title": "deficient indentation in multi-line double-quoted scalars",
+      "file": "patches/0005-deficient-indentation-in-multiline-double-quoted-scalars.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/99_issues.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found against yaml-test-suite. It narrows a condition introduced by upstream commit 4463985d ('handle multiline strings without indent'), one of the two unreleased scanner commits this ledger pins deliberately — see `upstream.sha_note`. Not reported upstream.",
+      "evidence": {
+        "repro": "---\\nquoted: \"a\\nb\\nc\"\\n  (suite case QB6E); and foo: \"bar\\n<TAB>baz\"\\n (suite case DK95/01) — ONE defect, two cases.",
+        "diagnosis": "The BR_DQT_STR_CTN branch of the scanner's dispatch read `(is_br || has_nwl)`. `is_br` is the real test — `has_nwl && leading_spaces > cur_ind` — and `|| has_nwl` waives it, so a continuation line of a multi-line double-quoted scalar was accepted at ANY indentation, including column 0 under a block mapping key and including a line indented with a TAB (`leading_spaces` stops counting at the first tab, so a tab-indented line has `leading_spaces == 0`). js-yaml calls both 'deficient indentation'. Dropping the `|| has_nwl` fixes both. The construct upstream added it for still works and is covered: at the DOCUMENT ROOT the required indent is -1 in this scanner's convention, so `is_br` is already true and an unindented multi-line scalar scans without the waiver — verified for the folded form, the escaped-newline form, inside a sequence item, and nested under a key.",
+        "upstream_test_note": "THIS PATCH REWRITES ONE OF UPSTREAM'S OWN CORPUS TESTS, which is a divergence worth stating plainly rather than burying in the diff. `test/corpus/99_issues.txt`'s 'Double-quote newline escape (#10)' asserts that `root: \"a\\\\<nl>b\\\\<nl>c\"` parses clean. MEASURED against this ledger's oracle: that input is INVALID ('deficient indentation'), and the same text with one leading space on each continuation is valid. So the upstream test asserts a document that is not YAML. It is replaced by two tests that keep the issue's intent — the same escaped-newline construct unindented AT THE ROOT, where it is genuinely valid, and the indented-under-a-key form — rather than deleted. Expect a conflict here on any upstream bump that touches that file.",
+        "first_seen": {
+          "package": "yaml/yaml-test-suite",
+          "version": "data-2022-01-17",
+          "path": "QB6E/in.yaml",
+          "note": "Not a corpus file, and the near miss is worth recording: this ledger's `sweep.ranked_corpus.what_the_oracle_choice_costs` describes 6 real corpus files of a RELATED deficient-indentation class — multi-line flow COLLECTIONS whose closing bracket sits in the key's column, which libyaml and go-yaml accept and js-yaml rejects. Those are a different production and this patch deliberately does not touch them; the sweep confirms it, moving 0 files."
+        },
+        "sweep_before": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "sweep_after": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "suite_before": {
+          "accepts_invalid": 5,
+          "rejects_valid": 0
+        },
+        "suite_after": {
+          "accepts_invalid": 3,
+          "rejects_valid": 0
+        },
+        "evidence_note": "Two suite cases for one condition, 5 -> 3, and rejects-valid stays 0 over all 308 expect-valid cases — which is the check that matters here, because waiving an indentation rule is the kind of change that buys accepts-invalid at the cost of rejects-valid. Zero corpus movement. Corpus tests 133 -> 134."
+      }
+    },
+    {
+      "id": 6,
+      "title": "tab used as block scalar indentation",
+      "file": "patches/0006-tab-used-as-block-scalar-indentation.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/99_issues.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found against yaml-test-suite. Not reported upstream.",
+      "evidence": {
+        "repro": "foo: |\\n<TAB>\\nbar: 1\\n  (suite case Y79Y/000)",
+        "diagnosis": "`scn_blk_str_bgn`'s auto-detection loop only advances over ' ', so a TAB fell into the branch that treats the character as the start of content. With the tab at column 0 under a mapping at indent 0 the detected indentation came out equal to the parent's, the block scalar was emitted empty, and the tab line was then swallowed by the generic whitespace skip — the tab appeared in NO node at all. js-yaml: 'tab characters must not be used in indentation'. The fix rejects the block scalar start when the detection line begins with a tab that is still inside the parent's indentation.",
+        "boundary_note": "THE BOUND IS STRICT (`< cur_ind`) AND THE OFF-BY-ONE IS THE WHOLE PATCH. The suite contains the adjacent valid case: Y79Y/001 is byte-for-byte Y79Y/000 with ONE LEADING SPACE, and it is valid, because that space puts the tab past the parent's indentation where it is ordinary content. Written first as `<= cur_ind`, which scored 4 rejects-valid — 96NN/00, 96NN/01, R4YG and Y79Y/001, every one of them a tab sitting one column past the parent. Recorded because the suite is the only thing that catches it: the corpus contains no instance in either direction.",
+        "first_seen": {
+          "package": "yaml/yaml-test-suite",
+          "version": "data-2022-01-17",
+          "path": "Y79Y/000/in.yaml",
+          "note": "Not a corpus file."
+        },
+        "sweep_before": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "sweep_after": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "suite_before": {
+          "accepts_invalid": 3,
+          "rejects_valid": 0
+        },
+        "suite_after": {
+          "accepts_invalid": 2,
+          "rejects_valid": 0
+        },
+        "evidence_note": "3 -> 2 accepts-invalid, 0 rejects-valid, zero corpus movement. The new corpus test is the VALID neighbour (`foo: |-` then one space and a tab), not the invalid case, because the invalid case lives in test/negative and the thing most likely to break later is the boundary. Corpus tests 134 -> 135."
+      }
+    },
+    {
+      "id": 7,
+      "title": "leading empty line deeper than the block scalar's content",
+      "file": "patches/0007-leading-empty-line-deeper-than-block-scalar-content.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/99_issues.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; found against yaml-test-suite and then found to occur in the ranked corpus. Not reported upstream.",
+      "evidence": {
+        "repro": "empty block scalar: >\\n<SP>\\n<SP><SP>\\n<SP><SP><SP>\\n<SP># comment\\n  (suite case S98Z)",
+        "diagnosis": "YAML 1.2.2 8.1.1.1: it is an error for any of a block scalar's leading empty lines to contain more spaces than its first non-empty line, because the auto-detected indentation would then be taken from whitespace rather than from content. `scn_blk_str_bgn` raised its running `ind` from every empty line and never compared it against the first content line. The fix tracks the deepest leading empty line separately (`max_bl_ind`) and rejects the block scalar start when it exceeds the first non-empty line's indentation. The sentinel is -2, below every real column, so a scalar with NO leading empty lines and one that reaches EOF before any content are both untouched — the two cases a naive comparison against `ind` would break, since `ind` starts at the parent's indentation.",
+        "battery": {
+          "what": "9 hand-built block-scalar cases spanning the boundary, each checked against the oracle before the fix was written and against the grammar after",
+          "result": "9/9 agreement",
+          "cases": "no-blank/content; blank-then-key; blank2-then-content1; blank1-then-content2; blank2-then-content2; S98Z; blank3-then-content1; no-blank-content2; blank-only-then-EOF",
+          "why": "The rule has two edges — 'more spaces than the first non-empty line' and 'only if there IS a leading empty line' — and the suite exercises one case. Deriving the predicate from a battery first is what kept `foo: >` followed by `bar: 1` (valid, and the shape an empty block scalar actually takes in real YAML) from being rejected."
+        },
+        "first_seen": {
+          "package": "Sigmmma/c20",
+          "version": "6ebf90fc1342",
+          "path": "src/content/hr/guides/json-parameters/params.yml",
+          "note": "Line 50 is `    values: |-`, followed by a SIX-space empty line and then content at indent 4. Found by the sweep after the fix, not before — it was one of the seven corpus files the oracle rejects and the grammar accepted."
+        },
+        "sweep_before": {
+          "files": 26636,
+          "passed": 26635,
+          "failed": 1,
+          "gap_files": 0,
+          "noise_files": 1,
+          "clusters": 1
+        },
+        "sweep_after": {
+          "files": 26636,
+          "passed": 26634,
+          "failed": 2,
+          "gap_files": 0,
+          "noise_files": 2,
+          "clusters": 2
+        },
+        "sweep_direction_note": "THE PASS COUNT GOES DOWN BY ONE AND THAT IS THE POINT, which is worth spelling out because every other patch in this repo is judged by the pass count going UP. The file that stops passing is the params.yml above; this ledger's oracle independently rejects it for the same reason js-yaml gives for S98Z ('bad indentation of a mapping entry'), so it is booked as NOISE, `gap_files` stays 0, and the grammar's accepts-invalid over the real corpus goes 6 -> 5. scripts/check.sh gates on `passed > PASS_BEFORE`, which is the right gate for a gap-closing patch and the WRONG SHAPE for an accepts-invalid one: a patch that correctly starts rejecting invalid files can only lower that number. Read the gap/noise split, not the pass count, when judging a patch of this kind.",
+        "suite_before": {
+          "accepts_invalid": 2,
+          "rejects_valid": 0
+        },
+        "suite_after": {
+          "accepts_invalid": 1,
+          "rejects_valid": 0
+        },
+        "evidence_note": "2 -> 1 accepts-invalid on the suite and 6 -> 5 on the real corpus, with rejects-valid still 0. Corpus tests 135 -> 137; the two new ones are both VALID neighbours (a leading empty line no deeper than the content, and an empty block scalar followed by the next key), for the same reason as 0006."
+      }
     }
   ],
   "oracle": {
@@ -304,42 +498,50 @@
       "what_would_work": "GitHub repositories in OTHER languages, which `github::rank(LangName::Yaml, \"<host language>\", k)` already supports without new code: the YAML is there because the repository is a project, not a package. Measured on the top 3 repos each for Go, Python and TypeScript: 874 YAML files from 9 repositories, against 216 MB of tarballs. That is roughly an order of magnitude more bandwidth per admitted file than the YAML-primary corpus (26,634 files from 100 repositories), and it is heavily skewed — 698 of the 874 come from one repository. So it is a real second population, worth adding when someone wants the incidental-config distribution specifically, and not worth switching to blind.",
       "conclusion": "The GitHub YAML-primary source stands, and now stands on a measurement rather than on the absence of an alternative."
     },
-    "files": 26628,
-    "files_note": "The ranked corpus as it stands on disk for the sweep that produced patch 0003. `sweep.ranked_corpus` above records 26,634 files from an earlier fetch of the same top-100 repositories; the six-file difference has NOT been attributed and no claim is made about it here beyond the fact that the two numbers are from two fetches. check.sh compares this field against the manifest on disk and warns when they disagree, because a pass COUNT only means anything against the corpus it was counted on.",
+    "files": 26636,
+    "files_note": "The ranked corpus as it stands on disk for the sweeps behind patches 0003-0007. `sweep.ranked_corpus` records 26,634 from an earlier fetch of the same top-100 repositories and patch 0003's evidence was measured at 26,628; the corpus is refetched and drifts, no claim is made about the individual files, and every number in `corpus.sweep_upstream`/`corpus.sweep_patched` below is from ONE fetch of 26,636. check.sh compares this field against the manifest on disk and warns when they disagree, because a pass COUNT only means anything against the corpus it was counted on.",
     "sweep_upstream": {
-      "files": 26628,
-      "passed": 26623,
+      "files": 26636,
+      "passed": 26631,
       "failed": 5,
       "gap_files": 4,
       "config_files": 0,
       "noise_files": 1,
       "clusters": 4,
-      "note": "upstream a1c4812a with the two packaging patches only, i.e. before patch 0003. Re-measured on the corpus above by reverting 0003's two files in build/, regenerating with the pinned CLI and sweeping, then restoring — so this and sweep_patched are one experiment with one variable changed. The 4 gap files are exactly the files 0003 fixes, which is the independent check that the patch is what moves the number."
+      "note": "upstream a1c4812a with the two packaging patches only, i.e. before 0003-0007. Re-measured on the 26,636-file corpus by moving 0003-0007 out of patches/, materializing, sweeping and restoring them, so this and sweep_patched are one experiment with one variable changed. Suite at this point: 6 accepts-invalid, 0 rejects-valid."
     },
     "sweep_patched": {
-      "files": 26628,
-      "passed": 26627,
-      "failed": 1,
+      "files": 26636,
+      "passed": 26634,
+      "failed": 2,
       "gap_files": 0,
       "config_files": 0,
-      "noise_files": 1,
-      "clusters": 1,
-      "note": "with patch 0003. 99.996% of files parse and ZERO gap files remain: the one failure is corpus noise (open-education-api/specification ooapiv6.yaml, which this ledger's oracle rejects too)."
-    }
+      "noise_files": 2,
+      "clusters": 2,
+      "note": "with patches 0003-0007. ZERO gap files; both remaining failures are corpus noise this ledger's oracle rejects too. The pass count is 26,634 rather than 26,635 BY DESIGN: patch 0007 correctly stops accepting one invalid file (see its `sweep_direction_note`). Suite: 1 accepts-invalid, 0 rejects-valid."
+    },
+    "sweep_baseline_note": "check.sh takes PASS_BEFORE from `sweep_patched.passed` and requires the new sweep to BEAT it. That gate assumes every patch closes a gap. Patches 0004-0007 are accepts-invalid patches and 0007 LOWERS the pass count on purpose, so a future accepts-invalid patch for this grammar may legitimately fail that gate; judge it on the gap/noise split and on the suite score, and set PASS_BEFORE explicitly rather than rewriting these numbers to go green."
   },
   "sweep": {
     "current": {
-      "as_of": "patch 0003",
+      "as_of": "patches 0003-0007",
       "files": 26636,
-      "passed": 26635,
-      "failed": 1,
+      "passed": 26634,
+      "failed": 2,
       "gap_files": 0,
       "config_files": 0,
-      "noise_files": 1,
-      "clusters": 1,
-      "headline": "ZERO GRAMMAR GAPS. The one remaining failure is corpus noise — open-education-api/specification ooapiv6.yaml, which this ledger's oracle rejects too. Everything below `ranked_corpus` is the history that got here and is deliberately NOT rewritten in place: it is patch 0003's before-picture.",
-      "measured_on": "the ranked corpus as it stood after the merge of 0003, 26,636 files — eight more than the 26,628 the controlled before/after in `corpus.sweep_*` was run on, because the corpus is refetched and drifts. Both give zero gaps.",
-      "what_is_left": "The sweep is EXHAUSTED for this grammar: it can only ever find rejects-valid, and there is nothing left to find. The remaining known defect is the other direction — `grammar_accepts_invalid` below."
+      "noise_files": 2,
+      "clusters": 2,
+      "suite": {
+        "cases": 402,
+        "expect_valid": 308,
+        "expect_error": 94,
+        "accepts_invalid": 1,
+        "rejects_valid": 0
+      },
+      "headline": "ZERO GRAMMAR GAPS and ONE accepts-invalid. Both remaining sweep failures are corpus noise the oracle rejects too. Everything below `ranked_corpus` is the history that got here and is deliberately NOT rewritten in place: it is patch 0003's before-picture.",
+      "measured_on": "the ranked corpus at 26,636 files, and yaml/yaml-test-suite data-2022-01-17 at 402 cases. The two populations answer different questions and neither substitutes for the other: the sweep found 0003 and cannot see 0004-0006 at all, and the suite found 0004-0007 and cannot see a 32k-line CRD bundle.",
+      "what_is_left": "ONE: suite case QLJ7, a tag shorthand `!prefix!` declared by a %TAG directive in the first document and used in later ones. js-yaml's reason is 'undeclared tag handle', which is NAME RESOLUTION and not syntax — it needs a per-document symbol table of declared handles, which a tree-sitter grammar has no place holding. Left unfixed deliberately rather than left unnoticed. The sweep side is exhausted: it can only ever find rejects-valid and there is nothing left to find."
     },
     "ranked_corpus": {
       "what": "The real corpus: top 100 GitHub repositories classified as YAML, fetched via `treebank fetch --lang yaml --limit 100`. 26,634 admitted files, 211 MB extracted. MEASURED AT THE PINNED SHA WITH THE TWO PACKAGING PATCHES ONLY — i.e. BEFORE patch 0003. It is kept as the measurement that found the row overflow and as 0003's before-picture; `corpus.sweep_upstream` / `corpus.sweep_patched` hold the controlled before/after on the corpus as it stood when 0003 landed, and `sweep.current` is where the grammar is now.",
@@ -372,8 +574,10 @@
       "fixed_by": "patch 0003, which widens `row`, `blk_imp_row`, the `cur_row`/`end_row` temporaries and the `bgn_row` local to `int32_t`, and orders serialize/deserialize so the two persistent 32-bit fields come first and every field stays naturally aligned (header 10 -> 14 bytes). The indent stacks are untouched, so the nesting depth that fits in TREE_SITTER_SERIALIZATION_BUFFER_SIZE is unchanged. THE COLUMNS ARE STILL int16_t AND WOULD WRAP THE SAME WAY PAST COLUMN 32767 — not fixed because no file in either corpus demonstrates it and fixing it properly means widening the two indent STACKS, which are serialized per indent level against a fixed buffer and would halve that depth. See patch 0003's `remaining_gaps_note`."
     },
     "grammar_accepts_invalid": {
-      "count": 7,
-      "note": "Measured against yaml-test-suite: of the suite's 94 expected-error cases the oracle rejects all 94 and the grammar rejects 87, so the grammar ACCEPTS 7 files that are not YAML — DK95/01 and Y79Y/000 (tabs that look like indentation), MUS6/01 and SF5V (directive variants, duplicate %YAML), QB6E (wrong-indented multiline quoted scalar), QLJ7 (tag shorthand defined only in the first document), S98Z (block scalar with more spaces than its first content line). This is the direction GRAMMARS.md says agents drift, so it is recorded as a number before any patch is written. The 87 that both reject are where test/negative was drawn from; these 7 are not in test/negative because they would fail on arrival, and putting them there would be a to-do disguised as a test."
+      "count": 1,
+      "note": "ONE: yaml-test-suite QLJ7 only, and it is out of scope by kind rather than by effort — see `sweep.current.what_is_left`. Patches 0004-0007 closed SF5V, QB6E, DK95/01, Y79Y/000 and S98Z, and all five now sit in test/negative, where the ledger previously said they could not go without being 'a to-do disguised as a test'. They are no longer to-dos.",
+      "history": "This field read 7 and was measured at the pinned sha before patch 0003. Re-measured at the start of the 0004-0007 work it was 6, not 7: MUS6/01 (a %YAML directive after a document start) was already rejected. The stale entry is corrected rather than quietly overwritten, because a count that nobody re-runs is how this direction rots — the grammar had improved and the ledger had not noticed. 7 (claimed, pre-0003) -> 6 (measured) -> 1 (now).",
+      "measured_with": "scripts-free: `treebank negative` over the suite's 94 expect-error cases, and the pinned CLI's `parse` over its 308 expect-valid cases. Both directions are scored on every change, because every one of 0004-0007 is a TIGHTENING and the failure mode of a tightening is rejects-valid."
     },
     "measurement_corpus_note": "The `grammar_at_pinned_sha`, `the_one_gap` and `grammar_accepts_invalid` entries below were produced on the 3,217-file hand-assembled measurement corpus, before `Lang::rank` existed, so that the oracle could be chosen before anything was vendored. `ranked_corpus` above is the real one. The two agree on the finding that matters: the row overflow was the only gap in both, and patch 0003 closes it in both.",
     "gap_files_note": "0 since patch 0003. This counts the 3,217-file measurement corpus, where the row overflow was likewise the only gap (`the_one_gap` below). It was 1 at the pinned sha."

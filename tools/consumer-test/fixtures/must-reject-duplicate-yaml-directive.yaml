@@ -1,0 +1,7 @@
+# treebank-grammar-yaml consumer fixture for patch 0004: must parse with an Error.
+#
+# A document may carry at most one %YAML directive (YAML 1.2.2 6.8.1). If a
+# published crate has lost patch 0004 this parses Clean instead.
+%YAML 1.2
+%YAML 1.2
+---

@@ -25,7 +25,7 @@ grammars:
 - `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
 - `crates/treebank-toml` — tree-sitter-toml 0.7.0, 4 grammar patches
 - `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript + tsx grammars), 12 grammar patches
-- `crates/treebank-yaml` — tree-sitter-yaml 0.7.2, 1 grammar patch
+- `crates/treebank-yaml` — tree-sitter-yaml 0.7.2, 5 grammar patches
 - `crates/treebank-zig` — tree-sitter-zig 1.1.2, 2 grammar patches
 <!-- END GENERATED -->
 

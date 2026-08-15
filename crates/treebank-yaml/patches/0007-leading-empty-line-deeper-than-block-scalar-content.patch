@@ -1,0 +1,98 @@
+diff --git a/src/scanner.c b/src/scanner.c
+index da872d1..f8aeb78 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -721,6 +721,10 @@ static bool scn_blk_str_bgn(Scanner *scanner, TSLexer *lexer, TSSymbol result_sy
+         ind += cur_ind;
+     } else {
+         ind = cur_ind;
++        // Highest indentation seen on a LEADING EMPTY line, in the same
++        // (column - 1) convention as `ind`. -2 means none seen yet, which is
++        // below every real column and so never trips the 8.1.1.1 check below.
++        int16_t max_bl_ind = -2;
+         while (is_wsp(lexer->lookahead)) {
+             adv(scanner, lexer);
+         }
+@@ -740,6 +744,9 @@ static bool scn_blk_str_bgn(Scanner *scanner, TSLexer *lexer, TSSymbol result_sy
+                 if (scanner->cur_col - 1 < ind) {
+                     break;
+                 }
++                if (scanner->cur_col - 1 > max_bl_ind) {
++                    max_bl_ind = scanner->cur_col - 1;
++                }
+                 ind = scanner->cur_col - 1;
+                 adv_nwl(scanner, lexer);
+             } else {
+@@ -753,6 +760,16 @@ static bool scn_blk_str_bgn(Scanner *scanner, TSLexer *lexer, TSSymbol result_sy
+                 if (lexer->lookahead == '\t' && scanner->cur_col - 1 < cur_ind) {
+                     return false;
+                 }
++                // YAML 1.2.2 8.1.1.1: it is an error for any of the leading
++                // empty lines to contain MORE spaces than the first non-empty
++                // line, because the auto-detected indentation would then come
++                // from whitespace rather than from content. Only checked once a
++                // leading empty line has been seen: a block scalar with no
++                // empty lines, and one that reaches EOF before any content, are
++                // both fine and must keep scanning.
++                if (max_bl_ind > scanner->cur_col - 1) {
++                    return false;
++                }
+                 if (scanner->cur_col - 1 > ind) {
+                     ind = scanner->cur_col - 1;
+                 }
+diff --git a/test/corpus/99_issues.txt b/test/corpus/99_issues.txt
+index 5806104..3abd362 100644
+--- a/test/corpus/99_issues.txt
++++ b/test/corpus/99_issues.txt
+@@ -32885,3 +32885,51 @@ foo: |-
+               (string_scalar)))
+           value: (block_node
+             (block_scalar)))))))
++
++=========================================================
++Leading empty line no deeper than the content line (#49)
++=========================================================
++
++foo: >
++ 
++  x
++
++---
++
++(stream
++  (document
++    (block_node
++      (block_mapping
++        (block_mapping_pair
++          key: (flow_node
++            (plain_scalar
++              (string_scalar)))
++          value: (block_node
++            (block_scalar)))))))
++
++=========================================================
++Block scalar with no content before the next key (#49)
++=========================================================
++
++foo: >
++bar: 1
++
++---
++
++(stream
++  (document
++    (block_node
++      (block_mapping
++        (block_mapping_pair
++          key: (flow_node
++            (plain_scalar
++              (string_scalar)))
++          value: (block_node
++            (block_scalar)))
++        (block_mapping_pair
++          key: (flow_node
++            (plain_scalar
++              (string_scalar)))
++          value: (flow_node
++            (plain_scalar
++              (integer_scalar))))))))
