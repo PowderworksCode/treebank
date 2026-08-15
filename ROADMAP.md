@@ -25,7 +25,7 @@ over a year.
 
 | Tier | What the oracle can say | Measured cost / 1000 files | Gap counts are |
 |---|---|---|---|
-| **A** | valid / invalid, per file, no project context | **0.2 – 2 s** | exact |
+| **A** | valid / invalid, per file, no project context | **0.05 – 2 s** | exact |
 | **B** | valid / invalid / **indeterminate** — needs an include or config environment | **35 s (C), 1068 s (C++)** | a floor |
 | **C** | nothing usable: no per-file parser, or the parser executes the corpus | — | impossible |
 
@@ -83,6 +83,31 @@ each sample to 60% of its length:
 | rust | 0.21 s | **2.8× faster** — `syn` bails at the first error |
 
 Worth knowing when sizing a bad day, but nothing here changes a decision.
+
+### The floor, re-measured — and what "any conformant parser" hides
+
+The band above used to start at 0.2 s, which was javascript, the cheapest of
+the first six. JSON is cheaper: **0.08 s per 1000 files** through V8's
+`JSON.parse` batched in one node process, of which **0.04 s is node's
+startup**, so the marginal cost is ~0.04 s and the full 5,657-file corpus
+adjudicates in 0.485 s. It is also **flat on the reject path** — 999 files
+truncated to 60% cost 0.09 s against 0.08 s whole, where javascript pays
+10.6× on the same test, because JSON has no second parse mode to fall into.
+(`syn` and lua go the other way and get *faster* on truncated input by
+bailing at the first error; JSON is the one that simply does not care.)
+
+The cost is the boring half. §5 called JSON's oracle "any conformant parser",
+and that is not true as written. Three parsers that all pass a 51-case
+negative battery disagree on three cases, and every disagreement is
+`serde_json`'s: it rejects nesting deeper than 127 (its default recursion
+limit, measured exactly) and rejects lone-surrogate escapes that RFC 8259
+permits. Both are **over-strict**, which is the direction that hides bugs —
+a valid file called invalid is booked as corpus noise, so the grammar failure
+that produced it drops out of `gap_files` silently. `serde_json` was also the
+cheapest candidate (0.02 s/1000, no subprocess, already a dependency), so on
+this language the obvious oracle and the correct one were different, and only
+a battery separated them. All three parsers agreed on all 5,657 real corpus
+files. See `crates/treebank-json/ledger.json`'s `oracle_not_serde_json`.
 
 ### Six more, measured for this document
 
@@ -348,10 +373,25 @@ free — Maven Central, already implemented for java.
 ### Wave 3 — where the oracle is a library, and "invalid" gets slippery
 
 **9. JSON** · crates.io 3.9 M · npm 4.5 M · all 3 editors · **Zed bundles it**
+Oracle V8 `JSON.parse`, **0.08 s/1000 measured** (§2).
 *Blocker: none.* *Teaches: the negative control.* The grammar should be
 perfect and the sweep should find nothing. A pipeline that reports gaps here
 is broken, which makes JSON the cheapest end-to-end test of the whole loop.
 Dialects (JSON5, JSONC) are the follow-on.
+
+**Done, and the prediction was half wrong.** The pipeline is fine; the
+grammar was not perfect. Over 5,657 `.json` files from the top 3,000 npm
+packages the sweep found one gap — tree-sitter-json rejected `1e+1`, the
+exponent's plus sign that RFC 8259 §6 spells out and every JSON parser
+accepts — and 0 gaps after the one-token fix. Two things are worth carrying
+forward. **The zero has to be falsified, not trusted**: the same corpus swept
+against a grammar with `$.null` deleted reports 3 gaps, which is what makes
+the 0 a measurement rather than a silence. And **corpus width beat corpus
+size**: the first corpus, 1,426 files from the top 800 packages, reported a
+clean 0 because 76% of it was `package.json` — a schema of strings and
+objects containing essentially no numbers. For a guest language, whose files
+all ride inside someone else's packages, the monoculture is the default and
+file count is not the axis that fixes it.
 
 **10. YAML** · crates.io 3.4 M · npm 246 K · all 3 editors · **Zed bundles it**
 *Blocker: **oracle authority**.* *Teaches: that no single reference parser is
@@ -468,7 +508,7 @@ The six already done are excluded. The top 20 are marked ★.
 | 4★ | ruby | 5.5 M | 779 K | 3 | **A** ✓ | `RubyVM::AbstractSyntaxTree` | — |
 | 5★ | php | 4.1 M | 615 K | 3 | **A** ✓ | `php -l` (parallelize) | — |
 | 6★ | swift | 4.2 M | 241 K | 3 | A | `swift-syntax` | oracle size (~2 GB) |
-| 7★ | json | 3.9 M | 4.5 M | 3 | A | any conformant parser | — |
+| 7★ | json | 3.9 M | 4.5 M | 3 | **A** ✓ | V8 `JSON.parse` | conformance is per-parser (§2) |
 | 8★ | scala | 3.8 M | 279 K | 3 | A | `scalameta` | dialect (2 vs 3) |
 | 9★ | css | 3.6 M | 245 K | 3 | A | `csstree` | oracle has no rejection power |
 | 10 | html | 3.5 M | 135 K | 3 | A | `html5ever`/`parse5` | recovery-by-spec; like css |
