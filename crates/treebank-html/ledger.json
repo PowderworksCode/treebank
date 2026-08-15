@@ -71,6 +71,8 @@
     },
     "repositories_note": "500 requested; 471 resolved. All 29 skips are the 250 MB artifact cap and every one is logged by the fetch driver \u2014 course-note and textbook repositories whose bulk is PDFs and images.",
     "files_measured_note": "132,492 .html files after classify() (extension, minus node_modules/ and vendor/) and admit() (template markers). 1.9 GB extracted.",
+    "fetch_limit": 500,
+    "fetch_limit_note": "The daily job's default is 100, and this grammar's numbers are from 500 requested (471 resolved, 132,492 files). check.sh takes PASS_BEFORE from corpus.sweep_patched.passed, which is a pass COUNT and only means anything against the corpus it was counted on \u2014 so at limit 100 the baseline is unreachable however many gaps get fixed, and a fix agent's only route to green is to overwrite corpus.sweep_patched with the smaller corpus's numbers. That is what happened to bash on 2026-08-12 (99 packages / 9,094 files against a 25,662-file baseline). The size therefore lives next to the numbers it produced.",
     "sweep_patched": {
       "passed": 128618,
       "failed": 3874,
