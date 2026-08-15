@@ -5,27 +5,48 @@
 
 mod bash;
 mod c;
+mod clojure;
 mod csharp;
+mod dart;
 mod debian;
+mod dockerfile;
 mod elixir;
+mod elm;
 mod exec_oracle;
+mod fortran;
+mod fsharp;
 mod github;
 mod go;
+mod graphql;
+mod groovy;
 mod html;
 mod java;
 mod javascript;
 mod json;
+mod julia;
 mod lua;
+mod make;
+mod markdown;
+mod nix;
 mod npm;
+mod ocaml;
 mod php;
+mod powershell;
+mod proto;
 mod python;
+mod r;
 mod rbs;
 mod ruby;
 mod rust;
 mod scala;
+mod scss;
+mod skeleton;
+mod solidity;
 mod stdin_oracle;
+mod svelte;
 mod toml;
 mod typescript;
+mod xml;
 mod yaml;
 mod zig;
 
@@ -42,6 +63,16 @@ use crate::rank::RankedCrate;
 pub trait Lang: Sync {
     /// Canonical name; matches `--lang` and the `corpus/<lang>/` dir.
     fn name(&self) -> LangName;
+
+    /// Is this a reserved name with nothing behind it yet? `false` for
+    /// every language that exists; the skeletons override it, and `require`
+    /// below turns `--lang <skeleton>` into one clear error instead of a
+    /// downstream mystery. Implementing a language deletes its override —
+    /// from its own file, which is the point of the arrangement. See
+    /// `skeleton.rs`.
+    fn skeleton(&self) -> bool {
+        false
+    }
 
     /// Build the ranked top-K package list. `db` is `corpus/<lang>/db`
     /// (local dump data; only languages that need one read it).
@@ -174,6 +205,26 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static HTML: html::Html = html::Html;
     static JSON: json::Json = json::Json;
     static SCALA: scala::Scala = scala::Scala;
+    static NIX: nix::Nix = nix::Nix;
+    static POWERSHELL: powershell::PowerShell = powershell::PowerShell;
+    static SOLIDITY: solidity::Solidity = solidity::Solidity;
+    static MARKDOWN: markdown::Markdown = markdown::Markdown;
+    static DART: dart::Dart = dart::Dart;
+    static R: r::R = r::R;
+    static OCAML: ocaml::OCaml = ocaml::OCaml;
+    static XML: xml::Xml = xml::Xml;
+    static SCSS: scss::Scss = scss::Scss;
+    static PROTO: proto::Proto = proto::Proto;
+    static JULIA: julia::Julia = julia::Julia;
+    static MAKE: make::Make = make::Make;
+    static SVELTE: svelte::Svelte = svelte::Svelte;
+    static GRAPHQL: graphql::GraphQL = graphql::GraphQL;
+    static CLOJURE: clojure::Clojure = clojure::Clojure;
+    static FSHARP: fsharp::FSharp = fsharp::FSharp;
+    static GROOVY: groovy::Groovy = groovy::Groovy;
+    static ELM: elm::Elm = elm::Elm;
+    static FORTRAN: fortran::Fortran = fortran::Fortran;
+    static DOCKERFILE: dockerfile::Dockerfile = dockerfile::Dockerfile;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -195,5 +246,37 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Html => &HTML,
         LangName::Json => &JSON,
         LangName::Scala => &SCALA,
+        LangName::Nix => &NIX,
+        LangName::Powershell => &POWERSHELL,
+        LangName::Solidity => &SOLIDITY,
+        LangName::Markdown => &MARKDOWN,
+        LangName::Dart => &DART,
+        LangName::R => &R,
+        LangName::Ocaml => &OCAML,
+        LangName::Xml => &XML,
+        LangName::Scss => &SCSS,
+        LangName::Proto => &PROTO,
+        LangName::Julia => &JULIA,
+        LangName::Make => &MAKE,
+        LangName::Svelte => &SVELTE,
+        LangName::Graphql => &GRAPHQL,
+        LangName::Clojure => &CLOJURE,
+        LangName::Fsharp => &FSHARP,
+        LangName::Groovy => &GROOVY,
+        LangName::Elm => &ELM,
+        LangName::Fortran => &FORTRAN,
+        LangName::Dockerfile => &DOCKERFILE,
     }
+}
+
+/// `get`, refusing the skeletons. Every `--lang` path goes through this, so
+/// a name the CLI advertises but nobody has implemented fails at the
+/// boundary with one sentence, rather than as a missing `top-k.json`, a
+/// grammar dir that is not there, or an empty verdict map.
+pub fn require(name: LangName) -> Result<&'static dyn Lang> {
+    let lang = get(name);
+    if lang.skeleton() {
+        return Err(skeleton::not_implemented(name));
+    }
+    Ok(lang)
 }

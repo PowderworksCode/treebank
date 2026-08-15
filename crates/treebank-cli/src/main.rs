@@ -118,7 +118,7 @@ fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
         .collect();
-    let verdicts = lang::get(lang).validate(srcroot, &paths)?;
+    let verdicts = lang::require(lang)?.validate(srcroot, &paths)?;
     let mut out = std::io::BufWriter::new(std::io::stdout().lock());
     for p in &paths {
         // A path the oracle declined to answer for is not silently dropped:
@@ -145,19 +145,19 @@ fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {
 fn main() -> anyhow::Result<()> {
     match Cli::parse().cmd {
         Cmd::Rank { lang, db, k, out } => rank::run(
-            lang::get(lang),
+            lang::require(lang)?,
             &lang_path(lang, db, "db"),
             k,
             &lang_path(lang, out, "top-k.json"),
         ),
         Cmd::Fetch { lang, list, limit, corpus } => fetch::run(
-            lang::get(lang),
+            lang::require(lang)?,
             &lang_path(lang, list, "top-k.json"),
             limit,
             &lang_path(lang, corpus, ""),
         ),
         Cmd::Sweep { lang, grammar, manifest, out } => sweep::run(
-            lang::get(lang),
+            lang::require(lang)?,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/sweep.json"),

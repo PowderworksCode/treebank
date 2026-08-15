@@ -88,6 +88,66 @@ pub enum LangName {
     #[serde(rename = "scala")]
     #[value(name = "scala")]
     Scala,
+    #[serde(rename = "nix")]
+    #[value(name = "nix")]
+    Nix,
+    #[serde(rename = "powershell")]
+    #[value(name = "powershell")]
+    Powershell,
+    #[serde(rename = "solidity")]
+    #[value(name = "solidity")]
+    Solidity,
+    #[serde(rename = "markdown")]
+    #[value(name = "markdown")]
+    Markdown,
+    #[serde(rename = "dart")]
+    #[value(name = "dart")]
+    Dart,
+    #[serde(rename = "r")]
+    #[value(name = "r")]
+    R,
+    #[serde(rename = "ocaml")]
+    #[value(name = "ocaml")]
+    Ocaml,
+    #[serde(rename = "xml")]
+    #[value(name = "xml")]
+    Xml,
+    #[serde(rename = "scss")]
+    #[value(name = "scss")]
+    Scss,
+    #[serde(rename = "proto")]
+    #[value(name = "proto")]
+    Proto,
+    #[serde(rename = "julia")]
+    #[value(name = "julia")]
+    Julia,
+    #[serde(rename = "make")]
+    #[value(name = "make")]
+    Make,
+    #[serde(rename = "svelte")]
+    #[value(name = "svelte")]
+    Svelte,
+    #[serde(rename = "graphql")]
+    #[value(name = "graphql")]
+    Graphql,
+    #[serde(rename = "clojure")]
+    #[value(name = "clojure")]
+    Clojure,
+    #[serde(rename = "fsharp")]
+    #[value(name = "fsharp")]
+    Fsharp,
+    #[serde(rename = "groovy")]
+    #[value(name = "groovy")]
+    Groovy,
+    #[serde(rename = "elm")]
+    #[value(name = "elm")]
+    Elm,
+    #[serde(rename = "fortran")]
+    #[value(name = "fortran")]
+    Fortran,
+    #[serde(rename = "dockerfile")]
+    #[value(name = "dockerfile")]
+    Dockerfile,
 }
 
 impl LangName {
@@ -113,6 +173,26 @@ impl LangName {
             LangName::Html => "html",
             LangName::Json => "json",
             LangName::Scala => "scala",
+            LangName::Nix => "nix",
+            LangName::Powershell => "powershell",
+            LangName::Solidity => "solidity",
+            LangName::Markdown => "markdown",
+            LangName::Dart => "dart",
+            LangName::R => "r",
+            LangName::Ocaml => "ocaml",
+            LangName::Xml => "xml",
+            LangName::Scss => "scss",
+            LangName::Proto => "proto",
+            LangName::Julia => "julia",
+            LangName::Make => "make",
+            LangName::Svelte => "svelte",
+            LangName::Graphql => "graphql",
+            LangName::Clojure => "clojure",
+            LangName::Fsharp => "fsharp",
+            LangName::Groovy => "groovy",
+            LangName::Elm => "elm",
+            LangName::Fortran => "fortran",
+            LangName::Dockerfile => "dockerfile",
         }
     }
 }
@@ -337,6 +417,20 @@ pub fn check(grammar_dir: &Path) -> Result<Vec<String>> {
                 ));
             }
         }
+    }
+
+    // A ledger may now name a language the CLI only RESERVES. Every
+    // automated path for that grammar — daily.sh, check.sh, verify.sh,
+    // oracle-smoke.sh — feeds `grammar` straight to `--lang`, which is the
+    // csharp `"c-sharp"` failure this enum was introduced to stop, so say it
+    // here rather than let four scripts discover it one at a time.
+    if crate::lang::get(led.grammar).skeleton() {
+        bad.push(format!(
+            "grammar {} has no implementation yet — \
+             crates/treebank-cli/src/lang/{}.rs is a skeleton, so rank, fetch, \
+             sweep and oracle all refuse this language",
+            led.grammar, led.grammar
+        ));
     }
 
     if led.generate_cli.is_empty() {
