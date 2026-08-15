@@ -176,23 +176,35 @@ about the wrong thing:
 So `unreadable_note` in the ledger records **which direction** a tool fails in,
 not merely that it was handled.
 
-## What the position costs, on 26,634 real files
+## What the position costs, on the real corpus
 
 The suite says the four parsers disagree on 67 of 402. The real corpus says
 they disagree on almost nothing — and pins down exactly what "almost" is.
 
-Over all 26,634 ranked-corpus files the oracle rejects **7**. The grammar
-rejects 1 of them (booked as noise, correctly) and **accepts the other 6**. But
-libyaml and go-yaml call all 6 of those *valid*:
+The grammar column below was re-measured on the current 26,636-file fetch after
+patches `0004`-`0007`; the three-parser comparison is from the 26,634-file fetch
+it was originally run on, and is labelled where it is quoted.
+
+Over the ranked corpus the oracle rejects **7**. The grammar rejects **2** of
+them (both booked as noise, correctly) and **accepts the other 5**. libyaml and
+go-yaml call all 5 of those *valid*:
 
 | | js-yaml | libyaml | go-yaml | grammar |
 |---|---|---|---|---|
-| 6 files | invalid | **valid** | **valid** | accepts |
+| 5 files | invalid | **valid** | **valid** | accepts |
 | `ooapiv6.yaml` | invalid | invalid | invalid | rejects |
+| `params.yml` | invalid | — | — | rejects (patch 0007) |
 
-All six are one construct: a multi-line flow collection as a block mapping
-value whose continuation and closing bracket sit at the *same* indentation as
-the key —
+**This paragraph used to say 6 and 1, and the correction is not just a number.**
+It claimed all six were one construct; five are, and the sixth was never
+checked. `Sigmmma/c20`'s `params.yml` is not deficient indentation at all —
+js-yaml's reason for it is *"bad indentation of a mapping entry"*, a block
+scalar whose leading empty line is deeper than its first content line (YAML
+1.2.2 §8.1.1.1). Patch `0007` fixes that rule, so the grammar now rejects it and
+agrees with the oracle. The five that remain really are one construct, verified
+one file at a time rather than asserted: a multi-line flow collection as a block
+mapping value whose continuation and closing bracket sit at the *same*
+indentation as the key —
 
 ```yaml
         daj_util_objects: [
@@ -205,28 +217,47 @@ content nested in a block context to be indented past its parent, so js-yaml
 appears to be right and the other two lenient. It is a common shape because it
 is what pasted JSON looks like.
 
-So: **`grammar accepts-invalid` is 6 under this oracle and would be 0 under
-either alternative**, while `gap_files` is 4 under all of them, because every
-gap file is one every parser calls valid. The headline number does not depend
-on the position; the number a future patch would be judged against does. That
-is what `verdicts_are_relative_to` is for, stated as a measurement rather than
-as a caveat.
+So: **`grammar accepts-invalid` is 5 under this oracle and would be 0 under
+either alternative**, while `gap_files` is **0** under all of them. The headline
+number never depended on the position; the number a future patch would be judged
+against is the one that does. That is what `verdicts_are_relative_to` is for,
+stated as a measurement rather than as a caveat.
 
-The other half of the same result is worth as much: **the three parsers agree
-on 26,628 of 26,634 real files, 99.98%.** The disagreement this whole document
-is about is a hard-tail phenomenon. Both numbers are true, and neither is
-quotable without the other.
+Those five are the whole remaining cost of the position, and closing them is a
+decision this document does not make. They are the shape pasted JSON takes, two
+of the three reference parsers accept them, and a patch that rejected them would
+lower the sweep's pass count by five while `gap_files` stayed at 0. Patch `0005`
+tightened the *scalar* form of deficient indentation and deliberately left the
+*collection* form alone for exactly this reason.
+
+The other half of the same result is worth as much: **the three parsers agree on
+26,628 of 26,634 real files, 99.98%** (measured on the 26,634-file fetch; the
+corpus is refetched and drifts, and the current one is 26,636). The disagreement
+this whole document is about is a hard-tail phenomenon. Both numbers are true,
+and neither is quotable without the other.
 
 ## What the negative corpus is drawn from
 
-`test/negative/` holds 24 files: 20 from the suite's expected-error cases and 4
+`test/negative/` holds 29 files: 25 from the suite's expected-error cases and 4
 control-character/encoding cases from the battery, which the suite has none of.
 Every one is rejected by the oracle *and* by the grammar today.
 
-Two exclusions worth stating. NUL cases are not there: `a: 1\nb: \0\n` parses
+Five of those 25 arrived with patches `0004`-`0007`: `SF5V`, `QB6E`, `DK95/01`,
+`Y79Y/000` and `S98Z`. This section used to say they could not be there, because
+"a test that fails on arrival is a to-do disguised as a test" — which was right,
+and the answer was to stop them failing rather than to keep excluding them.
+
+Two exclusions still stand. NUL cases are not there: `a: 1\nb: \0\n` parses
 **clean** under the grammar because tree-sitter truncates at codepoint 0, so it
 is accepted-invalid and unfixable in `grammar.js` — `Lang::admit` drops such
-files from the corpus instead. And the 7 suite cases the grammar currently
-accepts are not there either; they are counted in the ledger's
-`sweep.grammar_accepts_invalid` instead, because a test that fails on arrival
-is a to-do disguised as a test.
+files from the corpus instead. And the **one** suite case the grammar still
+accepts is not there either; it is counted in the ledger's
+`sweep.grammar_accepts_invalid`. That case is `QLJ7`, a tag shorthand declared
+by `%TAG` in the first document and used in later ones, which js-yaml rejects as
+an *undeclared tag handle* — name resolution, not syntax, and not something a
+tree-sitter grammar has any place deciding.
+
+The count in this section was also wrong in a way worth recording: it said the
+grammar accepted **7** suite cases. Re-measured before `0004` was written it was
+**6** — `MUS6/01` was already rejected and nobody had re-run the number. A count
+nobody re-runs is how the accepts-invalid direction rots.
