@@ -3,10 +3,14 @@
 Upstream: [tree-sitter/tree-sitter-html](https://github.com/tree-sitter/tree-sitter-html)
 pinned at `73a3947324f6efddf9e17c0ea58d454843590cc0`.
 
-Four patches: two packaging, and two grammar fixes that between them take the
-gap queue from 9,707 files to 2,823 and the corpus from 91.8% parsing to
-**97.1%**. Both grammar fixes are the same shape — a character that HTML5
-treats as ordinary text and the grammar had no token for.
+Seven patches: two packaging, and five grammar fixes that between them take
+the gap queue from **9,707 files to 119** and the corpus from 91.8% parsing
+to **99.16%**.
+
+The first two are the same shape — a character HTML5 treats as ordinary text
+that the grammar had no token for. The last three are the structural ones:
+what happens at end of document, what happens to an end tag that closes
+nothing, and where a tag name stops.
 
 ## 0001 — treebank redistribution notice
 
@@ -57,23 +61,67 @@ that display code: `WHERE o.created_at > NOW()`, `(job) => createJob(...)`
 inside `<pre>`, `<code>` or a paragraph, where the author had no reason to
 write `&gt;`.
 
+## 0005 — end of document closes every open element
+
+This was the 955-file class the previous ledger recorded as deliberately not
+attempted, on the grounds that it would need a rewrite of the scanner's
+end-tag logic. It did not. `scan_implicit_end_tag` closed an element at EOF
+only when the innermost open one was `html`, `head` or `body`:
+
+```c
+((parent->type == HTML || parent->type == HEAD || parent->type == BODY) && lexer->eof(lexer))
+```
+
+The spec's "stop parsing" step pops the *whole* stack, so `<div><p>hello` with
+no closing tags — which every browser renders — was an ERROR. Dropping the
+three-way type test to a bare `lexer->eof(lexer)` is the entire change.
+
+**1,826 files.** Gap queue 2,823 → 1,052.
+
+## 0006 — a stray end tag the scanner never ran for
+
+`<p>x</p></head>` was an ERROR while the same stray tag mid-document parsed.
+
+The grammar has an `erroneous_end_tag` rule for exactly this, and
+`scan_end_tag_name` already emits `ERRONEOUS_END_TAG_NAME` when the name does
+not match the top of the stack. But the scanner's dispatch gated that branch on
+`valid_symbols[START_TAG_NAME] || valid_symbols[END_TAG_NAME]` and never asked
+about `ERRONEOUS_END_TAG_NAME` — so in the one situation the rule exists for
+(document level, empty tag stack, where `END_TAG_NAME` is not valid because
+there is nothing to close) the scanner declined to run at all.
+
+**895 files.** Gap queue 1,052 → 158. One line, and the largest fix per
+character in the series.
+
+## 0007 — tag names end only at whitespace, a slash or `>`
+
+`scan_tag_name` accepted alnum, `-` and `:`. The spec's tag-name state ends on
+exactly three characters, and everything else — `=`, `.`, non-ASCII, even `<` —
+is part of the name. The *start* is separately restricted to ASCII alpha by the
+tag-open state, which is what keeps `<?xml ?>`, `<3` and `< div` from being
+tags, so that half is kept explicitly.
+
+**39 files** — the smallest yield here and the only patch that cost nothing:
+`noise_files` is unchanged. It also fixes two things that are simply correct
+rather than tolerant: `<dØdd>` (a non-ASCII element name) and the wpt fixture
+asserting that `<x<>` creates an element named `x<`.
+
 ## What is left, and what to be careful of
 
-The head of the remaining queue is one class: **an element left unclosed at end
-of document**, 955 files. The spec closes them at EOF and every browser renders
-them; tree-sitter-html closes a tag implicitly only through its external
-`_implicit_end_tag`. It is a real gap and it is deliberately not attempted
-here, because making EOF close arbitrary open elements touches the scanner's
-end-tag logic and therefore every file in the corpus.
+**119 gap files, and no head to the queue any more** — the largest cluster is
+67 occurrences across 61 files and the rest are single digits. Much of the tail
+is web-platform-tests fixtures written to exercise parser edge cases rather
+than pages anyone serves. Expect diminishing returns.
 
 The other direction has its own queue, and it is the one the sweep on this
 language cannot find: **six classes where the oracle says the markup is
 malformed and the grammar accepts it anyway**, each with a repro, in
 `ledger.json` under `accepts_invalid_markup`.
 
-Whichever direction the next patch goes, check the other one. Both fixes here
-moved a handful of files from noise into passing (12 and 38), which is the
-honest cost of a looser text rule; a strictness patch pays the same toll in
+Whichever direction the next patch goes, check the other one. Four of the five
+fixes here moved files from noise into passing — 12, 38, 55, 1 and zero for
+0007 — 106 files cumulatively, which is the honest cost of a more forgiving
+grammar; a strictness patch pays the same toll in
 reverse, and on a recovery-by-spec language overshooting turns valid pages into
 gaps. `tools/consumer-test/fixtures/patched.html` and `test/negative/` are the
 two guards, and both were re-run rather than assumed after each patch.
