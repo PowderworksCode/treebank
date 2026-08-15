@@ -9,8 +9,8 @@ RBS is Ruby's type signature language — a separate language, not a dialect.
 is Ruby and `RBS::Parser` rejects it. Both corpora come out of the same gems,
 which is exactly what makes crossing the two oracles an easy mistake.
 
-Eleven patches: two packaging, nine grammar. On the 1000-gem, 2,214-file corpus
-they take the sweep from 2,062 passing to **2,190 — 93.1% to 98.9%**.
+Thirteen patches: two packaging, eleven grammar. On the 3,028-file corpus they
+take the sweep from 2,719 passing to **3,005 — 89.8% to 99.24%**.
 
 `noise_files` is 0 at every patch level, and for this language that says
 something stronger than usual: exactly one file in the whole corpus is
@@ -107,3 +107,24 @@ so a module declaring one failed entirely.
 `def add_include: (RDoc::Include \`include\`) -> RDoc::Include`. `method_name`
 already accepted the same quoting for a method called `class` or `include`;
 `var_name` did not.
+
+## 0012 — named keyword arguments · 36 files
+
+A keyword argument may name its variable, exactly as a positional one does:
+`def f: (watcher: untyped watcher) -> void`. These took a bare `type` where a
+positional takes a type plus an optional `var_name`.
+
+Why it went unseen until the corpus grew is the whole argument for the second
+source: the Rails signatures in gem_rbs_collection name every keyword
+argument, and not one gem that ships its own `sig/` does.
+
+Inlined rather than reusing `$.parameter`, so an unnamed keyword argument
+still parses to a bare `type` and upstream's corpus tests pass unchanged. The
+trailing comma is taken inside the keyword rule; on the parameter list it
+collides with the list's own alternatives and leaves an unresolved conflict.
+
+## 0013 — record type string and symbol keys · 5 files
+
+A record key may be a quoted string or a symbol with `=>`, not only a bare
+identifier with `:`. roo declares its Excel format table as
+`{ 'h:mm am/pm' => :date }`; activerecord mixes both forms in one type.

@@ -285,32 +285,85 @@
         },
         "note": "A parameter name may be backtick-quoted, which is how RBS writes one that collides with a keyword. `method_name` already accepted the same quoting for a method called `class` or `include`; `var_name` did not."
       }
+    },
+    {
+      "id": 12,
+      "title": "named keyword arguments",
+      "file": "patches/0012-named-keyword-arguments.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/methods.txt"
+      ],
+      "origin": "treebank; found only after gem_rbs_collection was added to the corpus",
+      "evidence": {
+        "repro": "def f: (watcher: untyped watcher) -> void",
+        "first_seen": {
+          "package": "ruby/gem_rbs_collection",
+          "version": "9ab762c82470 (actionview 6.0)"
+        },
+        "sweep_before": {
+          "passed": 2954,
+          "failed": 74
+        },
+        "sweep_after": {
+          "passed": 2996,
+          "failed": 32
+        },
+        "note": "A keyword argument may name its variable, exactly as a positional one does; these took a bare `type` where a positional takes a type plus an optional var_name. 36 files, and the reason none of them showed up before is the whole argument for the second corpus source: the Rails signatures name every keyword argument, and not one gem that ships its own sig/ does. Inlined rather than reusing `$.parameter` so an unnamed keyword argument still parses to a bare `type` and upstream's corpus tests pass unchanged. The trailing comma is taken inside the keyword rule; on the parameter list it collides with the list's own alternatives and leaves an unresolved conflict."
+      }
+    },
+    {
+      "id": 13,
+      "title": "record type string and symbol keys",
+      "file": "patches/0013-record-type-string-and-symbol-keys.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/types.txt"
+      ],
+      "origin": "treebank; found only after gem_rbs_collection was added to the corpus",
+      "evidence": {
+        "repro": "X: { 'h:mm am/pm' => :date }  /  { from: untyped, :exclude_end => untyped }",
+        "first_seen": {
+          "package": "ruby/gem_rbs_collection",
+          "version": "9ab762c82470 (roo 2.10, activerecord 6.0)"
+        },
+        "sweep_before": {
+          "passed": 2996,
+          "failed": 32
+        },
+        "sweep_after": {
+          "passed": 3005,
+          "failed": 23
+        },
+        "note": "A record key may be a quoted string or a symbol with `=>`, not only a bare identifier with `:`. activerecord mixes both forms in one type."
+      }
     }
   ],
   "corpus": {
-    "source": "RubyGems `.gem` files for the top gems by download count; `.rbs` files from the inner data.tar.gz. Identical acquisition to treebank-ruby, and `Lang::Rbs` delegates rank/resolve/archive handling to it rather than copying — RBS signatures ship inside gems, so the registry, the ranking and the nested-archive handling are the same problem with the same answer. Only classify() and validate() differ, which is the whole of what makes this a different language.",
+    "source": "TWO sources, because RBS signatures live in two places and a corpus of one is biased. (1) RubyGems `.gem` files for the top gems by download count — the `.rbs` a gem ships in its own sig/, which 240 of the top 1000 do. (2) ruby/gem_rbs_collection, the community-maintained signatures for the gems that ship none, fetched as a GitHub source tarball at its head sha. The populations barely overlap: the collection covers Rails and its neighbours, which ship nothing themselves, while the self-hosting gems skew toward tooling. Acquisition for (1) is delegated to Lang::Ruby rather than copied.",
     "ranking": "ecosyste.ms index of rubygems.org, sorted by downloads — the same list treebank-ruby uses.",
-    "files_note": ".rbs only, the single extension tree-sitter-rbs's tree-sitter.json claims, and unambiguous: nothing else uses it. Paths containing a `vendor` component are excluded, as in ruby.",
-    "fetched": "2026-08-15",
-    "packages": 1000,
-    "packages_note": "1000 gems fetched; 240 of them ship .rbs signatures at all. 2,214 files. The corpus is narrower than the file count suggests — rbs itself and language_server-protocol are ~32% of it — which is worth knowing when reading a gap count.",
-    "files": 2214,
+    "files_note": ".rbs only, the single extension tree-sitter-rbs's tree-sitter.json claims. Paths containing a `vendor` component are excluded, as in ruby; in the collection, `test/` and `bin/` are excluded — its own fixtures and tooling rather than signature data for a real gem.",
+    "fetched": "2026-08-15 (gems), gem_rbs_collection @ 9ab762c8247028f90620fc93c4e7aac20eb693d7",
+    "packages": 1001,
+    "packages_note": "1000 gems plus the collection. 240 gems ship .rbs at all; the collection covers 173 more that do not.",
+    "files": 3028,
     "sweep_upstream": {
-      "passed": 2062,
-      "failed": 152,
-      "gap_files": 152,
+      "passed": 2719,
+      "failed": 309,
+      "gap_files": 309,
       "noise_files": 0,
-      "clusters": 44
+      "clusters": 58
     },
     "sweep_patched": {
-      "passed": 2190,
-      "failed": 24,
-      "gap_files": 24,
+      "passed": 3005,
+      "failed": 23,
+      "gap_files": 23,
       "noise_files": 0,
-      "clusters": 20
+      "clusters": 19
     },
-    "sweep_note": "93.1% -> 98.9%. noise_files is 0 at every patch level, which for this language means something stronger than usual: only ONE file in the whole corpus is oracle-invalid (http-form_data's `(Integer | void)`, a union RBS forbids), and the grammar accepts it — see grammar_looseness. So every failing file here is a genuine gap and gap_files is exact rather than a floor.",
-    "remaining_gaps_note": "24 files in 20 clusters remain, a long tail of 2s and 1s rather than anything systematic: inline type annotations in comments, a few keyword-quoted names in positions other than parameters, and assorted RBS 4.x syntax. 15 of the 24 are rbs's own core signatures, which is the same signal the assessment below records — this grammar trails RBS releases, and closing the tail is a subscription rather than a one-off."
+    "sweep_note": "89.8% -> 99.24%. noise_files is 0 at every patch level, and here that means something stronger than usual: exactly one file in the whole corpus is oracle-invalid and the grammar accepts it (see grammar_looseness), so every failing file is a genuine gap and gap_files is exact rather than a floor.",
+    "remaining_gaps_note": "24 files in 20 clusters remain, a long tail of 2s and 1s rather than anything systematic: inline type annotations in comments, a few keyword-quoted names in positions other than parameters, and assorted RBS 4.x syntax. 15 of the 24 are rbs's own core signatures, which is the same signal the assessment below records — this grammar trails RBS releases, and closing the tail is a subscription rather than a one-off.",
+    "corpus_breadth": "The second source paid for itself immediately and is the argument for measuring corpus bias rather than assuming it away. On gems alone the sweep read 2,190/2,214 with 24 gaps and looked close to exhausted. Adding the collection took the corpus to 3,028 files and the gap count to 74 — FIFTY gaps that 1000 gems had never shown, concentrated in one construct: keyword arguments that name their variable, which the Rails signatures do everywhere and no self-hosting gem does at all. Patches 0012 and 0013 close 51 of them, so the wider corpus now has FEWER gaps than the narrow one did (23 vs 24) while covering 37% more files."
   },
   "grammar_looseness": {
     "summary": "One construct RBS rejects that this grammar accepts: `void` inside a union type, e.g. `def rewind: () -> (Integer | void)`. It predates the treebank patches — verified against the pin with only the packaging patches applied.",

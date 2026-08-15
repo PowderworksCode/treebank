@@ -1,0 +1,66 @@
+diff --git a/grammar.js b/grammar.js
+index 005208d..73a7476 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -398,8 +398,24 @@ module.exports = grammar({
+     ),
+ 
+     splat_keyword: $ => seq("**", $.parameter),
+-    required_keywords: $ => seq(prec.right(1, seq(alias($.var_name, $.keyword), ":")), $.type, optional(seq(",", $.keywords))),
+-    optional_keywords: $ => seq(prec.right(1, seq("?", alias($.var_name, $.keyword), ":")), $.type, optional(seq(",", $.keywords))),
++    // A keyword argument may name its variable, exactly as a positional one
++    // does: `def f: (watcher: untyped watcher) -> void`. These took a bare
++    // `type` where a positional takes a type plus an optional `var_name`, so
++    // every named keyword argument failed — 36 files, almost all of them in
++    // gem_rbs_collection. The Rails signatures name every keyword argument
++    // and no gem shipping its own sig/ happened to, which is precisely the
++    // bias that adding the collection to the corpus was meant to expose.
++    //
++    // Inlined rather than reusing `$.parameter`, so a keyword argument
++    // without a variable name still parses to a bare `type` and upstream's
++    // corpus tests keep passing unchanged.
++    //
++    // The trailing comma is taken here rather than on the parameter list,
++    // where it collides with the list's own alternatives and leaves an
++    // unresolved conflict. google-cloud-firestore wraps long keyword lists
++    // and leaves one behind.
++    required_keywords: $ => seq(prec.right(1, seq(alias($.var_name, $.keyword), ":")), $.type, optional($.var_name), optional(seq(",", optional($.keywords)))),
++    optional_keywords: $ => seq(prec.right(1, seq("?", alias($.var_name, $.keyword), ":")), $.type, optional($.var_name), optional(seq(",", optional($.keywords)))),
+ 
+     // A parameter name may be backtick-quoted, which is how RBS writes one
+     // that collides with a keyword: `def add_include: (RDoc::Include
+diff --git a/test/corpus/methods.txt b/test/corpus/methods.txt
+index 537fece..bca5e42 100644
+--- a/test/corpus/methods.txt
++++ b/test/corpus/methods.txt
+@@ -1116,3 +1116,30 @@ end
+               (type (class_type (class_name (namespace (constant)) (constant))))
+               (var_name))))
+             (type (builtin_type)))))))))))
++
++================================================================================
++named keyword arguments, and a trailing comma
++================================================================================
++
++class C
++  def f: (
++    watcher: untyped watcher,
++    ?keyfile: String,
++  ) -> void
++end
++
++--------------------------------------------------------------------------------
++
++(program
++  (decl
++    body: (class_decl
++      name: (class_name (constant))
++      body: (members
++        (member body: (method_member
++          name: (method_name (identifier))
++          (method_types (method_type body: (method_type_body
++            (parameters (keywords (required_keywords
++              (keyword (identifier)) (type (builtin_type)) (var_name (identifier))
++              (keywords (optional_keywords
++                (keyword (identifier)) (type (class_type (class_name (constant)))))))))
++            (type (builtin_type)))))))))))

@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use super::{ruby::Ruby, Lang};
 use crate::ledger::LangName;
@@ -21,6 +21,9 @@ use crate::rank::RankedCrate;
 /// download ranking and the nested `.gem` archive handling are the same
 /// problem with the same answer. Only `classify` and `validate` differ, which
 /// is the whole of what makes this a different language.
+/// The community signature collection, ranked alongside the gems.
+const COLLECTION: &str = "ruby/gem_rbs_collection";
+
 pub struct Rbs;
 
 impl Lang for Rbs {
@@ -28,12 +31,54 @@ impl Lang for Rbs {
         LangName::Rbs
     }
 
+    /// The gem ranking, with `ruby/gem_rbs_collection` in front of it.
+    ///
+    /// RBS signatures live in two places and a corpus of only one is biased.
+    /// A gem either ships its own `sig/` — 240 of the top 1000 do — or it does
+    /// not, and for the ones that do not the community maintains signatures
+    /// centrally in gem_rbs_collection. Those are the populations, and they do
+    /// not overlap much: the collection covers Rails and its neighbours, which
+    /// ship no signatures of their own, while the gems that self-host skew
+    /// toward tooling. Taking only the first left `rbs` itself and
+    /// language_server-protocol at 32% of all files.
+    ///
+    /// It is ranked 0 with 0 downloads because it has none — it is a
+    /// repository, not a release. `RankedCrate.downloads` is a traffic metric
+    /// everywhere else in this repo and inventing one here would be worse than
+    /// an obvious zero.
     fn rank(&self, db: &Path, k: usize) -> Result<Vec<RankedCrate>> {
-        Ruby.rank(db, k)
+        let mut ranked = vec![RankedCrate {
+            rank: 0,
+            name: COLLECTION.to_string(),
+            version: String::new(),
+            downloads: 0,
+        }];
+        ranked.extend(Ruby.rank(db, k)?);
+        Ok(ranked)
     }
 
+    /// Gems resolve through RubyGems; the collection resolves to a GitHub
+    /// source tarball at its current head, with the sha standing in for a
+    /// version — the same arrangement `lang::github` uses, and for the same
+    /// reason: a repository has no releases, so "version" here means what
+    /// HEAD was when we fetched.
     fn resolve(&self, pkg: &RankedCrate) -> Result<(String, String)> {
-        Ruby.resolve(pkg)
+        if pkg.name != COLLECTION {
+            return Ruby.resolve(pkg);
+        }
+        let url = format!("https://api.github.com/repos/{COLLECTION}/commits/HEAD");
+        let doc: serde_json::Value = ureq::get(&url)
+            .set("User-Agent", "treebank")
+            .call()
+            .with_context(|| format!("GET {url}"))?
+            .into_json()?;
+        let sha = doc["sha"]
+            .as_str()
+            .with_context(|| format!("{COLLECTION}: no head sha"))?;
+        Ok((
+            sha[..12.min(sha.len())].to_string(),
+            format!("https://codeload.github.com/{COLLECTION}/tar.gz/{sha}"),
+        ))
     }
 
     fn nested_archives(&self) -> bool {
@@ -44,8 +89,16 @@ impl Lang for Rbs {
         Ruby.nested_archive_member(rel)
     }
 
-    fn archive_strip(&self, entry: &Path, is_zip: bool) -> usize {
-        Ruby.archive_strip(entry, is_zip)
+    /// Two archive shapes, told apart by whether the entry has a directory
+    /// component at all.
+    ///
+    /// A `.gem`'s outer tar is FLAT — `metadata.gz`, `checksums.yaml.gz`,
+    /// `data.tar.gz`, one component each — and stripping one would leave
+    /// nothing. A GitHub source tarball wraps everything in a single
+    /// `<repo>-<sha>/`, which must go. Nothing else reaches here: the inner
+    /// `data.tar.gz` keeps its own root through the nested walker.
+    fn archive_strip(&self, entry: &Path, _is_zip: bool) -> usize {
+        usize::from(entry.components().count() > 1)
     }
 
     /// `.rbs` only — the single extension tree-sitter-rbs's tree-sitter.json
@@ -55,6 +108,12 @@ impl Lang for Rbs {
     /// vendored trees: a gem that vendors a dependency ships someone else's
     /// signatures, so a failure there is attributed to the wrong package.
     fn classify(&self, rel: &Path) -> Option<Option<String>> {
+        // The collection ships its own test fixtures and tooling signatures
+        // alongside the gem ones; only `gems/<name>/<version>/` is signature
+        // data for a real gem.
+        if rel.starts_with("test") || rel.starts_with("bin") {
+            return None;
+        }
         if rel
             .components()
             .any(|c| c.as_os_str().to_str() == Some("vendor"))
