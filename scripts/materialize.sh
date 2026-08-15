@@ -171,8 +171,19 @@ for d in "${GEN_DIRS[@]}"; do
   (cd "build/$d" && $TS generate)
 done
 
+# --allow-empty because a no-op generate is a legitimate outcome, not a
+# failure. Every grammar here commits its generated src/, so if upstream
+# generated with the same CLI version we pin, regeneration reproduces those
+# files byte for byte and there is nothing to commit. Without this, `git
+# commit` exits 1, `set -e` kills the script AFTER build/ is fully and
+# correctly materialized, and the caller sees "nothing to commit, working
+# tree clean" with no "materialize: ok" and no explanation. treebank-rbs is
+# the first grammar whose upstream matches our pin exactly; it will not be
+# the last, and the reconstruction invariant is better served by a grammar
+# that regenerates to itself than by one that does not.
 git -C build add -A
 git -C build -c user.name=treebank -c user.email=treebank@localhost \
-  commit -qm "materialized: upstream $SHA + ${#patches[@]} patches + generate (CLI $CLI_WANT)"
+  commit -q --allow-empty \
+  -m "materialized: upstream $SHA + ${#patches[@]} patches + generate (CLI $CLI_WANT)"
 
 echo "materialize: ok — $GRAMMAR_DIR/build (upstream $SHA, CLI $CLI_WANT)"

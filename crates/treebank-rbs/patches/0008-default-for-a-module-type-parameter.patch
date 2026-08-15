@@ -1,0 +1,53 @@
+diff --git a/grammar.js b/grammar.js
+index d0c9c9a..53010b1 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -332,8 +332,14 @@ module.exports = grammar({
+       optional($.generics_variance),
+       $.type_variable,
+       optional($.generics_bound),
++      // A default, added in RBS 3.7 and used throughout rbs's own core
++      // signatures: `interface _Each[out T, out R = void]`,
++      // `class Thread::Queue[E = untyped]`. The grammar predates it.
++      optional($.generics_default),
+     ),
+ 
++    generics_default: $ => seq("=", $.type),
++
+     generics_bound: $ => seq("<", $.bound_type),
+ 
+     bound_type: $ => choice(
+diff --git a/test/corpus/decls.txt b/test/corpus/decls.txt
+index 324b7f7..e5fd7b4 100644
+--- a/test/corpus/decls.txt
++++ b/test/corpus/decls.txt
+@@ -430,3 +430,29 @@ end
+                 (method_types (method_type body: (method_type_body
+                   (parameters (required_positionals (parameter (type (builtin_type)))))
+                   (type (builtin_type)))))))))))))
++
++================================================================================
++default for a module type parameter
++================================================================================
++
++interface _Each[out T, out R = void]
++  def each: () -> R
++end
++
++--------------------------------------------------------------------------------
++
++(program
++  (decl
++    body: (interface_decl
++      name: (interface_name (interface))
++      type_parameters: (module_type_parameters
++        (module_type_parameter (generics_variance) (type_variable (constant)))
++        (module_type_parameter (generics_variance) (type_variable (constant))
++          (generics_default (type (builtin_type)))))
++      body: (interface_members
++        (interface_member
++          body: (method_member
++            name: (method_name (identifier))
++            (method_types (method_type body: (method_type_body
++              (parameters)
++              (type (class_type (class_name (constant)))))))))))))

@@ -1,0 +1,37 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index c8b4416..e222086 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,22 +1,29 @@
+ [package]
+-name = "tree-sitter-rbs"
+-description = "rbs grammar for the tree-sitter parsing library"
++name = "treebank-grammar-rbs"
++description = "Patched redistribution of joker1007/tree-sitter-rbs: upstream at a pinned commit plus the treebank patch series. Not an upstream release."
+ version = "0.2.2"
+ keywords = ["incremental", "parsing", "rbs"]
+ categories = ["parsing", "text-editors"]
+-repository = "https://github.com/joker1007/tree-sitter-rbs"
++repository = "https://github.com/PowderworksCode/treebank"
++homepage = "https://treebank.dev"
+ edition = "2018"
+ license = "MIT"
+ 
+ build = "bindings/rust/build.rs"
+ include = [
++  "LICENSE",
++  "LOCAL-PATCHES.md",
+   "bindings/rust/*",
+   "grammar.js",
++  "ledger.json",
++  "patches/*",
+   "queries/*",
+   "src/*",
++  "tree-sitter.json",
+ ]
+ 
+ [lib]
++name = "tree_sitter_rbs"
+ path = "bindings/rust/lib.rs"
+ 
+ [dependencies]

@@ -73,6 +73,7 @@ the names in upstream's manifests. They publish as:
 | `crates/treebank-lua` | `treebank-grammar-lua` | `tree_sitter_lua` |
 | `crates/treebank-php` | `treebank-grammar-php` | `tree_sitter_php` |
 | `crates/treebank-python` | `treebank-grammar-python` | `tree_sitter_python` |
+| `crates/treebank-rbs` | `treebank-grammar-rbs` | `tree_sitter_rbs` |
 | `crates/treebank-ruby` | `treebank-grammar-ruby` | `tree_sitter_ruby` |
 | `crates/treebank-rust` | `treebank-grammar-rust` | `tree_sitter_rust` |
 | `crates/treebank-toml` | `treebank-grammar-toml` | `tree_sitter_toml_ng` |

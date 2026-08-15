@@ -1,0 +1,72 @@
+diff --git a/grammar.js b/grammar.js
+index f56ddec..678b344 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -234,14 +234,22 @@ module.exports = grammar({
+       ))
+     ),
+ 
+-    _nestable_decls: $ => choice(
+-      $.class_decl,
+-      $.module_decl,
+-      $.class_alias_decl,
+-      $.module_alias_decl,
+-      $.interface_decl,
+-      $.type_alias_decl,
+-      $.const_decl,
++    // A nested declaration may carry annotations, exactly as a top-level one
++    // does through `decl` and a member does through `member`. Only those two
++    // had them, so `%a{private}` before a nested `interface` — how rbs's own
++    // core signatures mark an internal interface — had nowhere to attach and
++    // failed the whole enclosing module.
++    _nestable_decls: $ => seq(
++      field("annotations", alias(repeat($.annotation), $.annotations)),
++      choice(
++        $.class_decl,
++        $.module_decl,
++        $.class_alias_decl,
++        $.module_alias_decl,
++        $.interface_decl,
++        $.type_alias_decl,
++        $.const_decl,
++      ),
+     ),
+ 
+     class_decl: $ => choice(
+diff --git a/test/corpus/decls.txt b/test/corpus/decls.txt
+index fe69da5..324b7f7 100644
+--- a/test/corpus/decls.txt
++++ b/test/corpus/decls.txt
+@@ -401,3 +401,32 @@ end
+                             (class_type
+                               (class_name
+                                 (constant)))))))))))))))))
++
++================================================================================
++annotations on a nested declaration
++================================================================================
++
++module M
++  %a{private}
++  interface _P
++    def ===: (untyped) -> bool
++  end
++end
++
++--------------------------------------------------------------------------------
++
++(program
++  (decl
++    body: (module_decl
++      name: (module_name (constant))
++      body: (members
++        annotations: (annotations (annotation (annotation_text)))
++        (interface_decl
++          name: (interface_name (interface))
++          body: (interface_members
++            (interface_member
++              body: (method_member
++                name: (method_name (operator))
++                (method_types (method_type body: (method_type_body
++                  (parameters (required_positionals (parameter (type (builtin_type)))))
++                  (type (builtin_type)))))))))))))

@@ -334,5 +334,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-rbs",
+    "dep": "tree-sitter-rbs",
+    "crate": "treebank-grammar-rbs",
+    "cases": [
+      {
+        "label": "rbs",
+        "language": "tree_sitter_rbs::LANGUAGE",
+        "fixture": "patched.rbs",
+        "expect": "Clean"
+      },
+      {
+        "label": "rbs strictness (must reject)",
+        "language": "tree_sitter_rbs::LANGUAGE",
+        "fixture": "must-reject.rbs",
+        "expect": "Error"
+      }
+    ]
   }
 ]

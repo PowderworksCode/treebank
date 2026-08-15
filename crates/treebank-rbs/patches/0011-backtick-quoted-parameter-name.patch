@@ -1,0 +1,48 @@
+diff --git a/grammar.js b/grammar.js
+index 58bccb1..005208d 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -401,7 +401,11 @@ module.exports = grammar({
+     required_keywords: $ => seq(prec.right(1, seq(alias($.var_name, $.keyword), ":")), $.type, optional(seq(",", $.keywords))),
+     optional_keywords: $ => seq(prec.right(1, seq("?", alias($.var_name, $.keyword), ":")), $.type, optional(seq(",", $.keywords))),
+ 
+-    var_name: $ => $.identifier,
++    // A parameter name may be backtick-quoted, which is how RBS writes one
++    // that collides with a keyword: `def add_include: (RDoc::Include
++    // \`include\`) -> RDoc::Include`. Same quoting `method_name` already
++    // accepts for a method called `class` or `include`.
++    var_name: $ => choice($.identifier, /`[^`]+`/),
+ 
+     self_type_binding: $ => seq("[", $.self, ":", $.type, "]"),
+ 
+diff --git a/test/corpus/methods.txt b/test/corpus/methods.txt
+index 9ab6890..537fece 100644
+--- a/test/corpus/methods.txt
++++ b/test/corpus/methods.txt
+@@ -1093,3 +1093,26 @@ end
+           (method_types (method_type body: (method_type_body
+             (parameters (required_positionals (parameter (type (builtin_type)) (var_name (identifier)))))
+             (type (builtin_type)))))))))))
++
++================================================================================
++backtick-quoted parameter name
++================================================================================
++
++class C
++  def add_include: (RDoc::Include `include`) -> void
++end
++
++--------------------------------------------------------------------------------
++
++(program
++  (decl
++    body: (class_decl
++      name: (class_name (constant))
++      body: (members
++        (member body: (method_member
++          name: (method_name (identifier))
++          (method_types (method_type body: (method_type_body
++            (parameters (required_positionals (parameter
++              (type (class_type (class_name (namespace (constant)) (constant))))
++              (var_name))))
++            (type (builtin_type)))))))))))

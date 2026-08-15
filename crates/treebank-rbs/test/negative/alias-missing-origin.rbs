@@ -1,0 +1,3 @@
+class C
+  alias foo
+end

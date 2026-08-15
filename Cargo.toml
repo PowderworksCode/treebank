@@ -14,6 +14,7 @@ exclude = [
     "crates/treebank-go",
     "crates/treebank-zig",
     "crates/treebank-lua",
+    "crates/treebank-rbs",
     "crates/treebank-ruby",
     "crates/treebank-elixir",
     "crates/treebank-toml",
