@@ -353,5 +353,24 @@
         "expect": "Error"
       }
     ]
+  },
+  {
+    "grammar": "treebank-scala",
+    "dep": "tree-sitter-scala",
+    "crate": "treebank-grammar-scala",
+    "cases": [
+      {
+        "label": "scala (Scala 2 + Scala 3 dialect union, patch 0003)",
+        "language": "tree_sitter_scala::LANGUAGE",
+        "fixture": "patched.scala",
+        "expect": "Clean"
+      },
+      {
+        "label": "scala strictness (must reject)",
+        "language": "tree_sitter_scala::LANGUAGE",
+        "fixture": "must-reject.scala",
+        "expect": "Error"
+      }
+    ]
   }
 ]

@@ -1,0 +1,141 @@
+{
+  "grammar": "scala",
+  "upstream": {
+    "git_url": "https://github.com/tree-sitter/tree-sitter-scala",
+    "sha": "b931fcc338390925eb893d70ad070033f5856ccf",
+    "version": "0.26.2"
+  },
+  "upstream_note": "The grammar's official home in the tree-sitter org, pushed the day this was vendored: 196 stars, not archived, v0.26.2 released 2026-08-08. Per ROADMAP.md's host analysis, tree-sitter/ is the only host with zero grammars over a year stale, so no fork evaluation was needed here.",
+  "generate_cli": "0.25.10",
+  "generate_cli_note": "same pin as the other grammars: tree-sitter-cli 0.26.x ships broken Unicode identifier tables (see treebank-rust ledger). Upstream develops against ^0.26.8, so this pin is a real downgrade rather than a formality — verified before vendoring: generate succeeds at 0.25.10 and all 272 of upstream's own corpus tests plus its highlight and tag assertions pass on the parser it produces.",
+  "generate_dirs": [
+    "."
+  ],
+  "generate_deps": null,
+  "oracle": {
+    "tool": "tools/scala-oracle/Check.java (scalameta Parse.parseSource), run with the JDK single-file source launcher over the jars pinned in tools/scala-oracle/jars.lock",
+    "version": "scalameta 4.17.3 on OpenJDK 21.0.11",
+    "dialect": "per file, from the Maven coordinate the file was published under",
+    "flags": [
+      "_3 -> Scala3",
+      "_2.13 -> Scala213",
+      "_2.12 -> Scala212",
+      "_2.11 -> Scala211"
+    ],
+    "authority": "reference",
+    "authority_note": "Scala HAS an implementation everyone appeals to — scalac — so a gap number here is a measurement rather than a measurement-relative-to-us, and `position` would overstate the uncertainty. But scalameta is not scalac, it is the parser Scala's own tooling appeals to in scalac's place, so the two can disagree and a disagreement is a bug in scalameta rather than a matter of opinion. One is known and recorded under `dialect_is_the_whole_problem.known_permissiveness`; it was found by the negative battery, not by the corpus. Stated explicitly rather than left to the field's default, because the default is a claim.",
+    "stage": "parse",
+    "stage_note": "Parse.parseSource() builds a Source tree and stops: no typing, no symbol resolution, no macro expansion. The stage is worth recording even though Scala's stages do not disagree the way yaml's parse-vs-load did — an unresolved import or a missing classpath is not an error here, which is exactly what makes a file judgeable on its own.",
+    "note": "scalameta's parser, the one Metals and scalafmt are built on. It parses without typing, so unresolved imports and a missing classpath are not errors and each file is judged on its own, exactly like JavacTask.parse() for Java. `Parsed.Error` is the verdict `invalid`; anything THROWN out of the parser is an oracle failure and exits non-zero rather than becoming a verdict.",
+    "smoke": {
+      "requires": ["java"],
+      "build": "tools/scala-oracle/fetch-jars.sh",
+      "valid": "tools/scala-oracle/fixtures/com.example__smoke_3-1.0.0/Valid.scala",
+      "invalid": "tools/scala-oracle/fixtures/com.example__smoke_3-1.0.0/Invalid.scala",
+      "note": "Dedicated fixtures rather than the consumer-test pair, for a reason particular to this language: the smoke test hands validate() REPO-relative paths, and a Scala file's dialect comes from the Maven coordinate in its path. tools/consumer-test/fixtures/patched.scala has no coordinate, so the oracle correctly refuses to give it a verdict at all — and patched.scala is deliberately valid under NO single dialect anyway, since it pins the grammar's Scala 2 + Scala 3 union. These two live under a directory named for a coordinate instead, which is how any file outside the corpus declares its dialect. Valid.scala is Scala 3 ONLY, so the smoke test also fails if dialect routing breaks and sends it to a Scala 2 dialect.",
+      "build_note": "fetch-jars.sh verifies the sha256 of all nine pinned jars on every run, so a truncated or republished jar is caught here rather than becoming a verdict."
+    },
+    "dialect_is_the_whole_problem": {
+      "claim": "Scala 2 and Scala 3 are different languages sharing the .scala extension, and scalameta requires the dialect per file. Nothing in a file's path settles it — but the Maven coordinate does, and the corpus directory carries it: cats-core_3 is Scala 3, spark-core_2.11 is Scala 2.11. So the dialect is declared per package by crates/treebank-cli/src/lang/scala.rs and passed to the oracle per file. The oracle never picks a dialect and never falls back to another one.",
+      "measured_2026_08_13": {
+        "corpus": "3,508 files from 32 Maven Central sources jars, all of them library code that compiles",
+        "declared_per_package": "0 of 3508 valid files called invalid",
+        "every_file_as_Scala213": "61 of 3508 (1.7%) called invalid",
+        "every_file_as_Scala212": "62 of 3508 (1.8%) called invalid",
+        "every_file_as_Scala211": "226 of 3508 (6.4%) called invalid",
+        "every_file_as_Scala3": "301 of 3508 (8.6%) called invalid",
+        "both_directions_are_real": "301 files parse under Scala213 but not Scala3 (procedure syntax, symbol literals, do/while — Flink and Akka 2.x); 61 parse under Scala3 but not Scala213 (given, inline, using — tapir, upickle, os-lib)."
+      },
+      "why_not_try_both": "Trying every dialect and keeping any success makes 100% of files valid by construction, which would drive gap_files to zero and report a flawless grammar. The measurement above is the reason it is also unnecessary: the declared dialect misrouted nothing, so the union would buy no coverage and cost the entire meaning of `invalid`.",
+      "known_permissiveness": "scalameta's Scala213 dialect accepts `def f(using ) = 1`, which scalac 2.13 rejects (it reads `using` as a clause in every dialect). Found by the negative battery, not by the corpus. Scala3 rejects it. No corpus file depends on it.",
+      "not_yet_needed": "scalameta also ships Scala213Source3 and Scala212Source3 for 2.x code compiled with -Xsource:3. A cross-built artifact could need one; none in this corpus did, so the four plain dialects are what is declared. If a sweep ever shows false rejects clustered in a -Xsource:3 project, that is the evidence to add them."
+    },
+    "cost_measured_2026_08_13": {
+      "shape": "one long-lived JVM, serial, batch of paths on stdin",
+      "s_per_1000": "4.39-4.64 when 1000 files is the whole batch; 2.74-2.93 over 3508; 1.12-1.40 marginal once the JIT is warm. JVM start alone is 0.23 s, and the single-file source launcher adds ~0.6 s of compile per invocation.",
+      "batch_size_matters": "18.2 s/1000 for the first 100 files — this oracle must be called in batches, not per file.",
+      "load_caveat": "measured with load average 5-20 on 16 shared cores, so these are upper bounds.",
+      "roadmap_comparison": "ROADMAP.md entry #15 quotes no cost for scala. Against its measured peers (python 1.23, lua 1.7, go 1.94, bash 2.4 forked, php 18.3 serial, c++ 1068) this is firmly in the cheap tier; cost is not this language's problem, dialect is."
+    },
+    "why_it_does_not_parallelize": {
+      "finding": "scala.meta.internal.tokenizers.PlatformTokenizerCache.megaCache is a ConcurrentHashMap of Dialect -> *non-concurrent* mutable.Map, so two threads parsing under the same dialect race and throw ConcurrentModificationException.",
+      "measured": "at 4 / 8 / 16 threads, 1 / 8 / 15 valid files flipped to invalid, a different set each run. A false `invalid` records a real grammar gap as corpus noise, so a threaded oracle would quietly agree with us — the failure GRAMMARS.md names.",
+      "process_level_too": "separate JVMs are safe but barely pay: 1/4/8/16 processes over 3508 files ran 11.0 / 8.9 / 12.9 / 18.7 s wall, best case ~1.24x, because per-process JIT warmup is a large fraction of the job. The `-P16` lever that PHP's entry generalizes to 'lua, fish, awk and a dozen more' does not reach a JVM-resident oracle. Hence: serial, one JVM, one worker thread (which exists only for its 512 MB stack).",
+      "cache_is_not_a_leak": "megaCache clears per parse; heap stayed at 6 MB across 10,524 parses."
+    }
+  },
+  "corpus": {
+    "source": "Maven Central, ranked by dependent repositories (ecosyste.ms index of repo1.maven.org), fetched 2026-08-13; each coordinate's -sources.jar at the version maven-metadata.xml calls <release>; .scala files",
+    "files": 7589,
+    "packages": 94,
+    "projects": 60,
+    "ranking_deviates_from_java_and_why": {
+      "measured_2026_08_12": "ecosyste.ms ranks Maven artifacts by how many public repositories depend on them, which for Scala is a decade-lagging metric. The top 4,000 Maven artifacts by that count contain ZERO _3 coordinates. org.apache.spark:spark-core_2.11 scores 8,772; org.typelevel:cats-core_3 scores 2; dev.zio:zio_3 scores 1. Taken literally the list resolves to Spark 2.4.8, Kafka 2.4.1, Akka 2.5.32 and Flink 1.14 — 2016-era Scala 2.11.",
+      "consequence_if_reused_unchanged": "a Scala-3-era grammar would be swept against Scala 2.11 only, and the dialect split this language was queued for would never appear in a single verdict.",
+      "what_lang/scala.rs_does_instead": "the ranking decides WHAT IS POPULAR and the coordinate decides WHICH DIALECT TO SWEEP: rank by dependent repositories, collapse a project's cross-built lines (foo_2.11, foo_2.12, foo_3 are one project), then emit that project's newest published Scala 2 line and its Scala 3 line. Everything else — resolve, sources-jar naming, the fetch driver's skip-on-404 — is java's, unchanged.",
+      "result": "60 projects -> 94 coordinates: 34 _3, 45 _2.13, 14 _2.12, 1 _2.11. The naive ranking produced 0 _3.",
+      "popularity_is_the_project's": "both lines of a cross-built project carry the project's dependent-repository count, so `downloads` here is a per-project figure shared by up to two coordinates, and is a dependency-graph proxy rather than traffic (Maven Central publishes no download counts). Unlike the crates.io and npm rankings in this repo."
+    },
+    "sweep_upstream": {
+      "passed": 7560,
+      "failed": 29
+    },
+    "sweep_patched": {
+      "passed": 7566,
+      "failed": 23
+    },
+    "noise": 0,
+    "noise_note": "Every one of the 29 upstream failures was adjudicated VALID by scalameta under the file's declared dialect — 29 grammar gaps, 0 corpus noise. That is an unusually clean split, and it is what a per-package dialect buys: the same corpus judged entirely as Scala3 would have produced false `invalid` verdicts for 8.6% of files, each of which could have hidden a gap.",
+    "remaining_gaps": 23,
+    "remaining_gaps_note": "23 files in 18 clusters, all adjudicated valid. The largest is `template_body > MISSING ;` (3 files, Flink), then `block > ERROR(=> null_literal)` and `lambda_expression > ERROR(case integer_literal)` (2 each). They are the next patches, not defects in the numbers above."
+  },
+  "patches": [
+    {
+      "id": 1,
+      "title": "treebank redistribution notice",
+      "file": "patches/0001-treebank-redistribution-notice.patch",
+      "files": ["README.md"],
+      "kind": "packaging",
+      "origin": "treebank"
+    },
+    {
+      "id": 2,
+      "title": "treebank crate identity",
+      "file": "patches/0002-treebank-crate-identity.patch",
+      "files": ["Cargo.toml", "Cargo.lock"],
+      "kind": "packaging",
+      "origin": "treebank"
+    },
+    {
+      "id": 3,
+      "title": "Scala 2 `enum` as a term name",
+      "file": "patches/0003-scala-2-enum-as-a-term-name.patch",
+      "files": ["grammar.js", "test/corpus/definitions.txt"],
+      "origin": "treebank",
+      "evidence": {
+        "repro": "def qualifyEnum(enum: Enum[_]): String = enum.getClass.getCanonicalName",
+        "first_seen": {
+          "package": "org.apache.flink:flink-scala_2.12",
+          "version": "1.20.5"
+        },
+        "why": "`enum` is a Scala 3 keyword and an ordinary Scala 2 term name. Upstream already makes this allowance for import paths (`_namespace_path_segment`, commented 'Scala 3 keywords that are valid identifiers in Scala 2 sources'); Scala 2 sources also declare and use such names as terms, which upstream rejected. The patch extends the same allowance to parameter names and to expression position, and declares the one conflict it creates: after `enum`, an identifier is either the enum's name or a Scala 2 postfix application of a value called `enum`, and only the rest of the construct settles it.",
+        "scope": "`enum` only. `export` is its twin in upstream's path rule and was tried, but no corpus file uses it as a term and admitting it in expression position costs a second GLR conflict against `export_declaration` — so it was dropped rather than shipped on symmetry.",
+        "sweep_before": {"passed": 7560, "failed": 29},
+        "sweep_after": {"passed": 7566, "failed": 23},
+        "fixed_files": 6,
+        "grammar_tests": "272 -> 273 upstream corpus tests, all passing"
+      }
+    }
+  ],
+  "next_patch_diagnosed_not_shipped": {
+    "cluster": "template_body > MISSING ; — 3 files in org.apache.flink:flink-streaming-scala_2.12 1.20.5",
+    "looks_like": "Scala 2 procedure syntax being unsupported, which it is NOT: `def f(t: T) {}` and a lone `def f(t: T)` as a template's last member both parse today.",
+    "actually_is": "a bare Scala 2 declaration loses its inferred semicolon when another member follows. `trait A { def f(t: Throwable); val x = 1 }` parses; the same source with a newline instead of the `;` does not, and `def f: Int` (no parameter list) is fine either way. `_function_constructor` admits `optional($._automatic_semicolon)` before a FURTHER parameter list so that multi-line parameter lists work, and its `prec.right` makes the parser shift that semicolon into the repeat rather than reduce the declaration — after which `val`/`def` cannot follow and the file errors.",
+    "why_it_is_not_in_this_series": "the obvious fixes do not hold. Declaring [$._function_constructor] is reported as an unnecessary conflict, because prec.right has already resolved it; trading that prec.right for prec.dynamic plus [$.function_declaration, $._function_constructor] moves the failure to `def this` and cascades. It needs a considered change to how the parameter-list repeat ends, not a one-line conflict, and shipping a rushed one risks the multi-line parameter lists the repeat exists for. Written down here so the next agent starts from the mechanism rather than from the symptom."
+  },
+  "negative_corpus": {
+    "files": 14,
+    "note": "Every file is rejected by scalameta under BOTH Scala213 and Scala3, not just one — which matters here more than for a single-dialect language. tree-sitter-scala is ONE grammar for TWO languages, so the grammar is deliberately the union of Scala 2 and Scala 3 while the oracle is per file. A file that only one dialect rejects is therefore not a strictness test at all: the grammar is supposed to accept it. `def f(using ) = 1` was cut from the battery for exactly that reason."
+  },
+  "docs_note": "Scala 2 and Scala 3 both parse: one grammar, dialect declared per package"
+}
