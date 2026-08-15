@@ -192,3 +192,23 @@ tests('Compute::VcloudDirector | media' ['attributes']) do
 
 `'a' 'b'` still chains and `puts ['a']` still takes an array argument, both
 asserted in the corpus test.
+
+## 0013 — rescue clauses are ordered
+
+Found by measuring accepts-invalid, not by the sweep — the sweep is exhausted
+for this grammar (0 gaps over 44,292 files) and can only ever find
+rejects-valid.
+
+`_body_statement` was `repeat(choice(rescue, else, ensure))`, which says
+nothing about order or count, so four shapes CRuby rejects parsed clean:
+`else` with no `rescue` (in a `begin` and in a method body alike), `ensure`
+before `rescue`, and `else` before `rescue`. Ruby's `bodystmt` is
+`stmts? rescue* (else stmts)? ensure?`, and "else without rescue is useless"
+is a SyntaxError rather than a warning.
+
+All four are now in `test/negative`. The sweep is unchanged at 44,238 with 0
+gaps, so the tightening costs no real-world file.
+
+It also required editing an **upstream** corpus test. `begin with else`
+asserted that `begin / foo / else / bar / end` parses — which CRuby rejects —
+so the test encoded the bug; it now uses the form that includes a `rescue`.

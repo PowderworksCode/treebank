@@ -1,0 +1,83 @@
+diff --git a/grammar.js b/grammar.js
+index e1e2c5c..91e50d1 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -658,9 +658,24 @@ module.exports = grammar({
+ 
+     body_statement: $ => $._body_statement,
+ 
++    // Ruby's `bodystmt` is `stmts? rescue* (else stmts)? ensure?` — the
++    // clauses are ORDERED, and `else` requires at least one `rescue` before
++    // it. `repeat(choice(...))` said nothing about order or count, so four
++    // shapes CRuby rejects parsed clean: `else` with no `rescue` (in a
++    // `begin` and in a method body alike), `ensure` before `rescue`, and
++    // `else` before `rescue`.
++    //
++    // "else without rescue is useless" is a SyntaxError in CRuby, not a
++    // warning, so this is the accepts-invalid direction rather than a
++    // stylistic nicety.
+     _body_statement: $ => choice(
+-      seq($._statements, repeat(choice($.rescue, $.else, $.ensure))),
+-      seq(optional($._statements), repeat1(choice($.rescue, $.else, $.ensure))),
++      seq($._statements, optional($._rescue_clauses)),
++      $._rescue_clauses,
++    ),
++
++    _rescue_clauses: $ => choice(
++      seq(repeat1($.rescue), optional($.else), optional($.ensure)),
++      $.ensure,
+     ),
+ 
+     // Method calls without parentheses (aka "command calls") are only allowed
+diff --git a/test/corpus/control-flow.txt b/test/corpus/control-flow.txt
+index ec65f2b..cd1e29b 100644
+--- a/test/corpus/control-flow.txt
++++ b/test/corpus/control-flow.txt
+@@ -335,6 +335,8 @@ begin with else
+ 
+ begin
+ 	foo
++rescue
++	baz
+ else
+   bar
+ end
+@@ -343,6 +345,7 @@ end
+ 
+ (program
+   (begin (identifier)
++    (rescue body: (then (identifier)))
+     (else (identifier))))
+ 
+ ===============
+@@ -722,4 +725,28 @@ end
+       (pattern
+         (identifier))
+       (then
+-        (identifier)))))
+\ No newline at end of file
++        (identifier)))))
++===============
++rescue clauses are ordered
++===============
++
++begin
++  a
++rescue A
++  b
++rescue B
++  c
++else
++  d
++ensure
++  e
++end
++
++---
++
++(program
++  (begin (identifier)
++    (rescue exceptions: (exceptions (constant)) body: (then (identifier)))
++    (rescue exceptions: (exceptions (constant)) body: (then (identifier)))
++    (else (identifier))
++    (ensure (identifier))))
