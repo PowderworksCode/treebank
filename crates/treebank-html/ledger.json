@@ -74,11 +74,11 @@
     "fetch_limit": 500,
     "fetch_limit_note": "The daily job's default is 100, and this grammar's numbers are from 500 requested (471 resolved, 132,492 files). check.sh takes PASS_BEFORE from corpus.sweep_patched.passed, which is a pass COUNT and only means anything against the corpus it was counted on \u2014 so at limit 100 the baseline is unreachable however many gaps get fixed, and a fix agent's only route to green is to overwrite corpus.sweep_patched with the smaller corpus's numbers. That is what happened to bash on 2026-08-12 (99 packages / 9,094 files against a 25,662-file baseline). The size therefore lives next to the numbers it produced.",
     "sweep_patched": {
-      "passed": 131378,
-      "failed": 1114,
-      "gap_files": 119,
-      "noise_files": 995,
-      "note": "with patches 0003-0007. 99.16% of files parse, and the gap queue is 119 files \u2014 down from 9,707 at upstream."
+      "passed": 131471,
+      "failed": 1021,
+      "gap_files": 33,
+      "noise_files": 988,
+      "note": "with patches 0003-0009. 99.23% of files parse; the gap queue is 33 files, down from 9,707 at upstream."
     },
     "noise_share_note": "1,051 of 3,874 failures (27%) are noise on this corpus, against the oracle's 8.6% base rejection rate on the earlier sample \u2014 so the oracle IS discriminating rather than rejecting at random, which is the property the whole design was chosen for."
   },
@@ -124,7 +124,8 @@
       }
     ],
     "how_to_fix_one": "Each needs a corpus test in build/test/corpus/, before/after sweep numbers, and a check that the fix does not make the grammar reject anything in tools/consumer-test/fixtures/patched.html \u2014 on a recovery-by-spec language, a strictness patch that overshoots turns valid pages into gaps, which is the more expensive mistake.",
-    "patch_side_effect": "Each loosening patch moved some files from the noise column into passing, because a file can carry the construct being fixed AND malformed tag syntax elsewhere, so a more forgiving grammar reaches further into it: 12 for 0003, 38 for 0004, 55 for 0005, 1 for 0006, and ZERO for 0007. Cumulatively noise_files went 1,101 -> 995, a 106-file increase in accepts-invalid over the whole series, recorded rather than netted out. test/negative/ was re-run after every patch and all 20 files still reject."
+    "patch_side_effect": "Each loosening patch moved some files from the noise column into passing, because a file can carry the construct being fixed AND malformed tag syntax elsewhere, so a more forgiving grammar reaches further into it: 12 for 0003, 38 for 0004, 55 for 0005, 1 for 0006, and ZERO for 0007. Cumulatively noise_files went 1,101 -> 995, a 106-file increase in accepts-invalid over the whole series, recorded rather than netted out. test/negative/ was re-run after every patch and all 20 files still reject.",
+    "full_corpus_measurement": "Measured on the whole corpus for the first time (previously only on the 6,015-file sample): the oracle calls 2,383 of 132,492 files malformed (1.8%); the grammar rejects 988 of those (the noise column) and ACCEPTS 1,398. Broken down by html5ever error class, files carrying each: invalid byte sequence 1,148, bad char in AfterAttributeValueQuoted 187, CommentEndBang 42, TagOpen 16, CommentLessThanSignBangDashDash 9, BeforeAttributeName 9, BeforeDoctypeName 2, EndTagOpen 1. So 82% of the accepts-invalid queue is the non-UTF-8 class, which is a tree-sitter core limitation rather than something grammar.js can express \u2014 the lexer takes the bytes as text and there is nothing to object to, the same shape as treebank-lua's embedded-NUL finding. The ACTIONABLE queue is therefore 250 files, headed by the 187 files carrying `<input placeholder=\"Username\"require>`, a missing space between a quoted attribute value and the next attribute name \u2014 which is the class the negative battery found on day one, from a real Bulma template, before any corpus existed. Fixing it means requiring whitespace between attributes, which a tree-sitter grammar cannot express directly because `extras` skips whitespace invisibly; it needs an external token, and it is a STRICTNESS change, where overshooting turns valid pages into gaps."
   },
   "patches": [
     {
@@ -318,11 +319,78 @@
         },
         "evidence_note": "39 files, the smallest yield of the series and the only one that cost NOTHING: noise_files is unchanged at 995, so unlike 0003/0004/0005 this patch moved no file from the noise column into passing. It also fixes two classes that are simply correct behaviour rather than tolerance \u2014 <d\u00d8dd> (a non-ASCII element name) and the wpt fixture asserting that <x<> creates an element named 'x<'."
       }
+    },
+    {
+      "id": 8,
+      "title": "an equals sign in an unquoted attribute value",
+      "file": "patches/0008-an-equals-sign-in-an-unquoted-attribute-value.patch",
+      "files": [
+        "grammar.js",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; sweep",
+      "evidence": {
+        "repro": "<link href=stylesheet.py?x&delay=2>\n",
+        "diagnosis": "attribute_value was /[^<>\"'=\\\\s]+/ \u2014 it excluded `=`. An unquoted attribute value ends at whitespace or `>` and at nothing else, so a query string with a second parameter (`?x&delay=2`) or a base64 data URI (which ends in `=` padding) split mid-value and the start tag went to ERROR. The spec does name `=` here as the unexpected-character-in-unquoted-attribute-value parse error, but the same clause says to append it to the value and carry on, and html5ever reports nothing for it \u2014 so the oracle calls these files valid and the grammar was alone in refusing them. `\"` and `'` stay excluded so the quoted_attribute_value alternatives still win.",
+        "first_seen": {
+          "package": "web-platform-tests/wpt",
+          "version": "1a788d18840c",
+          "path": "html/semantics/document-metadata/interactions-of-styling-and-scripting/conditionally-block-rendering-on-link-media-attr.html:8"
+        },
+        "sweep_before": {
+          "passed": 131378,
+          "failed": 1114,
+          "gap_files": 119,
+          "noise_files": 995
+        },
+        "sweep_after": {
+          "passed": 131458,
+          "failed": 1034,
+          "gap_files": 46,
+          "noise_files": 988
+        },
+        "evidence_note": "80 files, and 73 of them off the gap queue \u2014 the largest single cluster left after #67, at 61 of its 119 files. 7 files moved from noise to passing."
+      }
+    },
+    {
+      "id": 9,
+      "title": "a raw text end tag needs a terminator",
+      "file": "patches/0009-a-raw-text-end-tag-needs-a-terminator.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; sweep",
+      "evidence": {
+        "repro": "<script>var s = \"</script\" + \"><b>x</b>\";</script>\n",
+        "diagnosis": "scan_raw_text broke out of the raw-text loop the moment it matched `</SCRIPT`, without looking at what came next. The spec's script-data-end-tag-name state leaves script data only on whitespace, `/` or `>` and treats anything else as more script data, so the standard way of writing a script tag inside a JavaScript string closed the element in the middle of a string literal and put the rest of the document in ERROR. The fix advances one character past the name and only breaks on a real terminator; otherwise the matched text is raw text like anything else.",
+        "first_seen": {
+          "package": "web-platform-tests/wpt",
+          "version": "1a788d18840c",
+          "path": "html/webappapis/dynamic-markup-insertion/document-write/iframe_003.html:5"
+        },
+        "sweep_before": {
+          "passed": 131458,
+          "failed": 1034,
+          "gap_files": 46,
+          "noise_files": 988
+        },
+        "sweep_after": {
+          "passed": 131471,
+          "failed": 1021,
+          "gap_files": 33,
+          "noise_files": 988
+        },
+        "evidence_note": "13 files, all of them gap files, and zero cost: noise_files is unchanged. wpt keeps a whole directory of these under document-write/."
+      }
     }
   ],
   "docs_note": "Oracle judges well-formed markup, not conformance",
-  "remaining_gaps_note": "119 gap files remain, and there is no head to the queue any more: the largest cluster is 67 occurrences across 61 valid files and the rest are single digits. The clusters that dominated earlier sweeps are gone \u2014 elements unclosed at EOF (0005), stray end tags at document level (0006), and unusual tag names (0007). What is left is a long tail, much of it web-platform-tests fixtures written to exercise parser edge cases rather than pages anyone serves: a <p class=\"x\"Close more deals> with no space before the text, raw text inside <script>/<style> containing what looks like a tag, and quoting oddities in end tags. Each is worth a few files. The next agent should expect diminishing returns and should NOT reach for a fix that loosens `text` any further without watching noise_files, which is the column that pays for it.",
+  "remaining_gaps_note": "33 gap files, and the queue is now genuinely exhausted rather than merely short: 21 of the 33 are web-platform-tests fixtures written to exercise parser edge cases, and no cause accounts for more than a handful. The one class that IS coherent and worth naming: tree-sitter-html treats only <script> and <style> as raw text, while HTML5 also has RCDATA (<textarea>, <title>) and RAWTEXT (<xmp>, <iframe>, <noembed>, <noframes>, <noscript>) elements whose content is text rather than markup. Verified minimal: `<textarea>a < 5</textarea>` and `<title>a < b</title>` are ERRORs where `<script>a < 5</script>` parses. That is deliberately not attempted here, and the reason is a change of RISK TIER rather than of effort \u2014 every fix in this series so far has been a condition or a character class, while this one needs new external tokens and new grammar rules for each element, on a grammar where the external scanner already decides raw text, implicit end tags and erroneous end tags between them. It should be its own change with its own sweep.",
   "corrections": {
-    "spanclass_was_not_noise": "The ledger that landed with #57 said of the 66-file <spanclass=...> cluster that it 'is not a gap at all on inspection \u2014 <spanclass=...> is a missing space in a real page, which the grammar is right to reject and the oracle also calls malformed'. Both halves were wrong, and patch 0007 is the correction. HTML5's tag-name state ends only at whitespace, '/' or '>', so <spanclass=language-selector__label-text> is a well-formed element whose NAME is 'spanclass=language-selector__label-text'; html5ever reports no error for it and calls the file valid. It was a real gap, the grammar was wrong to reject it, and it was misread from the cluster signature ('start_tag > ERROR(= ERROR)') without running the oracle on the file. Recorded because reading a verdict off a signature instead of asking the oracle is the specific mistake worth not repeating."
+    "spanclass_was_not_noise": "The ledger that landed with #57 said of the 66-file <spanclass=...> cluster that it 'is not a gap at all on inspection \u2014 <spanclass=...> is a missing space in a real page, which the grammar is right to reject and the oracle also calls malformed'. Both halves were wrong, and patch 0007 is the correction. HTML5's tag-name state ends only at whitespace, '/' or '>', so <spanclass=language-selector__label-text> is a well-formed element whose NAME is 'spanclass=language-selector__label-text'; html5ever reports no error for it and calls the file valid. It was a real gap, the grammar was wrong to reject it, and it was misread from the cluster signature ('start_tag > ERROR(= ERROR)') without running the oracle on the file. Recorded because reading a verdict off a signature instead of asking the oracle is the specific mistake worth not repeating.",
+    "non_utf8_file_count": "The commit message of 'sweep: count snippet lines in bytes, not in the lossy string' says '26 of its 132,492 files are not UTF-8'. That number was never measured \u2014 it was written while reasoning about why the panic was rare. Measured since: 1,185 files (0.89%), 45x the claim. The fix itself is unaffected and correct; the number in that message is not."
   }
 }

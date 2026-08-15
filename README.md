@@ -14,7 +14,7 @@ grammars:
 - `crates/treebank-csharp` — tree-sitter-c-sharp 0.23.5, 1 grammar patch
 - `crates/treebank-elixir` — tree-sitter-elixir 0.3.5, 1 grammar patch
 - `crates/treebank-go` — tree-sitter-go 0.25.0, 1 grammar patch
-- `crates/treebank-html` — tree-sitter-html 0.23.2 (Oracle judges well-formed markup, not conformance), 5 grammar patches
+- `crates/treebank-html` — tree-sitter-html 0.23.2 (Oracle judges well-formed markup, not conformance), 7 grammar patches
 - `crates/treebank-java` — tree-sitter-java 0.23.5, 2 grammar patches
 - `crates/treebank-javascript` — tree-sitter-javascript 0.25.0 (JSX included), 2 grammar patches
 - `crates/treebank-json` — tree-sitter-json 0.24.8, 1 grammar patch
