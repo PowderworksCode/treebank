@@ -1,0 +1,40 @@
+diff --git a/README.md b/README.md
+index 991b4f1..626a270 100644
+--- a/README.md
++++ b/README.md
+@@ -1,26 +1,10 @@
+-# tree-sitter-rbs
++> [!WARNING]
++> **This is an automatically generated, patched redistribution of
++> [tree-sitter-rbs](https://github.com/joker1007/tree-sitter-rbs) — it is not
++> the upstream project.** It is produced by
++> [treebank](https://treebank.dev), which patches the upstream grammar at a
++> pinned commit so that it parses 100% of a real-world code corpus.
++> `ledger.json` records the pinned upstream commit and every patch with
++> evidence; `LOCAL-PATCHES.md` describes the patches. Report problems with
++> the patches to treebank, not to the upstream maintainers.
+ 
+-[![Build/test](https://github.com/joker1007/tree-sitter-rbs/actions/workflows/ci.yml/badge.svg)](https://github.com/joker1007/tree-sitter-rbs/actions/workflows/ci.yml)
+-
+-[rbs](https://github.com/ruby/rbs) grammar for [tree-sitter](https://github.com/tree-sitter/tree-sitter).
+-
+-syntax reference is https://github.com/ruby/rbs/blob/master/docs/syntax.md
+-
+-## Use this in Neovim
+-
+-this parser is supported in nvim-treesitter. (https://github.com/nvim-treesitter/nvim-treesitter/pull/5745)
+-
+-Please run `:TSInstall rbs`
+-
+-## If you want to use specific version in Neovim
+-
+-Please write it to neovim config.
+-
+-```lua
+-vim.api.nvim_create_autocmd("User", {
+-  pattern = "TSUpdate",
+-  callback = function()
+-    require("nvim-treesitter.parsers").rbs.install_info.revision = "<commit sha1>"
+-  end,
+-})
+-```

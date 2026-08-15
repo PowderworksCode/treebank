@@ -1,0 +1,3 @@
+class C
+  attr_reader x
+end

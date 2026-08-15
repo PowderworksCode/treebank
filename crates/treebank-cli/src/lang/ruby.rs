@@ -191,7 +191,7 @@ impl Lang for Ruby {
 /// KIND of metric as crates.io, npm and PyPI: traffic, not Java's
 /// dependent-repos proxy, even though it arrives through the same
 /// ecosyste.ms API that java uses.
-fn rank_rubygems(k: usize) -> Result<Vec<RankedCrate>> {
+pub(super) fn rank_rubygems(k: usize) -> Result<Vec<RankedCrate>> {
     const PER_PAGE: usize = 100;
     let mut ranked = Vec::new();
     let mut page = 1;

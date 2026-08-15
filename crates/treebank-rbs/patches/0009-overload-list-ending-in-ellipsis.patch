@@ -1,0 +1,48 @@
+diff --git a/grammar.js b/grammar.js
+index 2b2187a..be46444 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -442,7 +442,12 @@ module.exports = grammar({
+       field("body", $.method_type_body)),
+ 
+     method_types: $ => choice(
+-      sep1($.method_type, "|"),
++      // `...` may TERMINATE an overload list as well as replace it: RBS uses
++      // it for "this method has further overloads not written here", which is
++      // how aws-sdk's hand-written customizations extend generated signatures
++      // and how bigdecimal documents its numeric coercions. Only the
++      // replacing form was accepted.
++      seq(sep1($.method_type, "|"), optional(seq("|", "..."))),
+       "..."
+     ),
+ 
+diff --git a/test/corpus/methods.txt b/test/corpus/methods.txt
+index 575a4a8..9ab6890 100644
+--- a/test/corpus/methods.txt
++++ b/test/corpus/methods.txt
+@@ -1071,3 +1071,25 @@ end
+             body: (method_type_body
+               (parameters (required_positionals (parameter (type (class_type (class_name (constant)))) (var_name (identifier)))))
+               (type (class_type (class_name (constant)))))))))))))
++
++================================================================================
++overload list ending in ...
++================================================================================
++
++class C
++  def copy_from: (untyped source) -> void
++               | ...
++end
++
++--------------------------------------------------------------------------------
++
++(program
++  (decl
++    body: (class_decl
++      name: (class_name (constant))
++      body: (members
++        (member body: (method_member
++          name: (method_name (identifier))
++          (method_types (method_type body: (method_type_body
++            (parameters (required_positionals (parameter (type (builtin_type)) (var_name (identifier)))))
++            (type (builtin_type)))))))))))

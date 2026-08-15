@@ -1,0 +1,19 @@
+# Every construct here needs a treebank patch; upstream tree-sitter-rbs
+# rejects this file. One per patch, so a regression names itself.
+%a{private}
+module Fixture[unchecked out E, out R = void]   # 0004 annotations on a nested decl, 0008 type param default
+  @_cache: Integer?                             # 0010 ivar name beginning with underscore
+
+  ERROR_CODE: -32700                            # 0006 signed integer literal type
+  NAMES: Array[String,]                         # 0005 trailing comma in type arguments
+
+  def save!: () -> void                         # 0003 method name ending in bang
+  def !=: (untyped other) -> bool               # 0003 the != operator
+  alias filter! select!                         # 0003 bang names on both sides of an alias
+
+  def pos=: [U < _ToInt] (U pos) -> U           # 0007 bounded type parameter on a method type
+  def add_include: (RDoc::Include `include`) -> void  # 0011 backtick-quoted parameter name
+
+  def copy_from: (untyped source) -> void       # 0009 overload list ending in ...
+               | ...
+end

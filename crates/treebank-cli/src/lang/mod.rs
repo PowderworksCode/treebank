@@ -19,6 +19,7 @@ mod lua;
 mod npm;
 mod php;
 mod python;
+mod rbs;
 mod ruby;
 mod rust;
 mod stdin_oracle;
@@ -165,6 +166,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static ZIG: zig::Zig = zig::Zig;
     static LUA: lua::Lua = lua::Lua;
     static RUBY: ruby::Ruby = ruby::Ruby;
+    static RBS: rbs::Rbs = rbs::Rbs;
     static ELIXIR: elixir::Elixir = elixir::Elixir;
     static YAML: yaml::Yaml = yaml::Yaml;
     static TOML: toml::Toml = toml::Toml;
@@ -184,6 +186,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Zig => &ZIG,
         LangName::Lua => &LUA,
         LangName::Ruby => &RUBY,
+        LangName::Rbs => &RBS,
         LangName::Elixir => &ELIXIR,
         LangName::Yaml => &YAML,
         LangName::Toml => &TOML,
