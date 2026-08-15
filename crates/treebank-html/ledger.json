@@ -72,12 +72,11 @@
     "repositories_note": "500 requested; 471 resolved. All 29 skips are the 250 MB artifact cap and every one is logged by the fetch driver \u2014 course-note and textbook repositories whose bulk is PDFs and images.",
     "files_measured_note": "132,492 .html files after classify() (extension, minus node_modules/ and vendor/) and admit() (template markers). 1.9 GB extracted.",
     "sweep_patched": {
-      "passed": 128618,
-      "failed": 3874,
-      "gap_files": 2823,
-      "noise_files": 1051,
-      "clusters": 162,
-      "note": "with patches 0003 and 0004. 97.1% of files parse, and the gap queue is 71% smaller than it was."
+      "passed": 131378,
+      "failed": 1114,
+      "gap_files": 119,
+      "noise_files": 995,
+      "note": "with patches 0003-0007. 99.16% of files parse, and the gap queue is 119 files \u2014 down from 9,707 at upstream."
     },
     "noise_share_note": "1,051 of 3,874 failures (27%) are noise on this corpus, against the oracle's 8.6% base rejection rate on the earlier sample \u2014 so the oracle IS discriminating rather than rejecting at random, which is the property the whole design was chosen for."
   },
@@ -123,7 +122,7 @@
       }
     ],
     "how_to_fix_one": "Each needs a corpus test in build/test/corpus/, before/after sweep numbers, and a check that the fix does not make the grammar reject anything in tools/consumer-test/fixtures/patched.html \u2014 on a recovery-by-spec language, a strictness patch that overshoots turns valid pages into gaps, which is the more expensive mistake.",
-    "patch_side_effect": "Both grammar patches moved a handful of files from the noise column into passing \u2014 12 for 0003 and 38 for 0004 \u2014 because a file can carry a bare `&` or `>` AND malformed tag syntax elsewhere, and a looser `text` rule lets the recovery reach further. That is a real (small) increase in accepts-invalid and it is recorded rather than netted out. The guard against it is test/negative/, which was re-run after each patch: all 20 files still reject."
+    "patch_side_effect": "Each loosening patch moved some files from the noise column into passing, because a file can carry the construct being fixed AND malformed tag syntax elsewhere, so a more forgiving grammar reaches further into it: 12 for 0003, 38 for 0004, 55 for 0005, 1 for 0006, and ZERO for 0007. Cumulatively noise_files went 1,101 -> 995, a 106-file increase in accepts-invalid over the whole series, recorded rather than netted out. test/negative/ was re-run after every patch and all 20 files still reject."
   },
   "patches": [
     {
@@ -217,8 +216,111 @@
         },
         "evidence_note": "1,183 more files, measured with patch 0003 already applied. Almost all of them display code \u2014 `SELECT ... WHERE o.created_at > NOW()`, `(job) => utils_1.createJob(...)` \u2014 inside <pre>, <code> or a paragraph, where an author had no reason to write &gt;. 38 files moved from noise to passing, a larger side effect than 0003's and the reason the negative corpus was re-run rather than assumed: all 20 files still reject, and tools/consumer-test/fixtures/must-reject.html still rejects while patched.html still parses clean."
       }
+    },
+    {
+      "id": 5,
+      "title": "end of document closes every open element",
+      "file": "patches/0005-end-of-document-closes-every-open-element.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; the head of the gap queue the first sweep left behind, and the class the previous ledger recorded as deliberately not attempted. It turned out to be one condition, not a rewrite of the end-tag logic.",
+      "evidence": {
+        "repro": "<div><p>hello\n",
+        "diagnosis": "scanner.c's scan_implicit_end_tag emitted an implicit end tag at EOF only when the innermost open element was html, head or body: `(parent->type == HTML || parent->type == HEAD || parent->type == BODY) && lexer->eof(lexer)`. The spec's 'stop parsing' step pops the WHOLE stack of open elements, so a page that simply ends with a <div> open \u2014 which every browser renders \u2014 was an ERROR. Dropping the three-way type test to a bare lexer->eof(lexer) is the entire change.",
+        "first_seen": {
+          "package": "htr-tech/zphisher",
+          "version": "65b99bccaa74",
+          "path": ".sites/dropbox/login.html (48 <div>, 47 </div>, no </html>)"
+        },
+        "sweep_before": {
+          "passed": 128618,
+          "failed": 3874,
+          "gap_files": 2823,
+          "noise_files": 1051,
+          "clusters": 162
+        },
+        "sweep_after": {
+          "passed": 130444,
+          "failed": 2048,
+          "gap_files": 1052,
+          "noise_files": 996
+        },
+        "evidence_note": "1,826 more files; the gap queue falls 2,823 -> 1,052. 55 files moved from noise to passing, the largest such side effect of any patch here and the reason the negative corpus was re-run rather than assumed: all 20 still reject, because they are truncated INSIDE a tag, comment or doctype, which is a start_tag failure rather than an unclosed element."
+      }
+    },
+    {
+      "id": 6,
+      "title": "a stray end tag the scanner never ran for",
+      "file": "patches/0006-a-stray-end-tag-the-scanner-never-ran-for.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; sweep. Uncovered once patch 0005 cleared the cluster above it.",
+      "evidence": {
+        "repro": "<p>x</p></head>\n",
+        "diagnosis": "The grammar has an `erroneous_end_tag` rule for a `</x>` that closes nothing, and scan_end_tag_name already emits ERRONEOUS_END_TAG_NAME when the name does not match the top of the tag stack. But the scanner's dispatch gated that whole branch on `valid_symbols[START_TAG_NAME] || valid_symbols[END_TAG_NAME]` and never asked about ERRONEOUS_END_TAG_NAME \u2014 so in the one situation the rule exists for, document level with an empty tag stack where END_TAG_NAME is NOT valid because there is nothing to close, the scanner declined to run at all. The same stray tag mid-document parsed fine, which is why it survived this long.",
+        "first_seen": {
+          "package": "google/styleguide",
+          "version": "1809c769de31",
+          "path": "xmlstyle.html:346 (a </head> for a <head> that is never opened)"
+        },
+        "sweep_before": {
+          "passed": 130444,
+          "failed": 2048,
+          "gap_files": 1052,
+          "noise_files": 996
+        },
+        "sweep_after": {
+          "passed": 131339,
+          "failed": 1153,
+          "gap_files": 158,
+          "noise_files": 995
+        },
+        "evidence_note": "895 more files and the gap queue falls 1,052 -> 158. One file moved from noise to passing. This is a one-line condition and it is the largest single fix per character in the series."
+      }
+    },
+    {
+      "id": 7,
+      "title": "tag names end only at whitespace, a slash or a greater-than",
+      "file": "patches/0007-tag-names-end-only-at-whitespace-slash-or-gt.patch",
+      "files": [
+        "src/scanner.c",
+        "test/corpus/main.txt"
+      ],
+      "kind": "grammar",
+      "origin": "treebank; sweep",
+      "evidence": {
+        "repro": "<spanclass=language-selector__label-text>Language</spanclass=language-selector__label-text>\n",
+        "diagnosis": "scan_tag_name accepted alnum, '-' and ':' only. The spec's tag-name state ends on exactly three characters \u2014 whitespace, '/' and '>' \u2014 and everything else is part of the name, including '=', '.', non-ASCII and even '<'. The start is separately restricted to ASCII alpha by the tag-open state, which is what keeps `<?xml ?>`, `<3` and `< div` from being tags, so that restriction is kept explicitly.",
+        "first_seen": {
+          "package": "htr-tech/zphisher",
+          "version": "65b99bccaa74",
+          "path": ".sites/linkedin/login.html:167"
+        },
+        "sweep_before": {
+          "passed": 131339,
+          "failed": 1153,
+          "gap_files": 158,
+          "noise_files": 995
+        },
+        "sweep_after": {
+          "passed": 131378,
+          "failed": 1114,
+          "gap_files": 119,
+          "noise_files": 995
+        },
+        "evidence_note": "39 files, the smallest yield of the series and the only one that cost NOTHING: noise_files is unchanged at 995, so unlike 0003/0004/0005 this patch moved no file from the noise column into passing. It also fixes two classes that are simply correct behaviour rather than tolerance \u2014 <d\u00d8dd> (a non-ASCII element name) and the wpt fixture asserting that <x<> creates an element named 'x<'."
+      }
     }
   ],
   "docs_note": "Oracle judges well-formed markup, not conformance",
-  "remaining_gaps_note": "2,823 gap files remain and the queue has a clear head. The largest cluster by far (955 files) is a single class: an element left UNCLOSED at end of document. tree-sitter-html closes a tag implicitly only through its external _implicit_end_tag, which fires for the tags HTML says are optional-close; a page that simply stops with <div> and <html> open \u2014 which the HTML5 spec closes at EOF and every browser renders \u2014 goes to ERROR. The example is htr-tech/zphisher .sites/dropbox/login.html, which has 48 <div> and 47 </div> and no </html> at all. It is a real gap and deliberately NOT attempted here: making EOF close arbitrary open elements is a change to the scanner's end-tag logic that touches every file in the corpus, and on a recovery-by-spec language a strictness change that overshoots turns valid pages into gaps. The next four clusters are a stray </head> or </body> after the section closed implicitly (798), <pre> content (231), and two more unclosed-element shapes (114 and 87). One at 66 files is not a gap at all on inspection \u2014 <spanclass=...> is a missing space in a real page, which the grammar is right to reject and the oracle also calls malformed; it is counted here because its sibling errors in the same file are what the cluster keyed on."
+  "remaining_gaps_note": "119 gap files remain, and there is no head to the queue any more: the largest cluster is 67 occurrences across 61 valid files and the rest are single digits. The clusters that dominated earlier sweeps are gone \u2014 elements unclosed at EOF (0005), stray end tags at document level (0006), and unusual tag names (0007). What is left is a long tail, much of it web-platform-tests fixtures written to exercise parser edge cases rather than pages anyone serves: a <p class=\"x\"Close more deals> with no space before the text, raw text inside <script>/<style> containing what looks like a tag, and quoting oddities in end tags. Each is worth a few files. The next agent should expect diminishing returns and should NOT reach for a fix that loosens `text` any further without watching noise_files, which is the column that pays for it.",
+  "corrections": {
+    "spanclass_was_not_noise": "The ledger that landed with #57 said of the 66-file <spanclass=...> cluster that it 'is not a gap at all on inspection \u2014 <spanclass=...> is a missing space in a real page, which the grammar is right to reject and the oracle also calls malformed'. Both halves were wrong, and patch 0007 is the correction. HTML5's tag-name state ends only at whitespace, '/' or '>', so <spanclass=language-selector__label-text> is a well-formed element whose NAME is 'spanclass=language-selector__label-text'; html5ever reports no error for it and calls the file valid. It was a real gap, the grammar was wrong to reject it, and it was misread from the cluster signature ('start_tag > ERROR(= ERROR)') without running the oracle on the file. Recorded because reading a verdict off a signature instead of asking the oracle is the specific mistake worth not repeating."
+  }
 }
