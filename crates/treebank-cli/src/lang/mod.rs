@@ -14,6 +14,7 @@ mod go;
 mod html;
 mod java;
 mod javascript;
+mod json;
 mod lua;
 mod npm;
 mod php;
@@ -168,6 +169,7 @@ pub fn get(name: LangName) -> &'static dyn Lang {
     static YAML: yaml::Yaml = yaml::Yaml;
     static TOML: toml::Toml = toml::Toml;
     static HTML: html::Html = html::Html;
+    static JSON: json::Json = json::Json;
     match name {
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
@@ -186,5 +188,6 @@ pub fn get(name: LangName) -> &'static dyn Lang {
         LangName::Yaml => &YAML,
         LangName::Toml => &TOML,
         LangName::Html => &HTML,
+        LangName::Json => &JSON,
     }
 }
