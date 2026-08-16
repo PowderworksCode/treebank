@@ -1,0 +1,139 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_callable": [
+      "function_definition",
+      "lambda"
+    ],
+    "_binding": [
+      "function_definition",
+      "class_definition",
+      "lambda",
+      "assignment",
+      "named_expression",
+      "for_statement",
+      "for_in_clause",
+      "import_statement",
+      "import_from_statement",
+      "global_statement",
+      "nonlocal_statement",
+      "parameter",
+      "star_parameter",
+      "double_star_parameter",
+      "tuple_parameter",
+      "except_clause",
+      "with_item",
+      "as_pattern",
+      "type_alias_statement",
+      "type_parameter"
+    ],
+    "_scope": [
+      "module",
+      "function_definition",
+      "lambda",
+      "class_definition",
+      "list_comprehension",
+      "set_comprehension",
+      "dictionary_comprehension",
+      "generator_expression"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "comment",
+      "reason": "an extra; carries no syntactic role"
+    },
+    {
+      "node": "elif_clause",
+      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
+    },
+    {
+      "node": "else_clause",
+      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
+    },
+    {
+      "node": "finally_clause",
+      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
+    },
+    {
+      "node": "if_clause",
+      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
+    },
+    {
+      "node": "case_clause",
+      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
+    },
+    {
+      "node": "arguments",
+      "reason": "the argument-list container; its elements carry _argument"
+    },
+    {
+      "node": "parameters",
+      "reason": "the parameter-list container; its elements carry _parameter"
+    },
+    {
+      "node": "type_parameters",
+      "reason": "the PEP 695 type-parameter-list container; its elements are type_parameter (a _binding facet member)"
+    },
+    {
+      "node": "pattern_list",
+      "reason": "bare comma-joined patterns (`a, b = \u2026`); its elements carry _pattern"
+    },
+    {
+      "node": "dotted_name",
+      "reason": "qualified import path; _name is identifier-only because a supertype reference imports all members into a position, and dotted names are not valid where identifiers are (candidate for a wider _name \u2014 see ledger)"
+    },
+    {
+      "node": "aliased_import",
+      "reason": "the `x as y` element of an import (the import statements themselves are _directive and _binding)"
+    },
+    {
+      "node": "relative_import",
+      "reason": "the leading-dots module path of `from . import x`"
+    },
+    {
+      "node": "wildcard_import",
+      "reason": "the `*` of `from m import *`"
+    },
+    {
+      "node": "pair",
+      "reason": "key: value inside a dictionary display; both sides carry _expression"
+    },
+    {
+      "node": "slice",
+      "reason": "the a:b:c form inside a subscript; only valid there, and the subscript_expression carries _access"
+    },
+    {
+      "node": "yield_expression",
+      "reason": "python allows yield only in specific positions (statement, assignment right side, parentheses), so it is threaded at those positions rather than through _expression"
+    },
+    {
+      "node": "string_start",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "string_content",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "string_end",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "interpolation",
+      "reason": "the {\u2026} of an f-string; its expression child carries _expression"
+    },
+    {
+      "node": "format_specifier",
+      "reason": "the :spec inside an interpolation"
+    },
+    {
+      "node": "type_conversion",
+      "reason": "the !r/!s/!a inside an interpolation"
+    }
+  ]
+}
