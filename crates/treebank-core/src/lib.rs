@@ -1,0 +1,101 @@
+//! The treebank vocabulary (DESIGN.md §3), as code.
+//!
+//! Two tiers with different physics, dictated by what tree-sitter's
+//! supertype mechanism can express:
+//!
+//! - **Table tier** — real supertype rules threaded through a grammar's
+//!   productions. Occurrence-level semantics, enforced at generate time,
+//!   natively queryable.
+//! - **Facet tier** — roles that cross-cut derivations and therefore cannot
+//!   be supertypes. Shipped as a `roles.json` manifest per grammar crate
+//!   (type-level membership) and expanded into concrete alternations at
+//!   query-load time by [`expand`].
+//!
+//! The vocabulary itself lives in `vocabulary/vocabulary.json`, embedded
+//! here and re-exported to JavaScript by `vocabulary/supertypes.js`, so the
+//! grammars and this crate can never disagree about what the vocabulary is.
+
+pub mod check;
+pub mod expand;
+pub mod node_types;
+pub mod roles;
+
+use std::sync::OnceLock;
+
+use serde::Deserialize;
+
+/// One vocabulary term: a name (always underscore-prefixed) and its
+/// one-line definition.
+#[derive(Debug, Clone, Deserialize)]
+pub struct Term {
+    pub name: String,
+    pub definition: String,
+}
+
+/// The closed vocabulary. A grammar may omit terms its language lacks; it
+/// may not invent terms. Adding a term is a vocabulary change, versioned
+/// here, applying to every language at once.
+#[derive(Debug, Deserialize)]
+pub struct Vocabulary {
+    pub version: String,
+    pub table: Vec<Term>,
+    pub facets: Vec<Term>,
+    /// Required containments, as (inner, outer): every grammar that
+    /// declares both must nest inner inside outer.
+    pub containments: Vec<(String, String)>,
+}
+
+impl Vocabulary {
+    pub fn table_terms(&self) -> impl Iterator<Item = &str> {
+        self.table.iter().map(|t| t.name.as_str())
+    }
+
+    pub fn facet_terms(&self) -> impl Iterator<Item = &str> {
+        self.facets.iter().map(|t| t.name.as_str())
+    }
+
+    pub fn is_table_term(&self, name: &str) -> bool {
+        self.table.iter().any(|t| t.name == name)
+    }
+
+    pub fn is_facet_term(&self, name: &str) -> bool {
+        self.facets.iter().any(|t| t.name == name)
+    }
+}
+
+/// The vocabulary this build of treebank-core carries. Parsing the embedded
+/// JSON cannot fail for a released crate; the unit tests parse it too, so a
+/// malformed edit fails `cargo test` before it can fail a consumer.
+pub fn vocabulary() -> &'static Vocabulary {
+    static VOCAB: OnceLock<Vocabulary> = OnceLock::new();
+    VOCAB.get_or_init(|| {
+        serde_json::from_str(include_str!("../vocabulary/vocabulary.json"))
+            .expect("embedded vocabulary.json is malformed")
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn embedded_vocabulary_parses_and_is_closed_and_underscored() {
+        let v = vocabulary();
+        assert_eq!(v.version, "0.1.0");
+        assert_eq!(v.table.len(), 22);
+        assert_eq!(v.facets.len(), 3);
+        for t in v.table.iter().chain(v.facets.iter()) {
+            assert!(t.name.starts_with('_'), "{} must be underscored", t.name);
+            assert!(!t.definition.is_empty());
+        }
+        // No name appears in both tiers.
+        for f in &v.facets {
+            assert!(!v.is_table_term(&f.name), "{} is in both tiers", f.name);
+        }
+        // Containments reference table-tier terms only.
+        for (inner, outer) in &v.containments {
+            assert!(v.is_table_term(inner), "{inner} not a table term");
+            assert!(v.is_table_term(outer), "{outer} not a table term");
+        }
+    }
+}
