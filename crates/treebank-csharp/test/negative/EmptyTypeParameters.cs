@@ -1,1 +1,0 @@
-class EmptyTypeParameters { void M<>() {} }

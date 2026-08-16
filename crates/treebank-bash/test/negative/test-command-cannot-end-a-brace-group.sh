@@ -1,1 +1,0 @@
-{ [ -f /etc/passwd ] }

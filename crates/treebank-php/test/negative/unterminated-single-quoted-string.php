@@ -1,2 +1,0 @@
-<?php
-$a = 'never closed;

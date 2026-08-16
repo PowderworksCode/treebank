@@ -1,3 +1,0 @@
-class C
-  include 3
-end

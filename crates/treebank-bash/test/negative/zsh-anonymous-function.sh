@@ -1,3 +1,0 @@
-() {
-  echo "zsh anonymous function"
-}

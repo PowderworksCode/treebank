@@ -1,1 +1,0 @@
-enum Color { Red, Green }

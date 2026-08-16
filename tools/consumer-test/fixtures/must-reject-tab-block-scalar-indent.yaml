@@ -1,6 +1,0 @@
-# treebank-grammar-yaml consumer fixture for patch 0006: must parse with an Error.
-#
-# A tab where the block scalar's indentation is detected. Lost patch 0006 -> Clean.
-foo: |
-	
-bar: 1

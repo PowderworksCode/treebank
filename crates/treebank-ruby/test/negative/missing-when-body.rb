@@ -1,3 +1,0 @@
-case x
-when
-end

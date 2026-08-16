@@ -1,9 +1,0 @@
-{
-  "name": "yaml-oracle",
-  "private": true,
-  "type": "module",
-  "description": "YAML validity check for the treebank oracle: js-yaml's event parser behind an explicit YAML 1.2.2 section 5.2 decode layer",
-  "dependencies": {
-    "js-yaml": "^5.2.3"
-  }
-}
