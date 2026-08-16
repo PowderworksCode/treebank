@@ -1,0 +1,92 @@
+================================================================================
+functions and classes
+================================================================================
+
+@dec(1)
+async def f(a: int, b=2, *args, c, **kw) -> str:
+    return a
+
+class C(Base, metaclass=M):
+    x = 1
+
+--------------------------------------------------------------------------------
+
+(module
+  (function_definition
+    (decorator (call_expression function: (identifier) arguments: (arguments (integer))))
+    name: (identifier)
+    parameters: (parameters
+      (parameter name: (identifier) type: (identifier))
+      (parameter name: (identifier) value: (integer))
+      (star_parameter name: (identifier))
+      (parameter name: (identifier))
+      (double_star_parameter name: (identifier)))
+    return_type: (identifier)
+    body: (block (return_statement (identifier))))
+  (class_definition
+    name: (identifier)
+    arguments: (arguments
+      (identifier)
+      (keyword_argument name: (identifier) value: (identifier)))
+    body: (block
+      (assignment left: (identifier) right: (integer)))))
+
+================================================================================
+pep 695
+================================================================================
+
+def first[T](l: list[T]) -> T:
+    pass
+
+class Pair[K, V]:
+    pass
+
+type Alias[T] = list[T]
+
+--------------------------------------------------------------------------------
+
+(module
+  (function_definition
+    name: (identifier)
+    type_parameters: (type_parameters (type_parameter name: (identifier)))
+    parameters: (parameters
+      (parameter name: (identifier)
+        type: (subscript_expression object: (identifier) subscript: (identifier))))
+    return_type: (identifier)
+    body: (block (pass_statement)))
+  (class_definition
+    name: (identifier)
+    type_parameters: (type_parameters
+      (type_parameter name: (identifier))
+      (type_parameter name: (identifier)))
+    body: (block (pass_statement)))
+  (type_alias_statement
+    name: (identifier)
+    type_parameters: (type_parameters (type_parameter name: (identifier)))
+    value: (subscript_expression object: (identifier) subscript: (identifier))))
+
+================================================================================
+imports
+================================================================================
+
+import os, sys as system
+from . import sibling
+from a.b import (c, d as e)
+from m import *
+
+--------------------------------------------------------------------------------
+
+(module
+  (import_statement
+    (dotted_name (identifier))
+    (aliased_import name: (dotted_name (identifier)) alias: (identifier)))
+  (import_from_statement
+    module: (relative_import)
+    (dotted_name (identifier)))
+  (import_from_statement
+    module: (dotted_name (identifier) (identifier))
+    (dotted_name (identifier))
+    (aliased_import name: (dotted_name (identifier)) alias: (identifier)))
+  (import_from_statement
+    module: (dotted_name (identifier))
+    (wildcard_import)))

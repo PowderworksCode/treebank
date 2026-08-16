@@ -1,0 +1,14 @@
+{
+  "note": "the same program will exist as program.rs and program.ts; every language must yield these exact counts",
+  "queries": {
+    "(_declaration) @d": 3,
+    "(_directive) @dir": 1,
+    "(_loop) @l": 2,
+    "(_jump) @j": 2,
+    "(_invocation) @i": 1,
+    "(_member) @m": 1,
+    "(_access) @a": 1,
+    "(_parameter) @p": 3,
+    "(function_definition name: (_name) @n)": 2
+  }
+}

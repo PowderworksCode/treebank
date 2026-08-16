@@ -1,0 +1,206 @@
+================================================================================
+operators and comparisons
+================================================================================
+
+x = a + b * -c ** 2
+y = a < b <= c != d
+z = a or not b and c in d
+w = m @ n | p & q ^ r << s
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    left: (identifier)
+    right: (binary_expression
+      left: (identifier)
+      right: (binary_expression
+        left: (identifier)
+        right: (unary_expression
+          operand: (binary_expression
+            left: (identifier)
+            right: (integer))))))
+  (assignment
+    left: (identifier)
+    right: (comparison_expression
+      (identifier)
+      (identifier)
+      (identifier)
+      (identifier)))
+  (assignment
+    left: (identifier)
+    right: (binary_expression
+      left: (identifier)
+      right: (binary_expression
+        left: (unary_expression
+          operand: (identifier))
+        right: (comparison_expression
+          (identifier)
+          (identifier)))))
+  (assignment
+    left: (identifier)
+    right: (binary_expression
+      left: (binary_expression
+        left: (identifier)
+        right: (identifier))
+      right: (binary_expression
+        left: (binary_expression
+          left: (identifier)
+          right: (identifier))
+        right: (binary_expression
+          left: (identifier)
+          right: (identifier))))))
+
+================================================================================
+comprehensions, lambda, conditional, walrus
+================================================================================
+
+r = [y ** 2 for y in ns if y if y > 0]
+d = {k: v for k, v in ps}
+g = (n for n in ns)
+t = sum(n for n in ns)
+f = lambda a, b=1: a + b
+c = "y" if p else "n"
+w = [y := f(x), y ** 2]
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    left: (identifier)
+    right: (list_comprehension
+      body: (binary_expression
+        left: (identifier)
+        right: (integer))
+      (for_in_clause
+        left: (identifier)
+        right: (identifier))
+      (if_clause
+        (identifier))
+      (if_clause
+        (comparison_expression
+          (identifier)
+          (integer)))))
+  (assignment
+    left: (identifier)
+    right: (dictionary_comprehension
+      body: (pair
+        key: (identifier)
+        value: (identifier))
+      (for_in_clause
+        left: (pattern_list
+          (identifier)
+          (identifier))
+        right: (identifier))))
+  (assignment
+    left: (identifier)
+    right: (generator_expression
+      body: (identifier)
+      (for_in_clause
+        left: (identifier)
+        right: (identifier))))
+  (assignment
+    left: (identifier)
+    right: (call_expression
+      function: (identifier)
+      arguments: (arguments
+        (generator_expression
+          body: (identifier)
+          (for_in_clause
+            left: (identifier)
+            right: (identifier))))))
+  (assignment
+    left: (identifier)
+    right: (lambda
+      parameters: (parameters
+        (parameter
+          name: (identifier))
+        (parameter
+          name: (identifier)
+          value: (integer)))
+      body: (binary_expression
+        left: (identifier)
+        right: (identifier))))
+  (assignment
+    left: (identifier)
+    right: (conditional_expression
+      consequence: (string
+        (string_start)
+        (string_content)
+        (string_end))
+      condition: (identifier)
+      alternative: (string
+        (string_start)
+        (string_content)
+        (string_end))))
+  (assignment
+    left: (identifier)
+    right: (list
+      (named_expression
+        name: (identifier)
+        value: (call_expression
+          function: (identifier)
+          arguments: (arguments
+            (identifier))))
+      (binary_expression
+        left: (identifier)
+        right: (integer)))))
+
+================================================================================
+strings
+================================================================================
+
+a = "plain" 'concat'
+b = f"pre {x!r:>{w}.2f} post"
+c = r"\d+"
+d = """tri
+ple"""
+e = b"bytes\x00"
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    left: (identifier)
+    right: (concatenated_string
+      (string
+        (string_start)
+        (string_content)
+        (string_end))
+      (string
+        (string_start)
+        (string_content)
+        (string_end))))
+  (assignment
+    left: (identifier)
+    right: (string
+      (string_start)
+      (string_content)
+      (interpolation
+        expression: (identifier)
+        conversion: (type_conversion)
+        format: (format_specifier
+          (interpolation
+            expression: (identifier))))
+      (string_content)
+      (string_end)))
+  (assignment
+    left: (identifier)
+    right: (string
+      (string_start)
+      (string_content)
+      (string_end)))
+  (assignment
+    left: (identifier)
+    right: (string
+      (string_start)
+      (string_content)
+      (string_end)))
+  (assignment
+    left: (identifier)
+    right: (string
+      (string_start)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (string_end))))

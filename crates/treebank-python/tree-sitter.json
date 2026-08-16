@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "python",
+      "camelcase": "Python",
+      "scope": "source.python",
+      "file-types": [
+        "py"
+      ],
+      "injection-regex": "python"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "treebank python grammar",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}
