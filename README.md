@@ -24,7 +24,7 @@ grammars:
 - `crates/treebank-rbs` — tree-sitter-rbs 0.2.2, 9 grammar patches
 - `crates/treebank-ruby` — tree-sitter-ruby 0.23.1, 10 grammar patches
 - `crates/treebank-rust` — tree-sitter-rust 0.24.2, 25 grammar patches
-- `crates/treebank-scala` — tree-sitter-scala 0.26.2 (Scala 2 and Scala 3 both parse: one grammar, dialect declared per package), 1 grammar patch
+- `crates/treebank-scala` — tree-sitter-scala 0.26.2 (Scala 2 and Scala 3 both parse: one grammar, dialect declared per package), 3 grammar patches
 - `crates/treebank-toml` — tree-sitter-toml 0.7.0, 4 grammar patches
 - `crates/treebank-typescript` — tree-sitter-typescript 0.23.2 (typescript + tsx grammars), 12 grammar patches
 - `crates/treebank-yaml` — tree-sitter-yaml 0.7.2, 5 grammar patches

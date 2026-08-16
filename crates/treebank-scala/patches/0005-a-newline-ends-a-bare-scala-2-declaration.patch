@@ -1,0 +1,159 @@
+diff --git a/grammar.js b/grammar.js
+index 02516d9..8ce292f 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -365,6 +365,10 @@ module.exports = grammar({
+     // see it, and highlighting needs that keyword as a token of its own, so
+     // the scanner looks ahead instead and declines the `>` of a plain comment.
+     $._using_directive_start,
++    // A newline that CONTINUES a `def` rather than ending it: the next line
++    // opens another parameter list, the result type, or the body. Emitted by
++    // the scanner on that lookahead alone, and valid nowhere else.
++    $._def_continuation,
+   ],
+ 
+   inline: $ => [
+@@ -1161,6 +1165,7 @@ module.exports = grammar({
+     function_definition: $ =>
+       seq(
+         $._function_declaration,
++        optional($._def_continuation),
+         choice(
+           seq("=", field("body", $._indentable_expression)),
+           field("body", $.block),
+@@ -1190,12 +1195,12 @@ module.exports = grammar({
+             "parameters",
+             repeat(
+               seq(
+-                optional($._automatic_semicolon),
++                optional($._def_continuation),
+                 choice($.parameters, $.type_parameters),
+               ),
+             ),
+           ),
+-          optional($._automatic_semicolon),
++          optional($._def_continuation),
+         ),
+       ),
+ 
+diff --git a/src/scanner.c b/src/scanner.c
+index 50b0145..92856f6 100644
+--- a/src/scanner.c
++++ b/src/scanner.c
+@@ -69,7 +69,8 @@ enum TokenType {
+   OP_LEFT_MUL,
+   OP_LEFT_OTHER,
+   OP_NAME,
+-  USING_DIRECTIVE_START
++  USING_DIRECTIVE_START,
++  DEF_CONTINUATION
+ };
+ 
+ // Mirrors enum TokenType above.
+@@ -125,7 +126,8 @@ const char* token_name[] = {
+   "OP_LEFT_MUL",
+   "OP_LEFT_OTHER",
+   "OP_NAME",
+-  "USING_DIRECTIVE_START"
++  "USING_DIRECTIVE_START",
++  "DEF_CONTINUATION"
+ };
+ 
+ typedef struct {
+@@ -1304,6 +1306,33 @@ static bool scan_impl(void *payload, TSLexer *lexer,
+     return false;
+   }
+ 
++  // A newline in the middle of a `def`, which Scala allows to continue onto
++  // the next line in three places: before another parameter list, before the
++  // result type, and before the body. A bare Scala 2 declaration -- `def
++  // f(t: T)` with no result type and no body -- ENDS at that same newline,
++  // and the parser cannot tell the two apart: what follows may be an
++  // arbitrary distance away, so both readings are live at once and whichever
++  // the grammar prefers makes the other unreachable. It preferred continuing,
++  // so `def f(t: T)` followed by any other member did not parse at all.
++  //
++  // The lexer can tell, because the answer is the very next character. Only
++  // `(`, `[`, `:`, `=` or `{` continues a def; anything else ends it. So the
++  // continuation gets its own token, emitted on that lookahead alone, and the
++  // ending newline stays an ordinary AUTOMATIC_SEMICOLON. The two can no
++  // longer be confused, which is why the grammar needs no conflict for this.
++  //
++  // valid_symbols is what keeps this narrow: DEF_CONTINUATION is only ever
++  // valid inside a def's signature or before its body, so no other newline in
++  // the language is affected by it.
++  if (valid_symbols[DEF_CONTINUATION] && newline_count > 0 &&
++      (lexer->lookahead == '(' || lexer->lookahead == '[' ||
++       lexer->lookahead == ':' || lexer->lookahead == '=' ||
++       lexer->lookahead == '{')) {
++    lexer->mark_end(lexer);
++    lexer->result_symbol = DEF_CONTINUATION;
++    return true;
++  }
++
+   if (valid_symbols[AUTOMATIC_SEMICOLON] && newline_count > 0) {
+     // AUTOMATIC_SEMICOLON should not be issued in the middle of expressions
+     // Thus, we exit this branch when encountering comments, else/catch clauses, etc.
+diff --git a/test/corpus/definitions.txt b/test/corpus/definitions.txt
+index 2358c8f..da78b57 100644
+--- a/test/corpus/definitions.txt
++++ b/test/corpus/definitions.txt
+@@ -3169,3 +3169,58 @@ class D
+             (type_arguments
+               (type_identifier))))))
+     (identifier)))
++
++================================================================================
++A Scala 2 declaration ends at the newline; a def continues across it
++================================================================================
++
++trait A {
++  def complete(r: Iterable[Int])
++  def completeExceptionally(t: Throwable)
++  val x = 1
++  def spread
++    (a: Int)
++    (b: Int)
++    : Int
++    = a + b
++}
++
++--------------------------------------------------------------------------------
++
++(compilation_unit
++  (trait_definition
++    (identifier)
++    (template_body
++      (function_declaration
++        (identifier)
++        (parameters
++          (parameter
++            (identifier)
++            (generic_type
++              (type_identifier)
++              (type_arguments
++                (type_identifier))))))
++      (function_declaration
++        (identifier)
++        (parameters
++          (parameter
++            (identifier)
++            (type_identifier))))
++      (val_definition
++        (identifier)
++        (integer_literal))
++      (function_definition
++        (identifier)
++        (parameters
++          (parameter
++            (identifier)
++            (type_identifier)))
++        (parameters
++          (parameter
++            (identifier)
++            (type_identifier)))
++        (type_identifier)
++        (infix_expression
++          (identifier)
++          (operator_identifier)
++          (identifier))))))

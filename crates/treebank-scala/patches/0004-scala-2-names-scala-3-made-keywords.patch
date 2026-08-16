@@ -1,0 +1,98 @@
+diff --git a/grammar.js b/grammar.js
+index d0f6791..02516d9 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -375,6 +375,7 @@ module.exports = grammar({
+     $._param_type,
+     $._identifier,
+     $._param_name,
++    $._bound_name,
+     $._postfix_expression_choice,
+     $._infix_type_choice,
+     $._param_value_type,
+@@ -470,6 +471,10 @@ module.exports = grammar({
+     // `enum` is a Scala 3 keyword and a Scala 2 term name, so after `enum` an
+     // identifier is either the enum's name or a Scala 2 postfix application of
+     // a value called `enum`. Only the rest of the construct settles it.
++    // `(using x)` is a Scala 3 given-argument clause and `(using = x)` is a
++    // Scala 2 named argument; the token after `using` is the only thing that
++    // tells them apart, and it can be an arbitrary expression away.
++    [$._simple_expression, $.arguments],
+     [$._simple_expression, $.enum_definition],
+     [$._simple_expression, $.lambda_expression],
+     [$._simple_expression, $._single_lambda_param],
+@@ -769,6 +774,10 @@ module.exports = grammar({
+     // costs a second GLR conflict against `export_declaration`.
+     _param_name: $ => choice($._identifier, alias("enum", $.identifier)),
+ 
++    // Same allowance where a Scala 2 source BINDS the name rather than
++    // declaring a parameter: `val enum = enumOf(obj)`.
++    _bound_name: $ => choice($._identifier, alias("enum", $.identifier)),
++
+     namespace_wildcard: $ => prec.left(1, choice("*", "_", "given")),
+ 
+     _namespace_given_by_type: $ => seq("given", $._type),
+@@ -1887,7 +1896,7 @@ module.exports = grammar({
+     // as a union type instead of an alternative pattern.
+     _definition_pattern: $ =>
+       choice(
+-        $._identifier,
++        $._bound_name,
+         $.stable_identifier,
+         $.interpolated_string_expression,
+         $.capture_pattern,
+@@ -2017,6 +2026,11 @@ module.exports = grammar({
+         // already makes this allowance for import paths
+         // (`_namespace_path_segment`); this is the same allowance for terms.
+         alias("enum", $.identifier),
++        // `using` is a Scala 3 soft keyword and an ordinary Scala 2 name, and
++        // Spark and Delta both pass it as a NAMED ARGUMENT:
++        // `@JsonSerialize(using = classOf[...])`. Without this the `(using
++        // expr)` clause below claims the token and the `=` has nowhere to go.
++        alias("using", $.identifier),
+         $.operator_identifier,
+         $.literal,
+         $.interpolated_string_expression,
+diff --git a/test/corpus/definitions.txt b/test/corpus/definitions.txt
+index 9849845..2358c8f 100644
+--- a/test/corpus/definitions.txt
++++ b/test/corpus/definitions.txt
+@@ -3134,3 +3134,38 @@ def qualifyEnum(enum: Enum[_]): String =
+             (identifier)
+             (identifier))
+           (arguments))))))
++
++================================================================================
++Scala 2 `enum` as a bound name, and `using` as a named argument
++================================================================================
++
++class C {
++  val enum = enumOf(obj)
++}
++
++@JsonSerialize(using = classOf[ExecutorMetricsJsonSerializer])
++class D
++
++--------------------------------------------------------------------------------
++
++(compilation_unit
++  (class_definition
++    (identifier)
++    (template_body
++      (val_definition
++        (identifier)
++        (call_expression
++          (identifier)
++          (arguments
++            (identifier))))))
++  (class_definition
++    (annotation
++      (type_identifier)
++      (arguments
++        (assignment_expression
++          (identifier)
++          (generic_function
++            (identifier)
++            (type_arguments
++              (type_identifier))))))
++    (identifier)))
