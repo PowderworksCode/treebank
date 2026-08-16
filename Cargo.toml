@@ -6,5 +6,8 @@ members = [
     "crates/treebank-lang",
     "crates/treebank-oracle",
     "crates/treebank-preprocessing",
+    "crates/treebank-python",
+    "crates/treebank-rust",
+    "crates/treebank-typescript",
 ]
 resolver = "2"

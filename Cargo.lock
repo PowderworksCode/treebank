@@ -1034,6 +1034,36 @@ name = "treebank-preprocessing"
 version = "0.1.0"
 
 [[package]]
+name = "treebank-python"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "treebank-rust"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "treebank-typescript"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "typenum"
 version = "1.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
