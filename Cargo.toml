@@ -1,24 +1,3 @@
 [workspace]
 members = ["crates/treebank-cli", "crates/treebank-preprocessing"]
-# Grammar dirs are not workspace members: upstream/ is a git submodule and
-# build/ is a materialized (gitignored) tree; excluding the parent dirs keeps
-# cargo from claiming any Cargo.toml under them for this workspace.
-exclude = [
-    "crates/treebank-rust",
-    "crates/treebank-typescript",
-    "crates/treebank-javascript",
-    "crates/treebank-java",
-    "crates/treebank-csharp",
-    "crates/treebank-c",
-    "crates/treebank-python",
-    "crates/treebank-go",
-    "crates/treebank-zig",
-    "crates/treebank-lua",
-    "crates/treebank-rbs",
-    "crates/treebank-ruby",
-    "crates/treebank-elixir",
-    "crates/treebank-toml",
-    "crates/treebank-html",
-    "crates/treebank-scala",
-]
 resolver = "2"

@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::{bail, Context, Result};
 
 use super::Lang;
-use crate::ledger::LangName;
+use crate::langname::LangName;
 use crate::rank::RankedCrate;
 
 pub struct Python;

@@ -1,8 +1,0 @@
-# treebank-grammar-yaml consumer fixture for patch 0005: must parse with an Error.
-#
-# A multi-line double-quoted scalar whose continuation lines sit at or inside
-# the parent key column is deficient indentation. Lost patch 0005 -> Clean.
----
-quoted: "a
-b
-c"

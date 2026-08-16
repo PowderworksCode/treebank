@@ -6,7 +6,7 @@ use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
 
 use super::Lang;
-use crate::ledger::LangName;
+use crate::langname::LangName;
 use crate::rank::RankedCrate;
 
 pub struct Rust;

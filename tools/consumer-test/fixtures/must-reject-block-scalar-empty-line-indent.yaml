@@ -1,9 +1,0 @@
-# treebank-grammar-yaml consumer fixture for patch 0007: must parse with an Error.
-#
-# A leading empty line with more spaces than the first content line
-# (YAML 1.2.2 8.1.1.1). Lost patch 0007 -> Clean.
-empty block scalar: >
- 
-  
-   
- # comment

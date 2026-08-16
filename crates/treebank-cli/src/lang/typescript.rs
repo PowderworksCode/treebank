@@ -4,7 +4,7 @@ use std::path::Path;
 use anyhow::Result;
 
 use super::{npm, stdin_oracle, Lang};
-use crate::ledger::LangName;
+use crate::langname::LangName;
 use crate::rank::RankedCrate;
 
 pub struct TypeScript;

@@ -3,31 +3,12 @@
 //! corpus, how files route to grammars, and what the reference parser is —
 //! lives behind this trait; rank/fetch/sweep/oracle are generic drivers.
 
-mod bash;
-mod c;
-mod csharp;
-mod debian;
-mod elixir;
-mod exec_oracle;
-mod github;
-mod go;
-mod html;
-mod java;
 mod javascript;
-mod json;
-mod lua;
 mod npm;
-mod php;
 mod python;
-mod rbs;
-mod ruby;
 mod rust;
-mod scala;
 mod stdin_oracle;
-mod toml;
 mod typescript;
-mod yaml;
-mod zig;
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -36,7 +17,7 @@ use anyhow::Result;
 
 use treebank_preprocessing::Symbols;
 
-use crate::ledger::LangName;
+use crate::langname::LangName;
 use crate::rank::RankedCrate;
 
 pub trait Lang: Sync {
@@ -154,46 +135,14 @@ pub trait Lang: Sync {
 /// Total: an unsupported name cannot be constructed, because clap and serde
 /// both reject it at the boundary. Nothing here can fail.
 pub fn get(name: LangName) -> &'static dyn Lang {
+    static PYTHON: python::Python = python::Python;
     static RUST: rust::Rust = rust::Rust;
     static TYPESCRIPT: typescript::TypeScript = typescript::TypeScript;
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
-    static JAVA: java::Java = java::Java;
-    static CSHARP: csharp::CSharp = csharp::CSharp;
-    static C: c::C = c::C;
-    static PYTHON: python::Python = python::Python;
-    static PHP: php::Php = php::Php;
-    static GO: go::Go = go::Go;
-    static BASH: bash::Bash = bash::Bash;
-    static ZIG: zig::Zig = zig::Zig;
-    static LUA: lua::Lua = lua::Lua;
-    static RUBY: ruby::Ruby = ruby::Ruby;
-    static RBS: rbs::Rbs = rbs::Rbs;
-    static ELIXIR: elixir::Elixir = elixir::Elixir;
-    static YAML: yaml::Yaml = yaml::Yaml;
-    static TOML: toml::Toml = toml::Toml;
-    static HTML: html::Html = html::Html;
-    static JSON: json::Json = json::Json;
-    static SCALA: scala::Scala = scala::Scala;
     match name {
+        LangName::Python => &PYTHON,
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
         LangName::Javascript => &JAVASCRIPT,
-        LangName::Java => &JAVA,
-        LangName::Csharp => &CSHARP,
-        LangName::C => &C,
-        LangName::Python => &PYTHON,
-        LangName::Php => &PHP,
-        LangName::Go => &GO,
-        LangName::Bash => &BASH,
-        LangName::Zig => &ZIG,
-        LangName::Lua => &LUA,
-        LangName::Ruby => &RUBY,
-        LangName::Rbs => &RBS,
-        LangName::Elixir => &ELIXIR,
-        LangName::Yaml => &YAML,
-        LangName::Toml => &TOML,
-        LangName::Html => &HTML,
-        LangName::Json => &JSON,
-        LangName::Scala => &SCALA,
     }
 }

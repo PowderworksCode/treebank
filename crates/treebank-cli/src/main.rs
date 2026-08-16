@@ -1,7 +1,7 @@
 mod fetch;
 mod grammar;
 mod lang;
-mod ledger;
+mod langname;
 mod rank;
 mod sweep;
 
@@ -9,7 +9,7 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::ledger::LangName;
+use crate::langname::LangName;
 
 #[derive(Parser)]
 #[command(name = "treebank", about = "Treebank corpus and grammar sweep tooling")]
@@ -66,11 +66,6 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
-    /// Validate ledger.json against the tree it describes — one grammar dir,
-    /// or every grammar under crates/ when given none
-    Ledger {
-        grammar: Option<PathBuf>,
-    },
     /// Assert that every file in a directory FAILS to parse (negative corpus)
     Negative {
         #[arg(long)]
@@ -86,11 +81,9 @@ enum Cmd {
     /// The oracles are otherwise four different things: batch processes
     /// reading stdin (python, go, zig...), a JSON three-valued one (c),
     /// fork-per-file exec oracles (bash, php), and `syn` in-process with no
-    /// subprocess at all (rust). `scripts/oracle-smoke.sh` drives this rather
-    /// than each tool directly, which is what lets that check be a loop over
-    /// languages instead of a hand-written block per oracle — and means it
-    /// tests the path `sweep` really takes, drivers and wiring included,
-    /// rather than a parallel invocation that can drift from it.
+    /// subprocess at all (rust). Smoke checks drive this rather than each tool
+    /// directly, so they test the path `sweep` really takes, drivers and
+    /// wiring included, rather than a parallel invocation that can drift.
     Oracle {
         #[arg(long, value_enum)]
         lang: LangName,
@@ -162,7 +155,6 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/sweep.json"),
         ),
-        Cmd::Ledger { grammar } => ledger::run(grammar.as_deref()),
         Cmd::Negative { grammar, dir } => sweep::negative(&grammar, &dir),
         Cmd::Oracle { lang, srcroot } => oracle_cmd(lang, &srcroot),
     }

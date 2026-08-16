@@ -670,18 +670,16 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         md,
         "\n## How to fix (one cluster at a time)\n\n\
          Work in `{grammar}`. For each cluster:\n\n\
-         1. Reproduce: `../../scripts/parse.sh <failing file>` (run from the \
-         grammar dir), then write the smallest failing repro and confirm it \
-         is valid {lang}.\n\
+         1. Reproduce: write the smallest failing repro and confirm it \
+         is valid {lang} with the oracle.\n\
          2. Fix the grammar source (smallest change, mirror existing idioms; \
          scanner only for external-token issues). Add a corpus test in \
          `test/corpus/`.\n\
-         3. Run `../../scripts/check.sh` until it prints `CHECK OK` — it \
-         regenerates with the pinned CLI and runs corpus tests, this sweep \
-         (pass count must beat {passed}), and the negative corpus.\n\
-         4. Capture the change as `patches/NNNN-*.patch` (source-of-truth \
-         files only, never generated files) with a ledger entry — see \
-         `GRAMMARS.md` at the repo root.\n",
+         3. Regenerate with the pinned tree-sitter CLI, run the corpus \
+         tests, re-run this sweep (pass count must beat {passed}), and \
+         re-run the negative corpus.\n\
+         4. Record the change and its before/after sweep numbers in the \
+         grammar's ledger — see `DESIGN.md` at the repo root.\n",
         grammar = report.grammar,
         lang = report.lang,
         passed = report.passed,

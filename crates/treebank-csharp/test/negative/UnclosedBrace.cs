@@ -1,1 +1,0 @@
-class Unclosed { void M() {
