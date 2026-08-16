@@ -76,6 +76,23 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._patterns_comma, $._closed_pattern],
+    [$._match_shape, $._access],
+    [$._match_shape, $._primary_expression],
+    [$.case_dict_splat, $._primary_expression],
+    [$.case_star_pattern, $._primary_expression],
+    [$.dictionary_pattern_pair, $._access],
+    [$.case_dict_pattern, $.dictionary],
+    [$.case_signed_number, $._literal],
+    [$.case_list_pattern, $.list],
+    [$.case_group_pattern, $._case_sequence],
+    [$.case_tuple_pattern, $.tuple],
+    [$._literal_pattern, $._primary_expression],
+    [$._closed_pattern, $._access],
+    [$.class_pattern, $._access],
+    [$._closed_pattern, $._primary_expression],
+    [$.class_pattern, $._primary_expression],
+    [$.case_complex_number, $._literal],
     // `a, b` at statement start: tuple until `=` proves pattern_list.
     [$.tuple, $.tuple_pattern],
     [$.list, $.list_pattern],
@@ -217,6 +234,18 @@ module.exports = grammar({
       $.star_pattern,
       $.tuple_pattern,
       $.list_pattern,
+    ),
+
+    // The match-pattern shapes, named as the destructuring ones so the
+    // node vocabulary does not fork: `(tuple_pattern)` and `(list_pattern)`
+    // mean the same shape in `a, b = x` and in `case (a, b)`.
+    _match_shape: $ => choice(
+      $._name,
+      $.member_expression,
+      $.class_pattern,
+      alias($.case_tuple_pattern, $.tuple_pattern),
+      alias($.case_list_pattern, $.list_pattern),
+      alias($.case_dict_pattern, $.dictionary_pattern),
     ),
 
     pattern_list: $ => prec.right(seq(
@@ -434,20 +463,125 @@ module.exports = grammar({
       field('body', $._body),
     ),
 
-    // Patterns reuse the expression grammar — `Point(x=0)` parses as a
-    // call, `[a, *rest]` as a list — plus `as` bindings. Reduces ahead of
-    // a trailing conditional, like the comprehension clauses.
-    _case_patterns: $ => prec.left(PREC.conditional + 1, seq(
-      choice($._expression, $.as_pattern),
-      repeat(seq(',', choice($._expression, $.as_pattern))),
+    // ── match patterns (PEP 634) ──────────────────────────────────
+    // A dedicated sub-grammar rather than the expression rules. Patterns
+    // LOOK like expressions — `Point(x=0)` like a call, `[a, *rest]` like
+    // a list — and reusing expressions is cheap and right for the common
+    // case, but `as` has no expression analogue, so it could only bind at
+    // the top level: `case X() as w` parsed and `case [a as b]` did not.
+    // 12 corpus files, including real matplotlib and cython code.
+    //
+    // Node names are shared with the destructuring patterns (aliased, not
+    // duplicated) so `(tuple_pattern)` means the same shape in `a, b = x`
+    // and in `case (a, b)`, and with rust wherever the construct matches.
+    _case_patterns: $ => prec.left(seq(
+      choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)),
+      repeat(seq(',', choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)))),
       optional(','),
     )),
 
-    as_pattern: $ => prec.left(PREC.conditional + 1, seq(
-      $._expression,
+    _case_pattern: $ => choice($._or_pattern, $.as_pattern),
+
+    as_pattern: $ => seq(
+      field('pattern', $._or_pattern),
       'as',
       field('alias', $._name),
+    ),
+
+    _or_pattern: $ => choice($._closed_pattern, $.or_pattern),
+
+    or_pattern: $ => prec.left(seq(
+      $._closed_pattern,
+      repeat1(seq('|', $._closed_pattern)),
     )),
+
+    // The leaves reuse the language's own nodes, exactly as rust's
+    // patterns reuse literals and paths: a bare name is an `identifier`
+    // (including `_`, which is a real identifier in python), a dotted
+    // value pattern is a `member_expression` — which is the occurrence
+    // story working as designed, since the same node answers `(_access)`
+    // where it is read and `(_pattern)` where it matches.
+    // NOT threaded through `_pattern`, and the reason is measured: python's
+    // destructuring positions and its match positions admit DIFFERENT
+    // member sets (`x[0]` and `*rest` destructure but do not match;
+    // `Point(x=0)` and `{"k": v}` match but do not destructure). A
+    // supertype's members enter every position that references it, so
+    // routing these through `_pattern` made `a, Point(x=0) = z` parse —
+    // invalid python. This is the `_clause` law in a second place, and it
+    // is why `(_pattern)` covers destructuring here while the match shapes
+    // are reachable by their shared node names instead. Rust does not hit
+    // this: its `let` and `match` patterns are one set.
+    _closed_pattern: $ => choice(
+      $._literal_pattern,
+      $._match_shape,
+      alias($.case_group_pattern, $.parenthesized_expression),
+    ),
+
+    // `-1`, `1+2j` and string concatenation are the literal forms PEP 634
+    // admits; everything else that looks literal is a value pattern.
+    _literal_pattern: $ => choice(
+      $._literal,
+      $.string,
+      $.concatenated_string,
+      alias($.case_signed_number, $.unary_expression),
+      alias($.case_complex_number, $.binary_expression),
+    ),
+
+    case_signed_number: $ => seq(field('operator', '-'), field('operand', choice($.integer, $.float))),
+    case_complex_number: $ => seq(
+      field('left', choice($.integer, $.float, alias($.case_signed_number, $.unary_expression))),
+      field('operator', choice('+', '-')),
+      field('right', choice($.integer, $.float)),
+    ),
+
+    class_pattern: $ => seq(
+      field('class', choice($._name, $.member_expression)),
+      '(',
+      optional(seq(commaSep1(choice($._case_pattern, $.keyword_pattern)), optional(','))),
+      ')',
+    ),
+
+    keyword_pattern: $ => seq(
+      field('name', $._name),
+      '=',
+      field('value', $._case_pattern),
+    ),
+
+    case_tuple_pattern: $ => seq('(', optional($._case_sequence), ')'),
+    case_list_pattern: $ => seq('[', optional($._case_sequence), ']'),
+
+    // A parenthesized single pattern with no comma is a group, not a
+    // one-tuple — python's own distinction.
+    case_group_pattern: $ => seq('(', $._case_pattern, ')'),
+
+    _case_sequence: $ => seq(
+      choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)),
+      repeat(seq(',', choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)))),
+      optional(','),
+    ),
+
+    case_star_pattern: $ => seq('*', $._name),
+
+    case_dict_pattern: $ => seq(
+      '{',
+      optional(seq(
+        commaSep1(choice(
+          $.dictionary_pattern_pair,
+          alias($.case_dict_splat, $.dictionary_splat_pattern),
+        )),
+        optional(','),
+      )),
+      '}',
+    ),
+
+    dictionary_pattern_pair: $ => seq(
+      field('key', choice($._literal_pattern, $.member_expression)),
+      ':',
+      field('value', $._case_pattern),
+    ),
+
+    case_dict_splat: $ => seq('**', $._name),
+
     else_clause: $ => seq('else', ':', field('body', $._body)),
 
     _loop: $ => choice($.while_statement, $.for_statement),

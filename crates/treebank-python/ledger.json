@@ -2,7 +2,7 @@
   "language": "python",
   "versions": "2.7 ∪ 3.x (through 3.13 syntax: match, PEP 695 type parameters and type aliases, except*, parenthesized with-items)",
   "generate_cli": "0.25.10",
-  "vocabulary": "0.1.0",
+  "vocabulary": "0.2.0",
   "oracles": [
     {
       "family": "python3",
@@ -26,42 +26,38 @@
     "blind_to": "python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension",
     "sweep": {
       "files": 46466,
-      "passed": 46096,
-      "failed": 370,
-      "gap_files": 24,
-      "noise_files": 346,
-      "pass_rate": "99.20%",
-      "oracle_note": "adjudicated by the two-leg union oracle. Moving from py3-only to the union re-classified 4 noise files as gaps (see known_gaps) — the direction the union exists to catch.",
-      "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note"
+      "passed": 46112,
+      "failed": 354,
+      "gap_files": 13,
+      "noise_files": 341,
+      "pass_rate": "99.24%",
+      "oracle_note": "adjudicated by the two-leg union oracle (CPython 3.12.3 + 2.7.18).",
+      "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note",
+      "note": "gap_files fell 24 -> 13 with the PEP 634 pattern sub-grammar; the whole as-pattern family is closed and CPython's own test_patma suite (vendored by cython) parses clean."
     },
-    "mutation_falsification": "the same corpus swept against the grammar with while_statement deleted from _loop reports 3,661 gap files (vs 20); the pipeline can say non-zero, so 20 is a measurement, not a silence"
+    "mutation_falsification": "the same corpus swept against the grammar with while_statement deleted from _loop reports 3,661 gap files (vs 13); with star_pattern deleted from the match sequence rule it reports 17. The pipeline can say non-zero for both old and new rules, so 13 is a measurement."
   },
   "known_gaps": [
     {
-      "construct": "as-patterns nested inside case containers (`case (int() as rows, int() as cols)`, `case [a as b]`, `case {'k': T() as v}`)",
-      "files": 12,
-      "note": "case patterns reuse the expression grammar; `as` binds only at the top level of a pattern. The union oracle surfaced this in REAL library code (matplotlib widgets.py, cython's pattern-matching tests), not just formatter fixtures — the dedicated pattern sub-grammar is the top follow-up."
+      "construct": "PEP 701 f-string edges (same-quote nesting, multiline interpolations opened at line end, \\{ escapes)",
+      "files": 3
     },
     {
       "construct": "py3 keywords as py2 identifiers (bare `nonlocal`, bare `await` — ruff parser fixtures)",
       "files": 2,
-      "note": "the declared hard-keyword deviation, now measured instead of assumed: 2 fixture files in 46,466, zero incidence in real library code."
+      "note": "the declared hard-keyword deviation, measured: 2 fixture files in 46,466, zero incidence in real library code"
     },
     {
-      "construct": "parenthesized kwarg name `f((a)=1)`, valid ≤3.7 and in py2",
+      "construct": "parenthesized kwarg name `f((a)=1)`, valid <=3.7 and in py2",
       "files": 2
-    },
-    {
-      "construct": "PEP 701 f-string edges (same-quote nesting, multiline interpolations opened at line end, \\{ escapes)",
-      "files": 3
     },
     {
       "construct": "walrus/format-spec collision f\"{num:=.2Uf}\" (`:=` lexes as one token; CPython special-cases this in its tokenizer)",
       "files": 1
     },
     {
-      "construct": "formatter test fixtures with deliberate edge layout (ruff/black `else:\\` backslash-continuation cases, inline-if + comment interleavings)",
-      "files": 4
+      "construct": "formatter test fixtures with deliberate edge layout (ruff/black `else:\\` backslash-continuation, inline-if + comment interleavings)",
+      "files": 5
     }
   ],
   "deviations": [
@@ -78,5 +74,6 @@
       "what": "inconsistent partial dedents (`if a:` at 0, body at 8, next line at 4) parse; CPython's tokenizer raises IndentationError. The scanner dedents to the nearest enclosing level"
     }
   ],
-  "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _clause and _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). The vocabulary decision this feeds: _clause and _control_flow are candidates for facet-tier reassignment at the next vocabulary version."
+  "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). _clause MOVED to the facet tier in vocabulary 0.2.0 on exactly this evidence, gathered independently in python, rust and typescript; _control_flow remains the open candidate.",
+  "patterns_note": "match patterns are a dedicated sub-grammar (PEP 634), not the expression rules. The shapes reuse the destructuring node names by alias — `(tuple_pattern)`, `(list_pattern)`, `(star_pattern)` mean the same thing in `a, b = x` and in `case (a, b)` — but they are NOT threaded through the `_pattern` supertype, and that is a measured decision rather than an oversight: python's destructuring and match positions admit different member sets (`x[0]` and `*rest` destructure but do not match; `Point(x=0)` and `{'k': v}` match but do not destructure), and a supertype's members enter every position that references it. Routing them through `_pattern` made `a, Point(x=0) = z` parse, which CPython rejects. This is the `_clause` law in a second place; rust does not hit it because its `let` and `match` patterns are one set. Consequence: `(_pattern)` covers destructuring positions here, and match patterns are reached by their shared concrete names."
 }
