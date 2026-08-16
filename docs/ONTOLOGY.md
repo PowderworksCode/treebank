@@ -1,3 +1,9 @@
+> **SUPERSEDED (2026-08-16)** by the redesign in [`DESIGN.md`](../DESIGN.md):
+> treebank now writes all grammars from scratch with the two-tier shared
+> vocabulary. The *measurements* in this file (supertype query mechanics,
+> differential harness cost, vocabulary survey) remain valid and are cited
+> from there; the *decisions* are re-decided in DESIGN.md §8.
+
 # The node ontology
 
 *Status: the four decisions in §6 are **settled** (2026-08-16); questions 5 and
