@@ -1,2 +1,5 @@
-def f():
-    nonlocal x
+def outer():
+    x = 1
+    def inner():
+        nonlocal x
+        x = 2

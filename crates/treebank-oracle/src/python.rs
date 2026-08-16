@@ -12,18 +12,51 @@ impl Oracle for Python {
         LangName::Python
     }
 
-    /// tools/py-oracle: CPython's own parser via `ast.parse`, which parses
-    /// and stops — no import, no execution, no name resolution — so a
-    /// missing dependency is not an error and each file is judged on its
-    /// own. The interpreter's version is the language version and is
-    /// recorded in ledger.json; see the note there.
+    /// The union oracle for a union grammar (DESIGN.md §4.3): a file is
+    /// valid python if ANY version family accepts it. CPython 3 judges
+    /// every file first via tools/py-oracle/check.py; whatever it rejects
+    /// is re-judged by CPython 2.7 via check2.py. Both go through
+    /// `compile(src, path, 'exec')` — parse and post-parse SyntaxErrors,
+    /// no import, no execution — so each file is judged on its own text.
+    /// The interpreter versions are the language versions and are recorded
+    /// in ledger.json.
+    ///
+    /// python2 is REQUIRED, not optional: a union grammar swept with only
+    /// the py3 oracle books every py2-only file as noise, which silently
+    /// hides the py2 half's gaps. If `python2` is not on PATH this errors
+    /// loudly rather than degrading.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        stdin_oracle::run(
+        let mut verdicts = stdin_oracle::run(
             "python3",
             &[crate::tool("py-oracle/check.py").to_string_lossy().as_ref()],
             "python3 tools/py-oracle/check.py — is python3 installed?",
             srcroot,
             paths,
-        )
+        )?;
+
+        let py3_rejected: Vec<String> = paths
+            .iter()
+            .filter(|p| verdicts.get(*p).copied() == Some(false))
+            .cloned()
+            .collect();
+        if py3_rejected.is_empty() {
+            return Ok(verdicts);
+        }
+
+        let py2 = stdin_oracle::run(
+            "python2",
+            &[crate::tool("py-oracle/check2.py").to_string_lossy().as_ref()],
+            "python2 tools/py-oracle/check2.py — python2 (2.7) is REQUIRED \
+             for the union oracle; a py3-only sweep would book every \
+             py2-only file as noise",
+            srcroot,
+            &py3_rejected,
+        )?;
+        for (path, valid) in py2 {
+            if valid {
+                verdicts.insert(path, true);
+            }
+        }
+        Ok(verdicts)
     }
 }

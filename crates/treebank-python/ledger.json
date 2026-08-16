@@ -6,15 +6,17 @@
   "oracles": [
     {
       "family": "python3",
-      "tool": "tools/py-oracle/check.py under python3 (stdin batch, ast.parse)",
+      "tool": "tools/py-oracle/check.py under python3 (stdin batch, compile(src, path, 'exec'))",
       "version": "CPython 3.12.3",
-      "role": "primary; the sweep's gap/noise split below was adjudicated by it",
+      "role": "primary; judges every file first",
       "horizon_note": "3.12 rejects syntax newer than itself: PEP 758 (3.14 parenthesis-free multi-except) appears in one black fixture and is booked as noise here; it becomes a gap the day the oracle is bumped, and the bump gets its own before/after sweep."
     },
     {
       "family": "python2",
-      "tool": "NONE AVAILABLE — no python2 binary exists on this machine or in CI",
-      "role": "the py2 side of the union is verified by construction only: test/corpus/python2.txt (statement forms, lexical forms, except-comma, tuple parameters) and test/negative-oracle/py3/ (py2-only forms a py3 oracle must reject). A live py2.7 oracle is the first upgrade this ledger wants."
+      "tool": "tools/py-oracle/check2.py under python2 (stdin batch, compile(src, path, 'exec'); the script is written in the py2/py3 common subset)",
+      "version": "CPython 2.7.18, built from source (Ubuntu 24.04 ships no python2 package)",
+      "role": "REQUIRED second leg of the union: every file python3 rejects is re-judged, and a file is valid if either accepts. The driver errors loudly if python2 is missing — a py3-only sweep books every py2-only file as noise, which silently hides the py2 half's gaps. Adding this leg surfaced 4 real gap files the py3-only sweep had mis-filed as noise.",
+      "battery": "test/negative-oracle/py3/ (print statement, backticks, 0777, except-comma) verified live: python3 rejects all four, python2 accepts all four. test/negative-oracle/py2/ (f-string, nonlocal, walrus) verified live in the reverse direction. The battery caught its own bad fixture on first run: bare `nonlocal x` with no enclosing binding is a SyntaxError in py3 as well, so the fixture gained the enclosing function it needed."
     }
   ],
   "corpus": {
@@ -26,24 +28,55 @@
       "files": 46466,
       "passed": 46096,
       "failed": 370,
-      "gap_files": 20,
-      "noise_files": 350,
+      "gap_files": 24,
+      "noise_files": 346,
       "pass_rate": "99.20%",
-      "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note"
+      "oracle_note": "adjudicated by the two-leg union oracle. Moving from py3-only to the union re-classified 4 noise files as gaps (see known_gaps) — the direction the union exists to catch.",
+      "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note"
     },
     "mutation_falsification": "the same corpus swept against the grammar with while_statement deleted from _loop reports 3,661 gap files (vs 20); the pipeline can say non-zero, so 20 is a measurement, not a silence"
   },
   "known_gaps": [
-    {"construct": "as-patterns nested inside case containers (`case [a as b]`, `case {'k': T() as v}`)", "files": 10, "note": "case patterns reuse the expression grammar; `as` binds only at the top level of a pattern. Fixing this properly means a dedicated pattern sub-grammar — the planned follow-up."},
-    {"construct": "PEP 701 f-string edges (same-quote nesting, multiline interpolations opened at line end, \\{ escapes)", "files": 3},
-    {"construct": "walrus/format-spec collision f\"{num:=.2Uf}\" (`:=` lexes as one token; CPython special-cases this in its tokenizer)", "files": 1},
-    {"construct": "formatter test fixtures with deliberate edge layout (ruff/black `else:\\` backslash-continuation cases, inline-if + comment interleavings)", "files": 6}
+    {
+      "construct": "as-patterns nested inside case containers (`case (int() as rows, int() as cols)`, `case [a as b]`, `case {'k': T() as v}`)",
+      "files": 12,
+      "note": "case patterns reuse the expression grammar; `as` binds only at the top level of a pattern. The union oracle surfaced this in REAL library code (matplotlib widgets.py, cython's pattern-matching tests), not just formatter fixtures — the dedicated pattern sub-grammar is the top follow-up."
+    },
+    {
+      "construct": "py3 keywords as py2 identifiers (bare `nonlocal`, bare `await` — ruff parser fixtures)",
+      "files": 2,
+      "note": "the declared hard-keyword deviation, now measured instead of assumed: 2 fixture files in 46,466, zero incidence in real library code."
+    },
+    {
+      "construct": "parenthesized kwarg name `f((a)=1)`, valid ≤3.7 and in py2",
+      "files": 2
+    },
+    {
+      "construct": "PEP 701 f-string edges (same-quote nesting, multiline interpolations opened at line end, \\{ escapes)",
+      "files": 3
+    },
+    {
+      "construct": "walrus/format-spec collision f\"{num:=.2Uf}\" (`:=` lexes as one token; CPython special-cases this in its tokenizer)",
+      "files": 1
+    },
+    {
+      "construct": "formatter test fixtures with deliberate edge layout (ruff/black `else:\\` backslash-continuation cases, inline-if + comment interleavings)",
+      "files": 4
+    }
   ],
   "deviations": [
-    {"what": "py2 chevron print `print >> f, x` takes the expression reading (a tuple whose head is a right-shift) — it is valid py3 syntax too, and the union prefers the py3 reading whenever both parse (print_statement carries prec.dynamic(-1))"},
-    {"what": "keywords that were identifiers in some version (True/False/None in py2, async/await before 3.7) are hard keywords here; `True = 5` (py2-valid) does not parse. Soft-keyword machinery exists for print/exec/match/case/type, which carry real corpus weight; the others measured no corpus incidence"},
-    {"what": "`x = 1; if y: pass` (invalid in every version) is accepted when it ends the file: the zero-width NEWLINE the scanner hands out at EOF satisfies the line wrapper the inline suite already consumed. One negative-corpus candidate removed for it; fix wants a smarter EOF rule"},
-    {"what": "inconsistent partial dedents (`if a:` at 0, body at 8, next line at 4) parse; CPython's tokenizer raises IndentationError. The scanner dedents to the nearest enclosing level"}
+    {
+      "what": "py2 chevron print `print >> f, x` takes the expression reading (a tuple whose head is a right-shift) — it is valid py3 syntax too, and the union prefers the py3 reading whenever both parse (print_statement carries prec.dynamic(-1))"
+    },
+    {
+      "what": "keywords that were identifiers in some version (True/False/None in py2, async/await before 3.7) are hard keywords here; `True = 5` (py2-valid) does not parse. Soft-keyword machinery exists for print/exec/match/case/type, which carry real corpus weight; the others measured no corpus incidence"
+    },
+    {
+      "what": "`x = 1; if y: pass` (invalid in every version) is accepted when it ends the file: the zero-width NEWLINE the scanner hands out at EOF satisfies the line wrapper the inline suite already consumed. One negative-corpus candidate removed for it; fix wants a smarter EOF rule"
+    },
+    {
+      "what": "inconsistent partial dedents (`if a:` at 0, body at 8, next line at 4) parse; CPython's tokenizer raises IndentationError. The scanner dedents to the nearest enclosing level"
+    }
   ],
   "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _clause and _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). The vocabulary decision this feeds: _clause and _control_flow are candidates for facet-tier reassignment at the next vocabulary version."
 }
