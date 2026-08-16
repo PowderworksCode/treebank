@@ -1,9 +1,10 @@
 # The node ontology
 
-*Status: proposal. Nothing below is implemented. This document must be settled
-before any owned `grammar.js` is written, because a grammar written before the
-vocabulary is decided is a one-off that paid the cost of ownership for none of
-the benefit.*
+*Status: the four decisions in §6 are **settled** (2026-08-16); questions 5 and
+6 remain open. Nothing below is implemented. The rest of this document must
+hold before any owned `grammar.js` is written, because a grammar written before
+the vocabulary is decided is a one-off that paid the cost of ownership for none
+of the benefit.*
 
 Treebank is writing its own grammars so that the ontology can be **enforced in
 the parse table** rather than reconstructed afterwards by a query layer that
@@ -146,7 +147,7 @@ Already true in tree-sitter and already used: rust's `_literal` sits inside
 
 ## 3. The terms
 
-Nine terms, in three groups. For each: what it means, and what it excludes.
+Eight terms, in three groups. For each: what it means, and what it excludes.
 
 ### Group A — the syntactic categories
 
@@ -179,8 +180,8 @@ a language's parameter list cannot destructure, parameters are plain nodes and
 
 ### Group B — the binding categories
 
-This is where the existing vocabularies disagree (§1.2), so the proposal states
-its cut sharply.
+This is where the existing vocabularies disagree (§1.2). **Decided: the cut is
+*has a body*.**
 
 **`definition`** — introduces a named entity **and supplies its content**.
 
@@ -222,7 +223,7 @@ Consequences that must be accepted rather than discovered later:
   are outside the vocabulary. That is a real loss — "where is this trait
   implemented" is the query — and it is open question 5 below.
 
-**`directive`** — affects the compilation unit or its environment rather than
+**`directive`** (**decided: this term exists**) — affects the compilation unit or its environment rather than
 binding a name in it: imports, exports, `package`, `#include`, `use`, `using`,
 `require`, pragmas, module attributes, preprocessor conditionals, shebangs.
 
@@ -253,9 +254,10 @@ folded form, and it is a `literal` where it appears.
 
 *Required containment*: `literal ⊆ expression`.
 
-**`value`** — reserved; see open question 2. Either data languages use
-`expression`/`literal` like everyone else, or `value` is the ninth term and
-`expression` is not declared by JSON, TOML, YAML or HTML.
+**`value`** — **decided: this term does not exist.** Data languages use
+`expression` and `literal` like everyone else (§4), so `(literal)` and
+`(definition)` mean the same thing over a `.json`, a `.toml` and a `.rs` file.
+The vocabulary is eight terms, not nine.
 
 ---
 
@@ -269,13 +271,24 @@ Upstream declares one hidden supertype, `_value`, over
 Under §3, every one of those seven is a `literal` by the per-rule test — no
 JSON construct can contain a name or a computation — and `_value` is exactly
 the set of things that denote a value. So JSON declares **`expression` and
-`literal`, with `literal ⊆ expression` and the two sets equal**, or, under
-question 2's alternative, `value` and `literal`.
+`literal`, with `literal ⊆ expression` and the two sets equal**.
 
 That equality is not a degenerate result. It is the ontology stating the thing
 that makes JSON a data language, in the same terms it states everything else,
 and it makes `(literal)` a query that means the same thing over a `.json` file
 and a `.rs` file.
+
+**Measured, not assumed.** A supertype whose entire membership is another
+supertype is unusual enough to be worth checking before the vocabulary depends
+on it. The vendored grammar with `_value` replaced by
+`expression: $ => choice($.literal)` over a `literal` holding the seven value
+rules: generates cleanly at 0.25.10; `node-types.json` records
+`expression -> literal` and `literal -> array,false,null,number,object,string,true`;
+`(expression)` and `(literal)` each capture all four values of
+`{"a": [1, true]}`; the parse tree is identical to the vendored one; and over
+the full 5,657-file corpus the differential against the vendored grammar is
+**0 disagreements, 92 failing files either way**. The ontology's shape for JSON
+is expressible and is behaviour-preserving.
 
 `pair`, `document`, `string_content`, `escape_sequence`, `comment` are
 uncategorised and ledgered.
@@ -294,8 +307,9 @@ Upstream declares nothing at all. Under §3:
   §3; they are uncategorised, and the absence is open question 6.
 
 `(definition)` over a TOML file then returns every key and every table header,
-and over a Rust file returns every item. Whether that is the ontology paying
-off or the ontology overreaching is open question 2.
+and over a Rust file returns every item. **Decided: that is the ontology paying
+off, and it is the intended behaviour** — the code and data vocabularies are
+one vocabulary.
 
 ---
 
@@ -321,25 +335,44 @@ from day one rather than only after the eighteenth grammar is rewritten.
 
 ---
 
-## 6. Open questions — these are the user's call
+## 6. Decisions
 
-1. **The `declaration`/`definition` cut.** Proposed: *has a body*. Alternatives
-   that real grammars use: *top-level vs local* (java), *not-an-expression*
-   (rust), *binds a name* (javascript), or collapse the two into a single
-   `definition` and lose the signature/implementation distinction.
-2. **Do data languages share the code vocabulary?** Proposed: yes — JSON and
-   TOML declare `expression`/`literal`, and TOML's `pair` is a `definition`.
-   Alternative: a separate `value` term, data languages declare no
-   `expression`, and `(definition)` never matches in a config file.
-3. **Where do imports go?** Proposed: a new `directive` term. Alternatives:
-   `definition` (they do bind names), or `statement` (javascript's answer), or
-   leave them uncategorised.
-4. **Compatibility.** Owned grammars rename `_value` → `value`,
-   `_expression` → `expression`. Parse consumers are unaffected (trees are
-   identical, measured §1.1); **query consumers break**. Take the break, or
-   carry upstream's spelling as an alias through a transition?
+Settled 2026-08-16. Each is recorded with what it rules out, because the
+alternatives were live and a later reader should not have to re-derive why they
+lost.
+
+1. **The `declaration`/`definition` cut is *has a body*.** `definition` names a
+   thing and supplies it; `declaration` names it and does not. Rules out java's
+   *top-level vs local*, rust's *not-an-expression*, and javascript's *binds a
+   name*, and accepts that java's `class_declaration` is a `definition` despite
+   its name. Chosen because it is decidable from the rule alone and because c,
+   rust, haskell and scala already draw it in their concrete node names.
+2. **Data languages share the code vocabulary.** JSON and TOML declare
+   `expression` and `literal`; TOML's `pair`, `table` and `table_array_element`
+   are `definition`s. Rules out a separate `value` term — so the vocabulary is
+   **eight terms**, and `(definition)` matching every key in a `Cargo.toml` is
+   intended rather than tolerated.
+3. **Imports get their own term, `directive`.** Rules out filing them under
+   `definition` (java, csharp) or `statement` (javascript). Keeps *what does
+   this file depend on* and *what does this file define* as two queries. The
+   known awkward case is accepted: `import numpy as np` does bind `np` and is
+   still a `directive`.
+4. **The query break is taken and versioned.** Owned grammars publish the
+   public spellings; `(_value)` stops working and `(value)` starts. Rules out
+   an alias shim and rules out keeping upstream's per-language underscore
+   convention. Trees are unchanged (§1.1), so `parse()` consumers see nothing;
+   `.scm` consumers get a major version and a changelog entry.
+
+## 7. Still open
+
 5. **Unnamed definitions.** Rust `impl` blocks, Ruby singleton classes, Java
-   anonymous classes: outside the vocabulary as written. Widen `definition` to
-   drop the name requirement, or accept the loss?
+   anonymous classes supply content without binding a name, so §3's
+   `definition` excludes them. "Where is this trait implemented" is a query
+   someone will want. Widen `definition` to drop the name requirement, or
+   accept the loss and ledger them as uncategorised?
 6. **Is there a `name` term?** Erlang declares `_name`; nothing else does. TOML
-   keys, identifiers, qualified paths all want it. Ninth term, or not?
+   keys, identifiers and qualified paths all want one, and §4 currently leaves
+   TOML's `bare_key`/`quoted_key`/`dotted_key` uncategorised. Ninth term, or
+   not?
+
+Neither blocks the JSON grammar. Question 6 is the first thing TOML runs into.

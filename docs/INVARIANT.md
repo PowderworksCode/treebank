@@ -123,7 +123,7 @@ upstream's problem. Under ownership it is ours, and it should be a gate.
 
 ### R5 — Ontology conformance (new; the reason for the programme)
 
-`treebank ontology` per `docs/ONTOLOGY.md` §5: the closed vocabulary, public
+`treebank ontology` per `docs/ONTOLOGY.md` §5: the closed eight-term vocabulary, public
 spellings, total node coverage, declared containments. This is the invariant
 that has no analogue today — it is the thing that could not be enforced while
 the grammar belonged to someone else, and it is what the other four are in
