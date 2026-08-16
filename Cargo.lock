@@ -977,10 +977,20 @@ dependencies = [
  "serde_json",
  "sha2",
  "tree-sitter",
+ "treebank-core",
  "treebank-corpus",
  "treebank-lang",
  "treebank-oracle",
  "treebank-preprocessing",
+]
+
+[[package]]
+name = "treebank-core"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

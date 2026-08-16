@@ -63,6 +63,14 @@ enum Cmd {
         #[arg(long)]
         out: Option<PathBuf>,
     },
+    /// Check a grammar's vocabulary conformance (DESIGN.md §3.3): declared
+    /// supertypes from the closed table tier, every named node covered or
+    /// deliberately uncategorised, required containments, and a valid
+    /// roles.json facet manifest
+    Roles {
+        /// Grammar crate root: reads src/node-types.json and roles.json
+        grammar: PathBuf,
+    },
     /// Assert that every file in a directory FAILS to parse (negative corpus)
     Negative {
         #[arg(long)]
@@ -122,6 +130,31 @@ fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
+/// `treebank roles`: the vocabulary-conformance gate, one grammar crate at
+/// a time. Prints every finding rather than the first, and exits non-zero
+/// on any — an empty report is conformance.
+fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
+    let vocab = treebank_core::vocabulary();
+    let nt = treebank_core::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
+    let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
+    let findings = treebank_core::check::check(&nt, &roles, vocab);
+    for f in &findings {
+        eprintln!("roles: {f}");
+    }
+    if !findings.is_empty() {
+        anyhow::bail!("{} vocabulary conformance finding(s)", findings.len());
+    }
+    println!(
+        "roles OK: {} supertypes, {} facet(s), {} named node(s), {} uncategorised (vocabulary {})",
+        nt.supertypes.len(),
+        roles.facets.len(),
+        nt.named.len() - nt.supertypes.len(),
+        roles.uncategorised.len(),
+        vocab.version,
+    );
+    Ok(())
+}
+
 fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {
     given.unwrap_or_else(|| {
         let mut p = PathBuf::from("corpus").join(lang.as_str());
@@ -152,6 +185,7 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/sweep.json"),
         ),
+        Cmd::Roles { grammar } => roles_cmd(&grammar),
         Cmd::Negative { grammar, dir } => sweep::negative(&grammar, &dir),
         Cmd::Oracle { lang, srcroot } => oracle_cmd(lang, &srcroot),
     }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/treebank-cli",
+    "crates/treebank-core",
     "crates/treebank-corpus",
     "crates/treebank-lang",
     "crates/treebank-oracle",

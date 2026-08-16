@@ -1,0 +1,10 @@
+[package]
+name = "treebank-core"
+version = "0.1.0"
+edition = "2021"
+description = "The treebank vocabulary as code and data: the closed term lists, the roles.json facet manifest schema, the vocabulary-conformance checker, and facet query expansion."
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"

@@ -1,0 +1,38 @@
+{
+  "version": "0.1.0",
+  "table": [
+    { "name": "_statement", "definition": "executed for effect as an element of a sequence" },
+    { "name": "_expression", "definition": "denotes a value" },
+    { "name": "_declaration", "definition": "introduces a named entity — function, class or type, variable, interface — with or without a body" },
+    { "name": "_pattern", "definition": "destructuring or matching position" },
+    { "name": "_type", "definition": "syntax in type position" },
+    { "name": "_name", "definition": "denotes or refers to a name: identifier, qualified name, path" },
+    { "name": "_literal", "definition": "value fully determined by its own text, for every instance of the rule" },
+    { "name": "_parameter", "definition": "formal parameter position" },
+    { "name": "_argument", "definition": "actual argument position in an invocation" },
+    { "name": "_member", "definition": "element of a type's body" },
+    { "name": "_clause", "definition": "subordinate piece of a larger construct that is not naturally a statement or expression" },
+    { "name": "_modifier", "definition": "keyword-ish marker altering a declaration's meaning" },
+    { "name": "_attribute", "definition": "annotation attached to a declaration" },
+    { "name": "_directive", "definition": "affects the compilation unit or its environment rather than computing in it" },
+    { "name": "_body", "definition": "the body position of a definition or control construct" },
+    { "name": "_control_flow", "definition": "alters sequential execution" },
+    { "name": "_branch", "definition": "conditional selection" },
+    { "name": "_loop", "definition": "repetition" },
+    { "name": "_jump", "definition": "non-local transfer" },
+    { "name": "_assignment", "definition": "stores into a place" },
+    { "name": "_invocation", "definition": "applies a callable" },
+    { "name": "_access", "definition": "reads a place: member or index" }
+  ],
+  "facets": [
+    { "name": "_callable", "definition": "defines something invokable" },
+    { "name": "_binding", "definition": "introduces a name" },
+    { "name": "_scope", "definition": "delimits a lexical scope" }
+  ],
+  "containments": [
+    ["_literal", "_expression"],
+    ["_branch", "_control_flow"],
+    ["_loop", "_control_flow"],
+    ["_jump", "_control_flow"]
+  ]
+}

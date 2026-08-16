@@ -18,6 +18,7 @@ measurement infrastructure they will be built and validated against:
 | path | what it is |
 |---|---|
 | `DESIGN.md` | the design: vocabulary, invariants, layout, order of work |
+| `crates/treebank-core` | the vocabulary as code and data: `vocabulary/vocabulary.json` (the closed 22-term table tier + 3 facets), `vocabulary/supertypes.js` (the JS face every grammar.js imports, with a generate-time term assert), the `roles.json` manifest schema, the vocabulary-conformance checker behind `treebank roles`, and facet query expansion (`(_callable)` → the concrete alternation) |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: `rank` an ecosystem's packages (PyPI, crates.io, npm), `fetch` their tarballs, extract source files, write the manifest sweeps consume — self-contained, with no grammar or oracle knowledge, so it can move out of this repo |
 | `crates/treebank-oracle` | reference-parser oracles behind one trait: is this file valid \<language\>? Carries its own oracle programs in `tools/` (CPython `ast.parse`, `syn`, `tsc`'s parser, V8) — equally self-contained and movable |

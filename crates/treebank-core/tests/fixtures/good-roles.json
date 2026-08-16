@@ -1,0 +1,10 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_callable": ["function_definition", "lambda"],
+    "_scope": ["module", "function_definition", "lambda"]
+  },
+  "uncategorised": [
+    { "node": "comment", "reason": "an extra; carries no syntactic role" }
+  ]
+}
