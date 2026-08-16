@@ -1,0 +1,41 @@
+{
+  "language": "rust",
+  "versions": "editions 2015–2024 in one grammar: try!() coexists with ?, async/await/dyn are keywords, let-chains and let-else, labeled blocks, c\"…\" and cr\"…\" literals, &raw const/mut, PEP-nothing — plus `safe`/`raw`/`default`/`auto`/`union`/`box`/`macro_rules` handled as soft keywords so edition-crossing identifier uses keep parsing",
+  "generate_cli": "0.25.10",
+  "vocabulary": "0.1.0",
+  "oracles": [
+    {
+      "family": "rust",
+      "tool": "syn::parse_file, in-process (no subprocess), driven by rayon",
+      "version": "syn 2",
+      "role": "primary and only. syn is edition-tolerant in the same direction this grammar is: it parses the union of editions without needing a flag per file. rustc -Zparse-only with --edition sweeps remains the adjudicator of last resort for future disagreements; nothing in this ledger needed it.",
+      "note": "an unreadable file is an error, never a verdict — the property every treebank oracle carries"
+    }
+  ],
+  "corpus": {
+    "source": "top-1000 crates.io crates by all-time downloads (crates.io db dump, fetched 2026-08-16), .crate tarballs",
+    "files": 27526,
+    "packages": 1000,
+    "blind_to": "pre-2018 idioms are underrepresented (top crates track current editions); no rustc test-suite torture cases; macro-heavy DSLs appear only as token trees",
+    "sweep": {
+      "files": 27526,
+      "passed": 27511,
+      "failed": 15,
+      "gap_files": 2,
+      "noise_files": 13,
+      "pass_rate": "99.95%",
+      "noise_note": "all 13 verified by inspection: derivative's doc/ fragments, cxx and pin-project trybuild ui fixtures (invalid by design), disabled/ source, one non-rust script"
+    },
+    "mutation_falsification": "the same corpus swept with while_expression deleted from _loop reports 2,323 gap files (vs 2); restored, 2 again. The number is a measurement, not a silence."
+  },
+  "known_gaps": [
+    {"construct": "ron's fuzzer fixture (a 2KB string of unbalanced braces with embedded blank lines) and json5's escape-soup test", "files": 2, "note": "both are generated test fixtures; each parses clean when extracted in halves, failing only whole — a GLR interaction still uncharacterized. The one real-library construct found and fixed on the way was worth more than these two."}
+  ],
+  "deviations": [
+    {"what": "source_file accepts statements (not just items) at top level, so `(_statement)` matches top-level occurrences the same way it does in blocks; rustc rejects expression statements there. Union-widening, covered by test/negative would-be cases only in spirit"},
+    {"what": "struct literals in condition position (`if x == S{} {}`) parse where rustc requires parens; the ban is enforced only at the condition's top level, matching the grammar's structural restriction (_no_struct_expression)"},
+    {"what": "`1 +* 2` parses because `*` is unary deref in rust — the negative corpus uses `1 ++ 2` instead (no unary + in rust)"},
+    {"what": "macro token trees keep strings, chars and raw strings as real tokens (so quotes and braces inside them never unbalance the tree) but everything else is deliberate soup, fenced at whitespace, '/', and '@' — each fence bought by a measured corpus failure"}
+  ],
+  "roles_note": "21 of 22 table-tier terms are threaded — rust's expression-orientation makes _control_flow/_branch/_loop/_jump nest inside _expression (python could not thread _control_flow at all), _member threads through impl and trait bodies, and _modifier gets its first members (visibility_modifier, mutable_specifier). Only _clause remains unthreadable (match arms are position-specific; same argument as python's ledger), reinforcing the facet-tier-reassignment candidacy recorded there. try_expression (`x?`) is a _jump member: it is rust's raise."
+}

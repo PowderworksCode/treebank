@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "rust",
+      "camelcase": "Rust",
+      "scope": "source.rust",
+      "file-types": [
+        "rs"
+      ],
+      "injection-regex": "rust"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "treebank rust grammar",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

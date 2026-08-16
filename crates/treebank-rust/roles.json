@@ -1,0 +1,184 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_callable": [
+      "function_definition",
+      "closure_expression"
+    ],
+    "_binding": [
+      "function_definition",
+      "struct_definition",
+      "enum_definition",
+      "union_definition",
+      "trait_definition",
+      "module_definition",
+      "module_declaration",
+      "const_definition",
+      "static_definition",
+      "type_alias",
+      "macro_definition",
+      "extern_crate_declaration",
+      "use_declaration",
+      "let_declaration",
+      "let_condition",
+      "parameter",
+      "self_parameter",
+      "closure_expression",
+      "for_expression",
+      "type_parameter",
+      "lifetime_parameter",
+      "const_parameter",
+      "field_declaration",
+      "enum_variant",
+      "capture_pattern",
+      "field_pattern",
+      "use_as_clause"
+    ],
+    "_scope": [
+      "source_file",
+      "function_definition",
+      "block",
+      "closure_expression",
+      "module_definition",
+      "impl_block",
+      "trait_definition",
+      "async_block",
+      "const_block",
+      "unsafe_block",
+      "match_arm",
+      "loop_expression",
+      "while_expression",
+      "for_expression"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "line_comment",
+      "reason": "an extra; carries no syntactic role"
+    },
+    {
+      "node": "block_comment",
+      "reason": "an extra; carries no syntactic role"
+    },
+    {
+      "node": "arguments",
+      "reason": "container node; its elements carry the role (_argument)"
+    },
+    {
+      "node": "parameters",
+      "reason": "container node; its elements carry the role (_parameter)"
+    },
+    {
+      "node": "closure_parameters",
+      "reason": "container node; its elements carry the role (aliased parameter nodes)"
+    },
+    {
+      "node": "declaration_list",
+      "reason": "container node; its elements carry the role (_member)"
+    },
+    {
+      "node": "field_declaration_list",
+      "reason": "container node; its elements carry the role (field_declaration, a _binding facet member)"
+    },
+    {
+      "node": "ordered_field_declaration_list",
+      "reason": "container node; its elements carry the role (tuple-struct fields)"
+    },
+    {
+      "node": "enum_variant_list",
+      "reason": "container node; its elements carry the role (enum_variant, a _binding facet member)"
+    },
+    {
+      "node": "field_initializer_list",
+      "reason": "container node; its elements carry the role (field initializers)"
+    },
+    {
+      "node": "match_block",
+      "reason": "container node; its elements carry the role (match_arm, a _scope facet member)"
+    },
+    {
+      "node": "field_initializer",
+      "reason": "key: value inside a struct expression; the value carries _expression"
+    },
+    {
+      "node": "shorthand_field_initializer",
+      "reason": "field-name shorthand inside a struct expression"
+    },
+    {
+      "node": "base_field_initializer",
+      "reason": "the ..base spread inside a struct expression"
+    },
+    {
+      "node": "attribute",
+      "reason": "the path-and-arguments interior of an attribute; the attribute_item carries _attribute"
+    },
+    {
+      "node": "or_pattern",
+      "reason": "top-of-pattern alternation; deliberately NOT under _pattern because rust only allows `|` at the top level of a pattern position, and threading it through _pattern would accept nested bare alternations everywhere"
+    },
+    {
+      "node": "let_chain",
+      "reason": "the `let pat = e && cond` chain form of a condition; its members carry their own roles"
+    },
+    {
+      "node": "loop_label",
+      "reason": "the 'label: prefix of a loop; names a loop, not a value"
+    },
+    {
+      "node": "lifetime",
+      "reason": "a lifetime is a name in the type system; a candidate _name member the vocabulary has not admitted yet"
+    },
+    {
+      "node": "trait_bounds",
+      "reason": "generics machinery below the role layer"
+    },
+    {
+      "node": "type_parameters",
+      "reason": "generics machinery below the role layer"
+    },
+    {
+      "node": "type_arguments",
+      "reason": "generics machinery below the role layer"
+    },
+    {
+      "node": "type_binding",
+      "reason": "generics machinery below the role layer (Item = T inside type arguments)"
+    },
+    {
+      "node": "use_bound",
+      "reason": "generics machinery below the role layer (use<'a> precise capture)"
+    },
+    {
+      "node": "where_clause",
+      "reason": "generics machinery below the role layer"
+    },
+    {
+      "node": "where_predicate",
+      "reason": "generics machinery below the role layer"
+    },
+    {
+      "node": "higher_ranked_bound",
+      "reason": "generics machinery below the role layer (for<'a> bound)"
+    },
+    {
+      "node": "higher_ranked_prefix",
+      "reason": "generics machinery below the role layer (for<'a> prefix of fn types)"
+    },
+    {
+      "node": "use_list",
+      "reason": "grouping inside a use tree; the use_declaration carries _directive"
+    },
+    {
+      "node": "scoped_use_list",
+      "reason": "prefix::{...} inside a use tree"
+    },
+    {
+      "node": "use_wildcard",
+      "reason": "the * leaf of a use tree"
+    },
+    {
+      "node": "token_tree",
+      "reason": "macro content is token soup by design; no roles inside"
+    }
+  ]
+}

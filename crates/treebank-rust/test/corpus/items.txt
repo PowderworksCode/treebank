@@ -1,0 +1,119 @@
+================================================================================
+functions, structs, enums
+================================================================================
+
+#[inline]
+pub async fn f<T: Clone>(x: &mut T, n: u32) -> Result<T, E> where T: Send {
+    x
+}
+
+pub struct P<'a> { pub name: &'a str }
+struct Unit;
+struct Tuple(u8, pub String);
+
+enum E { A, B(u8), C { x: u32 } }
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_definition
+    (attribute_item (attribute (identifier)))
+    (visibility_modifier)
+    name: (identifier)
+    type_parameters: (type_parameters
+      (type_parameter name: (identifier) (trait_bounds (type_identifier))))
+    parameters: (parameters
+      (parameter
+        pattern: (identifier)
+        type: (reference_type (mutable_specifier) type: (type_identifier)))
+      (parameter pattern: (identifier) type: (type_identifier)))
+    return_type: (generic_type
+      type: (type_identifier)
+      type_arguments: (type_arguments (type_identifier) (type_identifier)))
+    (where_clause
+      (where_predicate (type_identifier) (trait_bounds (type_identifier))))
+    body: (block (identifier)))
+  (struct_definition
+    (visibility_modifier)
+    name: (identifier)
+    type_parameters: (type_parameters (lifetime_parameter (lifetime)))
+    body: (field_declaration_list
+      (field_declaration
+        (visibility_modifier)
+        name: (identifier)
+        type: (reference_type (lifetime) type: (type_identifier)))))
+  (struct_definition name: (identifier))
+  (struct_definition
+    name: (identifier)
+    body: (ordered_field_declaration_list
+      type: (type_identifier)
+      (visibility_modifier)
+      type: (type_identifier)))
+  (enum_definition
+    name: (identifier)
+    body: (enum_variant_list
+      (enum_variant name: (identifier))
+      (enum_variant name: (identifier)
+        body: (ordered_field_declaration_list type: (type_identifier)))
+      (enum_variant name: (identifier)
+        body: (field_declaration_list
+          (field_declaration name: (identifier) type: (type_identifier)))))))
+
+================================================================================
+impl, trait, use, mod
+================================================================================
+
+use std::io::{self, Read as R};
+
+impl<T> Runner for W<T> {
+    fn run(&self) -> u8 { 0 }
+}
+
+pub trait Runner: Send {
+    type Out;
+    fn run(&self) -> u8;
+}
+
+mod inner {
+    pub fn g() {}
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (use_declaration
+    (scoped_use_list
+      path: (scoped_identifier path: (identifier) name: (identifier))
+      (use_list
+        (self)
+        (use_as_clause path: (identifier) alias: (identifier)))))
+  (impl_block
+    type_parameters: (type_parameters (type_parameter name: (identifier)))
+    trait: (type_identifier)
+    type: (generic_type
+      type: (type_identifier)
+      type_arguments: (type_arguments (type_identifier)))
+    body: (declaration_list
+      (function_definition
+        name: (identifier)
+        parameters: (parameters (self_parameter))
+        return_type: (type_identifier)
+        body: (block (integer)))))
+  (trait_definition
+    (visibility_modifier)
+    name: (identifier)
+    (trait_bounds (type_identifier))
+    body: (declaration_list
+      (type_alias name: (identifier))
+      (function_definition
+        name: (identifier)
+        parameters: (parameters (self_parameter))
+        return_type: (type_identifier))))
+  (module_definition
+    name: (identifier)
+    body: (block
+      (function_definition
+        (visibility_modifier)
+        name: (identifier)
+        parameters: (parameters)
+        body: (block)))))
