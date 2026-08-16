@@ -1,0 +1,28 @@
+{
+  "grammars": [
+    {
+      "name": "typescript",
+      "camelcase": "TypeScript",
+      "scope": "source.ts",
+      "file-types": [
+        "ts",
+        "tsx",
+        "mts",
+        "cts",
+        "js",
+        "jsx",
+        "mjs",
+        "cjs"
+      ],
+      "injection-regex": "typescript"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "treebank typescript grammar",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}
