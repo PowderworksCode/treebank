@@ -11,13 +11,28 @@ a = b = c
 --------------------------------------------------------------------------------
 
 (module
-  (assignment left: (identifier) right: (integer))
   (assignment
-    left: (pattern_list (identifier) (identifier))
-    right: (tuple (integer) (integer)))
-  (assignment left: (identifier) type: (identifier) right: (integer))
-  (augmented_assignment left: (identifier) right: (integer))
-  (assignment left: (identifier) right: (assignment left: (identifier) right: (identifier))))
+    left: (identifier)
+    right: (integer))
+  (assignment
+    left: (pattern_list
+      (identifier)
+      (identifier))
+    right: (tuple
+      (integer)
+      (integer)))
+  (assignment
+    left: (identifier)
+    type: (identifier)
+    right: (integer))
+  (augmented_assignment
+    left: (identifier)
+    right: (integer))
+  (assignment
+    left: (identifier)
+    right: (assignment
+      left: (identifier)
+      right: (identifier))))
 
 ================================================================================
 control flow
@@ -41,17 +56,27 @@ else:
 (module
   (if_statement
     condition: (identifier)
-    body: (block (pass_statement))
-    alternative: (elif_clause condition: (identifier) body: (block (pass_statement)))
-    alternative: (else_clause body: (block (pass_statement))))
+    body: (block
+      (pass_statement))
+    alternative: (elif_clause
+      condition: (identifier)
+      body: (block
+        (pass_statement)))
+    alternative: (else_clause
+      body: (block
+        (pass_statement))))
   (while_statement
     condition: (identifier)
-    body: (block (break_statement)))
+    body: (block
+      (break_statement)))
   (for_statement
     left: (identifier)
     right: (identifier)
-    body: (block (continue_statement))
-    alternative: (else_clause body: (block (pass_statement)))))
+    body: (block
+      (continue_statement))
+    alternative: (else_clause
+      body: (block
+        (pass_statement)))))
 
 ================================================================================
 try, raise, with
@@ -72,19 +97,35 @@ with open(p) as f, lock:
   (try_statement
     body: (block
       (raise_statement
-        (call_expression function: (identifier)
-          arguments: (arguments (string (string_start) (string_content) (string_end))))
+        (call_expression
+          function: (identifier)
+          arguments: (arguments
+            (string
+              (string_start)
+              (string_content)
+              (string_end))))
         cause: (identifier)))
     (except_clause
-      (tuple (identifier) (identifier))
+      (tuple
+        (identifier)
+        (identifier))
       alias: (identifier)
-      body: (block (pass_statement)))
-    (finally_clause body: (block (pass_statement))))
+      body: (block
+        (pass_statement)))
+    (finally_clause
+      body: (block
+        (pass_statement))))
   (with_statement
-    (with_item value: (call_expression function: (identifier) arguments: (arguments (identifier)))
+    (with_item
+      value: (call_expression
+        function: (identifier)
+        arguments: (arguments
+          (identifier)))
       alias: (identifier))
-    (with_item value: (identifier))
-    body: (block (pass_statement))))
+    (with_item
+      value: (identifier))
+    body: (block
+      (pass_statement))))
 
 ================================================================================
 match statement
@@ -105,17 +146,27 @@ match command:
     subject: (identifier)
     body: (block
       (case_clause
-        (list (identifier) (starred_expression (identifier)))
+        (list_pattern
+          (identifier)
+          (star_pattern
+            (identifier)))
         guard: (identifier)
-        body: (block (pass_statement)))
+        body: (block
+          (pass_statement)))
       (case_clause
         (as_pattern
-          (binary_expression
-            left: (call_expression function: (identifier)
-              arguments: (arguments (keyword_argument name: (identifier) value: (integer))))
-            right: (call_expression function: (identifier) arguments: (arguments)))
+          pattern: (or_pattern
+            (class_pattern
+              class: (identifier)
+              (keyword_pattern
+                name: (identifier)
+                value: (integer)))
+            (class_pattern
+              class: (identifier)))
           alias: (identifier))
-        body: (block (pass_statement)))
+        body: (block
+          (pass_statement)))
       (case_clause
         (identifier)
-        body: (block (pass_statement))))))
+        body: (block
+          (pass_statement))))))

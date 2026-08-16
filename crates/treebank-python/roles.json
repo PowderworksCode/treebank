@@ -1,31 +1,34 @@
 {
-  "vocabulary": "0.1.0",
+  "vocabulary": "0.2.0",
   "facets": {
     "_callable": [
       "function_definition",
       "lambda"
     ],
     "_binding": [
-      "function_definition",
-      "class_definition",
-      "lambda",
+      "as_pattern",
       "assignment",
-      "named_expression",
-      "for_statement",
+      "class_definition",
+      "class_pattern",
+      "dictionary_splat_pattern",
+      "double_star_parameter",
+      "except_clause",
       "for_in_clause",
-      "import_statement",
-      "import_from_statement",
+      "for_statement",
+      "function_definition",
       "global_statement",
+      "import_from_statement",
+      "import_statement",
+      "lambda",
+      "named_expression",
       "nonlocal_statement",
       "parameter",
       "star_parameter",
-      "double_star_parameter",
+      "star_pattern",
       "tuple_parameter",
-      "except_clause",
-      "with_item",
-      "as_pattern",
       "type_alias_statement",
-      "type_parameter"
+      "type_parameter",
+      "with_item"
     ],
     "_scope": [
       "module",
@@ -36,80 +39,82 @@
       "set_comprehension",
       "dictionary_comprehension",
       "generator_expression"
+    ],
+    "_clause": [
+      "case_clause",
+      "elif_clause",
+      "else_clause",
+      "except_clause",
+      "finally_clause",
+      "for_in_clause",
+      "if_clause",
+      "with_item"
     ]
   },
   "uncategorised": [
     {
-      "node": "comment",
-      "reason": "an extra; carries no syntactic role"
-    },
-    {
-      "node": "elif_clause",
-      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
-    },
-    {
-      "node": "else_clause",
-      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
-    },
-    {
-      "node": "finally_clause",
-      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
-    },
-    {
-      "node": "if_clause",
-      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
-    },
-    {
-      "node": "case_clause",
-      "reason": "clause of a compound statement; `_clause` cannot be threaded in python \u2014 a supertype's members enter every position that references it, and each construct admits only its own clauses (see ledger roles_note)"
+      "node": "aliased_import",
+      "reason": "the `x as y` element of an import (the import statements themselves are _directive and _binding)"
     },
     {
       "node": "arguments",
       "reason": "the argument-list container; its elements carry _argument"
     },
     {
-      "node": "parameters",
-      "reason": "the parameter-list container; its elements carry _parameter"
+      "node": "comment",
+      "reason": "an extra; carries no syntactic role"
     },
     {
-      "node": "type_parameters",
-      "reason": "the PEP 695 type-parameter-list container; its elements are type_parameter (a _binding facet member)"
+      "node": "dictionary_pattern",
+      "reason": "a mapping pattern's braces; its pairs carry the roles"
     },
     {
-      "node": "pattern_list",
-      "reason": "bare comma-joined patterns (`a, b = \u2026`); its elements carry _pattern"
+      "node": "dictionary_pattern_pair",
+      "reason": "key: pattern inside a mapping pattern"
     },
     {
       "node": "dotted_name",
       "reason": "qualified import path; _name is identifier-only because a supertype reference imports all members into a position, and dotted names are not valid where identifiers are (candidate for a wider _name \u2014 see ledger)"
     },
     {
-      "node": "aliased_import",
-      "reason": "the `x as y` element of an import (the import statements themselves are _directive and _binding)"
+      "node": "escape_sequence",
+      "reason": "lexical component of a string literal, below the role layer"
     },
     {
-      "node": "relative_import",
-      "reason": "the leading-dots module path of `from . import x`"
+      "node": "format_specifier",
+      "reason": "the :spec inside an interpolation"
     },
     {
-      "node": "wildcard_import",
-      "reason": "the `*` of `from m import *`"
+      "node": "interpolation",
+      "reason": "the {\u2026} of an f-string; its expression child carries _expression"
+    },
+    {
+      "node": "keyword_pattern",
+      "reason": "the `name=pattern` element of a class pattern; its value carries _pattern"
+    },
+    {
+      "node": "or_pattern",
+      "reason": "top-of-pattern alternation in a case; deliberately NOT under _pattern because PEP 634 allows `|` only at the top level of a pattern, and threading it would accept nested bare alternations everywhere (the same argument rust's roles.json records)"
     },
     {
       "node": "pair",
       "reason": "key: value inside a dictionary display; both sides carry _expression"
     },
     {
+      "node": "parameters",
+      "reason": "the parameter-list container; its elements carry _parameter"
+    },
+    {
+      "node": "pattern_list",
+      "reason": "bare comma-joined patterns (`a, b = \u2026`); its elements carry _pattern"
+    },
+    {
+      "node": "relative_import",
+      "reason": "the leading-dots module path of `from . import x`"
+    },
+    {
       "node": "slice",
       "reason": "the a:b:c form inside a subscript; only valid there, and the subscript_expression carries _access"
-    },
-    {
-      "node": "yield_expression",
-      "reason": "python allows yield only in specific positions (statement, assignment right side, parentheses), so it is threaded at those positions rather than through _expression"
-    },
-    {
-      "node": "string_start",
-      "reason": "lexical component of a string literal, below the role layer"
     },
     {
       "node": "string_content",
@@ -120,20 +125,24 @@
       "reason": "lexical component of a string literal, below the role layer"
     },
     {
-      "node": "escape_sequence",
+      "node": "string_start",
       "reason": "lexical component of a string literal, below the role layer"
-    },
-    {
-      "node": "interpolation",
-      "reason": "the {\u2026} of an f-string; its expression child carries _expression"
-    },
-    {
-      "node": "format_specifier",
-      "reason": "the :spec inside an interpolation"
     },
     {
       "node": "type_conversion",
       "reason": "the !r/!s/!a inside an interpolation"
+    },
+    {
+      "node": "type_parameters",
+      "reason": "the PEP 695 type-parameter-list container; its elements are type_parameter (a _binding facet member)"
+    },
+    {
+      "node": "wildcard_import",
+      "reason": "the `*` of `from m import *`"
+    },
+    {
+      "node": "yield_expression",
+      "reason": "python allows yield only in specific positions (statement, assignment right side, parentheses), so it is threaded at those positions rather than through _expression"
     }
   ]
 }

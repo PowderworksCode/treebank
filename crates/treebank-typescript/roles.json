@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.1.0",
+  "vocabulary": "0.2.0",
   "facets": {
     "_callable": [
       "function_definition",
@@ -42,6 +42,15 @@
       "static_block",
       "namespace_definition",
       "catch_clause"
+    ],
+    "_clause": [
+      "case_clause",
+      "catch_clause",
+      "default_clause",
+      "else_clause",
+      "export_clause",
+      "finally_clause",
+      "import_clause"
     ]
   },
   "uncategorised": [
@@ -78,22 +87,6 @@
       "reason": "the extends/implements tail of a class definition"
     },
     {
-      "node": "else_clause",
-      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
-    },
-    {
-      "node": "case_clause",
-      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
-    },
-    {
-      "node": "default_clause",
-      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
-    },
-    {
-      "node": "finally_clause",
-      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
-    },
-    {
       "node": "pair",
       "reason": "key: value inside an object; the value carries _expression"
     },
@@ -118,16 +111,8 @@
       "reason": "dotted namespace path (a.b.c) in name positions; same candidate-_name status as rust paths and python dotted_name"
     },
     {
-      "node": "import_clause",
-      "reason": "the bindings half of an import statement (the statement carries _directive)"
-    },
-    {
       "node": "named_imports",
       "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
-    },
-    {
-      "node": "export_clause",
-      "reason": "container node; its elements carry the role (export_specifier)"
     },
     {
       "node": "export_specifier",

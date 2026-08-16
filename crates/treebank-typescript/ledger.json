@@ -3,7 +3,7 @@
   "versions": "the TypeScript ∪ JavaScript ∪ JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
   "dialect_decision": "DESIGN.md §4.2 planned typescript/tsx dialect parsers because `<T>x` casts and JSX collide. Measured: the .ts corpus contains ZERO angle-bracket casts (the two grep candidates were generic arrow types) — the construct is legacy style that `as` replaced. So this crate ships one parser with JSX enabled everywhere, `<T>x` casts are the ledgered known-gap below, and the dialect split waits until a corpus proves it necessary. This deviation from DESIGN.md is deliberate and measured.",
   "generate_cli": "0.25.10",
-  "vocabulary": "0.1.0",
+  "vocabulary": "0.2.0",
   "oracles": [
     {
       "family": "typescript",
@@ -20,23 +20,63 @@
   ],
   "corpus": {
     "source": "top-300 npm packages by download rank, both corpora (typescript: .ts/.tsx files; javascript: .js/.mjs/.cjs/.jsx, minified excluded)",
-    "typescript_sweep": { "files": 1598, "passed": 1587, "failed": 11, "gap_files": 7, "noise_files": 4, "pass_rate": "99.31%" },
-    "javascript_sweep": { "files": 4801, "passed": 4798, "failed": 3, "gap_files": 3, "noise_files": 0, "pass_rate": "99.94%" },
+    "typescript_sweep": {
+      "files": 1598,
+      "passed": 1587,
+      "failed": 11,
+      "gap_files": 7,
+      "noise_files": 4,
+      "pass_rate": "99.31%"
+    },
+    "javascript_sweep": {
+      "files": 4801,
+      "passed": 4798,
+      "failed": 3,
+      "gap_files": 3,
+      "noise_files": 0,
+      "pass_rate": "99.94%"
+    },
     "blind_to": "npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heavy (undici-types, type-fest) and light on application .ts; JSX incidence is low outside React-adjacent packages",
     "mutation_falsification": "the javascript corpus swept with while_statement deleted from _loop reports 429 gap files (vs 3); restored, 3 again."
   },
   "known_gaps": [
-    {"construct": "interface members beginning with '[' after an unannotated-terminator member in semicolonless .d.ts (the '[' absorbs into the previous member's type as an index)", "files": 5, "note": "ajv + undici-types; the type-land analogue of the JS '[' ASI hazard. Equalizing precedences to force a GLR fork regressed 20 other files and was reverted — needs the fork at a different state."},
-    {"construct": "type-fest's deepest conditional-type chains", "files": 2, "note": "the npm type-system torture suite; everything else in it parses"},
-    {"construct": "prettier's minified bootstrap wrappers", "files": 2},
-    {"construct": "`let x` + newline + '('-initial line (the classic ASI hazard, mandatory insertion our static continuation set cannot see)", "files": 1},
-    {"construct": "legacy `<T>x` angle-bracket casts", "files": 0, "note": "the dialect-split construct, measured at zero corpus incidence — accepted as a gap by design; see dialect_decision"}
+    {
+      "construct": "interface members beginning with '[' after an unannotated-terminator member in semicolonless .d.ts (the '[' absorbs into the previous member's type as an index)",
+      "files": 5,
+      "note": "ajv + undici-types; the type-land analogue of the JS '[' ASI hazard. Equalizing precedences to force a GLR fork regressed 20 other files and was reverted — needs the fork at a different state."
+    },
+    {
+      "construct": "type-fest's deepest conditional-type chains",
+      "files": 2,
+      "note": "the npm type-system torture suite; everything else in it parses"
+    },
+    {
+      "construct": "prettier's minified bootstrap wrappers",
+      "files": 2
+    },
+    {
+      "construct": "`let x` + newline + '('-initial line (the classic ASI hazard, mandatory insertion our static continuation set cannot see)",
+      "files": 1
+    },
+    {
+      "construct": "legacy `<T>x` angle-bracket casts",
+      "files": 0,
+      "note": "the dialect-split construct, measured at zero corpus incidence — accepted as a gap by design; see dialect_decision"
+    }
   ],
   "deviations": [
-    {"what": "one parser instead of the typescript/tsx dialect pair; JSX is grammatical in .ts files (tsc rejects it there) — union-widening traded for a single table, justified by the zero measured cast incidence"},
-    {"what": "class methods are function_definition (python/rust precedent: same construct, same name), class members route through _declaration so a method answers (_declaration), (_member) and the _callable facet alike"},
-    {"what": "ASI is a static continuation set in the scanner (the flip side of the hazard list: ( [ ` + - * / % < > = & | ^ ? : , . in instanceof as satisfies extends), with ++/-- forcing insertion; spec-ASI's can-the-parse-continue rule is approximated, which costs exactly the one ledgered hazard file"},
-    {"what": "expression statements exclude function/class/{ at the first position structurally — the JS spec rule, enforced in the grammar rather than by dynamic precedence (which measured as unable to win the fork)"}
+    {
+      "what": "one parser instead of the typescript/tsx dialect pair; JSX is grammatical in .ts files (tsc rejects it there) — union-widening traded for a single table, justified by the zero measured cast incidence"
+    },
+    {
+      "what": "class methods are function_definition (python/rust precedent: same construct, same name), class members route through _declaration so a method answers (_declaration), (_member) and the _callable facet alike"
+    },
+    {
+      "what": "ASI is a static continuation set in the scanner (the flip side of the hazard list: ( [ ` + - * / % < > = & | ^ ? : , . in instanceof as satisfies extends), with ++/-- forcing insertion; spec-ASI's can-the-parse-continue rule is approximated, which costs exactly the one ledgered hazard file"
+    },
+    {
+      "what": "expression statements exclude function/class/{ at the first position structurally — the JS spec rule, enforced in the grammar rather than by dynamic precedence (which measured as unable to win the fork)"
+    }
   ],
-  "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). Only _clause stays unthreadable — the third language to record the same evidence for its facet-tier reassignment."
+  "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses)."
 }

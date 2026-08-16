@@ -81,9 +81,9 @@ mod tests {
     #[test]
     fn embedded_vocabulary_parses_and_is_closed_and_underscored() {
         let v = vocabulary();
-        assert_eq!(v.version, "0.1.0");
-        assert_eq!(v.table.len(), 22);
-        assert_eq!(v.facets.len(), 3);
+        assert_eq!(v.version, "0.2.0");
+        assert_eq!(v.table.len(), 21);
+        assert_eq!(v.facets.len(), 4);
         for t in v.table.iter().chain(v.facets.iter()) {
             assert!(t.name.starts_with('_'), "{} must be underscored", t.name);
             assert!(!t.definition.is_empty());
