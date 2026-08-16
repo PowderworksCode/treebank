@@ -1,0 +1,47 @@
+diff --git a/grammar.js b/grammar.js
+index d02918d..55044e0 100644
+--- a/grammar.js
++++ b/grammar.js
+@@ -124,7 +124,18 @@ module.exports = grammar({
+ 
+     attribute_name: _ => /[^<>"'/=\s]+/,
+ 
+-    attribute_value: _ => /[^<>"'=\s]+/,
++    // An unquoted attribute value ends at whitespace or `>` and at nothing
++    // else, so `=` belongs inside it: `href=a.py?x&delay=2` is one value,
++    // and a base64 data URI ends in `=` padding. The spec does call `=`
++    // here a parse error — "unexpected-character-in-unquoted-attribute-value"
++    // — but the same clause says to append it to the value and carry on, and
++    // html5ever reports nothing for it, so the oracle calls these files
++    // valid and the grammar was alone in refusing them.
++    //
++    // `"` and `'` stay excluded: they are the same parse error but the
++    // grammar has quoted_attribute_value alternatives that must win, and `<`
++    // and `>` stay excluded because `>` ends the tag.
++    attribute_value: _ => /[^<>"'\s]+/,
+ 
+     // An entity can be named, numeric (decimal), or numeric (hexacecimal). The
+     // longest entity name is 29 characters long, and the HTML spec says that
+diff --git a/test/corpus/main.txt b/test/corpus/main.txt
+index f464c83..1334da6 100644
+--- a/test/corpus/main.txt
++++ b/test/corpus/main.txt
+@@ -479,3 +479,18 @@ Tag names end only at whitespace, a slash or a greater-than
+     (start_tag (tag_name))
+     (text)
+     (end_tag (tag_name))))
++
++================================================================================
++An equals sign inside an unquoted attribute value
++================================================================================
++
++<link href=a.py?x&delay=2>
++<img srcset=data:image/gif;base64,R0lGODlhAQABAIAAAP8=>
++
++--------------------------------------------------------------------------------
++
++(document
++  (element
++    (start_tag (tag_name) (attribute (attribute_name) (attribute_value))))
++  (element
++    (start_tag (tag_name) (attribute (attribute_name) (attribute_value)))))

@@ -3,14 +3,15 @@
 Upstream: [tree-sitter/tree-sitter-html](https://github.com/tree-sitter/tree-sitter-html)
 pinned at `73a3947324f6efddf9e17c0ea58d454843590cc0`.
 
-Seven patches: two packaging, and five grammar fixes that between them take
-the gap queue from **9,707 files to 119** and the corpus from 91.8% parsing
-to **99.16%**.
+Nine patches: two packaging, and seven grammar fixes that between them take
+the gap queue from **9,707 files to 33** and the corpus from 91.8% parsing to
+**99.23%**.
 
-The first two are the same shape — a character HTML5 treats as ordinary text
-that the grammar had no token for. The last three are the structural ones:
-what happens at end of document, what happens to an end tag that closes
-nothing, and where a tag name stops.
+Three shapes. 0003 and 0004 are characters HTML5 treats as ordinary text that
+the grammar had no token for. 0005–0007 are structural: what happens at end of
+document, what happens to an end tag that closes nothing, and where a tag name
+stops. 0008 and 0009 are the long tail: where an unquoted attribute value ends,
+and when `</script` really ends a script.
 
 ## 0001 — treebank redistribution notice
 
@@ -106,21 +107,59 @@ tags, so that half is kept explicitly.
 rather than tolerant: `<dØdd>` (a non-ASCII element name) and the wpt fixture
 asserting that `<x<>` creates an element named `x<`.
 
+## 0008 — an equals sign in an unquoted attribute value
+
+`<link href=stylesheet.py?x&delay=2>` did not parse. `attribute_value` was
+`/[^<>"'=\s]+/`, excluding `=`, but an unquoted value ends at whitespace or
+`>` and at nothing else — so a query string with a second parameter, or a
+base64 data URI (which ends in `=` padding), split mid-value.
+
+The spec *does* name `=` here as a parse error, but the same clause says to
+append it and carry on, and html5ever reports nothing — so the oracle called
+these files valid and the grammar was alone in refusing them.
+
+**80 files**, 73 of them off the gap queue: the largest cluster left after #67.
+
+## 0009 — a raw text end tag needs a terminator
+
+`scan_raw_text` broke out the moment it matched `</SCRIPT`, without looking at
+what came next. The spec leaves script data only on whitespace, `/` or `>`, so
+the standard way of writing a script tag inside a JavaScript string —
+
+```js
+var s = "</script" + "><b>x</b>";
+```
+
+— closed the element in the middle of a string literal. **13 files**, all of
+them gap files, and zero cost.
+
 ## What is left, and what to be careful of
 
-**119 gap files, and no head to the queue any more** — the largest cluster is
-67 occurrences across 61 files and the rest are single digits. Much of the tail
-is web-platform-tests fixtures written to exercise parser edge cases rather
-than pages anyone serves. Expect diminishing returns.
+**33 gap files**, and the queue is exhausted rather than merely short: 21 of
+the 33 are web-platform-tests fixtures, and no cause accounts for more than a
+handful.
+
+The one coherent class left is worth naming. The grammar treats only `<script>`
+and `<style>` as raw text, while HTML5 also has **RCDATA** (`<textarea>`,
+`<title>`) and **RAWTEXT** (`<xmp>`, `<iframe>`, `<noembed>`, `<noframes>`,
+`<noscript>`) elements whose content is text rather than markup — verified
+minimal: `<textarea>a < 5</textarea>` and `<title>a < b</title>` are ERRORs
+where `<script>a < 5</script>` parses.
+
+That is deliberately not attempted here, and the reason is a change of **risk
+tier**, not of effort: every fix in this series has been a condition or a
+character class, while this one needs new external tokens and new grammar rules
+per element, on a grammar whose external scanner already arbitrates raw text,
+implicit end tags and erroneous end tags between them.
 
 The other direction has its own queue, and it is the one the sweep on this
 language cannot find: **six classes where the oracle says the markup is
 malformed and the grammar accepts it anyway**, each with a repro, in
 `ledger.json` under `accepts_invalid_markup`.
 
-Whichever direction the next patch goes, check the other one. Four of the five
-fixes here moved files from noise into passing — 12, 38, 55, 1 and zero for
-0007 — 106 files cumulatively, which is the honest cost of a more forgiving
+Whichever direction the next patch goes, check the other one. Five of the seven
+fixes here moved files from noise into passing — 12, 38, 55, 1, 0, 7 and 0 —
+113 files cumulatively, which is the honest cost of a more forgiving
 grammar; a strictness patch pays the same toll in
 reverse, and on a recovery-by-spec language overshooting turns valid pages into
 gaps. `tools/consumer-test/fixtures/patched.html` and `test/negative/` are the
