@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.1.0",
+  "vocabulary": "0.2.0",
   "facets": {
     "_callable": [
       "function_definition",
@@ -49,6 +49,10 @@
       "loop_expression",
       "while_expression",
       "for_expression"
+    ],
+    "_clause": [
+      "match_arm",
+      "where_clause"
     ]
   },
   "uncategorised": [
@@ -147,10 +151,6 @@
     {
       "node": "use_bound",
       "reason": "generics machinery below the role layer (use<'a> precise capture)"
-    },
-    {
-      "node": "where_clause",
-      "reason": "generics machinery below the role layer"
     },
     {
       "node": "where_predicate",
