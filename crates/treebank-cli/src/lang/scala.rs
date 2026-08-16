@@ -213,12 +213,23 @@ fn release(path: &str) -> Option<String> {
 /// project's; the ledger says so.
 fn rank_maven_scala(k: usize) -> Result<Vec<RankedCrate>> {
     const PER_PAGE: usize = 100;
+    // How far down the registry-wide ranking to look. Scala artifacts are
+    // sparse on Maven Central — the registry is overwhelmingly Java — so this
+    // is not a limit on the corpus so much as a definition of it: "every
+    // Scala project among the top SCAN_PAGES * PER_PAGE artifacts by
+    // dependent repositories". Measured 2026-08-16, the yield per page
+    // declines but does not cliff: pages 1-60 gave 2.05 Scala projects each,
+    // 61-90 gave 2.17, 91-120 gave 1.37 and 121-150 gave 1.13, for 263
+    // projects and 394 coordinates in total. 150 is where the marginal page
+    // is worth about half the first one's; it is a judgement about where to
+    // stop paying, not a point where the data runs out.
+    const SCAN_PAGES: usize = 150;
     let mut projects: Vec<(String, String, u64)> = Vec::new(); // group, base artifact, dependents
     let mut seen = std::collections::HashSet::new();
     let mut page = 1;
     // Scala coordinates are sparse in the registry-wide ranking, so this
     // walks further than java's does to find k of them.
-    while projects.len() < k && page <= 60 {
+    while page <= SCAN_PAGES {
         let url = format!(
             "https://packages.ecosyste.ms/api/v1/registries/repo1.maven.org/packages\
              ?sort=dependent_repos_count&order=desc&per_page={PER_PAGE}&page={page}"
@@ -236,6 +247,7 @@ fn rank_maven_scala(k: usize) -> Result<Vec<RankedCrate>> {
             batch.len(),
             projects.len()
         );
+        let mut page_min = u64::MAX;
         for entry in batch {
             let (Some(name), Some(dependents)) = (
                 entry["name"].as_str(),
@@ -243,6 +255,7 @@ fn rank_maven_scala(k: usize) -> Result<Vec<RankedCrate>> {
             ) else {
                 continue;
             };
+            page_min = page_min.min(dependents);
             let Some((group, artifact)) = name.split_once(':') else {
                 continue;
             };
@@ -254,15 +267,31 @@ fn rank_maven_scala(k: usize) -> Result<Vec<RankedCrate>> {
             if seen.insert((group.to_string(), base.to_string())) {
                 projects.push((group.to_string(), base.to_string(), dependents));
             }
-            if projects.len() == k {
-                break;
-            }
+        }
+        // Stop once the top k is SETTLED, not merely reached. ecosyste.ms
+        // pages in descending dependent-repo order, so when a page's smallest
+        // count drops below the current k-th place, no later page can contain
+        // anything that belongs in the top k and the membership is final.
+        //
+        // Stopping at `projects.len() == k` instead was measured wrong on
+        // 2026-08-16: Scala's ranking has a long tie plateau — every
+        // org.scala-sbt module sits at exactly 354 dependent repos — and the
+        // API does not order ties stably, so two runs three days apart
+        // produced different members from position 70 of 94 onward. That is
+        // the corpus silently changing underneath a ledger whose numbers were
+        // measured on the old one.
+        if projects.len() >= k && page_min < nth_dependents(&mut projects, k) {
+            break;
         }
         page += 1;
     }
     if projects.is_empty() {
         bail!("maven scala rank list came out empty");
     }
+    // Deterministic order for a given snapshot: count descending, then the
+    // coordinate itself, so a tie plateau cannot reshuffle between runs.
+    projects.sort_by(|a, b| b.2.cmp(&a.2).then_with(|| (&a.0, &a.1).cmp(&(&b.0, &b.1))));
+    projects.truncate(k);
 
     let mut ranked = Vec::new();
     for (group, base, dependents) in projects {
@@ -286,6 +315,14 @@ fn rank_maven_scala(k: usize) -> Result<Vec<RankedCrate>> {
     }
     eprintln!("rank: {} scala coordinates", ranked.len());
     Ok(ranked)
+}
+
+/// The dependent-repo count currently in k-th place, which is the bar a later
+/// page would have to clear to change the top k.
+fn nth_dependents(projects: &mut [(String, String, u64)], k: usize) -> u64 {
+    let mut counts: Vec<u64> = projects.iter().map(|p| p.2).collect();
+    counts.sort_unstable_by(|a, b| b.cmp(a));
+    counts[k - 1]
 }
 
 /// The artifact id without its Scala binary-version suffix, or `None` if it
@@ -344,6 +381,39 @@ mod tests {
             dialect_for("org.example__lib_2.13-1.0/src/vendor_3-9/A.scala").unwrap(),
             "Scala213"
         );
+    }
+
+    #[test]
+    fn ties_rank_deterministically() {
+        // Scala's ranking has a long tie plateau — every org.scala-sbt module
+        // sits at 354 dependent repos — and ecosyste.ms does not order ties
+        // stably. Whatever order they arrive in, the same k must come out.
+        let p = |g: &str, a: &str, d: u64| (g.to_string(), a.to_string(), d);
+        let mut a = vec![
+            p("org.scala-sbt", "io", 354),
+            p("org.scala-sbt", "task-system", 354),
+            p("com.eed3si9n", "gigahorse-okhttp", 354),
+            p("org.apache.spark", "spark-core", 8772),
+        ];
+        let mut b = vec![a[2].clone(), a[3].clone(), a[1].clone(), a[0].clone()];
+        for v in [&mut a, &mut b] {
+            v.sort_by(|x, y| y.2.cmp(&x.2).then_with(|| (&x.0, &x.1).cmp(&(&y.0, &y.1))));
+        }
+        assert_eq!(a, b);
+        assert_eq!(a[0].1, "spark-core", "count still beats name");
+        assert_eq!(a[1].0, "com.eed3si9n", "ties fall back to the coordinate");
+    }
+
+    #[test]
+    fn the_top_k_bar_is_the_kth_count() {
+        let mut p = vec![
+            ("g".to_string(), "a".to_string(), 10u64),
+            ("g".to_string(), "b".to_string(), 30),
+            ("g".to_string(), "c".to_string(), 20),
+        ];
+        assert_eq!(nth_dependents(&mut p, 1), 30);
+        assert_eq!(nth_dependents(&mut p, 2), 20);
+        assert_eq!(nth_dependents(&mut p, 3), 10);
     }
 
     #[test]

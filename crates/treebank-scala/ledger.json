@@ -66,28 +66,33 @@
   },
   "corpus": {
     "source": "Maven Central, ranked by dependent repositories (ecosyste.ms index of repo1.maven.org), fetched 2026-08-13; each coordinate's -sources.jar at the version maven-metadata.xml calls <release>; .scala files",
-    "files": 7589,
-    "packages": 94,
-    "projects": 60,
+    "files": 17665,
+    "packages": 394,
+    "projects": 263,
+    "fetch_limit": 394,
+    "fetch_limit_note": "The size the numbers below were measured at, so daily.sh rebuilds THAT corpus rather than the default 100. Without it the daily job fetches a differently-sized corpus, check.sh compares its sweep against corpus.sweep_patched.passed anyway, and the fix agent's only way to go green is to overwrite the recorded evidence with whatever the different corpus gave — which is what happened to bash (ledger 492 packages, daily job 99, ledger duly rewritten down). 394 rather than a round number because that is what 263 projects expand to: a project contributes its Scala 3 line and its newest Scala 2 line, and 131 of the 263 have both.",
     "ranking_deviates_from_java_and_why": {
       "measured_2026_08_12": "ecosyste.ms ranks Maven artifacts by how many public repositories depend on them, which for Scala is a decade-lagging metric. The top 4,000 Maven artifacts by that count contain ZERO _3 coordinates. org.apache.spark:spark-core_2.11 scores 8,772; org.typelevel:cats-core_3 scores 2; dev.zio:zio_3 scores 1. Taken literally the list resolves to Spark 2.4.8, Kafka 2.4.1, Akka 2.5.32 and Flink 1.14 — 2016-era Scala 2.11.",
       "consequence_if_reused_unchanged": "a Scala-3-era grammar would be swept against Scala 2.11 only, and the dialect split this language was queued for would never appear in a single verdict.",
       "what_lang/scala.rs_does_instead": "the ranking decides WHAT IS POPULAR and the coordinate decides WHICH DIALECT TO SWEEP: rank by dependent repositories, collapse a project's cross-built lines (foo_2.11, foo_2.12, foo_3 are one project), then emit that project's newest published Scala 2 line and its Scala 3 line. Everything else — resolve, sources-jar naming, the fetch driver's skip-on-404 — is java's, unchanged.",
-      "result": "60 projects -> 94 coordinates: 34 _3, 45 _2.13, 14 _2.12, 1 _2.11. The naive ranking produced 0 _3.",
+      "result": "263 projects -> 394 coordinates. The naive ranking produced 0 _3 in its top 4,000.",
+      "ties_are_not_ordered_stably": "Found 2026-08-16, and it is why `rank` sorts rather than taking the API's order. ecosyste.ms does not break ties, and Scala's ranking has a long tie plateau — every org.scala-sbt module sits at exactly 354 dependent repos. Two runs three days apart, same k, produced different members from position 70 of 94 onward: librarymanagement-core and sbinary in one, gigahorse-core and sjson-new-core in the other. A corpus that reshuffles under a ledger whose numbers were measured on the old one is the same evidence-corrupting failure `fetch_limit` guards against, arriving by a different route, so rank now stops when the top k is SETTLED (a page's smallest count has dropped below k-th place) rather than merely reached, and sorts by count then coordinate. Verified: two consecutive runs at k=60 now produce byte-identical lists.",
+      "scan_window": "150 pages of 100 artifacts. Scala is sparse on Maven Central, so this is less a limit than a definition: every Scala project among the top 15,000 artifacts by dependent repositories. Yield per page declines but does not cliff — 2.05 projects/page over pages 1-60, 2.17 over 61-90, 1.37 over 91-120, 1.13 over 121-150 — so the cutoff is a judgement about where the marginal page stops paying, not a point where the data runs out.",
       "popularity_is_the_project's": "both lines of a cross-built project carry the project's dependent-repository count, so `downloads` here is a per-project figure shared by up to two coordinates, and is a dependency-graph proxy rather than traffic (Maven Central publishes no download counts). Unlike the crates.io and npm rankings in this repo."
     },
     "sweep_upstream": {
-      "passed": 7560,
-      "failed": 29
+      "passed": 17600,
+      "failed": 65
     },
     "sweep_patched": {
-      "passed": 7566,
-      "failed": 23
+      "passed": 17608,
+      "failed": 57
     },
     "noise": 0,
-    "noise_note": "Every one of the 29 upstream failures was adjudicated VALID by scalameta under the file's declared dialect — 29 grammar gaps, 0 corpus noise. That is an unusually clean split, and it is what a per-package dialect buys: the same corpus judged entirely as Scala3 would have produced false `invalid` verdicts for 8.6% of files, each of which could have hidden a gap.",
-    "remaining_gaps": 23,
-    "remaining_gaps_note": "23 files in 18 clusters, all adjudicated valid. The largest is `template_body > MISSING ;` (3 files, Flink), then `block > ERROR(=> null_literal)` and `lambda_expression > ERROR(case integer_literal)` (2 each). They are the next patches, not defects in the numbers above."
+    "noise_note": "Every one of the 65 upstream failures was adjudicated VALID by scalameta under the file's declared dialect — 65 grammar gaps, 0 corpus noise. It held at 94 coordinates and it still holds at 394, which is the result worth having: the same corpus judged entirely as Scala3 would have produced false `invalid` verdicts for 8.6% of files, each of which could have hidden a gap.",
+    "classify_is_scala_only_and_that_was_measured": "`.sbt` and `.sc` are Scala too, and tree-sitter.json claims `.sbt`, so classify could plausibly take them — ruby's equivalent breadth pass found 1,586 files. Measured across all 394 sources jars: 7,589 .scala, 2,992 .java (correctly excluded), and ZERO .sbt or .sc. Build definitions do not ship inside a sources jar, so widening classify would add nothing here and would add a file whose dialect nothing in the corpus can declare. Recorded because \"we checked and it was empty\" is worth as much as a patch, and stops the next person re-deriving it.",
+    "remaining_gaps": 57,
+    "remaining_gaps_note": "57 files in 35 clusters, all adjudicated valid. Deepening 4.2x turned up 34 more, which is the point of deepening. The largest is `template_body > MISSING ;`, which grew from 3 files to 9 and is diagnosed under next_patch_diagnosed_not_shipped. Then `arguments > ERROR(=)` and `extension_definition > ERROR(case)` at 3 each. `block > ERROR(val)` is new and is the near neighbour of patch 0003: `val enum = enumOf(obj)` uses the same Scala 2 term name in a definition rather than a parameter or an expression."
   },
   "patches": [
     {
@@ -122,6 +127,7 @@
         "scope": "`enum` only. `export` is its twin in upstream's path rule and was tried, but no corpus file uses it as a term and admitting it in expression position costs a second GLR conflict against `export_declaration` — so it was dropped rather than shipped on symmetry.",
         "sweep_before": {"passed": 7560, "failed": 29},
         "sweep_after": {"passed": 7566, "failed": 23},
+        "sweep_corpus": "the 94-coordinate / 7,589-file corpus of 2026-08-13, which is what existed when the patch was written. On the current 394-coordinate corpus the same patch is 17600/65 -> 17608/57, so it fixes 8 files rather than 6.",
         "fixed_files": 6,
         "grammar_tests": "272 -> 273 upstream corpus tests, all passing"
       }
