@@ -1,8 +1,9 @@
 > **SUPERSEDED (2026-08-16)** by the redesign in [`DESIGN.md`](../DESIGN.md):
-> treebank now writes all grammars from scratch with the two-tier shared
-> vocabulary. The *measurements* in this file (supertype query mechanics,
-> differential harness cost, vocabulary survey) remain valid and are cited
-> from there; the *decisions* are re-decided in DESIGN.md §8.
+> treebank now writes all grammars from scratch, with no upstream grammars
+> anywhere in the system — so the differential-against-upstream machinery
+> described here no longer applies. The tree-sitter measurements in this file
+> (supertype query mechanics, sweep costs, vocabulary survey) remain valid;
+> the decisions are re-decided in DESIGN.md §7.
 
 # The replacement invariant
 
