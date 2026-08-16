@@ -1,0 +1,239 @@
+================================================================================
+control flow is expressions
+================================================================================
+
+fn f() -> u32 {
+    let x = if a { 1 } else { 2 };
+    let y = match x {
+        0 => "zero",
+        1..=9 => "small",
+        n if n > 10 => "big",
+        _ => "other",
+    };
+    'outer: for i in 0..10 {
+        while let Some(v) = it.next() {
+            break 'outer;
+        }
+    }
+    loop { continue; }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_definition
+    name: (identifier)
+    parameters: (parameters)
+    return_type: (type_identifier)
+    body: (block
+      (let_declaration
+        pattern: (identifier)
+        value: (if_expression
+          condition: (identifier)
+          consequence: (block
+            (integer))
+          alternative: (block
+            (integer))))
+      (let_declaration
+        pattern: (identifier)
+        value: (match_expression
+          subject: (identifier)
+          body: (match_block
+            (match_arm
+              pattern: (integer)
+              value: (string))
+            (match_arm
+              pattern: (range_pattern
+                (integer)
+                (integer))
+              value: (string))
+            (match_arm
+              pattern: (identifier)
+              guard: (binary_expression
+                left: (identifier)
+                right: (integer))
+              value: (string))
+            (match_arm
+              pattern: (identifier)
+              value: (string)))))
+      (expression_statement
+        (for_expression
+          (loop_label
+            (lifetime))
+          left: (identifier)
+          right: (range_expression
+            (integer)
+            (integer))
+          body: (block
+            (expression_statement
+              (while_expression
+                condition: (let_condition
+                  pattern: (tuple_struct_pattern
+                    type: (identifier)
+                    (identifier))
+                  value: (call_expression
+                    function: (member_expression
+                      object: (identifier)
+                      property: (identifier))
+                    arguments: (arguments)))
+                body: (block
+                  (expression_statement
+                    (break_expression
+                      (loop_label
+                        (lifetime))))))))))
+      (expression_statement
+        (loop_expression
+          body: (block
+            (expression_statement
+              (continue_expression))))))))
+
+================================================================================
+closures, calls, operators, literals
+================================================================================
+
+fn f() {
+    let add = |a: i32, b| a + b;
+    let s = v.iter().map(|x| x * 2).sum::<i32>();
+    let r = &mut buf[1..n];
+    let t = x as u64 + 0xff_u64;
+    let raw = r#"raw "str""#;
+    let done = flag && count != 0 || force;
+    let q = opt?;
+    let fut = async move { g().await };
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_definition
+    name: (identifier)
+    parameters: (parameters)
+    body: (block
+      (let_declaration
+        pattern: (identifier)
+        value: (closure_expression
+          parameters: (closure_parameters
+            (parameter
+              pattern: (identifier)
+              type: (type_identifier))
+            (parameter
+              pattern: (identifier)))
+          body: (binary_expression
+            left: (identifier)
+            right: (identifier))))
+      (let_declaration
+        pattern: (identifier)
+        value: (call_expression
+          function: (member_expression
+            object: (call_expression
+              function: (member_expression
+                object: (call_expression
+                  function: (member_expression
+                    object: (identifier)
+                    property: (identifier))
+                  arguments: (arguments))
+                property: (identifier))
+              arguments: (arguments
+                (closure_expression
+                  parameters: (closure_parameters
+                    (parameter
+                      pattern: (identifier)))
+                  body: (binary_expression
+                    left: (identifier)
+                    right: (integer)))))
+            property: (identifier)
+            type_arguments: (type_arguments
+              (type_identifier)))
+          arguments: (arguments)))
+      (let_declaration
+        pattern: (identifier)
+        value: (reference_expression
+          (mutable_specifier)
+          operand: (subscript_expression
+            object: (identifier)
+            subscript: (range_expression
+              (integer)
+              (identifier)))))
+      (let_declaration
+        pattern: (identifier)
+        value: (binary_expression
+          left: (cast_expression
+            value: (identifier)
+            type: (type_identifier))
+          right: (integer)))
+      (let_declaration
+        pattern: (identifier)
+        value: (raw_string))
+      (let_declaration
+        pattern: (identifier)
+        value: (binary_expression
+          left: (binary_expression
+            left: (identifier)
+            right: (binary_expression
+              left: (identifier)
+              right: (integer)))
+          right: (identifier)))
+      (let_declaration
+        pattern: (identifier)
+        value: (try_expression
+          (identifier)))
+      (let_declaration
+        pattern: (identifier)
+        value: (async_block
+          (block
+            (await_expression
+              (call_expression
+                function: (identifier)
+                arguments: (arguments)))))))))
+
+================================================================================
+macros and edition union
+================================================================================
+
+macro_rules! square { ($x:expr) => { $x * $x }; }
+
+fn f() {
+    println!("{}: {:?}", name, value);
+    let old = try!(read());
+    let chain = if let Some(x) = a && x > 0 { 1 } else { 0 };
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (macro_definition
+    name: (identifier)
+    body: (token_tree
+      (token_tree)
+      (token_tree)))
+  (function_definition
+    name: (identifier)
+    parameters: (parameters)
+    body: (block
+      (expression_statement
+        (macro_invocation
+          macro: (identifier)
+          (token_tree
+            (string))))
+      (let_declaration
+        pattern: (identifier)
+        value: (macro_invocation
+          macro: (identifier)
+          (token_tree
+            (token_tree))))
+      (let_declaration
+        pattern: (identifier)
+        value: (if_expression
+          condition: (let_chain
+            left: (let_condition
+              pattern: (tuple_struct_pattern
+                type: (identifier)
+                (identifier))
+              value: (identifier))
+            right: (binary_expression
+              left: (identifier)
+              right: (integer)))
+          consequence: (block
+            (integer))
+          alternative: (block
+            (integer)))))))
