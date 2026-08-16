@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::lang::Lang;
+use crate::Ecosystem;
 use crate::rank::RankedCrate;
 
 #[derive(Serialize, Deserialize)]
@@ -81,7 +81,7 @@ fn safe_path(rel: &Path) -> Option<PathBuf> {
 
 /// Strip the archive's own wrapper components and reject path traversal.
 /// How many to strip is the language's call — see `Lang::archive_strip`.
-fn strip_root(lang: &dyn Lang, entry_path: &Path, is_zip: bool) -> Option<PathBuf> {
+fn strip_root(lang: &dyn Ecosystem, entry_path: &Path, is_zip: bool) -> Option<PathBuf> {
     let mut comps = entry_path.components();
     for _ in 0..lang.archive_strip(entry_path, is_zip) {
         comps.next()?;
@@ -136,7 +136,7 @@ fn download(url: &str, max_bytes: Option<u64>) -> Result<Vec<u8>> {
 
 /// Write one extracted archive member into the corpus and describe it.
 fn record(
-    lang: &dyn Lang,
+    lang: &dyn Ecosystem,
     pkgdir: &Path,
     rel: &Path,
     buf: &[u8],
@@ -248,7 +248,7 @@ fn shape(buf: &[u8]) -> Shape {
 /// `Lang::nested_archives`; recursion is one level only, which is all any
 /// observed rock needs and keeps a zip bomb from turning into an unbounded
 /// walk.
-fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<ManifestFile>> {
+fn extract(lang: &dyn Ecosystem, archive: &Path, pkgdir: &Path) -> Result<Vec<ManifestFile>> {
     let mut files = Vec::new();
     // The package archive is streamed from disk rather than read into memory:
     // Debian .orig.tar.* in the C corpus run to hundreds of megabytes, and
@@ -324,7 +324,7 @@ fn extract(lang: &dyn Lang, archive: &Path, pkgdir: &Path) -> Result<Vec<Manifes
 /// another member's `dkjson.lua`, and it records which inner archive a file
 /// came from.
 fn walk(
-    lang: &dyn Lang,
+    lang: &dyn Ecosystem,
     buf: Vec<u8>,
     pkgdir: &Path,
     prefix: &Path,
@@ -373,7 +373,7 @@ fn walk(
 /// One archive member: recurse into it if it is itself an archive and this
 /// language asked for that, otherwise record it.
 fn take(
-    lang: &dyn Lang,
+    lang: &dyn Ecosystem,
     buf: Vec<u8>,
     pkgdir: &Path,
     prefix: &Path,
@@ -405,7 +405,7 @@ fn take(
     Ok(())
 }
 
-pub fn run(lang: &dyn Lang, list: &Path, limit: usize, corpus: &Path) -> Result<()> {
+pub fn run(lang: &dyn Ecosystem, list: &Path, limit: usize, corpus: &Path) -> Result<()> {
     let ranked: Vec<RankedCrate> = serde_json::from_str(&std::fs::read_to_string(list)?)?;
     let cache = corpus.join("cache");
     let srcroot = corpus.join("src");

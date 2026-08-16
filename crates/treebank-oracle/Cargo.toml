@@ -1,0 +1,11 @@
+[package]
+name = "treebank-oracle"
+version = "0.1.0"
+edition = "2021"
+description = "Reference-parser oracles: is this file valid <language>? One pinned oracle per language, all behind one trait. Self-contained so it can move out of this repo."
+
+[dependencies]
+anyhow = "1"
+rayon = "1"
+syn = { version = "2", features = ["full"] }
+treebank-lang = { path = "../treebank-lang" }

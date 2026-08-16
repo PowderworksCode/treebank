@@ -6,7 +6,7 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser};
 
-use crate::fetch::Manifest;
+use treebank_corpus::fetch::Manifest;
 use crate::grammar;
 
 #[derive(Serialize, Deserialize, Clone)]
@@ -220,9 +220,8 @@ fn resolve_splits(
     (Some(current), resolved)
 }
 
-pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Path, out: &Path) -> Result<()> {
-    let loaded: Vec<(tree_sitter::Language, String)> = lang
-        .grammar_dirs()
+pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Path, out: &Path) -> Result<()> {
+    let loaded: Vec<(tree_sitter::Language, String)> = crate::routing::grammar_dirs(lang)
         .iter()
         .map(|d| grammar::load(&grammar_dir.join(d)))
         .collect::<Result<_>>()?;
@@ -273,7 +272,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
                     return None;
                 };
                 let package = f.pkgdir.rsplitn(2, '-').last().unwrap_or(&f.pkgdir).to_string();
-                let parser = &mut parsers[lang.route(&f.dialect, &f.rel)];
+                let parser = &mut parsers[crate::routing::route(lang, &f.dialect, &f.rel)];
                 let failure =
                     check_file(parser, &package, &format!("{}/{}", f.pkgdir, f.rel), &src);
                 Some((f.sha256.clone(), failure))
@@ -301,7 +300,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     // Adjudicate every failing file with the language's reference parser so
     // the report separates grammar gaps from corpus noise.
     let failing_paths: Vec<String> = failures.iter().map(|f| f.path.clone()).collect();
-    let validity = lang.validate(&corpus_src, &failing_paths)?;
+    let validity = treebank_oracle::get(lang).validate(&corpus_src, &failing_paths)?;
 
     // The oracle must answer every question it was asked. A path with no
     // verdict reads as `false` at all three use sites below — that is, as
@@ -333,7 +332,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     // file parse cleanly, the rejection is a property of the preprocessor and
     // no grammar patch can fix it — so it must not be filed as a gap, where it
     // would sit at the top of the queue absorbing a fix agent's attempts.
-    let mut config_inherent: std::collections::HashSet<String> = match lang.preprocessing() {
+    let mut config_inherent: std::collections::HashSet<String> = match crate::routing::preprocessing(lang) {
         None => Default::default(),
         Some(symbols) => {
             let hits: Vec<String> = failures
@@ -346,7 +345,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
                         return None;
                     }
                     let mut parser = Parser::new();
-                    let index = lang.route(&None, &f.path);
+                    let index = crate::routing::route(lang, &None, &f.path);
                     parser.set_language(&languages[index]).ok()?;
                     let tree = parser.parse(reduced.text.as_bytes(), None)?;
                     (!tree.root_node().has_error()).then(|| f.path.clone())
@@ -369,7 +368,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     // the symbol means: if forcing either branch removes the error, the
     // grammar was failing only because it must see both at once.
     let mut split_resolved: HashMap<String, Option<Failure>> = HashMap::new();
-    if lang.preprocessing().is_some() {
+    if crate::routing::preprocessing(lang).is_some() {
         let candidates: Vec<&Failure> = failures
             .iter()
             .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
@@ -380,7 +379,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
             .filter_map(|f| {
                 let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
                 let mut parser = Parser::new();
-                parser.set_language(&languages[lang.route(&None, &f.path)]).ok()?;
+                parser.set_language(&languages[crate::routing::route(lang, &None, &f.path)]).ok()?;
                 let (remaining, resolved) = resolve_splits(&mut parser, f, &src);
                 (resolved > 0).then(|| (f.path.clone(), remaining, resolved))
             })
@@ -411,9 +410,9 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     // over-accepts — actually requires.
     let mut macro_clean: std::collections::HashSet<String> = Default::default();
     let mut macro_names: HashMap<String, Vec<String>> = HashMap::new();
-    if lang.preprocessing().is_some() {
+    if crate::routing::preprocessing(lang).is_some() {
         // One macro census per package, from the files already in the corpus.
-        let mut by_pkg: BTreeMap<String, Vec<&crate::fetch::FileEntry>> = BTreeMap::new();
+        let mut by_pkg: BTreeMap<String, Vec<&treebank_corpus::fetch::FileEntry>> = BTreeMap::new();
         for f in &files {
             by_pkg.entry(f.pkgdir.clone()).or_default().push(f);
         }
@@ -442,7 +441,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
                         return None;
                     }
                     let mut parser = Parser::new();
-                    parser.set_language(&languages[lang.route(&None, &f.path)]).ok()?;
+                    parser.set_language(&languages[crate::routing::route(lang, &None, &f.path)]).ok()?;
                     let tree = parser.parse(e.text.as_bytes(), None)?;
                     if tree.root_node().has_error() {
                         return None;
@@ -530,7 +529,7 @@ pub fn run(lang: &dyn crate::lang::Lang, grammar_dir: &Path, manifest_path: &Pat
     let config_files: usize = clusters.iter().map(|c| c.config_paths.len()).sum();
     let noise_files = failures.len() - gap_files - config_files;
     let report = Report {
-        lang: lang.name().to_string(),
+        lang: lang.to_string(),
         grammar: grammar_dir.display().to_string(),
         files: files.len(),
         passed: files.len() - failures.len(),
