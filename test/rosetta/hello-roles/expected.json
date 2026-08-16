@@ -1,5 +1,5 @@
 {
-  "note": "the same program will exist as program.rs and program.ts; every language must yield these exact counts",
+  "note": "the same program in every owned language must yield these counts. Asserts the roles the three languages genuinely SHARE: (_callable) is here because it is a facet, so it only works through roles.json expansion and proves that path. (_clause) is deliberately absent \u2014 clause membership is language-specific by nature (python comprehensions have for/if clauses, typescript imports have an import_clause, rust models else inside if_expression rather than as an else_clause node), which is exactly why it lives in the facet tier. A rosetta case can only assert what the languages share.",
   "queries": {
     "(_declaration) @d": 3,
     "(_directive) @dir": 1,
@@ -9,6 +9,7 @@
     "(_member) @m": 1,
     "(_access) @a": 1,
     "(_parameter) @p": 3,
-    "(function_definition name: (_name) @n)": 2
+    "(function_definition name: (_name) @n)": 2,
+    "(_callable) @fn": 2
   }
 }

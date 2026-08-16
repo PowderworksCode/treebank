@@ -1,4 +1,5 @@
 mod grammar;
+mod rosetta;
 mod routing;
 mod sweep;
 
@@ -70,6 +71,16 @@ enum Cmd {
     Roles {
         /// Grammar crate root: reads src/node-types.json and roles.json
         grammar: PathBuf,
+    },
+    /// Run the rosetta gate: the same program in every owned language must
+    /// yield the same role counts (DESIGN.md §5.4)
+    Rosetta {
+        /// Directory of rosetta cases [default: test/rosetta]
+        #[arg(long, default_value = "test/rosetta")]
+        dir: PathBuf,
+        /// Where the grammar crates live [default: crates]
+        #[arg(long, default_value = "crates")]
+        crates: PathBuf,
     },
     /// Assert that every file in a directory FAILS to parse (negative corpus)
     Negative {
@@ -186,6 +197,7 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, out, "reports/sweep.json"),
         ),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
+        Cmd::Rosetta { dir, crates } => rosetta::run(&dir, &crates),
         Cmd::Negative { grammar, dir } => sweep::negative(&grammar, &dir),
         Cmd::Oracle { lang, srcroot } => oracle_cmd(lang, &srcroot),
     }

@@ -10,20 +10,62 @@ thing across languages. Initial languages: **Python, Rust, TypeScript**
 its two tiers and the measurements that forced them, the version-union
 grammar policy, the testing invariants, and the crate layout. Start there.
 
-## What is in this repo today
-
-The grammars themselves do not exist yet; this tree currently holds the
-measurement infrastructure they will be built and validated against:
+## What is in this repo
 
 | path | what it is |
 |---|---|
 | `DESIGN.md` | the design: vocabulary, invariants, layout, order of work |
-| `crates/treebank-core` | the vocabulary as code and data: `vocabulary/vocabulary.json` (the closed 22-term table tier + 3 facets), `vocabulary/supertypes.js` (the JS face every grammar.js imports, with a generate-time term assert), the `roles.json` manifest schema, the vocabulary-conformance checker behind `treebank roles`, and facet query expansion (`(_callable)` → the concrete alternation) |
+| `crates/treebank-python` | Python 2.7 ∪ 3.x in one grammar |
+| `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
+| `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |
+| `crates/treebank-core` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
-| `crates/treebank-corpus` | corpus acquisition: `rank` an ecosystem's packages (PyPI, crates.io, npm), `fetch` their tarballs, extract source files, write the manifest sweeps consume — self-contained, with no grammar or oracle knowledge, so it can move out of this repo |
-| `crates/treebank-oracle` | reference-parser oracles behind one trait: is this file valid \<language\>? Carries its own oracle programs in `tools/` (CPython `ast.parse`, `syn`, `tsc`'s parser, V8) — equally self-contained and movable |
-| `crates/treebank-cli` | `treebank` — the thin binary: `rank` / `fetch` (drivers over treebank-corpus), `sweep` (parse the corpus, adjudicate failures via treebank-oracle), `negative` (assert a directory of invalid files stays rejected), `oracle` (run a reference parser over paths on stdin), plus the grammar-routing knowledge that belongs to neither library |
-| `crates/treebank-preprocessing` | dead-branch elimination for languages with a C-style preprocessor, so a parse failure can be judged against the configuration a compiler actually saw (no current target language needs it; kept for the languages that will) |
+| `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
+| `crates/treebank-oracle` | reference-parser oracles behind one trait, carrying their own oracle programs |
+| `crates/treebank-cli` | `treebank` — `rank` · `fetch` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
+| `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors (no current target needs it; kept for the languages that will) |
+| `test/rosetta` | the same program in every owned language, with the role counts all three must produce |
+
+Each grammar crate ships its `roles.json` and `ledger.json` inside the
+published package, so a consumer gets the facet membership and the
+evidence — versions covered, pinned oracles, corpus numbers, known gaps,
+declared deviations — without fetching anything.
+
+## Using a grammar
+
+```rust
+let mut parser = tree_sitter::Parser::new();
+parser.set_language(&treebank_python::LANGUAGE.into())?;
+```
+
+Table-tier roles are queryable straight from the parser, because they are
+real supertypes in the parse table:
+
+```scheme
+(_declaration) @decl
+(_loop) @loop
+(function_definition name: (_name) @name)
+```
+
+Facet-tier roles (`_callable`, `_binding`, `_scope`, `_clause`) cross-cut
+derivations, so they cannot be supertypes; they ship as `ROLES` and are
+expanded before the query runs.
+
+## What is checked, on every change
+
+| gate | what it catches |
+|---|---|
+| reproducible generation | committed `src/` drifting from `grammar.js` at the pinned CLI |
+| corpus tests | tree *shape* regressions, not just accept/reject |
+| negative corpus | accepts-invalid-code — the direction optimizing a pass rate drifts toward, and the one no corpus of real source can reveal |
+| `treebank roles` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
+| `treebank rosetta` | a role threaded in one grammar and forgotten in another (supertype matching is derivation-based, so a missed thread is otherwise silent) |
+| wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
+
+Corpus sweeps are not in CI: the corpora are gigabytes and gitignored.
+Their numbers live in each grammar's `ledger.json`, alongside what the
+corpus is blind to and the mutation test proving the pipeline can report
+non-zero.
 
 ## Building
 

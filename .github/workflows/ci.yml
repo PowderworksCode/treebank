@@ -1,15 +1,112 @@
 name: ci
+
 on:
   push:
     branches: [main]
   pull_request:
 
+env:
+  # DESIGN.md §7: regenerating with a different CLI silently changes what
+  # the grammar accepts, so the pin is load-bearing rather than hygiene.
+  TREE_SITTER_VERSION: "0.25.10"
+
 jobs:
-  build-and-test:
+  workspace:
+    name: build and test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+      # Compiles every grammar's parser.c and scanner.c as a real crate,
+      # and runs their load + manifest tests.
       - run: cargo build --workspace
       - run: cargo test --workspace
+
+  grammars:
+    name: gates (${{ matrix.grammar }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        grammar: [python, rust, typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: install pinned tree-sitter CLI
+        run: cargo install tree-sitter-cli --version "$TREE_SITTER_VERSION" --locked
+
+      - run: cargo build -p treebank-cli
+
+      # I1 — reproducible generation. The committed src/ must be exactly
+      # what grammar.js produces at the pinned CLI; without this the
+      # published parser and the readable grammar can drift apart.
+      - name: generation is reproducible
+        working-directory: crates/treebank-${{ matrix.grammar }}
+        run: |
+          tree-sitter generate
+          if ! git diff --quiet -- src/; then
+            echo "::error::src/ is not what grammar.js generates at $TREE_SITTER_VERSION"
+            git diff --stat -- src/
+            exit 1
+          fi
+
+      # The grammar's own corpus tests: tree shapes, not just accept/reject.
+      - name: corpus tests
+        working-directory: crates/treebank-${{ matrix.grammar }}
+        run: tree-sitter test
+
+      # Sweeps catch rejects-valid-code. This catches accepts-invalid-code,
+      # the direction that optimizing a pass rate drifts toward and that no
+      # corpus of real (valid) source can ever reveal.
+      - name: negative corpus
+        run: ./target/debug/treebank negative
+          --grammar crates/treebank-${{ matrix.grammar }}
+          --dir crates/treebank-${{ matrix.grammar }}/test/negative
+
+      # I4 — vocabulary conformance: closed term lists, total node
+      # coverage, containments, and a roles.json whose members all exist.
+      - name: vocabulary conformance
+        run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
+
+  rosetta:
+    name: gates (cross-language rosetta)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p treebank-cli
+      # The one check that catches a role threaded in one grammar and
+      # forgotten in another: supertype matching is derivation-based, so a
+      # missed thread is silent everywhere else.
+      - run: ./target/debug/treebank rosetta
+
+  wasm:
+    name: wasm artifacts
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        grammar: [python, rust, typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: install pinned tree-sitter CLI
+        run: cargo install tree-sitter-cli --version "$TREE_SITTER_VERSION" --locked
+      # DESIGN.md §7 makes wasm a first-class artifact, so it is built on
+      # every change rather than at release time — a grammar that cannot
+      # cross to wasm should fail here, not in a consumer's browser.
+      - name: build wasm
+        working-directory: crates/treebank-${{ matrix.grammar }}
+        run: tree-sitter build --wasm --docker -o tree-sitter-${{ matrix.grammar }}.wasm .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tree-sitter-${{ matrix.grammar }}-wasm
+          path: crates/treebank-${{ matrix.grammar }}/tree-sitter-${{ matrix.grammar }}.wasm
