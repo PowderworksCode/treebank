@@ -1,184 +1,438 @@
-# Treebank & Package Room by Powderworks
+# Treebank — design
 
-The plans I have in mind involve parsing a lot of code. Tree Sitter is usually
-pretty good, but sometimes various grammars fall behind the times. Keeping these
-parsers up to do date is thankless, unpaid work and that's not going to change
-anytime soon. So, I would like to automate the process of ensuring that there
-are Tree Sitter grammars for the languages I care about. 
+Treebank is a set of tree-sitter grammars written from scratch and owned
+outright — no upstream grammar repos, no forks, no vendored trees anywhere in
+the system. **Initial languages: Python, Rust, TypeScript.**
 
-Treebank will be a repo that contains vendered grammars for various languages.
-There are many, good grammars out there that just need a patch here and there to
-get them to 100% coverage for what I care about. Package Room will be an online
-service that grabs data from various package managers, runs the parsers across
-packages and then kicks off an agent in a sandbox if it hits a part of the
-language that it cannot parse. That agent will then put up a PR and I'll review
-and merge it. On merge, a new release will be published for that treebank
-grammar and pushed to cargo. It's a pretty straightforward loop I have in mind
-and I'm hoping it can get the grammars I need for less than $50/month.
+Three ideas define it:
 
-We are starting with packages now, and one day will move onto artifacts (like
-the Linux Kernel, Postgres, Rails, etc.) to make sure we hitting less package
-heavy languages like C as well as expanding coverage.
+1. **A shared node vocabulary, enforced in the parse table.** Every treebank
+   grammar carries the same set of supertypes — `_declaration`, `_loop`,
+   `_invocation`, … — alongside its language-specific nodes, so tooling can
+   ask cross-language questions without knowing each grammar's concrete node
+   names. Because we write the grammars, the vocabulary is a property of the
+   parse itself, checked when the parser is generated — not a convention
+   maintained by hand in query files that can drift.
+2. **One grammar per language, across language versions.** The Python grammar
+   parses Python 2.7 and every Python 3; the Rust grammar parses every
+   edition; the TypeScript grammar parses every TS version and JavaScript.
+3. **Validation by measurement.** Every grammar is swept over large corpora
+   of real published code, every failure is adjudicated by the language's
+   reference parser, and every claim of correctness is a number over a named
+   corpus — never an assertion.
 
-## Core loop
+The grammars ship as Rust crates and as wasm, from one repository.
+
+## 1. The three layers
 
 ```
-registry event (new version of a top-K package)
-  → fetch tarball, extract source files
-  → parse with our current grammar build
-  → all clean? record results, done.
-  → error? validity oracle: is the file even valid? (reference parser)
-      → invalid: record as corpus noise, done.
-      → valid: this is a grammar gap →
-          fix agent (diagnose → minimal repro → patch → regenerate → test → sweep)
-          → opens PR against the grammar repo
-          → adversarial review agent tries to reject it
-              → rejected: fix agent gets exactly one fix-up round
-              → rejected again: park for human, cap spent
-          → accepted: PR awaits human merge (human-in-the-loop for now)
-          → on merge: ledger updated, grammar auto-published
+language-specific syntax          concrete nodes: function_definition, match_arm, …
+        ↓
+shared syntactic supertypes       the vocabulary in §3: _declaration, _loop, _callable, …
+        ↓
+cross-language semantic ontology  Function, Method, NominalType, … — NOT in the grammars
 ```
 
-Bootstraping the parser for a language just involves running this loop from the
-top of the package list by descending popularity until it gets far enough down
-that we have built up confidence that we can parse everything. Rust is the
-initial target language: crates.io is easy to crawl, and Rust has no dialect
-ambiguity, so file-to-grammar routing is naive to start (revisit when a
-language that needs real routing — C/C++ headers, JS/TS, SQL flavors — comes
-online).
+The shared vocabulary describes **the syntactic role a node plays**, not the
+universal semantic concept it represents. That is why there is no `_class`,
+`_function`, `_method`, or `_variable` in it: those are semantic
+classifications, they become impossible to define consistently across
+languages, and they belong in a layer built on top of the grammars rather
+than inside them. A `method_definition` node is a `_declaration`, a
+`_member`, and (as a facet) `_callable`; calling it a *Method* is the upper
+layer's job.
 
-### Validity oracle
+Cross-language queries are the acceptance test of the whole design:
 
-"Our parser errored" does not mean "grammar bug": corpora are full of test
-fixtures, templates, snippets, and other-dialect files. Before dispatching an
-agent, adjudicate with the language's reference parser (rustc
-`-Zunpretty=ast-tree`, `python -m ast`, `node --check`, `gcc -fsyntax-only`,
-...). Files the reference rejects are recorded as noise, not bugs.
+```scheme
+(_declaration) @decl
+(_invocation)  @call
+(_loop)        @loop
+(_callable)    @fn
+(function_definition name: (_name) @n)
+```
 
-## Grammar repos and the patch ledger
+must mean the same thing over a `.py`, a `.rs`, and a `.ts` file.
 
-One repo per grammar, e.g. `powderworks/treebank-rust`. Each repo records the
-upstream grammar's `git_url` and `sha`, vendors the grammar source with all of
-our patches already applied, and keeps a `patches/` directory containing every
-individual patch it took to get from upstream to our tree. That way an
-upstream maintainer who wants any of our fixes can pull the patch files
-directly — the patches are the offer, the vendored tree is the product.
+## 2. What tree-sitter supertypes can express — measured
 
-Each repo carries a machine-readable ledger (`ledger.json`) and a human log
-(`LOCAL-PATCHES.md`):
+Tree-sitter's `supertypes` mechanism looks like it could carry any vocabulary
+you like. It cannot, and the vocabulary's structure is dictated by four facts,
+all measured on tree-sitter-cli 0.25.10 (the version treebank pins; 0.26.x
+ships Unicode identifier tables that wrongly drop some XID_Start characters,
+and stays banned until that is fixed):
 
-```json
-{
-  "upstream": {
-    "git_url": "https://github.com/tree-sitter/tree-sitter-rust",
-    "sha": "77a3747...",
-    "version": "0.24.2"
-  },
-  "patches": [
-    {
-      "id": 1,
-      "title": "extern types in extern blocks",
-      "file": "patches/0001-extern-types-in-extern-blocks.patch",
-      "files": ["grammar.js"],
-      "origin": "upstream PR #281",
-      "evidence": {
-        "repro": "extern \"C\" { pub type Foo; }",
-        "first_seen": {"package": "web-sys", "version": "0.3.103"},
-        "sweep_before": {"passed": 43601, "failed": 1725},
-        "sweep_after": {"passed": 45071, "failed": 255}
-      }
-    }
-  ]
+1. **An unused supertype rule is silently pruned.** A rule listed in
+   `supertypes:` but referenced by no production survives into `grammar.json`,
+   vanishes from `parser.c`, and its query matches nothing — no error, no
+   warning. A role must be a real production, reachable from the root.
+2. **Nested supertype partitions work.** Splitting a position into
+   `_value → _composite | _scalar` generates cleanly, leaves the parse tree
+   byte-identical, and `(_composite)`, `(_scalar)` and `(_value)` all match.
+   A derivation chain gives one occurrence several roles at once: a
+   `while_statement` reached via `_statement → _control_flow → _loop` answers
+   all three queries.
+3. **Overlapping membership at one position is a hard error.** Two supertypes
+   containing the same node, both reachable at the same position, is an
+   unresolved conflict: generate fails. Orthogonal roles cannot coexist in
+   the parse table at a single position.
+4. **Supertype queries are derivation-based, not type-based.** In a grammar
+   where node `x` occurs once via supertype `_a` and once directly, `(_a)`
+   matches only the first occurrence. A role holds for an *occurrence*
+   exactly when the parse flowed through the role's rule at that position.
+
+Fact 4 is the quiet gift: `(_expression)` matches an `identifier` only where
+it is *used* as an expression, not where it is a function's name — role-of-
+this-occurrence, which is precisely what a syntactic-role vocabulary should
+mean. Facts 1 and 3 are the constraint: roles that cross-cut the derivation
+(a `function_definition` is *callable* whether it occurs in statement
+position or class-body position) cannot be supertypes at all. So the
+vocabulary has two tiers with different physics.
+
+## 3. The vocabulary
+
+### 3.1 Two tiers
+
+**Table tier** — real supertype rules threaded through the productions.
+Occurrence-level semantics, enforced at generate time: a grammar that puts a
+node somewhere its role forbids does not build. Natively queryable by any
+tree-sitter consumer with no treebank machinery at all.
+
+**Facet tier** — roles that cross-cut derivations (§2, fact 3). Shipped as a
+`roles.json` manifest in each grammar crate: type-level membership,
+maintained next to the grammar, validated in CI against the generated
+`node-types.json` (every listed node must exist; every facet must be from
+the closed list). `treebank-core` expands facet queries at load time —
+`(_callable)` becomes the concrete alternation `[(function_definition)
+(lambda) …]` — so the query surface is uniform across tiers. Type-level is
+the *correct* semantics for facets: a `function_definition` is callable
+wherever it occurs.
+
+The facet tier is a compromise forced by the parse table's limits, kept
+honest by being closed, machine-checked, and shipped inside the same crate
+as the grammar — not a hand-maintained query pack.
+
+### 3.2 The terms
+
+The list is **closed**. A grammar may omit terms its language lacks
+(Python declares no `_type`; its annotations are ordinary expressions). It
+may not invent terms. Adding a term is a vocabulary change, versioned in
+`treebank-core`, applying to every language at once.
+
+All vocabulary names are underscore-prefixed (`_declaration`); concrete node
+names never are. Supertypes are hidden nodes either way, and hidden names
+are fully queryable — the underscore just marks the shared layer apart from
+concrete nodes in every query that mixes them.
+
+**Structural core — table tier**
+
+| term | definition | python | rust | typescript |
+|---|---|---|---|---|
+| `_statement` | executed for effect as an element of a sequence | `if_statement`, `expression_statement`, … | statements inside blocks | `if_statement`, `expression_statement`, … |
+| `_expression` | denotes a value | `binary_operator`, `call_expression`, `lambda`, … | nearly everything | `binary_expression`, `call_expression`, … |
+| `_declaration` | introduces a named entity — function, class/type, variable, interface — with or without a body | `function_definition`, `class_definition` | `function_definition`, `struct_definition`, `trait_definition`, trait method signatures | `function_definition`, `class_definition`, `interface_declaration`, `type_alias`, `declare …` |
+| `_pattern` | destructuring or matching position | match-case patterns, assignment targets | patterns everywhere | binding patterns, destructuring |
+| `_type` | syntax in type position | *(not declared)* | all type syntax | all type syntax |
+| `_name` | denotes or refers to a name: identifier, qualified name, path | `identifier`, dotted names in name position | `identifier`, `scoped_identifier`, paths | `identifier`, `nested_identifier`, `qualified_name` |
+| `_literal` | value fully determined by its own text, for every instance of the rule | `integer`, `string` *(not f-strings)*, `true` | `integer_literal`, `string_literal`, `char_literal` | `number`, `string` *(not templates)*, `true` |
+
+Two definitional notes. `_declaration` is one term: `fn f() {}`, `fn f();`
+and `declare function f(): void` are all declarations; the with-body /
+without-body distinction is not encoded (it can be added later as a facet,
+additively, without breaking a query). `_literal` quantifies over the rule,
+not the instance: Python's `string` rule can carry interpolation, so no
+Python string is a `_literal`, while Rust's `string_literal` cannot, so
+every one is.
+
+**Positional roles — table tier**
+
+| term | definition | examples |
+|---|---|---|
+| `_parameter` | formal parameter position | `typed_parameter`, `default_parameter` (py); `parameter`, `self_parameter` (rs); `required_parameter`, `optional_parameter` (ts) |
+| `_argument` | actual argument position in an invocation | `keyword_argument`, splats; plain expressions thread through it |
+| `_member` | element of a type's body | statements in a `class` body (py); `field_declaration`, impl items (rs); `method_definition`, `public_field_definition` (ts) |
+| `_clause` | subordinate piece of a larger construct that is not naturally a statement or expression | `elif_clause`, `else_clause`, `except_clause`, `case_clause`, `match_arm`, `where_clause`, `catch_clause`, `finally_clause`, comprehension clauses |
+| `_modifier` | keyword-ish marker altering a declaration's meaning | `visibility_modifier`, `mutable_specifier`, `accessibility_modifier`, `async`, … |
+| `_attribute` | annotation attached to a declaration | `decorator` (py, ts); `attribute_item`, `inner_attribute_item` (rs) |
+| `_directive` | affects the compilation unit or its environment rather than computing in it | `import_statement`, `import_from_statement` (py); `use_declaration`, `extern_crate_declaration` (rs); `import_statement`, `export_statement` (ts); shebangs, pragmas |
+| `_body` | the body position of a definition or control construct | `block` (py, rs); `statement_block`, arrow-function expression bodies (ts) |
+
+A rule the positional roles impose on the grammars: anything a query should
+see must be a **named node**. `pub`, `mut`, `async`, `readonly` are named
+modifier nodes in treebank grammars, not anonymous tokens, because an
+anonymous token can never carry a role.
+
+**Operational roles — table tier**, nested inside `_statement` and/or
+`_expression` as each language requires:
+
+| term | definition | notes |
+|---|---|---|
+| `_control_flow` | alters sequential execution | contains `_branch`, `_loop`, `_jump`, plus `try_statement`, `with_statement` |
+| `_branch` | conditional selection | `if`, `match`, `conditional_expression`, `switch` |
+| `_loop` | repetition | `for`, `while`, `loop`, do-while |
+| `_jump` | non-local transfer | `return`, `break`, `continue`, `raise`/`throw` |
+| `_assignment` | stores into a place | `assignment`, `augmented_assignment` (py); `assignment_expression`, `compound_assignment_expr` (rs); `assignment_expression`, `augmented_assignment_expression` (ts) |
+| `_invocation` | applies a callable | `call_expression`; `macro_invocation` (rs); `new_expression` (ts) |
+| `_access` | reads a place: member or index | `attribute`, `subscript` (py); `field_expression`, `index_expression` (rs); `member_expression`, `subscript_expression` (ts) |
+
+Where a language makes control flow an expression (Rust), `_control_flow`
+nests inside `_expression`; where it is a statement (Python), inside
+`_statement`; TypeScript threads it wherever its syntax requires. `(_loop)`
+does not care — that is the point of the vocabulary.
+
+**Facets — manifest tier** (`roles.json`)
+
+| term | definition | membership sketch |
+|---|---|---|
+| `_callable` | defines something invokable | `function_definition`, `lambda` (py); `function_definition`, `closure_expression` (rs); `function_definition`, `arrow_function`, `method_definition`, `function_expression` (ts) |
+| `_binding` | introduces a name | `function_definition`, `class_definition`, parameters, `assignment` / `let_declaration`, `for` targets, imports, `named_expression` (py `:=`) |
+| `_scope` | delimits a lexical scope | module roots, functions, classes (py); blocks, functions, modules (rs); functions, blocks, modules (ts) |
+
+`_declaration` and `_binding` are deliberately different questions. In
+
+```rust
+fn foo(x: i32) {
+    let y = x;
+    for z in values {}
 }
 ```
 
-The ledger is the source of truth for materializing any grammar: the
-`upstream/` submodule (which must sit exactly at the ledger's pinned `sha`)
-+ the `patches/` series applied in order + `tree-sitter generate` with the
-ledger's pinned `generate_cli` version produce the gitignored working tree
-`build/` that sweeps, tests and publishing consume (CI checks this).
+`foo`, `x`, `y` and `z` all introduce names, from four different constructs;
+only `fn foo` is a `_declaration`. Tooling gets to ask *find declarations*
+and *find everything that introduces a name* as two queries, not one.
 
-The CLI pin is not bookkeeping: regenerating with a different CLI version can
-silently change parsing behavior (found in practice: tree-sitter-cli 0.26.x
-ships Unicode identifier tables that drop some XID_Start chars, breaking
-`'K'`-style char literals — caught by the corpus sweep). Bumping the pinned
-CLI is treated like a patch: full sweep, before/after numbers, ledger entry.
+Three facets at launch. A term moves between tiers only with a vocabulary
+version bump.
 
-### Publishing
+### 3.3 What the checker enforces (`treebank roles`, in CI)
 
-On merge, CI regenerates the parser and publishes the grammar as
-`powderworks/treebank-<language>`, versioned as the upstream version plus a
-build counter suffix: upstream `0.24.2` + our 7th release on that base →
-**`0.24.2-7`**. Consumers pin to upstream semantics and can read our counter
-independently.
+1. Declared supertypes ⊆ the closed table-tier list; `roles.json` keys ⊆ the
+   closed facet list.
+2. Every named, non-`extras` node type is reachable through at least one
+   table role, **or** listed in a facet, **or** recorded in the ledger as
+   uncategorised with a one-line reason. Nothing is silently outside the
+   vocabulary.
+3. Every node named in `roles.json` exists in `node-types.json`.
+4. Declared containments hold (`_literal ⊆ _expression`; `_branch`, `_loop`,
+   `_jump` ⊆ `_control_flow`).
+5. **Role liveness:** every declared role matches at least one occurrence
+   over the language's corpus sweep. Because matching is derivation-based
+   (§2, fact 4), a role the grammar author forgot to thread at some position
+   fails *silently* — zero matches over a large corpus is how it gets caught.
+6. The cross-language rosetta suite passes (§5.4).
 
-### Upstream releases
+## 4. The grammars
 
-When upstream publishes a new grammar version, automation pulls it, replays
-the patch series, regenerates, sweeps, and opens a PR with the result:
+### 4.1 Construction rules
 
-- Clean replay + green sweep → PR is a rubber stamp.
-- Conflicts or sweep regressions → a rebase agent job (same pipeline as a fix
-  job) resolves them; patches upstream has absorbed are retired from the
-  ledger (the best outcome — divergence shrinking on its own).
+- One crate per language. Grammar source is `grammar.js` plus `src/scanner.c`
+  where the language demands an external scanner — all three initial
+  languages do (indentation and f-strings; raw strings; template literals
+  and JSX text).
+- Every `grammar.js` imports the vocabulary from `treebank-core`'s
+  `vocabulary/supertypes.js`. The term list is shared *code*, not shared
+  convention: the import provides the closed list and helpers for the
+  standard nestings; the grammar supplies the members.
+- **Shared concrete names and fields.** The same construct gets the same
+  node name and the same field names in every treebank grammar:
+  `function_definition` (not `function_item`, not `function_declaration`),
+  `class_definition`, `call_expression`, with the fixed field vocabulary
+  `name:`, `parameters:`, `body:`, `condition:`, `value:`, `left:`,
+  `right:`, `operator:`, `type:`, `arguments:`. So
+  `(function_definition name: (_name) @n)` is one query for three languages.
+  Grammars diverge only where constructs genuinely differ — never renaming
+  or reshaping to force a match, because a tree that lies about syntax is
+  worse than a tree that varies.
+- `extras` carry comments and whitespace only.
 
-## Agent pipeline
+### 4.2 One grammar per language, across versions
 
-Agents run headless (`claude -p`) from the job queue, using the Claude Max
-account. Design constraints that matter:
+A language gets one grammar accepting the **union of its versions** — no
+python2 crate, no per-edition Rust grammars.
 
-- **Job classes.** `grammar.js` rule fixes are declarative, verifiable, and
-  cheap — route to a mid-tier model. `scanner.c` (external scanner) fixes are
-  C programming with state-machine and serialization concerns — route to the
-  top model and expect longer sessions. Classify by whether the failing
-  region touches an external token.
-- **Caps everywhere.** Fix agent: bounded attempts (~3) before parking the
-  cluster for a human. Adversarial review: accept/reject with reasons.
-  Fix-up: exactly one round, as designed. A pathological cluster must cost a
-  bounded amount of usage allowance, never a week of it.
-- **PRs are built for 90-second review.** Every PR contains: the minimal
-  repro, the patch, regenerated files, the ledger entry, grammar corpus test
-  results, and before/after sweep numbers. The human decision should be a
-  glance, because human attention is the system's scarcest resource.
+- **Python**: 2.7 ∪ 3.x. The union adds the py2 `print` and `exec`
+  statements, `except E, e:` clauses, backtick repr, and old-style octal
+  literals, parsed alongside py3 syntax.
+- **Rust**: editions 2015–2024 together. The real work is contextual
+  keywords: `async`, `dyn`, `try`, `gen` are identifiers in older editions
+  and keywords in newer ones, and the union grammar accepts both readings.
+- **TypeScript**: every TS version, **and JavaScript** — TS is the union
+  language of JS, so this is the same philosophy applied across a language
+  boundary. One grammar source, **two generated parsers**: `typescript`
+  (`.ts`, `.mts`, `.cts`) and `tsx` (`.tsx`, `.jsx`, `.js`, `.mjs`,
+  `.cjs`). Two parsers because `<T>x` is a cast in `.ts` and an unclosed
+  JSX element in `.tsx` — a genuine grammatical ambiguity, not a precedence
+  problem; no single parse table exists.
 
-The adversarial reviewer's brief is to *refute*: find valid code the patch
-breaks, invalid code it newly accepts, or a simpler patch. It runs the same
-verification harness independently rather than trusting the fix agent's
-numbers.
+Which version a given file belongs to is deliberately **not** answered now.
+The sweep records per-version oracle verdicts anyway (§4.3) — that verdict
+vector is the hook a future `version_of()` builds on, and nothing more is
+built today.
 
-## Verification (CI, per PR)
+### 4.3 What "valid" means with multiple versions
 
-Runs on GitHub Actions (free for public repos), so evidence lives in the PR
-and merges never depend on our infrastructure being up:
+A parse failure on real code is only a bug if the code is actually valid, so
+every language carries **oracles** — reference parsers, pinned like
+compilers: tool + version + flags + declared positions + a smoke test that
+runs before any verdict is trusted.
 
-1. `tree-sitter generate` reproduces the committed generated files exactly.
-2. Grammar's own corpus tests pass (`tree-sitter test`).
-3. Full package-corpus sweep: pass count must not regress; the fix's target
-   files must now pass.
-4. **Negative tests**: the repro corpus of reference-rejected files must
-   still be rejected. Sweeps only catch rejects-valid-code; this catches
-   accepts-invalid-code, the direction agents drift when optimizing pass
-   rates (found in practice: upstream rust accepted `' a` as a lifetime).
+With a version-union grammar there is one oracle per version family:
 
-## Infrastructure
+- **python**: CPython 3 `compile(src, path, 'exec')`, and CPython 2.7's
+  `compile` where a python2 exists; when CI has no python2 binary, py2
+  verdicts come from a frozen battery of known-valid/known-invalid files,
+  and the ledger says so.
+- **rust**: `syn` in-process for the sweep; `rustc -Zparse-only` per
+  `--edition` for adjudicating anything `syn` and the grammar disagree on.
+- **typescript**: `tsc` parse per dialect; V8 as a secondary oracle for
+  plain `.js`.
 
-- **Runner**: my laptop for now — crawler, job queue, agent sessions, and
-  tarball cache all run locally. When this needs to run unattended, it moves
-  to Fly.io with agent sessions in Sprites (ephemeral sandboxed VMs spun up
-  per job and torn down after). This workload is mostly agents waiting on
-  model responses; cores only matter for sweeps.
-- **GitHub**: public org `powderworks`, one repo per grammar
-  (`treebank-<language>`), Actions for all per-PR verification and publish-on-
-  merge.
-- **PackageRoom.dev**: static-first on Cloudflare Pages/Workers; sweep
-  results and ledgers in R2/D1. Displays per-package parse status and
-  history, per-grammar coverage and patch ledger, crawl progress, and the
-  parked-for-human queue. (Future: impact analysis across the corpus.)
+Adjudication over the version set:
 
-## Decisions
+- **gap** — the grammar rejects a file that **any** version-oracle accepts.
+  Always a bug; the union must cover every version.
+- **widening** — the grammar accepts a file that **every** version-oracle
+  rejects. Sweeps cannot catch this direction (real corpora are almost
+  entirely valid code), which is what the negative corpus exists for:
+  `test/negative/` holds files invalid under *every* version, and
+  `test/negative/<version>/` files that must stay invalid for that
+  version's oracle — the guard against the union quietly becoming
+  "anything parses".
+- the sweep stores the full per-oracle verdict vector per file.
 
-- Rust first, run from the laptop: registry "events" are just naive polling
-  of crates.io. Per-ecosystem feeds come with later languages.
-- Dialect routing is naive for now — Rust doesn't need it.
-- The ledger lives per grammar repo, keeping PRs self-contained.
+Two oracle rules, both absolute. **An unreadable file is never an invalid
+file**: an oracle that cannot read its input exits non-zero with no verdict,
+because a verdict of "invalid" books the file as corpus noise, and an oracle
+that answers "invalid" for files it could not open would silently convert
+every grammar failure into noise and report a flawless grammar. And **an
+oracle is proved by a negative battery, never by agreement**: agreement on
+clean library code is worth nothing; only files that *should* be rejected
+test whether the oracle can reject.
 
+## 5. Testing — the invariant
+
+Treebank's credibility claim is behavioural: *this grammar parses N real
+files, agrees with the reference parsers on all but a ledgered list, rejects
+what every version rejects, and carries the shared vocabulary in full.* Four
+checks, run per grammar by `verify.sh` locally and in CI:
+
+**I1 — Reproducible generation.** `grammar.js` + `scanner.c` +
+tree-sitter-cli 0.25.10 reproduce the committed `src/` byte for byte. What
+is published is exactly what the source generates.
+
+**I2 — Corpus sweep, oracle-adjudicated.** Parse the full corpus; every
+failure goes to the version oracles; the result is `gap_files = 0` or a
+ledgered list with a reproduction for each. **A zero must be falsified, not
+trusted**: the sweep is re-run against a deliberately mutated grammar (one
+rule deleted), and must report gaps — a pipeline that cannot report non-zero
+proves nothing by reporting zero.
+
+**I3 — Negative corpus + conformance suites.** The per-version negative
+files of §4.3 must all still be rejected. Where an official suite exists it
+runs, and every known failure is ledgered: CPython's grammar and tokenizer
+test corpora, rustc's parser test suite, the TypeScript compiler's
+conformance suite.
+
+**I4 — Vocabulary conformance.** `treebank roles` (§3.3): closed lists,
+total node coverage, containments, manifest validity, role liveness, and
+the rosetta suite.
+
+### 5.4 The rosetta corpus
+
+A directory of small parallel programs — the same behaviour written in
+Python, Rust and TypeScript — each with an expected-roles file: assertions
+like *"exactly 2 `_loop`, 3 `_declaration`, 1 `_callable`, and
+`(function_definition name: (_name))` yields `f`, in all three languages."*
+This is the executable form of the promise that the vocabulary means the
+same thing everywhere, and it is the only check that catches a role threaded
+in one grammar and forgotten in another before a consumer does.
+
+### 5.5 Corpora
+
+Per language, thousands of packages from the ecosystem's registry (PyPI,
+crates.io, npm), fetched by rank, extracted to source files, swept whole.
+Corpus composition is *declared* in the ledger, including what the corpus is
+blind to — a registry corpus is biased toward well-formed, modern,
+machine-formatted code, so python2 forms, encoding edge cases, and
+deliberately hostile input are covered by the negative corpus and
+conformance suites, and the ledger says which population covers what. A
+clean sweep over a biased corpus is weak evidence on its own; the ledger is
+where that weakness is written down instead of discovered.
+
+## 6. Code organization
+
+```
+crates/
+  treebank-core/              # the vocabulary, as code and as data:
+    vocabulary/supertypes.js  #   the closed term list grammars import
+    src/                      #   roles.json schema, facet query expansion,
+                              #   the `treebank roles` checker
+  treebank-python/
+    grammar.js  src/scanner.c  src/ (generated, committed)
+    roles.json  ledger.json
+    test/corpus/  test/negative/  test/negative/<version>/
+    bindings/                 # rust crate + wasm
+  treebank-rust/              # same shape
+  treebank-typescript/        # common/define-grammar.js + typescript/ + tsx/
+  treebank-cli/               # fetch · rank · sweep · oracle · roles ·
+                              # negative · ledger
+tools/consumer-test/          # downstream crate + wasm smoke tests
+test/rosetta/                 # parallel programs + expected-roles files
+```
+
+- **treebank-core** is the single source of truth for the vocabulary: the JS
+  module every grammar imports, the Rust library the CLI and consumers use,
+  and — compiled to wasm — the same facet expansion in the browser.
+  Vocabulary versions are semver on this crate.
+- **Generated `src/` is committed** in each grammar crate; I1 keeps it
+  honest. There is no build directory, no patch series, no vendored
+  anything.
+- **wasm is a first-class artifact**: every grammar crate publishes
+  `tree-sitter-<lang>.wasm` alongside the Rust crate, and `treebank-core`
+  ships a JS/wasm package that loads them and provides facet-aware queries.
+  `roles.json` travels inside both the crate and the npm package.
+- **`ledger.json`** is each grammar's evidence file, machine-validated by
+  `treebank ledger`: language, versions covered, one pinned oracle per
+  version family, corpus description and its declared blind spots, sweep
+  results, conformance-suite results, and the vocabulary's uncategorised
+  list. Every number this document promises lives there, next to how it was
+  measured.
+
+## 7. Design decisions
+
+1. **Two tiers, because the parse table forces it.** Structural roles are
+   supertypes (occurrence-level, generate-time-enforced); the three
+   cross-cutting facets ship as a checked manifest with query expansion in
+   `treebank-core`. The alternative — restricting the vocabulary to only
+   what threads — was rejected to keep the facet queries; the other
+   alternative — everything in query files — was rejected because it is
+   exactly the drifting query layer this design exists to kill.
+2. **One `_declaration`,** with or without body; `_binding` is a separate
+   facet. A `_signature` facet can be added later, additively.
+3. **`treebank-typescript` covers JavaScript,** as two dialect parsers
+   generated from one source.
+4. **Shared concrete names and fields across grammars,** diverging only
+   where syntax genuinely differs.
+5. **Underscore spelling for every vocabulary term;** concrete nodes never
+   start with an underscore.
+6. **tree-sitter-cli pinned at 0.25.10**; bumping the pin is treated like a
+   grammar change — full sweep, before/after numbers, ledger entry —
+   because regenerating with a different CLI can silently change what the
+   grammar accepts.
+
+## 8. Order of work
+
+`treebank-core` (vocabulary + checker + expansion) → **Python** → **Rust** →
+**TypeScript**.
+
+Python first: the corpus infrastructure is cheapest to stand up, the oracle
+is the cheapest to extend across versions, and its external scanner
+(indentation, f-strings) is the hardest *small* scanner — the right first
+test of whether from-scratch scanners are sustainable. For calibration,
+mature tree-sitter grammars for these languages run roughly 1,300–1,800
+lines of `grammar.js` plus a 400–550-line scanner each, and the version
+union adds real size on top (py2 statement forms; Rust's edition-contextual
+keywords). The scanners are where the risk concentrates: indentation, raw
+strings, template literals, regex-vs-division and other ASI-adjacent token
+decisions, JSX text. One language at a time, with the sweep and the roles
+checker live from the first week, is what keeps that risk measured.
