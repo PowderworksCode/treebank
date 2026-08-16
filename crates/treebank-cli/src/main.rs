@@ -1,15 +1,12 @@
-mod fetch;
 mod grammar;
-mod lang;
-mod langname;
-mod rank;
+mod routing;
 mod sweep;
 
 use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 
-use crate::langname::LangName;
+use treebank_lang::LangName;
 
 #[derive(Parser)]
 #[command(name = "treebank", about = "Treebank corpus and grammar sweep tooling")]
@@ -111,7 +108,7 @@ fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
         .map(|l| l.trim().to_string())
         .filter(|l| !l.is_empty())
         .collect();
-    let verdicts = lang::get(lang).validate(srcroot, &paths)?;
+    let verdicts = treebank_oracle::get(lang).validate(srcroot, &paths)?;
     let mut out = std::io::BufWriter::new(std::io::stdout().lock());
     for p in &paths {
         // A path the oracle declined to answer for is not silently dropped:
@@ -137,20 +134,20 @@ fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {
 
 fn main() -> anyhow::Result<()> {
     match Cli::parse().cmd {
-        Cmd::Rank { lang, db, k, out } => rank::run(
-            lang::get(lang),
+        Cmd::Rank { lang, db, k, out } => treebank_corpus::rank::run(
+            treebank_corpus::get(lang),
             &lang_path(lang, db, "db"),
             k,
             &lang_path(lang, out, "top-k.json"),
         ),
-        Cmd::Fetch { lang, list, limit, corpus } => fetch::run(
-            lang::get(lang),
+        Cmd::Fetch { lang, list, limit, corpus } => treebank_corpus::fetch::run(
+            treebank_corpus::get(lang),
             &lang_path(lang, list, "top-k.json"),
             limit,
             &lang_path(lang, corpus, ""),
         ),
         Cmd::Sweep { lang, grammar, manifest, out } => sweep::run(
-            lang::get(lang),
+            lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/sweep.json"),

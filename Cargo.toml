@@ -1,3 +1,9 @@
 [workspace]
-members = ["crates/treebank-cli", "crates/treebank-preprocessing"]
+members = [
+    "crates/treebank-cli",
+    "crates/treebank-corpus",
+    "crates/treebank-lang",
+    "crates/treebank-oracle",
+    "crates/treebank-preprocessing",
+]
 resolver = "2"
