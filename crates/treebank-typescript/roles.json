@@ -1,0 +1,201 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_callable": [
+      "function_definition",
+      "arrow_function",
+      "function_expression"
+    ],
+    "_binding": [
+      "function_definition",
+      "class_definition",
+      "interface_definition",
+      "type_alias",
+      "enum_definition",
+      "namespace_definition",
+      "import_alias",
+      "variable_declaration",
+      "variable_declarator",
+      "parameter",
+      "rest_parameter",
+      "import_statement",
+      "import_specifier",
+      "namespace_import",
+      "catch_clause",
+      "field_definition",
+      "enum_member",
+      "type_parameter",
+      "arrow_function",
+      "function_expression",
+      "shorthand_property_pattern",
+      "pair_pattern",
+      "assignment_pattern",
+      "for_in_statement"
+    ],
+    "_scope": [
+      "program",
+      "function_definition",
+      "arrow_function",
+      "function_expression",
+      "class_definition",
+      "block",
+      "static_block",
+      "namespace_definition",
+      "catch_clause"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "comment",
+      "reason": "an extra; carries no syntactic role"
+    },
+    {
+      "node": "hash_bang_line",
+      "reason": "the #! line; a directive to the OS, not the language"
+    },
+    {
+      "node": "arguments",
+      "reason": "container node; its elements carry the role (_argument)"
+    },
+    {
+      "node": "parameters",
+      "reason": "container node; its elements carry the role (_parameter)"
+    },
+    {
+      "node": "class_body",
+      "reason": "container node; its elements carry the role (_member)"
+    },
+    {
+      "node": "switch_body",
+      "reason": "container node; its elements carry the role (case/default clauses)"
+    },
+    {
+      "node": "enum_body",
+      "reason": "container node; its elements carry the role (enum_member, a _binding facet member)"
+    },
+    {
+      "node": "class_heritage",
+      "reason": "the extends/implements tail of a class definition"
+    },
+    {
+      "node": "else_clause",
+      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
+    },
+    {
+      "node": "case_clause",
+      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
+    },
+    {
+      "node": "default_clause",
+      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
+    },
+    {
+      "node": "finally_clause",
+      "reason": "clause of a compound statement; `_clause` is unthreadable (a supertype's members enter every position that references it) \u2014 the same evidence python and rust recorded"
+    },
+    {
+      "node": "pair",
+      "reason": "key: value inside an object; the value carries _expression"
+    },
+    {
+      "node": "shorthand_property",
+      "reason": "shorthand member of an object literal"
+    },
+    {
+      "node": "sequence_expression",
+      "reason": "comma-joined expressions; each operand carries _expression \u2014 the sequence itself is deliberately outside so `(_expression)` does not double-count"
+    },
+    {
+      "node": "computed_property_name",
+      "reason": "the [expr] form of a property name; its child carries _expression"
+    },
+    {
+      "node": "private_name",
+      "reason": "a #field name; a candidate _name member the vocabulary has not admitted"
+    },
+    {
+      "node": "nested_identifier",
+      "reason": "dotted namespace path (a.b.c) in name positions; same candidate-_name status as rust paths and python dotted_name"
+    },
+    {
+      "node": "import_clause",
+      "reason": "the bindings half of an import statement (the statement carries _directive)"
+    },
+    {
+      "node": "named_imports",
+      "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
+    },
+    {
+      "node": "export_clause",
+      "reason": "container node; its elements carry the role (export_specifier)"
+    },
+    {
+      "node": "export_specifier",
+      "reason": "one exported name inside an export clause"
+    },
+    {
+      "node": "import_attribute",
+      "reason": "the `with {...}` assertion tail of an import"
+    },
+    {
+      "node": "rest_pattern",
+      "reason": "the ...rest element inside destructuring; its child binds"
+    },
+    {
+      "node": "string_content",
+      "reason": "lexical component of a template string"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "lexical component of a string or template"
+    },
+    {
+      "node": "template_substitution",
+      "reason": "the ${\u2026} of a template; its child carries _expression"
+    },
+    {
+      "node": "jsx_opening_element",
+      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
+    },
+    {
+      "node": "jsx_closing_element",
+      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
+    },
+    {
+      "node": "jsx_attribute",
+      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
+    },
+    {
+      "node": "jsx_expression",
+      "reason": "the {\u2026} container inside JSX; its child carries _expression"
+    },
+    {
+      "node": "jsx_namespace_name",
+      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
+    },
+    {
+      "node": "jsx_text",
+      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
+    },
+    {
+      "node": "type_parameters",
+      "reason": "type-system machinery below the role layer"
+    },
+    {
+      "node": "type_arguments",
+      "reason": "type-system machinery below the role layer"
+    },
+    {
+      "node": "property_signature",
+      "reason": "type-system machinery below the role layer (object_type member)"
+    },
+    {
+      "node": "call_signature",
+      "reason": "type-system machinery below the role layer (object_type member)"
+    },
+    {
+      "node": "construct_signature",
+      "reason": "type-system machinery below the role layer (object_type member)"
+    }
+  ]
+}

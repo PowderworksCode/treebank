@@ -11,28 +11,22 @@ use treebank_preprocessing::Symbols;
 /// crate root. Single-grammar languages get `["."]`.
 pub fn grammar_dirs(lang: LangName) -> &'static [&'static str] {
     match lang {
-        LangName::Python | LangName::Rust => &["."],
-        // One grammar source, two generated parsers (DESIGN.md §4.2):
-        // `<T>x` is a cast in .ts and an unclosed JSX element in .tsx.
-        LangName::Typescript => &["typescript", "tsx"],
-        // Plain JS parses with the tsx dialect; a javascript "grammar dir"
-        // exists only so .js corpora can be swept through it.
-        LangName::Javascript => &["."],
+        // One parser covers the whole TS ∪ JS ∪ JSX union: the only
+        // construct the DESIGN.md §4.2 dialect split existed for is the
+        // legacy `<T>x` cast, measured at ~zero corpus incidence and
+        // carried as a ledgered known-gap instead. Plain JS sweeps point
+        // --grammar at the same crate.
+        LangName::Python
+        | LangName::Rust
+        | LangName::Typescript
+        | LangName::Javascript => &["."],
     }
 }
 
 /// Index into `grammar_dirs()` for a file.
 pub fn route(lang: LangName, dialect: &Option<String>, rel: &str) -> usize {
-    match lang {
-        LangName::Typescript => {
-            let is_tsx = dialect
-                .as_deref()
-                .map(|d| d == "tsx")
-                .unwrap_or_else(|| rel.ends_with(".tsx"));
-            usize::from(is_tsx)
-        }
-        _ => 0,
-    }
+    let _ = (lang, dialect, rel);
+    0
 }
 
 /// What this language knows for certain about its own preprocessor.
