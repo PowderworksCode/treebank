@@ -1614,12 +1614,22 @@ module.exports = grammar({
       optional(seq('=', field('value', $._type))),
     ),
 
-    type_arguments: $ => seq(
+    // `prec.dynamic(1)`, because `a.b<T>(x)` is genuinely ambiguous with the
+    // comparison chain `a.b < T > (x)` and both are complete parses. Nothing
+    // asymmetric decided it, so the comparison won and generic calls on a
+    // MEMBER function -- `vi.importActual<any>('v')`, `z.custom<string>(f)`
+    // -- came out as `binary_expression`. A plain `f<T>(x)` already worked,
+    // which is why this hid in a handful of files rather than all of them.
+    //
+    // +1 rather than more, so it stays BELOW the JSX arbitration: a `<` in
+    // a .tsx file still has `jsx_opening_element` at -1 yielding to an
+    // arrow, and this does not disturb that balance.
+    type_arguments: $ => prec.dynamic(1, seq(
       '<',
       commaSep1($._type),
       optional(','),
       '>',
-    ),
+    )),
 
     // ── names & literals ─────────────────────────────────────────────
     _name: $ => choice(
