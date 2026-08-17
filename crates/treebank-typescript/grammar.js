@@ -1220,8 +1220,15 @@ module.exports = grammar({
       field('name', alias($.identifier, $.type_identifier)),
     ),
 
-    union_type: $ => prec.left(2, seq(optional($._type), '|', $._type)),
-    intersection_type: $ => prec.left(3, seq(optional($._type), '&', $._type)),
+    // These sit ABOVE `PREC.cast` deliberately. `x as A & B` is
+    // `x as (A & B)` in TypeScript, not `(x as A) & B` -- the type after
+    // `as`/`satisfies` is greedy. With the type operators below `cast`, the
+    // parser reduced `as_expression` at the `&` and read the rest as a
+    // bitwise-and over an object literal, which is silently well-formed
+    // and silently wrong. Their order relative to each other is unchanged:
+    // `&` still binds tighter than `|`.
+    union_type: $ => prec.left(PREC.cast + 1, seq(optional($._type), '|', $._type)),
+    intersection_type: $ => prec.left(PREC.cast + 2, seq(optional($._type), '&', $._type)),
 
     function_type: $ => prec.left(1, seq(
       field('type_parameters', optional($.type_parameters)),
@@ -1395,10 +1402,14 @@ module.exports = grammar({
 
     parenthesized_type: $ => seq('(', $._type, ')'),
 
-    predicate_type: $ => prec.right(seq(
-      optional('asserts'),
-      choice($._name, $.this),
-      optional(seq('is', $._type)),
+    // A predicate type needs `asserts`, or `is`, or both. The old shape --
+    // `optional('asserts') name optional(is type)` -- also derived a BARE
+    // name, so `let b: never` came out as `predicate_type(identifier)`
+    // rather than `predefined_type`, and every plain type name had a
+    // spurious second reading to carry through the table.
+    predicate_type: $ => prec.right(choice(
+      seq('asserts', choice($._name, $.this), optional(seq('is', $._type))),
+      seq(choice($._name, $.this), 'is', $._type),
     )),
 
     import_type: $ => seq('import', '(', $.string, ')', optional(seq('.', choice(alias($.identifier, $.type_identifier), $.nested_type_identifier))), field('type_arguments', optional($.type_arguments))),
@@ -1434,14 +1445,41 @@ module.exports = grammar({
     _name: $ => choice(
       $.identifier,
       alias($._soft_keyword, $.identifier),
+      alias($._value_word, $.identifier),
     ),
 
     _soft_keyword: _ => prec(1, choice(
       'type', 'namespace', 'module', 'declare', 'readonly', 'abstract',
-      'override', 'is', 'keyof', 'infer', 'satisfies', 'asserts', 'unique',
+      'override', 'keyof', 'infer', 'satisfies', 'unique',
       'get', 'set', 'of', 'from', 'as', 'async', 'static', 'public',
       'private', 'protected', 'any', 'assert', 'global', 'out', 'accessor',
     )),
+
+
+
+    // Words that are legal IDENTIFIERS but must not be reachable as bare
+    // TYPE names. Kept disjoint from `_soft_keyword`, which is aliased into
+    // both positions -- two hidden rules matching one token is an unresolved
+    // conflict, not a choice.
+    //
+    // `asserts` / `is` are the predicate keywords. Allowing either as a bare
+    // type made `a(): asserts this is X` look COMPLETE after `asserts`
+    // inside an object type, which made `_type_member_end` valid there. The
+    // external scanner is not forked by GLR -- when it returns a boundary
+    // that is the only lexing -- so it cut the member at `asserts` and the
+    // predicate reading died before the parser saw it. That shredded into
+    // four bogus `property_signature`s, which is well-formed, so it swept
+    // clean; only the generic form `asserts this is X<Y>` ever errored.
+    //
+    // The cost is `type asserts = ...` and `let x: is` as type NAMES, which
+    // TypeScript permits and nothing in the corpus does.
+    // `never` / `unknown` / `symbol` are deliberately NOT here. They are
+    // not reserved either, but giving them an identifier reading costs far
+    // more than it buys: `expectTypeOf<t1>().toEqualTypeOf<unknown>()` then
+    // has a competing generic-arrow fork that wins, and the type-argument
+    // reading dies. Measured at 10 -> 23 corpus gaps. A parameter named
+    // `symbol` inside a bare function type stays a known gap instead.
+    _value_word: _ => prec(1, choice('asserts', 'is')),
 
     identifier: _ => /[_$\p{XID_Start}][_$\p{XID_Continue}]*/,
 

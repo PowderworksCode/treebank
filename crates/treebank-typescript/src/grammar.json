@@ -7275,7 +7275,7 @@
     },
     "union_type": {
       "type": "PREC_LEFT",
-      "value": 2,
+      "value": 16,
       "content": {
         "type": "SEQ",
         "members": [
@@ -7304,7 +7304,7 @@
     },
     "intersection_type": {
       "type": "PREC_LEFT",
-      "value": 3,
+      "value": 17,
       "content": {
         "type": "SEQ",
         "members": [
@@ -8677,51 +8677,74 @@
       "type": "PREC_RIGHT",
       "value": 0,
       "content": {
-        "type": "SEQ",
+        "type": "CHOICE",
         "members": [
           {
-            "type": "CHOICE",
+            "type": "SEQ",
             "members": [
               {
                 "type": "STRING",
                 "value": "asserts"
               },
               {
-                "type": "BLANK"
-              }
-            ]
-          },
-          {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SYMBOL",
-                "name": "_name"
-              },
-              {
-                "type": "SYMBOL",
-                "name": "this"
-              }
-            ]
-          },
-          {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "SEQ",
+                "type": "CHOICE",
                 "members": [
                   {
-                    "type": "STRING",
-                    "value": "is"
+                    "type": "SYMBOL",
+                    "name": "_name"
                   },
                   {
                     "type": "SYMBOL",
-                    "name": "_type"
+                    "name": "this"
                   }
                 ]
               },
               {
-                "type": "BLANK"
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SEQ",
+                    "members": [
+                      {
+                        "type": "STRING",
+                        "value": "is"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "_type"
+                      }
+                    ]
+                  },
+                  {
+                    "type": "BLANK"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "_name"
+                  },
+                  {
+                    "type": "SYMBOL",
+                    "name": "this"
+                  }
+                ]
+              },
+              {
+                "type": "STRING",
+                "value": "is"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "_type"
               }
             ]
           }
@@ -9062,6 +9085,15 @@
           },
           "named": true,
           "value": "identifier"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_value_word"
+          },
+          "named": true,
+          "value": "identifier"
         }
       ]
     },
@@ -9101,10 +9133,6 @@
           },
           {
             "type": "STRING",
-            "value": "is"
-          },
-          {
-            "type": "STRING",
             "value": "keyof"
           },
           {
@@ -9114,10 +9142,6 @@
           {
             "type": "STRING",
             "value": "satisfies"
-          },
-          {
-            "type": "STRING",
-            "value": "asserts"
           },
           {
             "type": "STRING",
@@ -9182,6 +9206,23 @@
           {
             "type": "STRING",
             "value": "accessor"
+          }
+        ]
+      }
+    },
+    "_value_word": {
+      "type": "PREC",
+      "value": 1,
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "asserts"
+          },
+          {
+            "type": "STRING",
+            "value": "is"
           }
         ]
       }
