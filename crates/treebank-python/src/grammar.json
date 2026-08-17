@@ -3734,6 +3734,15 @@
           "name": "lambda"
         },
         {
+          "type": "SYMBOL",
+          "name": "_or_test"
+        }
+      ]
+    },
+    "_or_test": {
+      "type": "CHOICE",
+      "members": [
+        {
           "type": "ALIAS",
           "content": {
             "type": "SYMBOL",
@@ -3900,7 +3909,7 @@
             "name": "consequence",
             "content": {
               "type": "SYMBOL",
-              "name": "_expression"
+              "name": "_or_test"
             }
           },
           {
@@ -3912,7 +3921,7 @@
             "name": "condition",
             "content": {
               "type": "SYMBOL",
-              "name": "_expression"
+              "name": "_or_test"
             }
           },
           {
@@ -3931,7 +3940,7 @@
       }
     },
     "lambda": {
-      "type": "PREC",
+      "type": "PREC_RIGHT",
       "value": 2,
       "content": {
         "type": "SEQ",
@@ -3984,7 +3993,7 @@
           "members": [
             {
               "type": "SYMBOL",
-              "name": "_parameter"
+              "name": "_lambda_parameter"
             },
             {
               "type": "REPEAT",
@@ -3997,7 +4006,7 @@
                   },
                   {
                     "type": "SYMBOL",
-                    "name": "_parameter"
+                    "name": "_lambda_parameter"
                   }
                 ]
               }
@@ -4015,6 +4024,122 @@
               "type": "BLANK"
             }
           ]
+        }
+      ]
+    },
+    "_lambda_parameter": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_lambda_plain_parameter"
+          },
+          "named": true,
+          "value": "parameter"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_lambda_star_parameter"
+          },
+          "named": true,
+          "value": "star_parameter"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_lambda_double_star_parameter"
+          },
+          "named": true,
+          "value": "double_star_parameter"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "keyword_separator"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "positional_separator"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "tuple_parameter"
+        }
+      ]
+    },
+    "_lambda_plain_parameter": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_name"
+          }
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "STRING",
+                  "value": "="
+                },
+                {
+                  "type": "FIELD",
+                  "name": "value",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_expression"
+                  }
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        }
+      ]
+    },
+    "_lambda_star_parameter": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "*"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_name"
+          }
+        }
+      ]
+    },
+    "_lambda_double_star_parameter": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "**"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_name"
+          }
         }
       ]
     },
@@ -5238,8 +5363,8 @@
       "value": "tuple"
     },
     "_comma_expressions": {
-      "type": "PREC_RIGHT",
-      "value": 0,
+      "type": "PREC_DYNAMIC",
+      "value": 1,
       "content": {
         "type": "SEQ",
         "members": [
@@ -6058,6 +6183,13 @@
     }
   ],
   "conflicts": [
+    [
+      "_comma_expressions"
+    ],
+    [
+      "_no_conditional_expression",
+      "conditional_expression"
+    ],
     [
       "_patterns_comma",
       "_closed_pattern"

@@ -1,0 +1,79 @@
+{
+  "rule": "Boundaries `treebank shape` may ignore, as `\"<CPythonKind> <- <our_kind>\"` pairs. Each is a place our tree groups the code DIFFERENTLY from CPython's `ast` on purpose, not a place we disagree about the code. Pairs rather than bare CPython kinds: ignoring `Constant` outright would also silence a real Constant disagreement elsewhere, which is how a check like this quietly stops working. Every entry was read and confirmed by hand; nothing goes in here to make a number go down.",
+  "ignore": [
+    {
+      "signature": "FunctionDef <- function_definition",
+      "why": "CPython puts decorators in a separate `decorator_list` and starts FunctionDef at `def`; our `function_definition` starts at the first decorator, because DESIGN.md §3 makes decorators `_attribute` members OF the definition. A deliberate difference in where the construct begins."
+    },
+    {
+      "signature": "AsyncFunctionDef <- function_definition",
+      "why": "See `FunctionDef <- function_definition`; CPython also splits async into its own node kind, which we do not."
+    },
+    {
+      "signature": "ClassDef <- class_definition",
+      "why": "See `FunctionDef <- function_definition`."
+    },
+    {
+      "signature": "If <- if_statement",
+      "why": "CPython has no elif: it nests a second `If` inside the first one's `orelse`, so every `elif` is a new If starting at the `elif` keyword. We model it as an `elif_clause`, which is what the `_clause` vocabulary term exists for (DESIGN.md §3). Ours keeps the chain flat and says which clause is which."
+    },
+    {
+      "signature": "arg <- parameter",
+      "why": "CPython's `arg` covers the name and its annotation only; the default lives in a parallel `defaults` list, positionally matched. Our `parameter` holds name, annotation and default together, so the default is attached to the parameter it belongs to rather than recoverable by counting."
+    },
+    {
+      "signature": "arg <- star_parameter",
+      "why": "See `arg <- parameter`; CPython's `arg` also excludes the `*`."
+    },
+    {
+      "signature": "arg <- double_star_parameter",
+      "why": "See `arg <- parameter`; CPython's `arg` also excludes the `**`."
+    },
+    {
+      "signature": "arg <- lambda",
+      "why": "See `arg <- parameter`."
+    },
+    {
+      "signature": "Tuple <- subscript_expression",
+      "why": "`d[Any, Any]` — CPython wraps a multi-part subscript in a Tuple, because that is what Python passes to `__getitem__`. We keep the parts as children of `subscript_expression`. A semantic grouping we deliberately leave to the layer above the syntax."
+    },
+    {
+      "signature": "Tuple <- pattern_list",
+      "why": "See `Tuple <- subscript_expression`; the same grouping on the left of an assignment."
+    },
+    {
+      "signature": "Tuple <- with_statement",
+      "why": "See `Tuple <- subscript_expression`; parenthesised with-items."
+    },
+    {
+      "signature": "MatchSequence <- case_clause",
+      "why": "`case a, b:` — CPython wraps the sequence pattern; our case_clause holds the patterns directly."
+    },
+    {
+      "signature": "Constant <- concatenated_string",
+      "why": "CPython folds implicitly concatenated string literals into ONE Constant, losing the seam. We keep `concatenated_string` with a child per literal, which is strictly more information; the folded value belongs to a later layer."
+    },
+    {
+      "signature": "Constant <- string",
+      "why": "The literal segments of an f-string. CPython emits a Constant per run of literal text; we decompose a string into `string_content` and `escape_sequence`, so an escape splits the run."
+    },
+    {
+      "signature": "Constant <- format_specifier",
+      "why": "See `Constant <- string`; the literal text of a format spec."
+    },
+    {
+      "signature": "Constant <- interpolation",
+      "why": "See `Constant <- string`; the `=` self-documenting form's literal text."
+    },
+    {
+      "signature": "BoolOp <- binary_expression",
+      "why": "CPython's BoolOp is n-ary: `a or b or c` is one node with three values. Ours nests left-associatively, so there is no node spanning `a or b` in `a or b or c`... and no node spanning all three when the operators are mixed. Different shape for the same operator; ours matches how every other binary operator is modelled here."
+    },
+    {
+      "signature": "UnaryOp <- unary_expression",
+      "why": "CPython's UnaryOp covers `not x` and `-x` alike; we alias `not_expression` to `unary_expression`, and the spans differ where a `not` chains."
+    }
+  ],
+  "baseline_missed": 0,
+  "baseline_note": "Zero, and it started at 1,682,942. Every remaining difference between our tree and CPython ast is declared above with its reasoning. Raising this number is a decision that belongs in a commit message."
+}
