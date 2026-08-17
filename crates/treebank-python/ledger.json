@@ -60,6 +60,11 @@
     {
       "construct": "assorted single-file edges in dill and pygments (inline `if` with a trailing comment, docstring-adjacent layout)",
       "files": 2
+    },
+    {
+      "construct": "a COMMENT line between an INLINE suite and its continuation clause, e.g. `if True: pass` / `# c` / `else:`",
+      "files": 4,
+      "note": "Valid Python (CPython accepts it). Every BLOCK form works -- `if x:` / `pass` / `# c` / `else:` parses -- so real code does not hit this; all four files are ruff's own formatter fixtures probing exactly this shape. The blank-line form was fixed (see deviations); the comment form needs the scanner to know that only a comment preceded it on the line, which it cannot tell from lookahead, and scanner state does not survive the `return false` path that the comment takes."
     }
   ],
   "deviations": [
@@ -80,6 +85,12 @@
     },
     {
       "what": "a format specifier may contain newlines. PEP 701 makes the whole interpolation multi-line inside a triple-quoted f-string, so the closing brace ends the spec rather than the line ending."
+    },
+    {
+      "construct": "a BLANK line between an inline suite and its continuation clause, e.g. `if True: pass` / `` / `else:`",
+      "was": "the scanner emitted NEWLINE for the blank line. `if True: pass` opens no indent level, so the blank line never reached the INDENT/DEDENT branch that consumes such lines -- it fell through to the newline branch, and the spurious NEWLINE committed the shared GLR token stream before `else` could attach.",
+      "now": "NEWLINE is emitted only where a line with CONTENT ends: the call started past column 0 and has not already crossed a line boundary. CPython emits NL, not NEWLINE, for blank lines.",
+      "note": "Held as LOCAL state in the scan call, not scanner state: tree-sitter persists scanner state only after a call that RETURNS A TOKEN, so a flag cleared on the `return false` path is lost. A first attempt using a persistent flag failed exactly that way. No corpus file exercises it; committed as a correctness fix."
     }
   ],
   "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). _clause MOVED to the facet tier in vocabulary 0.2.0 on exactly this evidence, gathered independently in python, rust and typescript; _control_flow remains the open candidate.",
