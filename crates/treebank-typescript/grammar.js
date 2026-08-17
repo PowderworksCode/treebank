@@ -148,6 +148,10 @@ module.exports = grammar({
     [$._reserved_property, $.enum_definition],
     [$.variable_declaration, $._reserved_property],
     [$.function_definition, $.property_signature, $.method_signature],
+    // `_method_head` is the shared prefix of a method DEFINITION and a
+    // method SIGNATURE; which one it is only becomes clear at the body or
+    // the terminator.
+    [$._method_head, $.method_signature],
     [$.property_signature, $.method_signature],
     [$.method_signature, $._soft_keyword],
     [$.import_alias, $.import_statement, $._soft_keyword],
@@ -540,26 +544,65 @@ module.exports = grammar({
     declare_modifier: _ => prec(1, 'declare'),
     accessor_modifier: _ => prec(1, 'accessor'),
 
-    function_definition: $ => prec.dynamic(1, prec.right(seq(
+    // Three alternatives, and the split is the point.
+    //
+    // The method form -- name, parameters, body, no `function` keyword -- is
+    // for class and object members. It is reachable at STATEMENT level too,
+    // because members route through `_declaration`, and there it collides
+    // with an ordinary call. With one blanket `prec.dynamic(1)` the
+    // declaration reading won, so `foo();` -- every zero-argument call
+    // statement in the language -- parsed as a bodyless function declaration
+    // named `foo` rather than a call. `foo(1, 2)` was fine, because number
+    // literals cannot be parameters; only the argument-less case collided,
+    // and it collided everywhere.
+    //
+    // Boundaries alone cannot catch this: `function_definition` and
+    // `expression_statement` span the same bytes and only the KINDS differ,
+    // so `treebank shape` is blind to it. It surfaced while reading a shape
+    // fixture's tree by eye.
+    //
+    // So the BODYLESS method form -- the one that is a real member signature
+    // in a class or interface and nothing at all at statement level -- gets
+    // a negative dynamic precedence and loses to the call. The other two
+    // keep theirs.
+    function_definition: $ => choice(
+      prec.dynamic(1, prec.right(seq(
+        repeat($._attribute),
+        repeat($._modifier),
+        optional('async'),
+        'function',
+        optional('*'),
+        optional(field('name', $._name)),
+        field('type_parameters', optional($.type_parameters)),
+        field('parameters', $.parameters),
+        optional(seq(':', field('return_type', $._type))),
+        choice(field('body', $._body), $._semicolon),
+      ))),
+      prec.dynamic(1, prec.right(seq(
+        $._method_head,
+        field('type_parameters', optional($.type_parameters)),
+        field('parameters', $.parameters),
+        optional(seq(':', field('return_type', $._type))),
+        field('body', $._body),
+      ))),
+      prec.dynamic(-1, prec.right(seq(
+        $._method_head,
+        field('type_parameters', optional($.type_parameters)),
+        field('parameters', $.parameters),
+        optional(seq(':', field('return_type', $._type))),
+        $._semicolon,
+      ))),
+    ),
+
+    _method_head: $ => seq(
       repeat($._attribute),
       repeat($._modifier),
       optional('async'),
-      choice(
-        seq('function', optional('*'), optional(field('name', $._name))),
-        // class/object methods: name first, no `function` keyword
-        seq(
-          optional('async'),
-          optional(choice('get', 'set')),
-          optional('*'),
-          field('name', $._property_name),
-          optional('?'),
-        ),
-      ),
-      field('type_parameters', optional($.type_parameters)),
-      field('parameters', $.parameters),
-      optional(seq(':', field('return_type', $._type))),
-      choice(field('body', $._body), $._semicolon),
-    ))),
+      optional(choice('get', 'set')),
+      optional('*'),
+      field('name', $._property_name),
+      optional('?'),
+    ),
 
     _property_name: $ => choice(
       $._name,
@@ -1465,7 +1508,18 @@ module.exports = grammar({
       ']',
     )),
 
-    type_operator: $ => prec.right(2, seq(choice('keyof', 'readonly', 'unique'), $._type)),
+    // Tighter than `intersection_type` (cast+2), which is tighter than
+    // `union_type` (cast+1). `readonly string[] | undefined` is
+    // `(readonly string[]) | undefined`, and `keyof A | B` is `(keyof A) | B`.
+    //
+    // This was prec 2 and correct until the type operators were raised above
+    // `PREC.cast` to fix `x as A & B` -- that move also lifted them above
+    // this one, and `readonly` silently started swallowing the union:
+    // `readonly (string[] | undefined)`. 119 corpus files, no error, and no
+    // sweep could have seen it. A regression introduced by a fix and caught
+    // by the shape check on the very next run, which is the argument for
+    // having the check at all.
+    type_operator: $ => prec.right(PREC.cast + 3, seq(choice('keyof', 'readonly', 'unique'), $._type)),
 
     typeof_type: $ => prec.right(seq('typeof', choice($.identifier, $.nested_identifier, $.import_type), field('type_arguments', optional($.type_arguments)))),
 
