@@ -27,44 +27,43 @@
     "blind_to": "python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension",
     "sweep": {
       "files": 139205,
-      "passed": 138262,
-      "failed": 943,
-      "gap_files": 23,
-      "noise_files": 920,
-      "pass_rate": "99.32%",
+      "passed": 138273,
+      "failed": 932,
+      "gap_files": 16,
+      "noise_files": 916,
+      "pass_rate": "99.99%",
       "oracle_note": "adjudicated by the two-leg union oracle (CPython 3.12.3 + 2.7.18).",
       "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note",
       "note": "widened from the top-300 (46,466 files). Every remaining family is a formatter/parser test fixture or a declared deviation; 20 of the 23 are ruff's and black's own edge-case corpora."
     },
-    "mutation_falsification": "while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified."
+    "mutation_falsification": "while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified.",
+    "corpus_composition_note": "16 gap files, but only 5 DISTINCT sources: ruff, ty and ast-serialize each vendor ruff's parser test corpus, so every ruff fixture is counted three times. 15 of the 16 are ruff fixtures -- deliberately adversarial snippets, several from `err/` and `invalid/` directories that ruff itself expects to reject and that our py2-inclusive oracle blesses. Exactly ONE gap file (dill/source.py) is ordinary library code. Read the gap count with that in mind."
   },
   "known_gaps": [
     {
-      "construct": "parenthesized kwarg name `f((a)=1)`, valid <=3.7 and in py2",
+      "construct": "`f((a)=1)` -- a parenthesized keyword argument",
       "files": 6,
-      "note": "the union claims 2.7 u 3.x, so a form valid in 3.7 is a real gap rather than a fixture curiosity — the py2 leg of the oracle is what makes it visible"
+      "note": "Valid in Python 3.0-3.7, a syntax error from 3.8. OPEN POLICY QUESTION for the union: how far back does py3 coverage reach? All 6 files are ruff's parenthesized_kwarg_py37/py38 fixtures."
     },
     {
-      "construct": "py3 keywords as py2 identifiers (bare `nonlocal`, bare `await`)",
-      "files": 6,
-      "note": "the declared hard-keyword deviation, measured: 6 fixture files in 139,205 and zero incidence in real library code"
+      "construct": "`nonlocal` used as a bare identifier",
+      "files": 3,
+      "note": "Valid Python 2 -- `nonlocal` is not a keyword there, so a bare `nonlocal` is an expression statement. The union claims py2.7, so this is a legitimate widening, but it is the same POLICY question as `f((a)=1)`. All 3 files are ruff's nonlocal_stmt_empty fixture."
     },
     {
-      "construct": "formatter fixtures with deliberate edge layout (ruff/black `else:\\` backslash continuations, inline-if + comment interleavings)",
-      "files": 8
+      "construct": "`await` used as a bare identifier",
+      "files": 3,
+      "note": "Valid Python 2 and Python 3.0-3.4. Same policy question. Widening `async`/`await` to soft keywords is the highest-risk of the three -- it is the transition CPython itself staged over four releases. All 3 files are ruff's await/no_expression_1 fixture."
     },
     {
-      "construct": "walrus/format-spec collision f\"{num:=.2Uf}\" (`:=` lexes as one token; CPython special-cases this in its tokenizer)",
-      "files": 1
+      "construct": "backslash continuations that change a suite's indentation",
+      "files": 3,
+      "note": "CPython's rule here is neither 'the indent of the first physical line' nor 'the indent of the token'. Taking it from the first physical line (captured at the backslash) FIXES ruff's backslash_continuation_indentation (3 files) and BREAKS black's backslash_before_indent (6 files); the committed behaviour is the reverse trade. Measured both ways, kept the better one."
     },
     {
-      "construct": "assorted single-file edges in dill and pygments (inline `if` with a trailing comment, docstring-adjacent layout)",
-      "files": 2
-    },
-    {
-      "construct": "a COMMENT line between an INLINE suite and its continuation clause, e.g. `if True: pass` / `# c` / `else:`",
-      "files": 4,
-      "note": "Valid Python (CPython accepts it). Every BLOCK form works -- `if x:` / `pass` / `# c` / `else:` parses -- so real code does not hit this; all four files are ruff's own formatter fixtures probing exactly this shape. The blank-line form was fixed (see deviations); the comment form needs the scanner to know that only a comment preceded it on the line, which it cannot tell from lookahead, and scanner state does not survive the `return false` path that the comment takes."
+      "construct": "TWO OR MORE consecutive comment lines after an inline suite",
+      "files": 1,
+      "note": "One is tolerated (see deviations). `repeat1` there HANGS the parser -- the scanner emits a zero-width NEWLINE at EOF and an unbounded repeat over a zero-width token never terminates. dill/source.py has four."
     }
   ],
   "deviations": [
