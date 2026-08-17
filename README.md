@@ -74,5 +74,5 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-`tree-sitter-cli` is pinned at **0.25.10** for all grammar generation; see
+`tree-sitter-cli` is pinned at **0.26.12** for all grammar generation; see
 DESIGN.md §7 for why the pin is load-bearing.

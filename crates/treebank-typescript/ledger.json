@@ -2,7 +2,7 @@
   "language": "typescript",
   "versions": "the TypeScript ∪ JavaScript ∪ JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
   "dialect_decision": "DESIGN.md §4.2 planned typescript/tsx dialect parsers because `<T>x` casts and JSX collide. Measured: the .ts corpus contains ZERO angle-bracket casts (the two grep candidates were generic arrow types) — the construct is legacy style that `as` replaced. So this crate ships one parser with JSX enabled everywhere, `<T>x` casts are the ledgered known-gap below, and the dialect split waits until a corpus proves it necessary. This deviation from DESIGN.md is deliberate and measured.",
-  "generate_cli": "0.25.10",
+  "generate_cli": "0.26.12",
   "vocabulary": "0.2.0",
   "oracles": [
     {

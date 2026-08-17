@@ -1,6 +1,6 @@
 {
   "note": "if/else in three languages. This case exists because the rosetta gate caught rust modelling `else` inline while python and typescript gave it a node — a shared-names violation that made `alternative:` mean different things per language and left `(_clause)` a member short. `(_clause)` is asserted here, unlike hello-roles, precisely because these programs use only the clause all three share.",
-  "field_query_note": "the obvious guard, `(_branch alternative: (else_clause))`, is NOT asserted: under tree-sitter 0.26 a field pattern whose parent is a supertype accepts only a supertype child, and `else_clause` is concrete. `(_declaration body: (_body))` is asserted instead — the same shape with a supertype child — so the writable form is the one under test. The CLI we generate with (0.25.10) accepts both, which makes this a toolchain split rather than a grammar defect; see treebank-rust/ledger.json's toolchain_note.",
+  "field_query_note": "the obvious guard, `(_branch alternative: (else_clause))`, is NOT asserted: a field pattern whose parent is a supertype accepts only a supertype child, and `else_clause` is concrete. `(_declaration body: (_body))` is asserted instead — the same shape with a supertype child — so the writable form is the one under test. See treebank-rust/ledger.json's toolchain_note for the rule and what it implies about the vocabulary.",
   "queries": {
     "(_declaration) @d": 1,
     "(_declaration body: (_body)) @db": 1,
