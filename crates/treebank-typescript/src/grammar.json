@@ -7686,7 +7686,7 @@
       }
     },
     "function_type": {
-      "type": "PREC_LEFT",
+      "type": "PREC_RIGHT",
       "value": 1,
       "content": {
         "type": "SEQ",
@@ -7731,7 +7731,7 @@
       }
     },
     "constructor_type": {
-      "type": "PREC_LEFT",
+      "type": "PREC_RIGHT",
       "value": 1,
       "content": {
         "type": "SEQ",

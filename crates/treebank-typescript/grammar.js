@@ -1359,14 +1359,20 @@ module.exports = grammar({
     union_type: $ => prec.left(PREC.cast + 1, seq(optional($._type), '|', $._type)),
     intersection_type: $ => prec.left(PREC.cast + 2, seq(optional($._type), '&', $._type)),
 
-    function_type: $ => prec.left(1, seq(
+    // `prec.right`, not `prec.left`: a function type's RETURN extends as far
+    // right as it can. `() => X extends T ? 1 : 2` is
+    // `() => (X extends T ? 1 : 2)`, and with left associativity at the same
+    // precedence as `conditional_type` we reduced the function type first
+    // and read `(() => X) extends T ? 1 : 2` instead. A conditional needs
+    // `extends`, so the greed cannot run past anything else.
+    function_type: $ => prec.right(1, seq(
       field('type_parameters', optional($.type_parameters)),
       field('parameters', $.parameters),
       '=>',
       field('return_type', $._type),
     )),
 
-    constructor_type: $ => prec.left(1, seq(
+    constructor_type: $ => prec.right(1, seq(
       optional('abstract'),
       'new',
       field('type_parameters', optional($.type_parameters)),
