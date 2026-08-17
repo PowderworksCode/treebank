@@ -80,8 +80,26 @@ static bool skip_trivia(TSLexer *lexer, bool *crossed) {
 static bool continues_type_member(TSLexer *lexer) {
   int32_t c = lexer->lookahead;
   switch (c) {
-    case '(': case '`':
-    case '*': case '%': case '<': case '>': case '=': case '&': case '|':
+    /* '(' is NOT here, for the same reason '[' is not: after an expression
+     * it is a call and continues, but after a type member it BEGINS the next
+     * member -- a call signature. A type cannot be called, so there is no
+     * type-member reading in which a leading '(' continues anything.
+     *
+     * This only became reachable when the separator between members stopped
+     * being optional. While juxtaposition was allowed, a missing boundary
+     * here cost nothing visible; requiring the separator turned it into a
+     * rejection of `interface I { (a: X): Y\n (a: Z): W }`, which is
+     * ordinary .d.ts overload syntax.
+     *
+     * '<' is out for the same reason and with a real trade behind it. A '<'
+     * opening a line after a complete member is a generic call signature
+     * (`<T extends X,\n  U>(...): V`, which vite's importGlob.d.ts writes
+     * across five lines); the competing reading is a type's arguments broken
+     * onto the next line (`a: Array\n<string>`), which formatters do not
+     * produce -- prettier breaks AFTER the '<', not before it. Measured on
+     * the corpus, not guessed. */
+    case '`':
+    case '*': case '%': case '>': case '=': case '&': case '|':
     case '^': case '?': case ':': case ',': case '.': case ';': case '!':
     case '-': case '+': case '/':
       return true;

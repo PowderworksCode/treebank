@@ -7466,71 +7466,100 @@
           ]
         },
         {
-          "type": "REPEAT",
-          "content": {
-            "type": "SEQ",
-            "members": [
-              {
-                "type": "CHOICE",
-                "members": [
-                  {
-                    "type": "SYMBOL",
-                    "name": "property_signature"
-                  },
-                  {
-                    "type": "SYMBOL",
-                    "name": "call_signature"
-                  },
-                  {
-                    "type": "SYMBOL",
-                    "name": "construct_signature"
-                  },
-                  {
-                    "type": "SYMBOL",
-                    "name": "index_signature"
-                  },
-                  {
-                    "type": "ALIAS",
-                    "content": {
-                      "type": "SYMBOL",
-                      "name": "method_signature"
-                    },
-                    "named": true,
-                    "value": "function_definition"
-                  }
-                ]
-              },
-              {
-                "type": "CHOICE",
-                "members": [
-                  {
-                    "type": "CHOICE",
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "REPEAT",
+                  "content": {
+                    "type": "SEQ",
                     "members": [
                       {
-                        "type": "STRING",
-                        "value": ","
-                      },
-                      {
-                        "type": "STRING",
-                        "value": ";"
+                        "type": "SYMBOL",
+                        "name": "_type_member"
                       },
                       {
                         "type": "SYMBOL",
-                        "name": "_type_member_end"
+                        "name": "_member_separator"
                       }
                     ]
-                  },
-                  {
-                    "type": "BLANK"
                   }
-                ]
-              }
-            ]
-          }
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "_type_member"
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "_member_separator"
+                    },
+                    {
+                      "type": "BLANK"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "STRING",
           "value": "}"
+        }
+      ]
+    },
+    "_member_separator": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "STRING",
+          "value": ","
+        },
+        {
+          "type": "STRING",
+          "value": ";"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_type_member_end"
+        }
+      ]
+    },
+    "_type_member": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "property_signature"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "call_signature"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "construct_signature"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "index_signature"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "method_signature"
+          },
+          "named": true,
+          "value": "function_definition"
         }
       ]
     },

@@ -1246,20 +1246,37 @@ module.exports = grammar({
       field('return_type', $._type),
     )),
 
+    // Members are SEPARATED, not merely juxtaposed. The separator used to be
+    // `optional` on every member, which made `{ a: X b: Y }` parse -- tsc
+    // rejects it -- and that hole was not only a widening. `readonly` is a
+    // soft keyword and so a legal property name, so with juxtaposition
+    // allowed, `readonly maxSize: number` had a second reading as TWO
+    // members (`readonly`, then `maxSize: number`), and in real .d.ts files
+    // that reading sometimes won. It parsed cleanly, so the sweep never saw
+    // it; the shape check found it by noticing tsc had a PropertySignature
+    // boundary where we had none.
+    //
+    // Only the LAST member may omit its separator, which is what lets
+    // `{ a: X }` and a trailing `;` both work.
     object_type: $ => seq(
       '{',
       optional(choice(',', ';')),
-      repeat(seq(
-        choice(
-          $.property_signature,
-          $.call_signature,
-          $.construct_signature,
-          $.index_signature,
-          alias($.method_signature, $.function_definition),
-        ),
-        optional(choice(',', ';', $._type_member_end)),
+      optional(seq(
+        repeat(seq($._type_member, $._member_separator)),
+        $._type_member,
+        optional($._member_separator),
       )),
       '}',
+    ),
+
+    _member_separator: $ => choice(',', ';', $._type_member_end),
+
+    _type_member: $ => choice(
+      $.property_signature,
+      $.call_signature,
+      $.construct_signature,
+      $.index_signature,
+      alias($.method_signature, $.function_definition),
     ),
 
     property_signature: $ => seq(
