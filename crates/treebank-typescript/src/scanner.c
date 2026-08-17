@@ -23,6 +23,56 @@ enum TokenType {
 
 static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 
+/* Skip whitespace AND comments, setting *crossed when a line terminator is
+ * passed -- a block comment containing one counts, which is what the ASI
+ * rules say.
+ *
+ * Comments matter here because both callers decide by looking at the next
+ * character, and a comment starts with '/', which is IN both continuation
+ * sets. Without this, `clear(): void` followed by a doc comment and then an
+ * index signature never got a member boundary: the scanner saw the comment's
+ * '/' as division and read `void [Symbol.iterator]` as an indexed access.
+ *
+ * Returns false for a BARE '/' -- real division or a regex -- which
+ * continues the previous construct and is never a boundary.
+ */
+static bool skip_trivia(TSLexer *lexer, bool *crossed) {
+  for (;;) {
+    int32_t c = lexer->lookahead;
+    if (c == ' ' || c == '\t' || c == '\f' || c == 0x0b) {
+      skip(lexer);
+      continue;
+    }
+    if (c == '\n' || c == '\r' || c == 0x2028 || c == 0x2029) {
+      *crossed = true;
+      skip(lexer);
+      continue;
+    }
+    if (c != '/') return true;
+    skip(lexer);
+    if (lexer->lookahead == '/') {
+      while (lexer->lookahead != 0 && lexer->lookahead != '\n' &&
+             lexer->lookahead != '\r') {
+        skip(lexer);
+      }
+      continue;
+    }
+    if (lexer->lookahead == '*') {
+      skip(lexer);
+      int32_t prev = 0;
+      while (lexer->lookahead != 0) {
+        int32_t d = lexer->lookahead;
+        if (d == '\n' || d == '\r' || d == 0x2028 || d == 0x2029) *crossed = true;
+        skip(lexer);
+        if (prev == '*' && d == '/') break;
+        prev = d;
+      }
+      continue;
+    }
+    return false;
+  }
+}
+
 /* True when the token ahead continues the type of the member just parsed,
  * so no member boundary belongs here. Mirrors the ASI continuation set
  * EXCEPT for '[': a bracket after an expression is a subscript, but a
@@ -68,17 +118,7 @@ bool tree_sitter_typescript_external_scanner_scan(void *payload, TSLexer *lexer,
   if (valid[TYPE_MEMBER_END] && !valid[AUTOMATIC_SEMICOLON]) {
     lexer->mark_end(lexer);
     bool crossed = false;
-    for (;;) {
-      int32_t c = lexer->lookahead;
-      if (c == ' ' || c == '\t' || c == '\f' || c == 0x0b) {
-        skip(lexer);
-      } else if (c == '\n' || c == '\r' || c == 0x2028 || c == 0x2029) {
-        crossed = true;
-        skip(lexer);
-      } else {
-        break;
-      }
-    }
+    if (!skip_trivia(lexer, &crossed)) return false;
     if (!crossed) return false;
     if (!continues_type_member(lexer)) {
       lexer->result_symbol = TYPE_MEMBER_END;
@@ -92,17 +132,7 @@ bool tree_sitter_typescript_external_scanner_scan(void *payload, TSLexer *lexer,
   lexer->mark_end(lexer);
 
   bool crossed_newline = false;
-  for (;;) {
-    int32_t c = lexer->lookahead;
-    if (c == ' ' || c == '\t' || c == '\f' || c == 0x0b) {
-      skip(lexer);
-    } else if (c == '\n' || c == '\r' || c == 0x2028 || c == 0x2029) {
-      crossed_newline = true;
-      skip(lexer);
-    } else {
-      break;
-    }
-  }
+  if (!skip_trivia(lexer, &crossed_newline)) return false;
 
   int32_t c = lexer->lookahead;
 
