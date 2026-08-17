@@ -35,9 +35,14 @@ def parses(path):
             warnings.simplefilter("ignore")
             compile(src, path, "exec", 0, 1)  # flags=0, dont_inherit=1
         return True
-    except (SyntaxError, ValueError, MemoryError, RuntimeError):
+    except (SyntaxError, ValueError, TypeError, MemoryError, RuntimeError):
         # RuntimeError: py2 raises it (maximum recursion depth) where py3
-        # has RecursionError; ValueError covers embedded NULs.
+        # has RecursionError. NUL bytes in the source are a VERDICT, not an
+        # oracle failure — the bytes were read fine, they are just not
+        # valid python — but py2 reports them as TypeError where py3 uses
+        # ValueError, so both must be caught or the oracle dies on a file
+        # it should simply reject. Found by widening the corpus to the
+        # top-1000 packages; the py3 leg had this right already.
         return False
 
 

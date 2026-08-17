@@ -1,7 +1,7 @@
 {
   "language": "typescript",
   "versions": "the TypeScript ∪ JavaScript ∪ JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
-  "dialect_decision": "DESIGN.md §4.2 planned typescript/tsx dialect parsers because `<T>x` casts and JSX collide. Measured: the .ts corpus contains ZERO angle-bracket casts (the two grep candidates were generic arrow types) — the construct is legacy style that `as` replaced. So this crate ships one parser with JSX enabled everywhere, `<T>x` casts are the ledgered known-gap below, and the dialect split waits until a corpus proves it necessary. This deviation from DESIGN.md is deliberate and measured.",
+  "dialect_decision": "One parser for TS + JS + JSX. The DESIGN.md §4.2 dialect split existed for the `<T>` ambiguity, and this ledger previously justified skipping it by measuring angle-bracket CASTS at zero incidence in the top-300. That measurement was right and the conclusion was wrong: the top-1000 corpus has 11+ files of GENERIC ARROW FUNCTIONS (`const f = <T extends X>(x: T) => x`, in zod and rxjs), which hit the same ambiguity and are ordinary modern style. They now parse in the single grammar. The fix was not precedence but a token collision: `_jsx_identifier` and `identifier` matched the same text, so the LEXER chose JSX before the parser could fork — the same trap the rust ledger records for identifier/type_identifier. With plain JSX names lexing as the ordinary identifier and only dashed names getting their own token, GLR forks and jsx_opening_element's negative dynamic precedence yields to the arrow whenever both complete. Casts remain a ledgered gap at 0 measured files.",
   "generate_cli": "0.26.12",
   "vocabulary": "0.2.0",
   "oracles": [
@@ -19,49 +19,49 @@
     }
   ],
   "corpus": {
-    "source": "top-300 npm packages by download rank, both corpora (typescript: .ts/.tsx files; javascript: .js/.mjs/.cjs/.jsx, minified excluded)",
+    "source": "top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)",
     "typescript_sweep": {
-      "files": 1598,
-      "passed": 1587,
-      "failed": 11,
-      "gap_files": 7,
-      "noise_files": 4,
-      "pass_rate": "99.31%"
+      "files": 11988,
+      "passed": 11960,
+      "failed": 28,
+      "gap_files": 22,
+      "noise_files": 6,
+      "pass_rate": "99.77%"
     },
     "javascript_sweep": {
-      "files": 4801,
-      "passed": 4798,
-      "failed": 3,
-      "gap_files": 3,
+      "files": 25297,
+      "passed": 25289,
+      "failed": 8,
+      "gap_files": 8,
       "noise_files": 0,
-      "pass_rate": "99.94%"
+      "pass_rate": "99.97%"
     },
     "blind_to": "npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heavy (undici-types, type-fest) and light on application .ts; JSX incidence is low outside React-adjacent packages",
-    "mutation_falsification": "the javascript corpus swept with while_statement deleted from _loop reports 429 gap files (vs 3); restored, 3 again."
+    "mutation_falsification": "javascript with while_statement deleted from _loop: 429 gap files (vs 8). typescript with `void` removed from predefined_type: 25 gap files (vs 22) — the new rules are falsified too, not only the old ones.",
+    "widening_note": "Widened from the top-300 to the top-1000: typescript 1,598 -> 11,988 files, javascript 4,801 -> 25,297. It found six real families the narrow corpus had no instance of, the largest of which invalidates a claim this ledger used to make (see dialect_decision)."
   },
   "known_gaps": [
     {
-      "construct": "interface members beginning with '[' after an unannotated-terminator member in semicolonless .d.ts (the '[' absorbs into the previous member's type as an index)",
+      "construct": "interface members beginning with '[' after an unannotated-terminator member in semicolonless .d.ts",
       "files": 5,
-      "note": "ajv + undici-types; the type-land analogue of the JS '[' ASI hazard. Equalizing precedences to force a GLR fork regressed 20 other files and was reverted — needs the fork at a different state."
+      "note": "ajv, browserslist, undici-types; the type-land analogue of the JS '[' ASI hazard. Equalizing precedences to force a GLR fork regressed 20 other files and was reverted."
     },
     {
-      "construct": "type-fest's deepest conditional-type chains",
-      "files": 2,
-      "note": "the npm type-system torture suite; everything else in it parses"
+      "construct": "`typeof globalThis extends { ... }` — an object type as the right side of a conditional's extends",
+      "files": 3
     },
     {
-      "construct": "prettier's minified bootstrap wrappers",
-      "files": 2
-    },
-    {
-      "construct": "`let x` + newline + '('-initial line (the classic ASI hazard, mandatory insertion our static continuation set cannot see)",
-      "files": 1
+      "construct": "generic type arguments on an asserts-predicate return (`): asserts this is NodePath_Final<t.X>`)",
+      "files": 3
     },
     {
       "construct": "legacy `<T>x` angle-bracket casts",
-      "files": 0,
-      "note": "the dialect-split construct, measured at zero corpus incidence — accepted as a gap by design; see dialect_decision"
+      "files": 1,
+      "note": "the dialect-split construct; one file in 11,988 (@adobe/css-tools). Still accepted as a gap by design — see dialect_decision."
+    },
+    {
+      "construct": "assorted single-file .d.ts and minified-bundle edges",
+      "files": 10
     }
   ],
   "deviations": [
@@ -76,6 +76,12 @@
     },
     {
       "what": "expression statements exclude function/class/{ at the first position structurally — the JS spec rule, enforced in the grammar rather than by dynamic precedence (which measured as unable to win the fork)"
+    },
+    {
+      "what": "`T?` is a tuple-ELEMENT form, not a general type. TS only allows it there, and admitting it to the type tier let `x < -1 ? p : q` fork into a type-argument reading that outlived the expression one — 3 corpus files."
+    },
+    {
+      "what": "`void`, `never`, `unknown` and `symbol` are a predefined_type node rather than identifiers. `void` is a unary operator, so it can never arrive as an identifier and `f<void>()` previously had no reading at all."
     }
   ],
   "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses)."
