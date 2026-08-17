@@ -8493,10 +8493,32 @@
             "type": "ALIAS",
             "content": {
               "type": "SYMBOL",
-              "name": "identifier"
+              "name": "_infer_parameter"
             },
             "named": true,
-            "value": "type_identifier"
+            "value": "type_parameter"
+          }
+        ]
+      }
+    },
+    "_infer_parameter": {
+      "type": "PREC_RIGHT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "FIELD",
+            "name": "name",
+            "content": {
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "identifier"
+              },
+              "named": true,
+              "value": "type_identifier"
+            }
           },
           {
             "type": "CHOICE",
@@ -8509,8 +8531,12 @@
                     "value": "extends"
                   },
                   {
-                    "type": "SYMBOL",
-                    "name": "_no_conditional_type"
+                    "type": "FIELD",
+                    "name": "constraint",
+                    "content": {
+                      "type": "SYMBOL",
+                      "name": "_no_conditional_type"
+                    }
                   }
                 ]
               },

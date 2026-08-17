@@ -2747,83 +2747,11 @@
     "named": true,
     "fields": {},
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": true,
       "types": [
         {
-          "type": "array_type",
-          "named": true
-        },
-        {
-          "type": "constructor_type",
-          "named": true
-        },
-        {
-          "type": "function_type",
-          "named": true
-        },
-        {
-          "type": "generic_type",
-          "named": true
-        },
-        {
-          "type": "import_type",
-          "named": true
-        },
-        {
-          "type": "indexed_access_type",
-          "named": true
-        },
-        {
-          "type": "intersection_type",
-          "named": true
-        },
-        {
-          "type": "literal_type",
-          "named": true
-        },
-        {
-          "type": "nested_type_identifier",
-          "named": true
-        },
-        {
-          "type": "object_type",
-          "named": true
-        },
-        {
-          "type": "parenthesized_type",
-          "named": true
-        },
-        {
-          "type": "predefined_type",
-          "named": true
-        },
-        {
-          "type": "template_literal_type",
-          "named": true
-        },
-        {
-          "type": "this_type",
-          "named": true
-        },
-        {
-          "type": "tuple_type",
-          "named": true
-        },
-        {
-          "type": "type_identifier",
-          "named": true
-        },
-        {
-          "type": "type_operator",
-          "named": true
-        },
-        {
-          "type": "typeof_type",
-          "named": true
-        },
-        {
-          "type": "union_type",
+          "type": "type_parameter",
           "named": true
         }
       ]

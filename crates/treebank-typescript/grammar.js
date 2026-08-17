@@ -1457,7 +1457,19 @@ module.exports = grammar({
     // The constraint of `infer R extends C` may not be a bare conditional
     // — the `?` after it belongs to the enclosing conditional type. TS's
     // own grammar makes the same exclusion.
-    infer_type: $ => prec.right(1, seq('infer', alias($.identifier, $.type_identifier), optional(seq('extends', $._no_conditional_type)))),
+    // The inferred name and its constraint are ONE thing -- tsc models
+    // `infer U extends t.Node | null` as an InferType wrapping a
+    // TypeParameter spanning `U extends t.Node | null`, and we had no node
+    // for that span at all. Aliased to the existing `type_parameter` rather
+    // than reusing that rule directly, because it also admits `in`/`out`/
+    // `const` variance and an `= default`, none of which is legal after
+    // `infer`. Same node name, no widening.
+    infer_type: $ => prec.right(1, seq('infer', alias($._infer_parameter, $.type_parameter))),
+
+    _infer_parameter: $ => prec.right(seq(
+      field('name', alias($.identifier, $.type_identifier)),
+      optional(seq('extends', field('constraint', $._no_conditional_type))),
+    )),
 
     _no_conditional_type: $ => choice(
       alias($.identifier, $.type_identifier),
