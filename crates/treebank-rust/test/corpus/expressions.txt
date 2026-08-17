@@ -32,8 +32,9 @@ fn f() -> u32 {
           condition: (identifier)
           consequence: (block
             (integer))
-          alternative: (block
-            (integer))))
+          alternative: (else_clause
+            (block
+              (integer)))))
       (let_declaration
         pattern: (identifier)
         value: (match_expression
@@ -235,5 +236,6 @@ fn f() {
               right: (integer)))
           consequence: (block
             (integer))
-          alternative: (block
-            (integer)))))))
+          alternative: (else_clause
+            (block
+              (integer))))))))

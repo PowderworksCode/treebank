@@ -1,0 +1,12 @@
+{
+  "note": "if/else in three languages. This case exists because the rosetta gate caught rust modelling `else` inline while python and typescript gave it a node — a shared-names violation that made `alternative:` mean different things per language and left `(_clause)` a member short. `(_clause)` is asserted here, unlike hello-roles, precisely because these programs use only the clause all three share.",
+  "field_query_note": "the obvious guard, `(_branch alternative: (else_clause))`, is NOT asserted: tree-sitter 0.26 rejects it as an impossible pattern because a field named through a supertype must exist on EVERY subtype, and `_branch` also covers match/switch, which have no `alternative:`. `(_declaration body: (_body))` is asserted instead — the same shape where every subtype does agree — so the working and failing cases are both visible here. Note the CLI we generate with (0.25.10) still accepts the rejected form, so this is also a toolchain skew: see the ledger.",
+  "queries": {
+    "(_declaration) @d": 1,
+    "(_declaration body: (_body)) @db": 1,
+    "(_branch) @b": 1,
+    "(_jump) @j": 2,
+    "(else_clause) @e": 1,
+    "(_clause) @c": 1
+  }
+}
