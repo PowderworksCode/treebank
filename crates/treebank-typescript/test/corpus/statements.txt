@@ -62,9 +62,8 @@ export type Alias<T> = T[]
           body: (block
             (return_statement
               (new_expression
-                constructor: (call_expression
-                  function: (identifier)
-                  arguments: (arguments))))))
+                constructor: (identifier)
+                arguments: (arguments)))))
         (function_definition
           name: (identifier)
           parameters: (parameters)
@@ -138,10 +137,9 @@ function render(items: Item[]) {
           (default_clause
             (throw_statement
               (new_expression
-                constructor: (call_expression
-                  function: (identifier)
-                  arguments: (arguments
-                    (string))))))))
+                constructor: (identifier)
+                arguments: (arguments
+                  (string)))))))
       (return_statement
         (jsx_element
           open_tag: (jsx_opening_element

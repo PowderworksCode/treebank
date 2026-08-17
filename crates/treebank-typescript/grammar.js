@@ -936,11 +936,62 @@ module.exports = grammar({
       )),
     ),
 
+    // `new` takes a MEMBER expression, never a CALL. JavaScript binds
+    // `new Date().getFullYear()` as `(new Date()).getFullYear()`, and with
+    // `$._expression` as the constructor we bound it as
+    // `new (Date().getFullYear())` -- a completely different program, in ~29
+    // corpus files, parsing without an error. The sweep cannot see this; the
+    // shape check found it, because tsc has a `NewExpression` spanning
+    // `new Date()` and we had no node with that span.
+    //
+    // Precedence cannot express it: `member` must still bind INTO the
+    // constructor (`new a.b.C()`) while `call` must not, and one number
+    // cannot say both. So the constructor gets its own tier -- the member
+    // chain over a primary expression, which is exactly the spec's
+    // MemberExpression.
     new_expression: $ => prec.right(PREC.new_no_args, seq(
       'new',
-      field('constructor', $._expression),
+      field('constructor', $._constructable),
       field('type_arguments', optional($.type_arguments)),
       field('arguments', optional($.arguments)),
+    )),
+
+    _constructable: $ => choice(
+      $._constructable_primary,
+      alias($._constructable_member, $.member_expression),
+      alias($._constructable_subscript, $.subscript_expression),
+    ),
+
+    // A `new` chain is itself constructable (`new new X()()`), and so is a
+    // parenthesised anything -- `new (f())()` is how you say the reading
+    // this rule otherwise forbids.
+    _constructable_primary: $ => choice(
+      $.new_expression,
+      $._name,
+      $.this,
+      $.super,
+      $.parenthesized_expression,
+      $.object,
+      $.array,
+      $.template_string,
+      $._literal,
+      $.function_expression,
+      $.class_definition,
+      $.import_meta,
+    ),
+
+    _constructable_member: $ => prec(PREC.member, seq(
+      field('object', $._constructable),
+      field('operator', choice('.', '?.')),
+      field('property', choice($._name, alias($._reserved_property, $.identifier), $.private_name)),
+    )),
+
+    _constructable_subscript: $ => prec(PREC.member, seq(
+      field('object', $._constructable),
+      optional('?.'),
+      '[',
+      field('subscript', $._expressions),
+      ']',
     )),
 
     arguments: $ => seq(

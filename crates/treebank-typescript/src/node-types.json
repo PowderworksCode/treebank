@@ -3299,6 +3299,18 @@
           {
             "type": "_expression",
             "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "new_expression",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
           }
         ]
       },
@@ -3486,7 +3498,59 @@
         "required": true,
         "types": [
           {
-            "type": "_expression",
+            "type": "_literal",
+            "named": true
+          },
+          {
+            "type": "_name",
+            "named": true
+          },
+          {
+            "type": "array",
+            "named": true
+          },
+          {
+            "type": "class_definition",
+            "named": true
+          },
+          {
+            "type": "function_expression",
+            "named": true
+          },
+          {
+            "type": "import_meta",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "new_expression",
+            "named": true
+          },
+          {
+            "type": "object",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
+            "named": true
+          },
+          {
+            "type": "super",
+            "named": true
+          },
+          {
+            "type": "template_string",
+            "named": true
+          },
+          {
+            "type": "this",
             "named": true
           }
         ]
@@ -4194,6 +4258,18 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "new_expression",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
             "named": true
           }
         ]
