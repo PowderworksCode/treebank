@@ -959,7 +959,13 @@ module.exports = grammar({
       field('alternative', $._expression),
     )),
 
-    await_expression: $ => prec(PREC.unary, seq('await', $._expression)),
+    // `prec.right`: `await f<T>(x)` is `await (f<T>(x))`, not
+    // `(await f)<T>(x)`. Plain `prec` left the two readings tied -- both
+    // hold one `await_expression`, one `call_expression` and one
+    // `type_arguments`, so the dynamic precedence on type arguments cancels
+    // out -- and the wrong one was winning. Right associativity extends the
+    // operand instead of reducing the await.
+    await_expression: $ => prec.right(PREC.unary, seq('await', $._expression)),
 
     yield_expression: $ => prec.right(PREC.yield, seq(
       'yield',
@@ -1025,7 +1031,17 @@ module.exports = grammar({
       $._constructable_primary,
       alias($._constructable_member, $.member_expression),
       alias($._constructable_subscript, $.subscript_expression),
+      // `new WebSocketCtor!(url)` -- the `!` asserts the CONSTRUCTOR is
+      // non-null, so it belongs inside `new`, and the arguments belong to
+      // `new`. Without this the constructor tier stopped at the `!` and the
+      // call came out as `(new WebSocketCtor!)(url)`.
+      alias($._constructable_non_null, $.non_null_expression),
     ),
+
+    // Above `new_no_args` (18), or the `new` reduces at the `!` and the
+    // assertion lands OUTSIDE: `(new WebSocketCtor!)(url)` instead of
+    // `new (WebSocketCtor!)(url)`.
+    _constructable_non_null: $ => prec.left(PREC.member, seq($._constructable, '!')),
 
     // A `new` chain is itself constructable (`new new X()()`), and so is a
     // parenthesised anything -- `new (f())()` is how you say the reading

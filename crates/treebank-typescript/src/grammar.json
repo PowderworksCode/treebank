@@ -5323,7 +5323,7 @@
       }
     },
     "await_expression": {
-      "type": "PREC",
+      "type": "PREC_RIGHT",
       "value": 16,
       "content": {
         "type": "SEQ",
@@ -5650,8 +5650,34 @@
           },
           "named": true,
           "value": "subscript_expression"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_constructable_non_null"
+          },
+          "named": true,
+          "value": "non_null_expression"
         }
       ]
+    },
+    "_constructable_non_null": {
+      "type": "PREC_LEFT",
+      "value": 20,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "SYMBOL",
+            "name": "_constructable"
+          },
+          {
+            "type": "STRING",
+            "value": "!"
+          }
+        ]
+      }
     },
     "_constructable_primary": {
       "type": "CHOICE",
