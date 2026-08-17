@@ -921,8 +921,15 @@ module.exports = grammar({
 
     escape_sequence: _ => token.immediate(prec(1, choice(
       /\\N\{[^}\r\n]+\}/,
-      /\\[^\r\n]/,
+      // An ordinary escape, but NOT over a brace: CPython reads `\{` as a
+      // literal backslash followed by an interpolation that still opens
+      // (f"\{foo}" is Constant('\\') then FormattedValue(foo)), so
+      // consuming the brace here loses the interpolation entirely.
+      /\\[^\r\n{}]/,
       /\\\r?\n/,
+      // The lone backslash of that case. Shorter than the alternative
+      // above, so tree-sitter's longest-match rule still prefers `\n` etc.
+      /\\/,
       /\{\{/,
       /\}\}/,
     ))),
@@ -938,10 +945,14 @@ module.exports = grammar({
 
     type_conversion: _ => /![rsa]/,
 
+    // A format spec may span lines when the f-string is triple-quoted
+    // (PEP 701 makes the whole interpolation multi-line there), so newlines
+    // are content rather than a terminator. The closing brace is what ends
+    // it, and braces are still excluded so a nested interpolation wins.
     format_specifier: $ => seq(
       ':',
       repeat(choice(
-        token.immediate(prec(1, /[^{}\n]+/)),
+        token.immediate(prec(1, /[^{}]+/)),
         $.interpolation,
       )),
     ),

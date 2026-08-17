@@ -27,38 +27,39 @@
     "blind_to": "python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension",
     "sweep": {
       "files": 139205,
-      "passed": 138256,
-      "failed": 949,
-      "gap_files": 29,
+      "passed": 138262,
+      "failed": 943,
+      "gap_files": 23,
       "noise_files": 920,
       "pass_rate": "99.32%",
       "oracle_note": "adjudicated by the two-leg union oracle (CPython 3.12.3 + 2.7.18).",
       "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note",
-      "note": "widened from the top-300 (46,466 files). Gap COUNT rose 13 -> 29 while the gap RATE fell 0.028% -> 0.021%; every family was already ledgered, and 24 of the 29 are ruff's parser test fixtures."
+      "note": "widened from the top-300 (46,466 files). Every remaining family is a formatter/parser test fixture or a declared deviation; 20 of the 23 are ruff's and black's own edge-case corpora."
     },
-    "mutation_falsification": "the same corpus swept against the grammar with while_statement deleted from _loop reports 3,661 gap files (vs 13); with star_pattern deleted from the match sequence rule it reports 17. The pipeline can say non-zero for both old and new rules, so 13 is a measurement."
+    "mutation_falsification": "while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified."
   },
   "known_gaps": [
     {
-      "construct": "PEP 701 f-string edges (same-quote nesting, multiline interpolations opened at line end, \\{ escapes)",
-      "files": 3
-    },
-    {
-      "construct": "py3 keywords as py2 identifiers (bare `nonlocal`, bare `await` — ruff parser fixtures)",
-      "files": 2,
-      "note": "the declared hard-keyword deviation, measured: 2 fixture files in 46,466, zero incidence in real library code"
-    },
-    {
       "construct": "parenthesized kwarg name `f((a)=1)`, valid <=3.7 and in py2",
-      "files": 2
+      "files": 6,
+      "note": "the union claims 2.7 u 3.x, so a form valid in 3.7 is a real gap rather than a fixture curiosity — the py2 leg of the oracle is what makes it visible"
+    },
+    {
+      "construct": "py3 keywords as py2 identifiers (bare `nonlocal`, bare `await`)",
+      "files": 6,
+      "note": "the declared hard-keyword deviation, measured: 6 fixture files in 139,205 and zero incidence in real library code"
+    },
+    {
+      "construct": "formatter fixtures with deliberate edge layout (ruff/black `else:\\` backslash continuations, inline-if + comment interleavings)",
+      "files": 8
     },
     {
       "construct": "walrus/format-spec collision f\"{num:=.2Uf}\" (`:=` lexes as one token; CPython special-cases this in its tokenizer)",
       "files": 1
     },
     {
-      "construct": "formatter test fixtures with deliberate edge layout (ruff/black `else:\\` backslash-continuation, inline-if + comment interleavings)",
-      "files": 5
+      "construct": "assorted single-file edges in dill and pygments (inline `if` with a trailing comment, docstring-adjacent layout)",
+      "files": 2
     }
   ],
   "deviations": [
@@ -73,6 +74,12 @@
     },
     {
       "what": "inconsistent partial dedents (`if a:` at 0, body at 8, next line at 4) parse; CPython's tokenizer raises IndentationError. The scanner dedents to the nearest enclosing level"
+    },
+    {
+      "what": "escape_sequence never consumes a brace. CPython reads `f\"\\{foo}\"` as a literal backslash followed by an interpolation that still opens, so an escape that swallowed the `{` lost the interpolation entirely; a lone backslash is its own (shorter) alternative, which tree-sitter's longest-match rule keeps out of the way of `\\n` and friends."
+    },
+    {
+      "what": "a format specifier may contain newlines. PEP 701 makes the whole interpolation multi-line inside a triple-quoted f-string, so the closing brace ends the spec rather than the line ending."
     }
   ],
   "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). _clause MOVED to the facet tier in vocabulary 0.2.0 on exactly this evidence, gathered independently in python, rust and typescript; _control_flow remains the open candidate.",
