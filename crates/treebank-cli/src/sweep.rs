@@ -689,6 +689,15 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
 
 /// Negative corpus: every file must FAIL to parse.
 pub fn negative(grammar_dir: &Path, dir: &Path) -> Result<()> {
+    negative_inner(grammar_dir, dir, false)
+}
+
+/// `quiet` suppresses the success line so `verify` can format its own.
+pub fn negative_quiet(grammar_dir: &Path, dir: &Path) -> Result<()> {
+    negative_inner(grammar_dir, dir, true)
+}
+
+fn negative_inner(grammar_dir: &Path, dir: &Path, quiet: bool) -> Result<()> {
     let (language, _) = grammar::load(grammar_dir)?;
     let mut parser = Parser::new();
     parser.set_language(&language)?;
@@ -713,6 +722,8 @@ pub fn negative(grammar_dir: &Path, dir: &Path) -> Result<()> {
         }
         bail!("{} of {} negative files were accepted", wrongly_accepted.len(), total);
     }
-    println!("negative: all {total} files correctly rejected");
+    if !quiet {
+        println!("negative: all {total} files correctly rejected");
+    }
     Ok(())
 }

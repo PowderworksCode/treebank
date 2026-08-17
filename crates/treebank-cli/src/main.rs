@@ -1,6 +1,7 @@
 mod grammar;
 mod rosetta;
 mod routing;
+mod verify;
 mod sweep;
 
 use std::path::PathBuf;
@@ -82,6 +83,16 @@ enum Cmd {
         #[arg(long, default_value = "crates")]
         crates: PathBuf,
     },
+    /// Run every gate a grammar must pass: reproducible generation, corpus
+    /// tests, negative corpus, vocabulary conformance, and the rosetta suite
+    Verify {
+        /// Grammar crate root
+        grammar: PathBuf,
+        #[arg(long, default_value = "crates")]
+        crates: PathBuf,
+        #[arg(long, default_value = "test/rosetta")]
+        rosetta: PathBuf,
+    },
     /// Assert that every file in a directory FAILS to parse (negative corpus)
     Negative {
         #[arg(long)]
@@ -144,6 +155,24 @@ fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
 /// `treebank roles`: the vocabulary-conformance gate, one grammar crate at
 /// a time. Prints every finding rather than the first, and exits non-zero
 /// on any — an empty report is conformance.
+pub fn roles_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
+    let vocab = treebank_core::vocabulary();
+    let nt = treebank_core::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
+    let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
+    let findings = treebank_core::check::check(&nt, &roles, vocab);
+    if !findings.is_empty() {
+        anyhow::bail!("{}", findings.join("; "));
+    }
+    Ok(format!(
+        "{} supertypes, {} facet(s), {} named node(s), {} uncategorised (vocabulary {})",
+        nt.supertypes.len(),
+        roles.facets.len(),
+        nt.named.len() - nt.supertypes.len(),
+        roles.uncategorised.len(),
+        vocab.version,
+    ))
+}
+
 fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
     let vocab = treebank_core::vocabulary();
     let nt = treebank_core::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
@@ -198,6 +227,7 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
         Cmd::Rosetta { dir, crates } => rosetta::run(&dir, &crates),
+        Cmd::Verify { grammar, crates, rosetta } => verify::run(&grammar, &crates, &rosetta),
         Cmd::Negative { grammar, dir } => sweep::negative(&grammar, &dir),
         Cmd::Oracle { lang, srcroot } => oracle_cmd(lang, &srcroot),
     }

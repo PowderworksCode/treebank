@@ -33,6 +33,15 @@ const LANGUAGES: &[(&str, &str)] = &[
 ];
 
 pub fn run(dir: &Path, crates_dir: &Path) -> Result<()> {
+    run_inner(dir, crates_dir, false)
+}
+
+/// `quiet` suppresses the summary line so `verify` can format its own.
+pub fn run_quiet(dir: &Path, crates_dir: &Path) -> Result<()> {
+    run_inner(dir, crates_dir, true)
+}
+
+fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
     let mut cases: Vec<_> = std::fs::read_dir(dir)
         .with_context(|| format!("read {}", dir.display()))?
         .filter_map(|e| e.ok())
@@ -113,10 +122,12 @@ pub fn run(dir: &Path, crates_dir: &Path) -> Result<()> {
     if !failures.is_empty() {
         bail!("{} rosetta assertion(s) failed", failures.len());
     }
-    println!(
-        "rosetta OK: {} case(s) × {} languages, {checked} assertions",
-        cases.len(),
-        LANGUAGES.len()
-    );
+    if !quiet {
+        println!(
+            "rosetta OK: {} case(s) × {} languages, {checked} assertions",
+            cases.len(),
+            LANGUAGES.len()
+        );
+    }
     Ok(())
 }
