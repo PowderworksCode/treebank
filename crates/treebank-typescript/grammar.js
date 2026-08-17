@@ -1220,8 +1220,15 @@ module.exports = grammar({
       field('name', alias($.identifier, $.type_identifier)),
     ),
 
-    union_type: $ => prec.left(2, seq(optional($._type), '|', $._type)),
-    intersection_type: $ => prec.left(3, seq(optional($._type), '&', $._type)),
+    // These sit ABOVE `PREC.cast` deliberately. `x as A & B` is
+    // `x as (A & B)` in TypeScript, not `(x as A) & B` -- the type after
+    // `as`/`satisfies` is greedy. With the type operators below `cast`, the
+    // parser reduced `as_expression` at the `&` and read the rest as a
+    // bitwise-and over an object literal, which is silently well-formed
+    // and silently wrong. Their order relative to each other is unchanged:
+    // `&` still binds tighter than `|`.
+    union_type: $ => prec.left(PREC.cast + 1, seq(optional($._type), '|', $._type)),
+    intersection_type: $ => prec.left(PREC.cast + 2, seq(optional($._type), '&', $._type)),
 
     function_type: $ => prec.left(1, seq(
       field('type_parameters', optional($.type_parameters)),

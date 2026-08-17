@@ -7275,7 +7275,7 @@
     },
     "union_type": {
       "type": "PREC_LEFT",
-      "value": 2,
+      "value": 16,
       "content": {
         "type": "SEQ",
         "members": [
@@ -7304,7 +7304,7 @@
     },
     "intersection_type": {
       "type": "PREC_LEFT",
-      "value": 3,
+      "value": 17,
       "content": {
         "type": "SEQ",
         "members": [
