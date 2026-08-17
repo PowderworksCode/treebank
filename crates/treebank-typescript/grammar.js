@@ -55,6 +55,14 @@ module.exports = grammar({
 
   externals: $ => [
     $._automatic_semicolon,
+    // A zero-width member boundary for object types. Distinct from ASI
+    // because its continuation set is the opposite one: `[` CONTINUES an
+    // expression (`foo\n[0]`) and BEGINS a type member (an index
+    // signature), and the scanner cannot tell those apart. It does not
+    // have to — this token is only ever valid where the parser wants a
+    // member boundary, so validity does the disambiguation the lookahead
+    // cannot.
+    $._type_member_end,
   ],
 
   supertypes: $ => tb.assertTableTerms([
@@ -1240,7 +1248,7 @@ module.exports = grammar({
           $.index_signature,
           alias($.method_signature, $.function_definition),
         ),
-        optional(choice(',', ';')),
+        optional(choice(',', ';', $._type_member_end)),
       )),
       '}',
     ),
@@ -1308,6 +1316,13 @@ module.exports = grammar({
     _no_conditional_type: $ => choice(
       alias($.identifier, $.type_identifier),
       $.predefined_type,
+      // `infer T extends new (...) => any` — a constraint may be a
+      // constructor or function type. Both end in a return type, so they
+      // cannot swallow the enclosing conditional's `?`.
+      $.constructor_type,
+      $.function_type,
+      $.union_type,
+      $.intersection_type,
       $.generic_type,
       $.nested_type_identifier,
       $.object_type,

@@ -7512,6 +7512,10 @@
                       {
                         "type": "STRING",
                         "value": ";"
+                      },
+                      {
+                        "type": "SYMBOL",
+                        "name": "_type_member_end"
                       }
                     ]
                   },
@@ -8153,6 +8157,22 @@
         {
           "type": "SYMBOL",
           "name": "predefined_type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "constructor_type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "function_type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "union_type"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "intersection_type"
         },
         {
           "type": "SYMBOL",
@@ -10151,6 +10171,10 @@
     {
       "type": "SYMBOL",
       "name": "_automatic_semicolon"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_type_member_end"
     }
   ],
   "inline": [],

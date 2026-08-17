@@ -18,13 +18,75 @@
 
 enum TokenType {
   AUTOMATIC_SEMICOLON,
+  TYPE_MEMBER_END,
 };
 
 static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 
+/* True when the token ahead continues the type of the member just parsed,
+ * so no member boundary belongs here. Mirrors the ASI continuation set
+ * EXCEPT for '[': a bracket after an expression is a subscript, but a
+ * bracket after a type member is the next member's index signature. */
+static bool continues_type_member(TSLexer *lexer) {
+  int32_t c = lexer->lookahead;
+  switch (c) {
+    case '(': case '`':
+    case '*': case '%': case '<': case '>': case '=': case '&': case '|':
+    case '^': case '?': case ':': case ',': case '.': case ';': case '!':
+    case '-': case '+': case '/':
+      return true;
+    default:
+      break;
+  }
+  /* `extends` after a type continues a conditional type. */
+  if (c == 'e') {
+    char word[9];
+    int n = 0;
+    while (n < 8 && lexer->lookahead >= 'a' && lexer->lookahead <= 'z') {
+      word[n++] = (char)lexer->lookahead;
+      lexer->advance(lexer, false);
+    }
+    word[n] = 0;
+    return strcmp(word, "extends") == 0;
+  }
+  return false;
+}
+
 bool tree_sitter_typescript_external_scanner_scan(void *payload, TSLexer *lexer,
                                                   const bool *valid) {
   (void)payload;
+
+  // A member boundary inside an object type. It needs the SAME continuation
+  // set as ASI — a member's type spans lines all the time in .d.ts
+  // (`a: A` then `| B`, or a qualified name broken across lines) — with
+  // exactly ONE token flipped: `[` continues an expression (`foo\n[0]` is a
+  // subscript) and BEGINS a type member (an index signature). That single
+  // difference is the whole reason this is a separate token rather than
+  // reusing ASI, and dropping the rest of the set is what a first attempt
+  // got wrong: it severed every multi-line member type and took the corpus
+  // from 22 to 100 gaps.
+  if (valid[TYPE_MEMBER_END] && !valid[AUTOMATIC_SEMICOLON]) {
+    lexer->mark_end(lexer);
+    bool crossed = false;
+    for (;;) {
+      int32_t c = lexer->lookahead;
+      if (c == ' ' || c == '\t' || c == '\f' || c == 0x0b) {
+        skip(lexer);
+      } else if (c == '\n' || c == '\r' || c == 0x2028 || c == 0x2029) {
+        crossed = true;
+        skip(lexer);
+      } else {
+        break;
+      }
+    }
+    if (!crossed) return false;
+    if (!continues_type_member(lexer)) {
+      lexer->result_symbol = TYPE_MEMBER_END;
+      return true;
+    }
+    return false;
+  }
+
   if (!valid[AUTOMATIC_SEMICOLON]) return false;
 
   lexer->mark_end(lexer);
