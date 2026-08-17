@@ -90,7 +90,7 @@ jobs:
       - run: ./target/debug/treebank rosetta
 
   wasm:
-    name: wasm artifacts
+    name: wasm packs (${{ matrix.grammar }})
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -98,25 +98,54 @@ jobs:
         grammar: [python, rust, typescript]
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-      - name: install pinned tree-sitter CLI
-        run: cargo install tree-sitter-cli --version "$TREE_SITTER_VERSION" --locked
-      # 0.26 builds wasm through a downloaded wasi-sdk rather than
-      # emscripten, so this is ~113 MB the first time and free after —
-      # worth caching across the three parallel grammar jobs.
-      - name: cache wasi-sdk
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      # The toolchain (wasi-sdk, binaryen) and the tree-sitter runtime are
+      # downloaded, sha256-verified and cached — never taken from PATH, so a
+      # runner with its own compilers cannot change the bytes.
+      - name: cache wasm toolchain
         uses: actions/cache@v4
         with:
-          path: ~/.cache/tree-sitter/wasi-sdk
-          key: wasi-sdk-${{ runner.os }}-${{ env.TREE_SITTER_VERSION }}
-      # DESIGN.md §7 makes wasm a first-class artifact, so it is built on
-      # every change rather than at release time — a grammar that cannot
-      # cross to wasm should fail here, not in a consumer's browser.
-      - name: build wasm
-        working-directory: crates/treebank-${{ matrix.grammar }}
-        run: tree-sitter build --wasm -o tree-sitter-${{ matrix.grammar }}.wasm .
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
+      - run: pip install wasmtime
+      # DESIGN.md §7 makes wasm a first-class artifact, so packs are built
+      # and checked on every change rather than at release time: a grammar
+      # that cannot cross to wasm should fail here, not in a consumer's
+      # browser. check.sh also asserts byte-reproducibility, that a real
+      # WASI runtime loads the module, and that what the pack says about
+      # itself matches the repo.
+      - name: build and check the pack
+        run: ./tools/wasm-pack/check.sh ${{ matrix.grammar }}
       - uses: actions/upload-artifact@v4
         with:
-          name: tree-sitter-${{ matrix.grammar }}-wasm
-          path: crates/treebank-${{ matrix.grammar }}/tree-sitter-${{ matrix.grammar }}.wasm
+          name: treebank-${{ matrix.grammar }}-wasm-pack
+          path: dist/wasm/treebank-${{ matrix.grammar }}.wasm
+
+  release-rehearsal:
+    name: wasm release rehearsal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the rehearsal reads and writes tags
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: cache wasm toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
+      - run: pip install wasmtime
+      # Everything that only happens AFTER a successful release — the tag,
+      # the skip on a re-run, and a consumer fetching assets over HTTP and
+      # parsing with them — is untestable by publishing, which is exactly
+      # the part that breaks. This rehearses all of it and publishes
+      # nothing: staged releases, served over localhost, fetched by URL,
+      # checksummed, parsed by both example consumers, and indexed.
+      - run: ./tools/wasm-pack/test-release.sh

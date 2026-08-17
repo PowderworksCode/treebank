@@ -2749,6 +2749,14 @@
           "named": true
         },
         {
+          "type": "constructor_type",
+          "named": true
+        },
+        {
+          "type": "function_type",
+          "named": true
+        },
+        {
           "type": "generic_type",
           "named": true
         },
@@ -2758,6 +2766,10 @@
         },
         {
           "type": "indexed_access_type",
+          "named": true
+        },
+        {
+          "type": "intersection_type",
           "named": true
         },
         {
@@ -2802,6 +2814,10 @@
         },
         {
           "type": "typeof_type",
+          "named": true
+        },
+        {
+          "type": "union_type",
           "named": true
         }
       ]

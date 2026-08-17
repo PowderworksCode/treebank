@@ -22,11 +22,11 @@
     "source": "top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)",
     "typescript_sweep": {
       "files": 11988,
-      "passed": 11960,
-      "failed": 28,
-      "gap_files": 22,
+      "passed": 11969,
+      "failed": 19,
+      "gap_files": 13,
       "noise_files": 6,
-      "pass_rate": "99.77%"
+      "pass_rate": "99.84%"
     },
     "javascript_sweep": {
       "files": 25297,
@@ -37,31 +37,26 @@
       "pass_rate": "99.97%"
     },
     "blind_to": "npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heavy (undici-types, type-fest) and light on application .ts; JSX incidence is low outside React-adjacent packages",
-    "mutation_falsification": "javascript with while_statement deleted from _loop: 429 gap files (vs 8). typescript with `void` removed from predefined_type: 25 gap files (vs 22) — the new rules are falsified too, not only the old ones.",
+    "mutation_falsification": "javascript with while_statement deleted from _loop: 429 gap files (vs 8). typescript with the _type_member_end token removed: 20 gap files (vs 13). Both the oldest and the newest rules can be falsified.",
     "widening_note": "Widened from the top-300 to the top-1000: typescript 1,598 -> 11,988 files, javascript 4,801 -> 25,297. It found six real families the narrow corpus had no instance of, the largest of which invalidates a claim this ledger used to make (see dialect_decision)."
   },
   "known_gaps": [
     {
-      "construct": "interface members beginning with '[' after an unannotated-terminator member in semicolonless .d.ts",
-      "files": 5,
-      "note": "ajv, browserslist, undici-types; the type-land analogue of the JS '[' ASI hazard. Equalizing precedences to force a GLR fork regressed 20 other files and was reverted."
-    },
-    {
-      "construct": "`typeof globalThis extends { ... }` — an object type as the right side of a conditional's extends",
+      "construct": "`): asserts this is X<t.Y>` — generic type arguments on an asserts-predicate return",
       "files": 3
     },
     {
-      "construct": "generic type arguments on an asserts-predicate return (`): asserts this is NodePath_Final<t.X>`)",
+      "construct": "parenthesized function types as declared const/property types in .d.ts",
       "files": 3
     },
     {
       "construct": "legacy `<T>x` angle-bracket casts",
       "files": 1,
-      "note": "the dialect-split construct; one file in 11,988 (@adobe/css-tools). Still accepted as a gap by design — see dialect_decision."
+      "note": "the dialect-split construct; one file in 11,988. Accepted as a gap by design — see dialect_decision."
     },
     {
       "construct": "assorted single-file .d.ts and minified-bundle edges",
-      "files": 10
+      "files": 6
     }
   ],
   "deviations": [
@@ -82,6 +77,9 @@
     },
     {
       "what": "`void`, `never`, `unknown` and `symbol` are a predefined_type node rather than identifiers. `void` is a unary operator, so it can never arrive as an identifier and `f<void>()` previously had no reading at all."
+    },
+    {
+      "what": "object-type members are separated by a scanner token (_type_member_end) as well as , and ;. It carries ASI's continuation set with exactly one token flipped: `[` CONTINUES an expression (`foo` newline `[0]` is a subscript) and BEGINS a type member (an index signature). That single difference is why it is a separate token rather than reusing ASI, and it is what finally closed the 5-file .d.ts family — a precedence attempt had regressed 20 files, and a first version of this token with NO continuation set regressed to 100 by severing every multi-line member type."
     }
   ],
   "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses)."
