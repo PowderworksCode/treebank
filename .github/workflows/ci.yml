@@ -122,3 +122,30 @@ jobs:
         with:
           name: treebank-${{ matrix.grammar }}-wasm-pack
           path: dist/wasm/treebank-${{ matrix.grammar }}.wasm
+
+  release-rehearsal:
+    name: wasm release rehearsal
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0          # the rehearsal reads and writes tags
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: cache wasm toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
+      - run: pip install wasmtime
+      # Everything that only happens AFTER a successful release — the tag,
+      # the skip on a re-run, and a consumer fetching assets over HTTP and
+      # parsing with them — is untestable by publishing, which is exactly
+      # the part that breaks. This rehearses all of it and publishes
+      # nothing: staged releases, served over localhost, fetched by URL,
+      # checksummed, parsed by both example consumers, and indexed.
+      - run: ./tools/wasm-pack/test-release.sh

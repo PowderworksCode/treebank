@@ -79,9 +79,48 @@ Two build settings are load-bearing:
   which loses the WASI reactor exec model, and every host then refuses to
   instantiate the module. It looks like a runtime bug and is a link flag.
 
+## Releases and the index
+
+```sh
+./tools/wasm-pack/release.sh                 # stage into dist/release
+./tools/wasm-pack/release.sh --publish       # the only networked path
+./tools/wasm-pack/index.sh                   # packs.json
+./tools/wasm-pack/test-release.sh            # rehearse all of it, publish nothing
+```
+
+A release is the `.wasm`, its provenance and roles as sibling JSON, and
+`SHA256SUMS` over all three. The siblings are extracted **from the module**,
+so they cannot disagree with what it says about itself; the module remains
+the source of truth.
+
+**GitHub Releases, not npm** — measured rather than assumed: npm's
+tree-sitter grammar packages ship native `.node` prebuilds and contain zero
+wasm, while every upstream grammar publishes `<name>.wasm` as a release
+asset. Releases also need no account and no secret, and are an HTTPS GET from
+any language, which is what matters when packs are consumed from bindings
+rather than only from JS.
+
+`packs.json` is published to a **moving `packs-index` tag**, so a consumer has
+one stable URL instead of N releases to discover. The index is mutable by
+design and nothing in it is trusted: every entry carries the sha256 of an
+immutable artifact.
+
+Versions are plain semver from each crate's `Cargo.toml`. The vendoring era's
+`<upstream>-treebank.N` scheme tracked an upstream version and a build
+counter; treebank owns these grammars, so neither exists.
+
+`test-release.sh` closes what publishing leaves untestable — the tag, the
+skip on a re-run, and a consumer actually fetching over HTTP. It stages
+every pack under a `rehearsal-wasm/` tag namespace, serves it over
+localhost, fetches **by URL**, verifies `SHA256SUMS` against the fetched
+bytes, runs both example consumers (asserting each grammar's negative
+fixture is still rejected and its rosetta program parses clean), checks the
+index's hashes and that its URLs name the real tag rather than the rehearsal
+one, and asserts a re-run releases nothing. It publishes nothing and deletes
+its tags on exit.
+
 ## Status
 
-Built and gated on every change; **published nowhere**. The registry
-(`packs.json` over GitHub Releases, each entry carrying the sha256 of an
-immutable asset) is the next step and is deliberately not wired to anything
-that fires.
+Built, gated and rehearsed on every change; **published nowhere**. The first
+real publish is a `--publish` run, and it is deliberately not wired to
+anything that fires.
