@@ -53,6 +53,8 @@ expanded before the query runs.
 
 ## What is checked, on every change
 
+Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
+
 | gate | what it catches |
 |---|---|
 | reproducible generation | committed `src/` drifting from `grammar.js` at the pinned CLI |
