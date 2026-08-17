@@ -754,11 +754,19 @@ module.exports = grammar({
       seq(repeat($._modifier), field('name', alias('global', $.identifier)), field('body', $.block)),
     ),
 
-    nested_identifier: $ => seq(
+    // `prec.dynamic(1)` for the same reason `nested_type_identifier` has it,
+    // and it has to be here too or the tie comes back one level deeper.
+    // `x as z.core.$ZodString` splits into `nested_type_identifier(z, core)`
+    // plus a `member_expression`, and that reading ALSO holds exactly one
+    // `nested_type_identifier` -- so the +1 there cancels out. The module
+    // part of a three-level name is a `nested_identifier`, and only the
+    // correct reading contains one, which is the asymmetry. The margin grows
+    // with each further level, so deeper names stay decided.
+    nested_identifier: $ => prec.dynamic(1, seq(
       field('object', choice($.identifier, $.nested_identifier)),
       '.',
       field('property', $.identifier),
-    ),
+    )),
 
     import_alias: $ => seq(
       optional('export'),
