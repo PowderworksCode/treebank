@@ -953,7 +953,17 @@ module.exports = grammar({
     // are content rather than a terminator. The closing brace is what ends
     // it, and braces are still excluded so a nested interpolation wins.
     format_specifier: $ => seq(
-      ':',
+      // A LEXICAL precedence, not a parse one. After `f"{num"` both `:` and
+      // `:=` are valid, and tree-sitter's longest-match rule handed the
+      // walrus the colon: `f"{num:=10}"` parsed as `named_expression`, where
+      // CPython gives a width-10 format spec (`'         5'`). Lexical
+      // precedence outranks match length, so this `:` wins wherever a format
+      // spec can start. It is a distinct token from the plain `:` used by
+      // dicts, slices and annotations, so those are untouched, and a
+      // PARENTHESISED walrus -- `f"{(x := 10)}"`, the only form CPython
+      // accepts here -- still lexes `:=` because no format spec is valid
+      // inside the parentheses.
+      token(prec(1, ':')),
       repeat(choice(
         token.immediate(prec(1, /[^{}]+/)),
         $._interpolation,

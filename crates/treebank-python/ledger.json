@@ -91,6 +91,12 @@
       "was": "the scanner emitted NEWLINE for the blank line. `if True: pass` opens no indent level, so the blank line never reached the INDENT/DEDENT branch that consumes such lines -- it fell through to the newline branch, and the spurious NEWLINE committed the shared GLR token stream before `else` could attach.",
       "now": "NEWLINE is emitted only where a line with CONTENT ends: the call started past column 0 and has not already crossed a line boundary. CPython emits NL, not NEWLINE, for blank lines.",
       "note": "Held as LOCAL state in the scan call, not scanner state: tree-sitter persists scanner state only after a call that RETURNS A TOKEN, so a flag cleared on the `return false` path is lost. A first attempt using a persistent flag failed exactly that way. No corpus file exercises it; committed as a correctness fix."
+    },
+    {
+      "construct": "`f\"{num:=10}\"` -- a format spec beginning with `=`",
+      "was": "after `f\"{num` both `:` and `:=` were valid, and tree-sitter's longest-match rule handed the colon to the walrus: the whole family parsed as `named_expression`. CPython reads it as a width-10 format spec (`'         5'`).",
+      "now": "`format_specifier` opens with `token(prec(1, ':'))`. Lexical precedence outranks match length, so this colon wins wherever a format spec can start. It is a distinct token from the plain `:` of dicts, slices and annotations, and a PARENTHESISED walrus -- `f\"{(x := 10)}\"`, the only form CPython accepts here -- still lexes `:=` because no format spec is valid inside the parentheses.",
+      "note": "SILENT except where the spec was not itself a valid walrus right-hand side: only `f\"{num:=.2Uf}\"` errored, 1 file in mpmath."
     }
   ],
   "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). _clause MOVED to the facet tier in vocabulary 0.2.0 on exactly this evidence, gathered independently in python, rust and typescript; _control_flow remains the open candidate.",
