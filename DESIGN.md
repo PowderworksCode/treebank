@@ -263,6 +263,38 @@ python2 crate, no per-edition Rust grammars.
   JSX element in `.tsx` — a genuine grammatical ambiguity, not a precedence
   problem; no single parse table exists.
 
+#### When versions conflict, the latest version wins
+
+A union grammar is not a promise to parse every version equally. Three cases,
+and they are decided differently:
+
+1. **The same text means different things in different versions.** The latest
+   version's reading wins. `print >> f, x` is a py2 print statement and a py3
+   expression; it parses as the expression. `print (x)` is a py2 statement
+   and a py3 call; it parses as the call.
+
+2. **A construct is valid only in an older version, and admitting it would
+   change how CURRENT code parses.** The current language wins and the
+   construct is rejected. In a GLR grammar an admitted old form is not an
+   extra reading sitting quietly beside the others — it is a **fork at every
+   occurrence of the token**, and forks can win. Measured, twice: letting
+   `never`/`unknown`/`symbol` be identifiers in TypeScript fixed 3 files and
+   broke 13, because the identifier reading created a competing generic-arrow
+   fork that beat the type-argument reading. Supporting the past must never
+   cost the present.
+
+3. **A construct is valid only in an older version and costs nothing.** It is
+   accepted — this is what the union is for. `except E, e:`, the py2 `print`
+   and `exec` statements, backtick repr and old-style octal literals have no
+   competing reading in any later version, so no current program is at risk
+   from them.
+
+The cases that fall under (2) are recorded per grammar in
+`version_policy.json` and, because a policy nobody checks is a comment,
+each one also gets a file in `test/negative/` — so the rejection is a gate,
+not a note. The sweep reads that file and books matching failures as
+`version` rather than `gap` (§4.3).
+
 Which version a given file belongs to is deliberately **not** answered now.
 The sweep records per-version oracle verdicts anyway (§4.3) — that verdict
 vector is the hook a future `version_of()` builds on, and nothing more is
@@ -288,8 +320,14 @@ With a version-union grammar there is one oracle per version family:
 
 Adjudication over the version set:
 
-- **gap** — the grammar rejects a file that **any** version-oracle accepts.
-  Always a bug; the union must cover every version.
+- **gap** — the grammar rejects a file that **any** version-oracle accepts,
+  *and* the rejection is not a declared version-policy rejection (§4.2).
+  Otherwise a bug; the union must cover every version it claims.
+- **version** — the grammar rejects a file that only an OLDER version-oracle
+  accepts, and `version_policy.json` declares that construct rejected. Both
+  conditions are required: the declaration alone cannot suppress a failure
+  that the CURRENT oracle calls valid, so a real gap can never hide behind a
+  policy entry.
 - **widening** — the grammar accepts a file that **every** version-oracle
   rejects. Sweeps cannot catch this direction (real corpora are almost
   entirely valid code), which is what the negative corpus exists for:

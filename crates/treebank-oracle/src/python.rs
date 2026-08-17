@@ -59,4 +59,17 @@ impl Oracle for Python {
         }
         Ok(verdicts)
     }
+
+    /// CPython 3 alone — the current language. `validate` above is the union
+    /// of py3 and py2.7; this is the py3 half, and the difference between
+    /// the two is exactly the set of py2-only files.
+    fn validate_current(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
+        stdin_oracle::run(
+            "python3",
+            &[crate::tool("py-oracle/check.py").to_string_lossy().as_ref()],
+            "python3 tools/py-oracle/check.py — is python3 installed?",
+            srcroot,
+            paths,
+        )
+    }
 }

@@ -44,7 +44,27 @@ pub trait Oracle: Sync {
     /// Reference-parser validity for a batch of corpus-relative paths.
     /// Every requested path gets a verdict or the call errors; a missing
     /// verdict is never silently dropped.
+    ///
+    /// This is the UNION verdict: valid if ANY version family accepts.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>>;
+
+    /// Validity under the CURRENT version of the language only.
+    ///
+    /// Separate from `validate` because the two answer different questions.
+    /// `validate` asks "is this valid in the language at all", which is what
+    /// decides gap-vs-noise. This asks "is this still valid today", which is
+    /// what lets a declared version-policy rejection (DESIGN.md §4.2) be
+    /// distinguished from a genuine gap: a construct may only be booked as
+    /// `version` if the current oracle also rejects it. Without that second
+    /// condition a policy entry could suppress a real, current-language
+    /// failure, which is precisely the kind of self-granted exemption the
+    /// sweep exists to prevent.
+    ///
+    /// Defaults to `validate`, which is correct for every language whose
+    /// oracle has no version split.
+    fn validate_current(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
+        self.validate(srcroot, paths)
+    }
 }
 
 /// Total: an unsupported name cannot be constructed, because clap and serde
