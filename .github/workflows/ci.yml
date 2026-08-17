@@ -102,12 +102,20 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       - name: install pinned tree-sitter CLI
         run: cargo install tree-sitter-cli --version "$TREE_SITTER_VERSION" --locked
+      # 0.26 builds wasm through a downloaded wasi-sdk rather than
+      # emscripten, so this is ~113 MB the first time and free after —
+      # worth caching across the three parallel grammar jobs.
+      - name: cache wasi-sdk
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/tree-sitter/wasi-sdk
+          key: wasi-sdk-${{ runner.os }}-${{ env.TREE_SITTER_VERSION }}
       # DESIGN.md §7 makes wasm a first-class artifact, so it is built on
       # every change rather than at release time — a grammar that cannot
       # cross to wasm should fail here, not in a consumer's browser.
       - name: build wasm
         working-directory: crates/treebank-${{ matrix.grammar }}
-        run: tree-sitter build --wasm --docker -o tree-sitter-${{ matrix.grammar }}.wasm .
+        run: tree-sitter build --wasm -o tree-sitter-${{ matrix.grammar }}.wasm .
       - uses: actions/upload-artifact@v4
         with:
           name: tree-sitter-${{ matrix.grammar }}-wasm
