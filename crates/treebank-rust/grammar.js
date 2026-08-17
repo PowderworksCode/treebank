@@ -713,8 +713,17 @@ module.exports = grammar({
       'if',
       field('condition', choice($._no_struct_expression, $.let_condition, $.let_chain)),
       field('consequence', $.block),
-      optional(seq('else', field('alternative', choice($.block, $.if_expression)))),
+      optional(field('alternative', $.else_clause)),
     )),
+
+    // `else` is a node, not an inline tail. Same construct as python's and
+    // typescript's `else`, so it carries the same name (DESIGN.md §4.1):
+    // `alternative:` points at an else_clause in all three, and `(_clause)`
+    // has a member here that it was silently missing. What rust admits
+    // AFTER the keyword differs — a block or a chained if, where python
+    // takes a suite and typescript any statement — but that is the
+    // clause's contents, not its shape.
+    else_clause: $ => seq('else', choice($.block, $.if_expression)),
 
     let_condition: $ => seq(
       'let',

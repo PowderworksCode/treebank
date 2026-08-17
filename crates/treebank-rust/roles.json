@@ -51,6 +51,7 @@
       "for_expression"
     ],
     "_clause": [
+      "else_clause",
       "match_arm",
       "where_clause"
     ]
