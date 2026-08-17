@@ -1462,12 +1462,6 @@ module.exports = grammar({
     // both positions -- two hidden rules matching one token is an unresolved
     // conflict, not a choice.
     //
-    // `never` / `unknown` / `symbol` are `predefined_type` members;
-    // TypeScript reserves none of them, so `(symbol: ts.Symbol) => boolean`
-    // names a parameter `symbol` and `.d.ts` files do this constantly. But
-    // folding them into `_soft_keyword` made `let b: never` a
-    // `type_identifier` instead of a `predefined_type`.
-    //
     // `asserts` / `is` are the predicate keywords. Allowing either as a bare
     // type made `a(): asserts this is X` look COMPLETE after `asserts`
     // inside an object type, which made `_type_member_end` valid there. The
@@ -1479,9 +1473,13 @@ module.exports = grammar({
     //
     // The cost is `type asserts = ...` and `let x: is` as type NAMES, which
     // TypeScript permits and nothing in the corpus does.
-    _value_word: _ => prec(1, choice(
-      'never', 'unknown', 'symbol', 'asserts', 'is',
-    )),
+    // `never` / `unknown` / `symbol` are deliberately NOT here. They are
+    // not reserved either, but giving them an identifier reading costs far
+    // more than it buys: `expectTypeOf<t1>().toEqualTypeOf<unknown>()` then
+    // has a competing generic-arrow fork that wins, and the type-argument
+    // reading dies. Measured at 10 -> 23 corpus gaps. A parameter named
+    // `symbol` inside a bare function type stays a known gap instead.
+    _value_word: _ => prec(1, choice('asserts', 'is')),
 
     identifier: _ => /[_$\p{XID_Start}][_$\p{XID_Continue}]*/,
 

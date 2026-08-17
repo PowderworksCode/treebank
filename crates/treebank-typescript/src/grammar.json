@@ -9218,18 +9218,6 @@
         "members": [
           {
             "type": "STRING",
-            "value": "never"
-          },
-          {
-            "type": "STRING",
-            "value": "unknown"
-          },
-          {
-            "type": "STRING",
-            "value": "symbol"
-          },
-          {
-            "type": "STRING",
             "value": "asserts"
           },
           {
