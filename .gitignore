@@ -4,5 +4,7 @@ db-dump.tar.gz
 *.dylib
 node_modules/
 
-# wasm artifacts (built by CI, uploaded per run)
-crates/*/tree-sitter-*.wasm
+
+# wasm packs (built by CI, uploaded per run)
+/dist/
+__pycache__/
