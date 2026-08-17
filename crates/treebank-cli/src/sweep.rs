@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser};
@@ -45,6 +45,12 @@ pub struct Cluster {
     /// has to support, and the ones to test it against.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub macros: Vec<String>,
+    /// Valid-in-SOME-version files the grammar rejects ON PURPOSE, because
+    /// `version_policy.json` declares the construct rejected and the CURRENT
+    /// version's oracle rejects it too (DESIGN.md §4.2). Excluded from
+    /// `valid_paths`: no grammar change should fix these.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub version_paths: Vec<String>,
     pub paths: Vec<String>,
 }
 
@@ -61,8 +67,39 @@ pub struct Report {
     /// both gaps and noise because neither name is true of them.
     #[serde(default)]
     pub config_files: usize,
+    /// Files rejected by declared version policy. Counted apart from gaps
+    /// because they are decisions, and apart from noise because the code is
+    /// valid in a version the language once had.
+    #[serde(default)]
+    pub version_files: usize,
     pub noise_files: usize,
     pub clusters: Vec<Cluster>,
+}
+
+/// Signatures a grammar declares it rejects on purpose, from
+/// `version_policy.json` (DESIGN.md §4.2). Absent file means no declarations,
+/// which is the normal case; a malformed one is an error, because silently
+/// treating it as empty would turn declared rejections back into gaps and
+/// send a fix agent chasing decisions.
+fn load_version_policy(grammar_dir: &Path) -> anyhow::Result<std::collections::HashSet<String>> {
+    #[derive(Deserialize)]
+    struct Rejection {
+        signature: String,
+    }
+    #[derive(Deserialize)]
+    struct Policy {
+        #[serde(default)]
+        rejections: Vec<Rejection>,
+    }
+    let path = grammar_dir.join("version_policy.json");
+    if !path.exists() {
+        return Ok(Default::default());
+    }
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {}", path.display()))?;
+    let policy: Policy = serde_json::from_str(&text)
+        .with_context(|| format!("parse {}", path.display()))?;
+    Ok(policy.rejections.into_iter().map(|r| r.signature).collect())
 }
 
 /// First ERROR or MISSING node in document order.
@@ -327,6 +364,30 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         &missing[..missing.len().min(5)],
     );
 
+    // Declared version-policy rejections (DESIGN.md §4.2). TWO conditions,
+    // both required: the cluster signature is declared in
+    // `version_policy.json`, AND the CURRENT version's oracle rejects the
+    // file. The second is what keeps a declaration from becoming a
+    // self-granted exemption — a policy entry can never suppress a failure on
+    // code that is still valid today, so a real gap cannot hide behind one.
+    let declared_versions = load_version_policy(grammar_dir)?;
+    let version_only: std::collections::HashSet<String> = if declared_versions.is_empty() {
+        Default::default()
+    } else {
+        // Only the files the UNION oracle called valid can be version-only;
+        // the rest are noise and already classified.
+        let valid_failing: Vec<String> = failing_paths
+            .iter()
+            .filter(|p| validity.get(*p).copied().unwrap_or(false))
+            .cloned()
+            .collect();
+        let current = treebank_oracle::get(lang).validate_current(&corpus_src, &valid_failing)?;
+        valid_failing
+            .into_iter()
+            .filter(|p| current.get(p).copied() == Some(false))
+            .collect()
+    };
+
     // A grammar sees every #if branch at once; a compiler sees only the live
     // ones. Where removing the branches a compiler would have dropped makes a
     // file parse cleanly, the rejection is a property of the preprocessor and
@@ -479,13 +540,19 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
     let mut clusters: Vec<Cluster> = by_sig
         .into_iter()
         .map(|(signature, fs)| {
-            let (config_paths, valid_paths): (Vec<String>, Vec<String>) = fs
+            let (config_paths, rest): (Vec<String>, Vec<String>) = fs
                 .iter()
                 .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
                 .map(|f| f.path.clone())
                 .partition(|p| config_inherent.contains(p));
+            let declared = declared_versions.contains(&signature);
+            let (version_paths, valid_paths): (Vec<String>, Vec<String>) = rest
+                .into_iter()
+                .partition(|p| declared && version_only.contains(p));
             let verdict = if !valid_paths.is_empty() {
                 "gap"
+            } else if !version_paths.is_empty() {
+                "version"
             } else if !config_paths.is_empty() {
                 "config"
             } else {
@@ -519,6 +586,7 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
                 config_paths,
                 macro_paths,
                 macros,
+                version_paths,
                 paths: fs.iter().map(|f| f.path.clone()).collect(),
             }
         })
@@ -527,7 +595,26 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
 
     let gap_files: usize = clusters.iter().map(|c| c.valid).sum();
     let config_files: usize = clusters.iter().map(|c| c.config_paths.len()).sum();
-    let noise_files = failures.len() - gap_files - config_files;
+    let version_files: usize = clusters.iter().map(|c| c.version_paths.len()).sum();
+    let noise_files = failures.len() - gap_files - config_files - version_files;
+
+    // A declared rejection that matches nothing is stale: either the corpus
+    // no longer contains it or the signature drifted when the grammar
+    // changed. Loud, because a policy file that quietly stops describing
+    // reality is worse than no policy file.
+    let matched: std::collections::HashSet<&str> = clusters
+        .iter()
+        .filter(|c| !c.version_paths.is_empty())
+        .map(|c| c.signature.as_str())
+        .collect();
+    for sig in &declared_versions {
+        if !matched.contains(sig.as_str()) {
+            eprintln!(
+                "sweep: WARNING version_policy.json declares `{sig}` rejected, but no \
+                 failing file matches it. Stale entry, or the signature drifted."
+            );
+        }
+    }
     let report = Report {
         lang: lang.to_string(),
         grammar: grammar_dir.display().to_string(),
@@ -536,6 +623,7 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         failed: failures.len(),
         gap_files,
         config_files,
+        version_files,
         noise_files,
         clusters,
     };
@@ -546,12 +634,13 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
 
     println!(
         "sweep: {} files — {} passed, {} failed ({} grammar-gap, {} config-inherent, \
-         {} noise), {} clusters",
+         {} version-policy, {} noise), {} clusters",
         report.files,
         report.passed,
         report.failed,
         report.gap_files,
         report.config_files,
+        report.version_files,
         report.noise_files,
         report.clusters.len()
     );
@@ -586,13 +675,25 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         report.gap_files,
         report.lang,
         report.noise_files,
-        if report.config_files > 0 {
-            format!(
-                ", and {} are valid but **cannot be represented as written** \
-                 because a preprocessor conditional splits a construct — see \
-                 the note at the end; do not try to fix those",
-                report.config_files
-            )
+        if report.config_files > 0 || report.version_files > 0 {
+            let mut extra = String::new();
+            if report.config_files > 0 {
+                extra.push_str(&format!(
+                    ", and {} are valid but **cannot be represented as written** \
+                     because a preprocessor conditional splits a construct — see \
+                     the note at the end; do not try to fix those",
+                    report.config_files
+                ));
+            }
+            if report.version_files > 0 {
+                extra.push_str(&format!(
+                    ", and {} are valid only in an OLDER version of the language \
+                     and are rejected **on purpose** — see `version_policy.json`; \
+                     those are decisions, not bugs, do not try to fix them",
+                    report.version_files
+                ));
+            }
+            extra
         } else {
             String::new()
         },
@@ -629,10 +730,43 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         }
     };
 
+    let mut versions: Vec<&Cluster> =
+        report.clusters.iter().filter(|c| c.verdict == "version").collect();
+    versions.sort_by_key(|c| std::cmp::Reverse(c.version_paths.len()));
+    let version_note = |md: &mut String| {
+        if versions.is_empty() {
+            return;
+        }
+        let _ = write!(
+            md,
+            "\n## Not grammar bugs: {} file(s) rejected by version policy\n\n\
+             These are valid in an OLDER version of {} and the grammar rejects \
+             them **on purpose**. Do not try to fix them.\n\n\
+             Where a construct is valid only in an older version AND admitting \
+             it would change how CURRENT code parses, the current language wins \
+             (DESIGN.md §4.2). In a GLR grammar an admitted old form is not a \
+             quiet extra reading — it is a fork at every occurrence of the \
+             token, and forks can win. Each construct below is declared in \
+             `version_policy.json` with its reasoning, and has a file in \
+             `test/negative/` so the rejection is a gate rather than a note.\n\n\
+             Both conditions are required to land here: the signature is \
+             declared, AND the CURRENT version's oracle also rejects the file. \
+             A declaration alone cannot suppress a failure on code that is \
+             still valid today.\n\n\
+             Clusters, largest first:\n\n",
+            report.version_files,
+            report.lang,
+        );
+        for c in &versions {
+            let _ = write!(md, "- `{}` — {} file(s)\n", c.signature, c.version_paths.len());
+        }
+    };
+
     let gaps: Vec<&Cluster> = report.clusters.iter().filter(|c| c.verdict == "gap").collect();
     if gaps.is_empty() {
         md.push_str("No grammar gaps — nothing to fix.\n");
         config_note(&mut md);
+        version_note(&mut md);
         return md;
     }
     md.push_str("## Grammar gaps, largest first\n");
@@ -684,6 +818,7 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         passed = report.passed,
     );
     config_note(&mut md);
+    version_note(&mut md);
     md
 }
 
