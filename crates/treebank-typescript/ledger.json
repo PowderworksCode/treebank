@@ -22,11 +22,11 @@
     "source": "top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)",
     "typescript_sweep": {
       "files": 11988,
-      "passed": 11969,
-      "failed": 19,
-      "gap_files": 13,
+      "passed": 11975,
+      "failed": 13,
+      "gap_files": 7,
       "noise_files": 6,
-      "pass_rate": "99.84%"
+      "pass_rate": "99.89%"
     },
     "javascript_sweep": {
       "files": 25297,
@@ -42,12 +42,14 @@
   },
   "known_gaps": [
     {
-      "construct": "`): asserts this is X<t.Y>` — generic type arguments on an asserts-predicate return",
-      "files": 3
+      "construct": "a parameter NAMED `never`/`unknown`/`symbol` inside a bare function type, e.g. `(symbol: ts.Symbol) => boolean`",
+      "files": 3,
+      "note": "TypeScript reserves none of the three, so this is valid. Giving them an identifier reading fixes it and breaks `expectTypeOf<t1>().toEqualTypeOf<unknown>()` far worse: the identifier reading creates a competing generic-arrow fork that wins and the type-argument reading dies. Measured 10 -> 23 gap files. Held as a gap deliberately."
     },
     {
-      "construct": "parenthesized function types as declared const/property types in .d.ts",
-      "files": 3
+      "construct": "ambient `declare class C { clear(): void\\n [Symbol.iterator]: ... }` — a bodyless method followed by an index signature",
+      "files": 2,
+      "note": "`class_body` separates members by nothing, because an ordinary method ends in `}`. An ambient method ends in a TYPE, so `void` and the next `[` merge into one indexed_access_type. Adding `optional($._type_member_end)` to `class_body` generates cleanly but the token is never offered in that state, with or without the scanner's ASI guard. Both files are undici-types."
     },
     {
       "construct": "legacy `<T>x` angle-bracket casts",
@@ -55,8 +57,8 @@
       "note": "the dialect-split construct; one file in 11,988. Accepted as a gap by design — see dialect_decision."
     },
     {
-      "construct": "assorted single-file .d.ts and minified-bundle edges",
-      "files": 6
+      "construct": "a generic arrow whose type parameter carries an `extends` constraint at the head of a call argument",
+      "files": 1
     }
   ],
   "deviations": [
@@ -83,6 +85,24 @@
     },
     {
       "what": "`string` is a `_literal` here and is NOT one in python, and that asymmetry is correct rather than a drift: typescript's string is a single token that cannot interpolate, so it satisfies the vocabulary's per-rule test ('determined by its own text, for EVERY instance of the rule'), while python's `string` rule carries f-strings and so cannot. It was excluded here by oversight until vocabulary 0.3.0 measured it. The `_string` facet exists because of exactly this: `(_literal)` is not comparable across languages for strings, and `(_string)` is."
+    },
+    {
+      "construct": "`x as A & B` / `x as A | B`",
+      "was": "`union_type` and `intersection_type` sat at prec 2 and 3, below PREC.cast (15), so the parser reduced `as_expression` at the operator and read the rest as a bitwise-and/or over an object literal. `x as A & B` produced `(x as A) & B`.",
+      "now": "both operators sit above `cast` (`&` still tighter than `|`), giving `as_expression(intersection_type(A, B))`.",
+      "note": "SILENT: the wrong tree is well-formed, so the sweep never flagged it. Only `x as A & { c?: B }` errored, because `?` is illegal in an object literal. Found by chasing that one file."
+    },
+    {
+      "construct": "`a(): asserts this is X` inside an object type",
+      "was": "`asserts` was reachable as a bare type name, so the member looked complete after it and `_type_member_end` was valid there. The external scanner is not forked by GLR, so it cut the member and the predicate reading died before the parser saw it — shredding into four bogus property_signatures.",
+      "now": "`asserts` and `is` reach identifier position only, via `_value_word`; `predicate_type` now requires `asserts` or `is` rather than deriving a bare name.",
+      "note": "SILENT for the same reason: four property_signatures is well-formed. Only the generic form `asserts this is X<Y>` errored."
+    },
+    {
+      "construct": "a comment between two object-type members",
+      "was": "the scanner skipped whitespace and then judged by the next character; a comment starts with `/`, which is in both continuation sets, so the boundary was suppressed and `void /*c*/ [Symbol.iterator]` became one indexed_access_type.",
+      "now": "`skip_trivia` skips line and block comments too, and counts a line terminator inside a block comment as crossed.",
+      "note": "no corpus file exercises the interface form; committed as a correctness fix, not a number."
     }
   ],
   "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses)."
