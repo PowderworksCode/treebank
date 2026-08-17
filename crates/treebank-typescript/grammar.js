@@ -1265,11 +1265,24 @@ module.exports = grammar({
       field('type_arguments', $.type_arguments),
     )),
 
-    nested_type_identifier: $ => seq(
+    // The type after `as` is greedy, and `.` was breaking it:
+    // `x as React.ReactElement` came out as `(x as React).ReactElement`, a
+    // member access on a cast. Both readings are well-formed, so nothing
+    // errored; 73 corpus files carried it, and the shape check found them by
+    // noticing tsc had a TypeReference spanning `React.ReactElement` where
+    // we had none.
+    //
+    // DYNAMIC precedence, not static. `[member_expression,
+    // nested_type_identifier]` is a declared conflict, and a declared
+    // conflict is resolved by GLR at parse time -- static `prec` is not
+    // consulted for it, which a first attempt at `prec(PREC.member + 1)`
+    // demonstrated by changing nothing at all. Only the type reading
+    // contains this node, so +1 is enough to decide it.
+    nested_type_identifier: $ => prec.dynamic(1, seq(
       field('module', choice($._name, $.nested_identifier)),
       '.',
       field('name', alias($.identifier, $.type_identifier)),
-    ),
+    )),
 
     // These sit ABOVE `PREC.cast` deliberately. `x as A & B` is
     // `x as (A & B)` in TypeScript, not `(x as A) & B` -- the type after
