@@ -82,6 +82,29 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$.nested_identifier, $.import_type, $._name],
+    [$.nested_identifier, $._no_conditional_type, $._name],
+    [$.nested_identifier, $._type, $._name],
+    [$._expression, $.nested_type_identifier],
+    [$._no_conditional_type, $._name],
+    [$._type, $._no_conditional_type, $._name],
+    [$.rest_pattern, $.predicate_type],
+    [$._expression, $.rest_pattern, $.predicate_type],
+    [$._expression, $.tuple_type, $.predicate_type],
+    [$._expression, $._pattern, $.predicate_type],
+    [$._pattern, $.predicate_type],
+    [$.nested_identifier, $._type, $.nested_type_identifier, $._name],
+    [$.infer_type, $._soft_keyword],
+    [$.constructor_type, $._soft_keyword],
+    [$._jsx_name, $.type_parameter],
+    // `<T>(x) => x` is a generic arrow in .ts and a JSX element in .tsx.
+    // One parser must hold both readings until the source decides: GLR
+    // forks here, jsx_opening_element's negative dynamic precedence yields
+    // to the arrow whenever both complete, and a real JSX element wins
+    // because the arrow fork dies at the missing `=>`.
+    [$.type_parameters, $.jsx_opening_element],
+    [$.type_parameters, $.jsx_self_closing_element],
+    [$.arrow_function, $.jsx_element],
     [$._statement_expression, $._property_name, $.shorthand_property, $.shorthand_property_pattern],
     [$._statement_expression, $._property_name],
     [$._statement_expression, $.shorthand_property, $.shorthand_property_pattern],
@@ -571,7 +594,10 @@ module.exports = grammar({
     ))),
 
     class_heritage: $ => repeat1(choice(
-      seq('extends', $._expression, field('type_arguments', optional($.type_arguments))),
+      seq('extends', field('value', choice(
+        seq($._expression, field('type_arguments', optional($.type_arguments))),
+        $.generic_type,
+      ))),
       seq('implements', commaSep1($._type)),
     )),
 
@@ -824,6 +850,11 @@ module.exports = grammar({
         ['*', PREC.mul], ['/', PREC.mul], ['%', PREC.mul],
       ];
       return choice(
+        prec.left(PREC.relational, seq(
+          field('left', $.private_name),
+          field('operator', 'in'),
+          field('right', $._expression),
+        )),
         ...table.map(([op, p]) => prec.left(p, seq(
           field('left', $._expression),
           field('operator', op),
@@ -1028,7 +1059,12 @@ module.exports = grammar({
       $.jsx_namespace_name,
     ),
 
-    _jsx_name: $ => alias($._jsx_identifier, $.identifier),
+    // JSX names must not introduce a SECOND token matching a plain
+    // identifier: two tokens with the same regex are resolved by the lexer
+    // before the parser sees them, which is what made `<T>(x) => x` lex as
+    // JSX and never fork to the generic-arrow reading. Only dashed names
+    // (`data-foo`, which an identifier cannot spell) get their own token.
+    _jsx_name: $ => choice($.identifier, alias($._jsx_dashed_identifier, $.identifier)),
 
     jsx_namespace_name: $ => seq($._jsx_name, ':', $._jsx_name),
 
@@ -1045,7 +1081,7 @@ module.exports = grammar({
     ),
 
     _jsx_attribute_name: $ => $._jsx_name,
-    _jsx_identifier: _ => /[_\p{XID_Start}][_\p{XID_Continue}-]*/,
+    _jsx_dashed_identifier: _ => /[_\p{XID_Start}][_\p{XID_Continue}]*(-[_\p{XID_Continue}]+)+/,
 
     _jsx_child: $ => choice(
       $.jsx_text,
@@ -1137,6 +1173,8 @@ module.exports = grammar({
     // ── types ────────────────────────────────────────────────────────
     _type: $ => choice(
       alias($.identifier, $.type_identifier),
+      alias($._soft_keyword, $.type_identifier),
+      $.predefined_type,
       $.generic_type,
       $.nested_type_identifier,
       $.union_type,
@@ -1159,7 +1197,6 @@ module.exports = grammar({
       $.infer_type,
       $.this_type,
       $.rest_type,
-      $.optional_type,
     ),
 
     generic_type: $ => prec(1, seq(
@@ -1168,7 +1205,7 @@ module.exports = grammar({
     )),
 
     nested_type_identifier: $ => seq(
-      field('module', choice($.identifier, $.nested_identifier)),
+      field('module', choice($._name, $.nested_identifier)),
       '.',
       field('name', alias($.identifier, $.type_identifier)),
     ),
@@ -1246,8 +1283,9 @@ module.exports = grammar({
       '[',
       optional(seq(commaSep1(choice(
         $._type,
-        seq(field('label', $.identifier), optional('?'), ':', $._type),
-        seq('...', field('label', $.identifier), ':', $._type),
+        $.optional_type,
+        seq(field('label', $._name), optional('?'), ':', $._type),
+        seq('...', field('label', $._name), ':', $._type),
       )), optional(','))),
       ']',
     ),
@@ -1269,6 +1307,7 @@ module.exports = grammar({
 
     _no_conditional_type: $ => choice(
       alias($.identifier, $.type_identifier),
+      $.predefined_type,
       $.generic_type,
       $.nested_type_identifier,
       $.object_type,
@@ -1289,7 +1328,7 @@ module.exports = grammar({
       optional(choice('+', '-')),
       optional($.readonly_modifier),
       '[',
-      alias($.identifier, $.type_identifier),
+      alias(choice($.identifier, $._soft_keyword), $.type_identifier),
       'in',
       field('keys', $._type),
       optional(seq('as', field('alias', $._type))),
@@ -1341,11 +1380,13 @@ module.exports = grammar({
 
     predicate_type: $ => prec.right(seq(
       optional('asserts'),
-      choice($.identifier, $.this),
+      choice($._name, $.this),
       optional(seq('is', $._type)),
     )),
 
     import_type: $ => seq('import', '(', $.string, ')', optional(seq('.', choice(alias($.identifier, $.type_identifier), $.nested_type_identifier))), field('type_arguments', optional($.type_arguments))),
+
+    predefined_type: _ => choice('void', 'never', 'unknown', 'symbol'),
 
     this_type: _ => 'this',
     rest_type: $ => prec(1, seq('...', $._type)),

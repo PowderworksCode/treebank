@@ -16,24 +16,25 @@
       "tool": "tools/py-oracle/check2.py under python2 (stdin batch, compile(src, path, 'exec'); the script is written in the py2/py3 common subset)",
       "version": "CPython 2.7.18, built from source (Ubuntu 24.04 ships no python2 package)",
       "role": "REQUIRED second leg of the union: every file python3 rejects is re-judged, and a file is valid if either accepts. The driver errors loudly if python2 is missing — a py3-only sweep books every py2-only file as noise, which silently hides the py2 half's gaps. Adding this leg surfaced 4 real gap files the py3-only sweep had mis-filed as noise.",
-      "battery": "test/negative-oracle/py3/ (print statement, backticks, 0777, except-comma) verified live: python3 rejects all four, python2 accepts all four. test/negative-oracle/py2/ (f-string, nonlocal, walrus) verified live in the reverse direction. The battery caught its own bad fixture on first run: bare `nonlocal x` with no enclosing binding is a SyntaxError in py3 as well, so the fixture gained the enclosing function it needed."
+      "battery": "test/negative-oracle/py3/ (print statement, backticks, 0777, except-comma) verified live: python3 rejects all four, python2 accepts all four. test/negative-oracle/py2/ (f-string, nonlocal, walrus) verified live in the reverse direction. The battery caught its own bad fixture on first run: bare `nonlocal x` with no enclosing binding is a SyntaxError in py3 as well, so the fixture gained the enclosing function it needed.",
+      "bug_found_by_widening": "The wider corpus crashed the py2 leg: a file with a NUL byte makes py2's compile() raise TypeError where py3 raises ValueError, and check2.py caught only the latter, so the oracle died instead of returning a verdict. A NUL in the source is a VERDICT (the bytes were read fine, they are just not python), not an oracle failure, so both are now caught. The loud-failure discipline worked exactly as designed — the sweep aborted rather than silently booking every python2 file as noise."
     }
   ],
   "corpus": {
-    "source": "top-300 PyPI packages by download rank (hugovk top-pypi-packages, fetched 2026-08-16), sdists only",
-    "files": 46466,
-    "packages": 300,
+    "source": "top-1000 PyPI packages by download rank (hugovk top-pypi-packages), sdists only; 951 of 1000 publish one",
+    "files": 139205,
+    "packages": 951,
     "blind_to": "python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension",
     "sweep": {
-      "files": 46466,
-      "passed": 46112,
-      "failed": 354,
-      "gap_files": 13,
-      "noise_files": 341,
-      "pass_rate": "99.24%",
+      "files": 139205,
+      "passed": 138256,
+      "failed": 949,
+      "gap_files": 29,
+      "noise_files": 920,
+      "pass_rate": "99.32%",
       "oracle_note": "adjudicated by the two-leg union oracle (CPython 3.12.3 + 2.7.18).",
       "noise_note": "noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note",
-      "note": "gap_files fell 24 -> 13 with the PEP 634 pattern sub-grammar; the whole as-pattern family is closed and CPython's own test_patma suite (vendored by cython) parses clean."
+      "note": "widened from the top-300 (46,466 files). Gap COUNT rose 13 -> 29 while the gap RATE fell 0.028% -> 0.021%; every family was already ledgered, and 24 of the 29 are ruff's parser test fixtures."
     },
     "mutation_falsification": "the same corpus swept against the grammar with while_statement deleted from _loop reports 3,661 gap files (vs 13); with star_pattern deleted from the match sequence rule it reports 17. The pipeline can say non-zero for both old and new rules, so 13 is a measurement."
   },

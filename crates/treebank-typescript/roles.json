@@ -55,91 +55,55 @@
   },
   "uncategorised": [
     {
-      "node": "comment",
-      "reason": "an extra; carries no syntactic role"
-    },
-    {
-      "node": "hash_bang_line",
-      "reason": "the #! line; a directive to the OS, not the language"
-    },
-    {
       "node": "arguments",
       "reason": "container node; its elements carry the role (_argument)"
     },
     {
-      "node": "parameters",
-      "reason": "container node; its elements carry the role (_parameter)"
+      "node": "call_signature",
+      "reason": "type-system machinery below the role layer (object_type member)"
     },
     {
       "node": "class_body",
       "reason": "container node; its elements carry the role (_member)"
     },
     {
-      "node": "switch_body",
-      "reason": "container node; its elements carry the role (case/default clauses)"
-    },
-    {
-      "node": "enum_body",
-      "reason": "container node; its elements carry the role (enum_member, a _binding facet member)"
-    },
-    {
       "node": "class_heritage",
       "reason": "the extends/implements tail of a class definition"
     },
     {
-      "node": "pair",
-      "reason": "key: value inside an object; the value carries _expression"
-    },
-    {
-      "node": "shorthand_property",
-      "reason": "shorthand member of an object literal"
-    },
-    {
-      "node": "sequence_expression",
-      "reason": "comma-joined expressions; each operand carries _expression \u2014 the sequence itself is deliberately outside so `(_expression)` does not double-count"
+      "node": "comment",
+      "reason": "an extra; carries no syntactic role"
     },
     {
       "node": "computed_property_name",
       "reason": "the [expr] form of a property name; its child carries _expression"
     },
     {
-      "node": "private_name",
-      "reason": "a #field name; a candidate _name member the vocabulary has not admitted"
+      "node": "construct_signature",
+      "reason": "type-system machinery below the role layer (object_type member)"
     },
     {
-      "node": "nested_identifier",
-      "reason": "dotted namespace path (a.b.c) in name positions; same candidate-_name status as rust paths and python dotted_name"
-    },
-    {
-      "node": "named_imports",
-      "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
-    },
-    {
-      "node": "export_specifier",
-      "reason": "one exported name inside an export clause"
-    },
-    {
-      "node": "import_attribute",
-      "reason": "the `with {...}` assertion tail of an import"
-    },
-    {
-      "node": "rest_pattern",
-      "reason": "the ...rest element inside destructuring; its child binds"
-    },
-    {
-      "node": "string_content",
-      "reason": "lexical component of a template string"
+      "node": "enum_body",
+      "reason": "container node; its elements carry the role (enum_member, a _binding facet member)"
     },
     {
       "node": "escape_sequence",
       "reason": "lexical component of a string or template"
     },
     {
-      "node": "template_substitution",
-      "reason": "the ${\u2026} of a template; its child carries _expression"
+      "node": "export_specifier",
+      "reason": "one exported name inside an export clause"
     },
     {
-      "node": "jsx_opening_element",
+      "node": "hash_bang_line",
+      "reason": "the #! line; a directive to the OS, not the language"
+    },
+    {
+      "node": "import_attribute",
+      "reason": "the `with {...}` assertion tail of an import"
+    },
+    {
+      "node": "jsx_attribute",
       "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
     },
     {
@@ -147,15 +111,15 @@
       "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
     },
     {
-      "node": "jsx_attribute",
-      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
-    },
-    {
       "node": "jsx_expression",
-      "reason": "the {\u2026} container inside JSX; its child carries _expression"
+      "reason": "the {…} container inside JSX; its child carries _expression"
     },
     {
       "node": "jsx_namespace_name",
+      "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
+    },
+    {
+      "node": "jsx_opening_element",
       "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
     },
     {
@@ -163,24 +127,64 @@
       "reason": "JSX syntax below the role layer; the jsx_element/jsx_self_closing_element/jsx_fragment nodes carry _expression"
     },
     {
-      "node": "type_parameters",
-      "reason": "type-system machinery below the role layer"
+      "node": "named_imports",
+      "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
     },
     {
-      "node": "type_arguments",
-      "reason": "type-system machinery below the role layer"
+      "node": "nested_identifier",
+      "reason": "dotted namespace path (a.b.c) in name positions; same candidate-_name status as rust paths and python dotted_name"
+    },
+    {
+      "node": "optional_type",
+      "reason": "the T? form of a tuple ELEMENT; TS allows it only there, and keeping it out of the type tier is what stops  forking into a type-argument reading"
+    },
+    {
+      "node": "pair",
+      "reason": "key: value inside an object; the value carries _expression"
+    },
+    {
+      "node": "parameters",
+      "reason": "container node; its elements carry the role (_parameter)"
+    },
+    {
+      "node": "private_name",
+      "reason": "a #field name; a candidate _name member the vocabulary has not admitted"
     },
     {
       "node": "property_signature",
       "reason": "type-system machinery below the role layer (object_type member)"
     },
     {
-      "node": "call_signature",
-      "reason": "type-system machinery below the role layer (object_type member)"
+      "node": "rest_pattern",
+      "reason": "the ...rest element inside destructuring; its child binds"
     },
     {
-      "node": "construct_signature",
-      "reason": "type-system machinery below the role layer (object_type member)"
+      "node": "sequence_expression",
+      "reason": "comma-joined expressions; each operand carries _expression — the sequence itself is deliberately outside so `(_expression)` does not double-count"
+    },
+    {
+      "node": "shorthand_property",
+      "reason": "shorthand member of an object literal"
+    },
+    {
+      "node": "string_content",
+      "reason": "lexical component of a template string"
+    },
+    {
+      "node": "switch_body",
+      "reason": "container node; its elements carry the role (case/default clauses)"
+    },
+    {
+      "node": "template_substitution",
+      "reason": "the ${…} of a template; its child carries _expression"
+    },
+    {
+      "node": "type_arguments",
+      "reason": "type-system machinery below the role layer"
+    },
+    {
+      "node": "type_parameters",
+      "reason": "type-system machinery below the role layer"
     }
   ]
 }
