@@ -87,9 +87,11 @@ module.exports = grammar({
     '_access',
     '_attribute',
     '_modifier',
+    '_interpolation',
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$.import_type, $._literal],
     [$.nested_identifier, $.import_type, $._name],
     [$.nested_identifier, $._no_conditional_type, $._name],
     [$.nested_identifier, $._type, $._name],
@@ -314,7 +316,6 @@ module.exports = grammar({
       $._access,
       $._assignment,
       $._literal,
-      $.string,
       $.template_string,
       $._name,
       $.array,
@@ -792,7 +793,6 @@ module.exports = grammar({
       $._access,
       $._assignment,
       $._literal,
-      $.string,
       $.template_string,
       $._name,
       $.object,
@@ -1114,12 +1114,14 @@ module.exports = grammar({
         alias($._template_chars, $.string_content),
         alias(token.immediate('$'), $.string_content),
         $.escape_sequence,
-        $.template_substitution,
+        $._interpolation,
       )),
       '`',
     ),
 
     _template_chars: _ => token.immediate(prec(1, /[^`$\\]+/)),
+
+    _interpolation: $ => choice($.template_substitution),
 
     template_substitution: $ => seq(
       token.immediate('${'),
@@ -1444,6 +1446,7 @@ module.exports = grammar({
     identifier: _ => /[_$\p{XID_Start}][_$\p{XID_Continue}]*/,
 
     _literal: $ => choice(
+      $.string,
       $.number,
       $.true,
       $.false,
@@ -1476,6 +1479,7 @@ module.exports = grammar({
     false: _ => 'false',
     null: _ => 'null',
     undefined: _ => 'undefined',
+
 
     comment: _ => token(choice(
       seq('//', /[^\r\n]*/),

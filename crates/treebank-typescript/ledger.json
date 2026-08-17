@@ -3,7 +3,7 @@
   "versions": "the TypeScript ∪ JavaScript ∪ JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
   "dialect_decision": "One parser for TS + JS + JSX. The DESIGN.md §4.2 dialect split existed for the `<T>` ambiguity, and this ledger previously justified skipping it by measuring angle-bracket CASTS at zero incidence in the top-300. That measurement was right and the conclusion was wrong: the top-1000 corpus has 11+ files of GENERIC ARROW FUNCTIONS (`const f = <T extends X>(x: T) => x`, in zod and rxjs), which hit the same ambiguity and are ordinary modern style. They now parse in the single grammar. The fix was not precedence but a token collision: `_jsx_identifier` and `identifier` matched the same text, so the LEXER chose JSX before the parser could fork — the same trap the rust ledger records for identifier/type_identifier. With plain JSX names lexing as the ordinary identifier and only dashed names getting their own token, GLR forks and jsx_opening_element's negative dynamic precedence yields to the arrow whenever both complete. Casts remain a ledgered gap at 0 measured files.",
   "generate_cli": "0.26.12",
-  "vocabulary": "0.2.0",
+  "vocabulary": "0.3.0",
   "oracles": [
     {
       "family": "typescript",
@@ -80,6 +80,9 @@
     },
     {
       "what": "object-type members are separated by a scanner token (_type_member_end) as well as , and ;. It carries ASI's continuation set with exactly one token flipped: `[` CONTINUES an expression (`foo` newline `[0]` is a subscript) and BEGINS a type member (an index signature). That single difference is why it is a separate token rather than reusing ASI, and it is what finally closed the 5-file .d.ts family — a precedence attempt had regressed 20 files, and a first version of this token with NO continuation set regressed to 100 by severing every multi-line member type."
+    },
+    {
+      "what": "`string` is a `_literal` here and is NOT one in python, and that asymmetry is correct rather than a drift: typescript's string is a single token that cannot interpolate, so it satisfies the vocabulary's per-rule test ('determined by its own text, for EVERY instance of the rule'), while python's `string` rule carries f-strings and so cannot. It was excluded here by oversight until vocabulary 0.3.0 measured it. The `_string` facet exists because of exactly this: `(_literal)` is not comparable across languages for strings, and `(_string)` is."
     }
   ],
   "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses)."

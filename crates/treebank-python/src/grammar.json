@@ -5741,7 +5741,7 @@
               },
               {
                 "type": "SYMBOL",
-                "name": "interpolation"
+                "name": "_interpolation"
               }
             ]
           }
@@ -5787,6 +5787,15 @@
           ]
         }
       }
+    },
+    "_interpolation": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "interpolation"
+        }
+      ]
     },
     "interpolation": {
       "type": "SEQ",
@@ -5898,7 +5907,7 @@
               },
               {
                 "type": "SYMBOL",
-                "name": "interpolation"
+                "name": "_interpolation"
               }
             ]
           }
@@ -6239,7 +6248,8 @@
     "_assignment",
     "_invocation",
     "_access",
-    "_attribute"
+    "_attribute",
+    "_interpolation"
   ],
   "reserved": {}
 }
