@@ -58,9 +58,8 @@ must mean the same thing over a `.py`, a `.rs`, and a `.ts` file.
 
 Tree-sitter's `supertypes` mechanism looks like it could carry any vocabulary
 you like. It cannot, and the vocabulary's structure is dictated by four facts,
-all measured on tree-sitter-cli 0.25.10 (the version treebank pins; 0.26.x
-ships Unicode identifier tables that wrongly drop some XID_Start characters,
-and stays banned until that is fixed):
+all measured on tree-sitter-cli 0.26.12, the version treebank pins (§7), and
+re-confirmed on it after the pin moved there from 0.25.10:
 
 1. **An unused supertype rule is silently pruned.** A rule listed in
    `supertypes:` but referenced by no production survives into `grammar.json`,
@@ -317,7 +316,7 @@ what every version rejects, and carries the shared vocabulary in full.* Four
 checks, run per grammar by `verify.sh` locally and in CI:
 
 **I1 — Reproducible generation.** `grammar.js` + `scanner.c` +
-tree-sitter-cli 0.25.10 reproduce the committed `src/` byte for byte. What
+tree-sitter-cli 0.26.12 reproduce the committed `src/` byte for byte. What
 is published is exactly what the source generates.
 
 **I2 — Corpus sweep, oracle-adjudicated.** Parse the full corpus; every
@@ -415,10 +414,20 @@ test/rosetta/                 # parallel programs + expected-roles files
    where syntax genuinely differs.
 5. **Underscore spelling for every vocabulary term;** concrete nodes never
    start with an underscore.
-6. **tree-sitter-cli pinned at 0.25.10**; bumping the pin is treated like a
+6. **tree-sitter-cli pinned at 0.26.12**, matching the `tree-sitter`
+   runtime library consumers link, so the version that generates and the
+   version that runs are the same. Bumping the pin is treated like a
    grammar change — full sweep, before/after numbers, ledger entry —
    because regenerating with a different CLI can silently change what the
-   grammar accepts.
+   grammar accepts. The pin sat at 0.25.10 while 0.26.x shipped Unicode
+   identifier tables that wrongly dropped XID_Start characters; 0.26.12
+   was re-measured against that (15 XID_Start probe characters, identical
+   behaviour) and against all four corpora — 80,391 files, byte-identical
+   verdicts — before the bump.
+
+   That skew was not free while it lasted: a *query* valid under 0.25
+   could be an impossible pattern under 0.26, which is how the
+   supertype-field rule in `treebank-rust/ledger.json` came to light.
 
 ## 8. Order of work
 

@@ -8,7 +8,9 @@ on:
 env:
   # DESIGN.md §7: regenerating with a different CLI silently changes what
   # the grammar accepts, so the pin is load-bearing rather than hygiene.
-  TREE_SITTER_VERSION: "0.25.10"
+  # It matches the tree-sitter runtime library consumers link, so a query
+  # that validates here cannot be an impossible pattern there.
+  TREE_SITTER_VERSION: "0.26.12"
 
 jobs:
   workspace:
