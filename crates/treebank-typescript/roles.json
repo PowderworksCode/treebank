@@ -140,6 +140,10 @@
       "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
     },
     {
+      "node": "named_tuple_member",
+      "reason": "the `label: T` form of a tuple ELEMENT, alongside optional_type; type-system machinery below the role layer"
+    },
+    {
       "node": "optional_type",
       "reason": "the T? form of a tuple ELEMENT; TS allows it only there, and keeping it out of the type tier is what stops  forking into a type-argument reading"
     },

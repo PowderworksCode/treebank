@@ -91,6 +91,7 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._expression, $.named_tuple_member],
     [$.import_type, $._literal],
     [$.nested_identifier, $.import_type, $._name],
     [$.nested_identifier, $._no_conditional_type, $._name],
@@ -1438,10 +1439,20 @@ module.exports = grammar({
       optional(seq(commaSep1(choice(
         $._type,
         $.optional_type,
-        seq(field('label', $._name), optional('?'), ':', $._type),
-        seq('...', field('label', $._name), ':', $._type),
+        $.named_tuple_member,
       )), optional(','))),
       ']',
+    ),
+
+    // `[opts?: X, ...rest: Y[]]` -- a LABELLED tuple element. The label and
+    // the type it labels were loose children of `tuple_type` with no node
+    // spanning the pair, so nothing in the tree said which type each label
+    // belonged to. 92 files, 640 occurrences. tsc calls it a
+    // NamedTupleMember and puts the `...` inside, so the rest form is one
+    // node too.
+    named_tuple_member: $ => choice(
+      seq(field('label', $._name), optional('?'), ':', field('type', $._type)),
+      seq('...', field('label', $._name), ':', field('type', $._type)),
     ),
 
     conditional_type: $ => prec.right(1, seq(

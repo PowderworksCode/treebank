@@ -3288,6 +3288,32 @@
     }
   },
   {
+    "type": "named_tuple_member",
+    "named": true,
+    "fields": {
+      "label": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_type",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "namespace_definition",
     "named": true,
     "fields": {
@@ -4404,24 +4430,17 @@
   {
     "type": "tuple_type",
     "named": true,
-    "fields": {
-      "label": {
-        "multiple": true,
-        "required": false,
-        "types": [
-          {
-            "type": "_name",
-            "named": true
-          }
-        ]
-      }
-    },
+    "fields": {},
     "children": {
       "multiple": true,
       "required": false,
       "types": [
         {
           "type": "_type",
+          "named": true
+        },
+        {
+          "type": "named_tuple_member",
           "named": true
         },
         {
