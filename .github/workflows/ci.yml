@@ -76,6 +76,22 @@ jobs:
       - name: vocabulary conformance
         run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
 
+      # Sweeps and the negative corpus both judge accept/reject. This judges
+      # the TREE: every node boundary the reference parser reports must
+      # exist in ours. It is the only check here that can see a file parse
+      # cleanly and wrongly, and every fixture under test/shape/ is a
+      # mis-parse that was found on the corpus and fixed. Ceiling is zero.
+      #
+      # The full corpus run is `treebank shape --lang typescript` locally;
+      # CI has no corpus, so it guards the fixtures.
+      - name: shape (tree agrees with the reference parser)
+        if: matrix.grammar == 'typescript'
+        run: ./target/debug/treebank shape
+          --lang typescript
+          --grammar crates/treebank-typescript
+          --dir crates/treebank-typescript/test/shape
+          --out /tmp/shape-fixture.json
+
   rosetta:
     name: gates (cross-language rosetta)
     runs-on: ubuntu-latest

@@ -25,6 +25,35 @@ pub fn run_node(
     srcroot: &Path,
     paths: &[String],
 ) -> Result<HashMap<String, bool>> {
+    let out = node_lines(tool, "check.mjs", node_args, srcroot, paths)?;
+    Ok(verdicts(&out, srcroot))
+}
+
+/// Run any script in a node oracle's tool directory and return its raw
+/// stdout lines. The verdict oracles answer in `path\tvalid` pairs; the
+/// span oracle answers in JSON, so the shared part stops at the lines.
+pub fn node_lines(
+    tool: &Path,
+    script_name: &str,
+    node_args: &[&str],
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<Vec<String>> {
+    ensure_node_modules(tool)?;
+    let script = tool.join(script_name);
+    let mut args: Vec<&str> = node_args.to_vec();
+    let script_str = script.to_string_lossy().into_owned();
+    args.push(&script_str);
+    run_lines(
+        "node",
+        &args,
+        &format!("spawn node {}", script.display()),
+        srcroot,
+        paths,
+    )
+}
+
+fn ensure_node_modules(tool: &Path) -> Result<()> {
     if !tool.join("node_modules").exists() {
         eprintln!("oracle: installing {} deps (npm ci)", tool.display());
         let ok = Command::new("npm")
@@ -35,17 +64,7 @@ pub fn run_node(
             .success();
         anyhow::ensure!(ok, "npm ci failed in {}", tool.display());
     }
-    let script = tool.join("check.mjs");
-    let mut args: Vec<&str> = node_args.to_vec();
-    let script_str = script.to_string_lossy().into_owned();
-    args.push(&script_str);
-    run(
-        "node",
-        &args,
-        &format!("spawn node {}", script.display()),
-        srcroot,
-        paths,
-    )
+    Ok(())
 }
 
 /// Run `program args...` as an oracle over `paths` (relative to `srcroot`),
@@ -59,6 +78,18 @@ pub fn run(
     srcroot: &Path,
     paths: &[String],
 ) -> Result<HashMap<String, bool>> {
+    let lines = run_lines(program, args, hint, srcroot, paths)?;
+    Ok(verdicts(&lines, srcroot))
+}
+
+/// As `run`, but returns the oracle's raw stdout lines.
+pub fn run_lines(
+    program: &str,
+    args: &[&str],
+    hint: &str,
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<Vec<String>> {
     let mut child = Command::new(program)
         .args(args)
         .stdin(Stdio::piped())
@@ -88,15 +119,26 @@ pub fn run(
     // have already reached the terminal; only the status is news here.
     anyhow::ensure!(output.status.success(), "{program} oracle exited with {}", output.status);
 
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(|l| l.to_string())
+        .collect())
+}
+
+/// Corpus-relative key for an absolute path the oracle echoed back.
+pub fn relativize(path: &str, srcroot: &Path) -> String {
+    Path::new(path)
+        .strip_prefix(srcroot)
+        .map(|r| r.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_string())
+}
+
+fn verdicts(lines: &[String], srcroot: &Path) -> HashMap<String, bool> {
     let mut map = HashMap::new();
-    for line in String::from_utf8_lossy(&output.stdout).lines() {
+    for line in lines {
         if let Some((path, verdict)) = line.rsplit_once('\t') {
-            let rel = Path::new(path)
-                .strip_prefix(srcroot)
-                .map(|r| r.to_string_lossy().into_owned())
-                .unwrap_or_else(|_| path.to_string());
-            map.insert(rel, verdict == "valid");
+            map.insert(relativize(path, srcroot), verdict == "valid");
         }
     }
-    Ok(map)
+    map
 }

@@ -148,6 +148,10 @@ module.exports = grammar({
     [$._reserved_property, $.enum_definition],
     [$.variable_declaration, $._reserved_property],
     [$.function_definition, $.property_signature, $.method_signature],
+    // `_method_head` is the shared prefix of a method DEFINITION and a
+    // method SIGNATURE; which one it is only becomes clear at the body or
+    // the terminator.
+    [$._method_head, $.method_signature],
     [$.property_signature, $.method_signature],
     [$.method_signature, $._soft_keyword],
     [$.import_alias, $.import_statement, $._soft_keyword],
@@ -490,13 +494,26 @@ module.exports = grammar({
       optional($.finally_clause),
     ),
 
-    catch_clause: $ => seq(
+    // `prec.dynamic(2)`, above `function_definition`'s 1. Its method form
+    // takes a name, parameters and a body with no `function` keyword, so at
+    // STATEMENT level `catch (e) { ... }` also derives a function named
+    // `catch` -- and the dynamic precedence made that reading win. The whole
+    // clause vanished from the tree: `try {} catch (e) {}` came out as a
+    // `try_statement` with no catch, followed by an unrelated
+    // `function_definition`. 66 corpus files, no error anywhere.
+    //
+    // The deeper fix is to stop the keyword-less method form being reachable
+    // at statement level at all -- it belongs to class bodies and object
+    // types. That is a larger refactor of `_declaration`, which class members
+    // route through on purpose; this raises the two clauses that actually
+    // collide, and the shape check now covers the rest of the class.
+    catch_clause: $ => prec.dynamic(2, seq(
       'catch',
       optional(seq('(', field('parameter', $._pattern), optional(seq(':', field('type', $._type))), ')')),
       field('body', $.block),
-    ),
+    )),
 
-    finally_clause: $ => seq('finally', field('body', $.block)),
+    finally_clause: $ => prec.dynamic(2, seq('finally', field('body', $.block))),
 
     // ── declarations ─────────────────────────────────────────────────
     _declaration: $ => choice(
@@ -527,26 +544,65 @@ module.exports = grammar({
     declare_modifier: _ => prec(1, 'declare'),
     accessor_modifier: _ => prec(1, 'accessor'),
 
-    function_definition: $ => prec.dynamic(1, prec.right(seq(
+    // Three alternatives, and the split is the point.
+    //
+    // The method form -- name, parameters, body, no `function` keyword -- is
+    // for class and object members. It is reachable at STATEMENT level too,
+    // because members route through `_declaration`, and there it collides
+    // with an ordinary call. With one blanket `prec.dynamic(1)` the
+    // declaration reading won, so `foo();` -- every zero-argument call
+    // statement in the language -- parsed as a bodyless function declaration
+    // named `foo` rather than a call. `foo(1, 2)` was fine, because number
+    // literals cannot be parameters; only the argument-less case collided,
+    // and it collided everywhere.
+    //
+    // Boundaries alone cannot catch this: `function_definition` and
+    // `expression_statement` span the same bytes and only the KINDS differ,
+    // so `treebank shape` is blind to it. It surfaced while reading a shape
+    // fixture's tree by eye.
+    //
+    // So the BODYLESS method form -- the one that is a real member signature
+    // in a class or interface and nothing at all at statement level -- gets
+    // a negative dynamic precedence and loses to the call. The other two
+    // keep theirs.
+    function_definition: $ => choice(
+      prec.dynamic(1, prec.right(seq(
+        repeat($._attribute),
+        repeat($._modifier),
+        optional('async'),
+        'function',
+        optional('*'),
+        optional(field('name', $._name)),
+        field('type_parameters', optional($.type_parameters)),
+        field('parameters', $.parameters),
+        optional(seq(':', field('return_type', $._type))),
+        choice(field('body', $._body), $._semicolon),
+      ))),
+      prec.dynamic(1, prec.right(seq(
+        $._method_head,
+        field('type_parameters', optional($.type_parameters)),
+        field('parameters', $.parameters),
+        optional(seq(':', field('return_type', $._type))),
+        field('body', $._body),
+      ))),
+      prec.dynamic(-1, prec.right(seq(
+        $._method_head,
+        field('type_parameters', optional($.type_parameters)),
+        field('parameters', $.parameters),
+        optional(seq(':', field('return_type', $._type))),
+        $._semicolon,
+      ))),
+    ),
+
+    _method_head: $ => seq(
       repeat($._attribute),
       repeat($._modifier),
       optional('async'),
-      choice(
-        seq('function', optional('*'), optional(field('name', $._name))),
-        // class/object methods: name first, no `function` keyword
-        seq(
-          optional('async'),
-          optional(choice('get', 'set')),
-          optional('*'),
-          field('name', $._property_name),
-          optional('?'),
-        ),
-      ),
-      field('type_parameters', optional($.type_parameters)),
-      field('parameters', $.parameters),
-      optional(seq(':', field('return_type', $._type))),
-      choice(field('body', $._body), $._semicolon),
-    ))),
+      optional(choice('get', 'set')),
+      optional('*'),
+      field('name', $._property_name),
+      optional('?'),
+    ),
 
     _property_name: $ => choice(
       $._name,
@@ -936,11 +992,62 @@ module.exports = grammar({
       )),
     ),
 
+    // `new` takes a MEMBER expression, never a CALL. JavaScript binds
+    // `new Date().getFullYear()` as `(new Date()).getFullYear()`, and with
+    // `$._expression` as the constructor we bound it as
+    // `new (Date().getFullYear())` -- a completely different program, in ~29
+    // corpus files, parsing without an error. The sweep cannot see this; the
+    // shape check found it, because tsc has a `NewExpression` spanning
+    // `new Date()` and we had no node with that span.
+    //
+    // Precedence cannot express it: `member` must still bind INTO the
+    // constructor (`new a.b.C()`) while `call` must not, and one number
+    // cannot say both. So the constructor gets its own tier -- the member
+    // chain over a primary expression, which is exactly the spec's
+    // MemberExpression.
     new_expression: $ => prec.right(PREC.new_no_args, seq(
       'new',
-      field('constructor', $._expression),
+      field('constructor', $._constructable),
       field('type_arguments', optional($.type_arguments)),
       field('arguments', optional($.arguments)),
+    )),
+
+    _constructable: $ => choice(
+      $._constructable_primary,
+      alias($._constructable_member, $.member_expression),
+      alias($._constructable_subscript, $.subscript_expression),
+    ),
+
+    // A `new` chain is itself constructable (`new new X()()`), and so is a
+    // parenthesised anything -- `new (f())()` is how you say the reading
+    // this rule otherwise forbids.
+    _constructable_primary: $ => choice(
+      $.new_expression,
+      $._name,
+      $.this,
+      $.super,
+      $.parenthesized_expression,
+      $.object,
+      $.array,
+      $.template_string,
+      $._literal,
+      $.function_expression,
+      $.class_definition,
+      $.import_meta,
+    ),
+
+    _constructable_member: $ => prec(PREC.member, seq(
+      field('object', $._constructable),
+      field('operator', choice('.', '?.')),
+      field('property', choice($._name, alias($._reserved_property, $.identifier), $.private_name)),
+    )),
+
+    _constructable_subscript: $ => prec(PREC.member, seq(
+      field('object', $._constructable),
+      optional('?.'),
+      '[',
+      field('subscript', $._expressions),
+      ']',
     )),
 
     arguments: $ => seq(
@@ -1214,11 +1321,24 @@ module.exports = grammar({
       field('type_arguments', $.type_arguments),
     )),
 
-    nested_type_identifier: $ => seq(
+    // The type after `as` is greedy, and `.` was breaking it:
+    // `x as React.ReactElement` came out as `(x as React).ReactElement`, a
+    // member access on a cast. Both readings are well-formed, so nothing
+    // errored; 73 corpus files carried it, and the shape check found them by
+    // noticing tsc had a TypeReference spanning `React.ReactElement` where
+    // we had none.
+    //
+    // DYNAMIC precedence, not static. `[member_expression,
+    // nested_type_identifier]` is a declared conflict, and a declared
+    // conflict is resolved by GLR at parse time -- static `prec` is not
+    // consulted for it, which a first attempt at `prec(PREC.member + 1)`
+    // demonstrated by changing nothing at all. Only the type reading
+    // contains this node, so +1 is enough to decide it.
+    nested_type_identifier: $ => prec.dynamic(1, seq(
       field('module', choice($._name, $.nested_identifier)),
       '.',
       field('name', alias($.identifier, $.type_identifier)),
-    ),
+    )),
 
     // These sit ABOVE `PREC.cast` deliberately. `x as A & B` is
     // `x as (A & B)` in TypeScript, not `(x as A) & B` -- the type after
@@ -1246,20 +1366,37 @@ module.exports = grammar({
       field('return_type', $._type),
     )),
 
+    // Members are SEPARATED, not merely juxtaposed. The separator used to be
+    // `optional` on every member, which made `{ a: X b: Y }` parse -- tsc
+    // rejects it -- and that hole was not only a widening. `readonly` is a
+    // soft keyword and so a legal property name, so with juxtaposition
+    // allowed, `readonly maxSize: number` had a second reading as TWO
+    // members (`readonly`, then `maxSize: number`), and in real .d.ts files
+    // that reading sometimes won. It parsed cleanly, so the sweep never saw
+    // it; the shape check found it by noticing tsc had a PropertySignature
+    // boundary where we had none.
+    //
+    // Only the LAST member may omit its separator, which is what lets
+    // `{ a: X }` and a trailing `;` both work.
     object_type: $ => seq(
       '{',
       optional(choice(',', ';')),
-      repeat(seq(
-        choice(
-          $.property_signature,
-          $.call_signature,
-          $.construct_signature,
-          $.index_signature,
-          alias($.method_signature, $.function_definition),
-        ),
-        optional(choice(',', ';', $._type_member_end)),
+      optional(seq(
+        repeat(seq($._type_member, $._member_separator)),
+        $._type_member,
+        optional($._member_separator),
       )),
       '}',
+    ),
+
+    _member_separator: $ => choice(',', ';', $._type_member_end),
+
+    _type_member: $ => choice(
+      $.property_signature,
+      $.call_signature,
+      $.construct_signature,
+      $.index_signature,
+      alias($.method_signature, $.function_definition),
     ),
 
     property_signature: $ => seq(
@@ -1371,7 +1508,18 @@ module.exports = grammar({
       ']',
     )),
 
-    type_operator: $ => prec.right(2, seq(choice('keyof', 'readonly', 'unique'), $._type)),
+    // Tighter than `intersection_type` (cast+2), which is tighter than
+    // `union_type` (cast+1). `readonly string[] | undefined` is
+    // `(readonly string[]) | undefined`, and `keyof A | B` is `(keyof A) | B`.
+    //
+    // This was prec 2 and correct until the type operators were raised above
+    // `PREC.cast` to fix `x as A & B` -- that move also lifted them above
+    // this one, and `readonly` silently started swallowing the union:
+    // `readonly (string[] | undefined)`. 119 corpus files, no error, and no
+    // sweep could have seen it. A regression introduced by a fix and caught
+    // by the shape check on the very next run, which is the argument for
+    // having the check at all.
+    type_operator: $ => prec.right(PREC.cast + 3, seq(choice('keyof', 'readonly', 'unique'), $._type)),
 
     typeof_type: $ => prec.right(seq('typeof', choice($.identifier, $.nested_identifier, $.import_type), field('type_arguments', optional($.type_arguments)))),
 
