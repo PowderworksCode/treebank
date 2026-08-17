@@ -223,6 +223,17 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
   // Anchor for zero-width tokens emitted before any skipping.
   lexer->mark_end(lexer);
 
+  // Where this call began, and whether it has crossed a line boundary yet.
+  // Together these say whether a newline we reach TERMINATES a line that had
+  // content on it, or merely ends a BLANK one. CPython emits NEWLINE only
+  // for the former; blank lines get NL, which the parser never sees.
+  //
+  // Deliberately local rather than scanner state: tree-sitter persists
+  // scanner state only after a call that RETURNS A TOKEN, so a flag cleared
+  // on the (overwhelmingly common) `return false` path is simply lost.
+  uint32_t entry_column = lexer->get_column(lexer);
+  bool line_crossed = false;
+
   // One unified skip pass. The external scanner is consulted exactly once
   // per token request, BEFORE the internal lexer touches extras — so every
   // kind of whitespace in front of a token we own must be handled here:
@@ -238,7 +249,18 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
       if (lexer->lookahead == '\r') skip(lexer);
       if (lexer->lookahead == '\n') skip(lexer);
     } else if (c == '\n' || c == '\r') {
-      if (valid[NEWLINE]) {
+      // A NEWLINE only where a line with CONTENT ends: this call started
+      // past column 0 and has not already crossed a boundary. Otherwise the
+      // line is blank and gets skipped.
+      //
+      // Emitting for a blank line killed the continuation fork after an
+      // INLINE suite. `if True: pass` opens no indent level, so a blank or
+      // comment line before the `else` never reached the INDENT/DEDENT
+      // branch that consumes such lines — it fell to here, and the spurious
+      // NEWLINE committed the shared GLR token stream before `else` could
+      // attach. With a block suite the DEDENT path absorbed it, which is why
+      // only the inline form was affected.
+      if (valid[NEWLINE] && entry_column > 0 && !line_crossed) {
         if (lexer->lookahead == '\r') advance(lexer);
         if (lexer->lookahead == '\n') advance(lexer);
         lexer->mark_end(lexer);
@@ -246,6 +268,7 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
         lexer->result_symbol = NEWLINE;
         return true;
       }
+      line_crossed = true;
       // Not a message here: a blank line before an indent decision, or a
       // newline inside brackets. Plain whitespace either way — but only
       // the former is a line boundary: inside brackets the logical line
