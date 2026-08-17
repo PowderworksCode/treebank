@@ -1025,6 +1025,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "rayon",
+ "serde",
+ "serde_json",
  "syn 2.0.119",
  "treebank-lang",
 ]

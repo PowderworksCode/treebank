@@ -22,11 +22,11 @@
     "source": "top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)",
     "typescript_sweep": {
       "files": 11988,
-      "passed": 11975,
-      "failed": 13,
-      "gap_files": 7,
+      "passed": 11976,
+      "failed": 12,
+      "gap_files": 6,
       "noise_files": 6,
-      "pass_rate": "99.89%"
+      "pass_rate": "99.95%"
     },
     "javascript_sweep": {
       "files": 25297,
@@ -103,7 +103,44 @@
       "was": "the scanner skipped whitespace and then judged by the next character; a comment starts with `/`, which is in both continuation sets, so the boundary was suppressed and `void /*c*/ [Symbol.iterator]` became one indexed_access_type.",
       "now": "`skip_trivia` skips line and block comments too, and counts a line terminator inside a block comment as crossed.",
       "note": "no corpus file exercises the interface form; committed as a correctness fix, not a number."
+    },
+    {
+      "construct": "object type members with no separator, e.g. `{ a: X b: Y }`",
+      "was": "the separator was `optional` on every member, so juxtaposition parsed. tsc rejects it. `readonly` is a soft keyword and so a legal property name, so with juxtaposition allowed `readonly maxSize: number` had a second reading as TWO members and sometimes took it.",
+      "now": "only the LAST member may omit its separator. Requiring it then exposed `(` and `<` sitting in the type-member continuation set, so `interface I { (a: X): Y\\n (a: Z): W }` and multi-line generic call signatures had no boundary; both are out of the set now, as `[` already was.",
+      "note": "SILENT. Found by the shape check."
+    },
+    {
+      "construct": "`new Date().getFullYear()`",
+      "was": "`new (Date().getFullYear())`. The constructor was `$._expression`, so the call bound into it.",
+      "now": "the constructor is its own tier — the member chain over a primary expression, the spec's MemberExpression. Precedence cannot express it: `member` must bind INTO the constructor while `call` must not.",
+      "note": "SILENT, ~29 files. Our own corpus tests had it RECORDED as `new (Service())` and had been passing for it — hand-written expectations cannot catch a mis-parse the author did not already know about."
+    },
+    {
+      "construct": "`x as React.ReactElement`",
+      "was": "`(x as React).ReactElement`, a member access on a cast. Same family as `x as A & B`.",
+      "now": "`prec.dynamic(1)` on `nested_type_identifier`. `[member_expression, nested_type_identifier]` is a DECLARED conflict, so static `prec` is never consulted for it — `prec(PREC.member + 1)` changed nothing at all.",
+      "note": "SILENT, 73 files. Found by the shape check."
+    },
+    {
+      "construct": "`try { } catch (e) { }`",
+      "was": "a `try_statement` with NO catch clause, followed by an unrelated `function_definition` named `catch`. The clause was simply absent from the tree.",
+      "now": "`catch_clause` and `finally_clause` at `prec.dynamic(2)`, above `function_definition`'s method form.",
+      "note": "SILENT, 66 files. Found by the shape check."
+    },
+    {
+      "construct": "`readonly string[] | undefined`",
+      "was": "`readonly (string[] | undefined)`. A REGRESSION introduced by the fix that raised the type operators above `PREC.cast`: that also lifted them above `type_operator`, which sat at 2.",
+      "now": "`type_operator` at `PREC.cast + 3`, tighter than intersection, which is tighter than union.",
+      "note": "SILENT, 119 files, introduced and caught within the same day. The argument for the shape ratchet in one line."
+    },
+    {
+      "construct": "`foo();` — any zero-argument call statement",
+      "was": "a bodyless `function_definition` named `foo`. The keyword-less method form is reachable at statement level, because members route through `_declaration`, and one blanket `prec.dynamic(1)` made it beat the call. `foo(1, 2)` was fine — number literals cannot be parameters — so only the argument-less case collided, and it collided everywhere.",
+      "now": "`function_definition` splits into three alternatives; the BODYLESS method form takes `prec.dynamic(-1)` and loses to the call.",
+      "note": "SILENT and invisible to the shape check too: `function_definition` and `expression_statement` span the same bytes and only the KINDS differ. Found by reading a shape fixture's tree by eye. Recorded because it marks the boundary of what a boundary check can do."
     }
   ],
-  "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses)."
+  "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses).",
+  "shape_check": "`treebank shape` compares our node BOUNDARIES against tsc's over the whole corpus: 3,128,811 oracle nodes, 3,229 boundaries missed in 316 files, 21 clusters, ratcheted in shape_policy.json. It exists because a yes/no oracle cannot see a file parse CLEANLY and WRONGLY, and that turned out not to be a rare corner — six silent mis-parses in TypeScript within a day of turning it on. The remaining 21 clusters are the work queue, not a clean bill of health. Declared granularity differences (places our tree groups differently on purpose) are listed in shape_policy.json as `<TscKind> <- <our_kind>` pairs, each read by hand."
 }

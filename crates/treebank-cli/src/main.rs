@@ -2,6 +2,7 @@ mod grammar;
 mod rosetta;
 mod routing;
 mod verify;
+mod shape;
 mod sweep;
 
 use std::path::PathBuf;
@@ -49,6 +50,30 @@ enum Cmd {
     },
     /// Sweep the corpus with a grammar, adjudicate failures with the
     /// reference parser, and write sweep.json + an agent-ready REPORT.md
+    /// Compare our node BOUNDARIES against the reference parser's over the
+    /// corpus. Catches silent mis-parses: files that parse cleanly and build
+    /// the wrong tree, which the sweep is structurally blind to.
+    Shape {
+        #[arg(long, value_enum, default_value_t = LangName::Typescript)]
+        lang: LangName,
+        /// Grammar dir, as for `sweep`
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/shape.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Check only the first N files, for a quick look
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Check a directory of committed fixtures instead of the corpus.
+        /// The ceiling is ZERO there: every file is a mis-parse that was
+        /// fixed, so any miss is it coming back.
+        #[arg(long)]
+        dir: Option<PathBuf>,
+    },
     Sweep {
         #[arg(long, value_enum, default_value_t = LangName::Rust)]
         lang: LangName,
@@ -218,6 +243,14 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, list, "top-k.json"),
             limit,
             &lang_path(lang, corpus, ""),
+        ),
+        Cmd::Shape { lang, grammar, manifest, out, limit, dir } => shape::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            &lang_path(lang, out, "reports/shape.json"),
+            limit,
+            dir.as_deref(),
         ),
         Cmd::Sweep { lang, grammar, manifest, out } => sweep::run(
             lang,

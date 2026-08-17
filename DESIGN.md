@@ -335,7 +335,62 @@ Adjudication over the version set:
   `test/negative/<version>/` files that must stay invalid for that
   version's oracle — the guard against the union quietly becoming
   "anything parses".
+- **mis-shape** — the grammar ACCEPTS a file and builds the wrong tree for
+  it. None of the above can see this, and it is not a rare corner: five were
+  found in TypeScript within a day of looking, including
+  `new Date().getFullYear()` binding as `new (Date().getFullYear())` and the
+  `catch` clause vanishing out of `try`/`catch` entirely. §5.6 is the check
+  for it.
 - the sweep stores the full per-oracle verdict vector per file.
+
+### 5.6 The shape check (`treebank shape`)
+
+A yes/no oracle can only catch the grammar REJECTING valid code. It is
+structurally blind to the grammar ACCEPTING code and building the wrong tree
+for it: those files parse cleanly, sweep cleanly, and ship. Before this
+check, every silent mis-parse in this repository was found by accident, from
+an adjacent file where the wrong reading happened to be illegal — `x as A & B`
+parsed as `(x as A) & B` corpus-wide and surfaced only because
+`x as A & { c?: B }` puts a `?` where an object literal cannot have one.
+
+The reference parser already builds a tree and the sweep throws it away.
+Keep the node BOUNDARIES from it and one property becomes checkable over
+the whole corpus:
+
+> for every node the reference parser reports, our tree has a node with
+> exactly that byte span.
+
+Four things make it work in practice:
+
+1. **Boundaries, not names.** Comparing node names needs a correspondence
+   table per language, which is where this kind of check usually dies — the
+   table is large, subjective, and rots. Boundaries need no table: if tsc
+   says something spans 15..20 and we have no node there, we disagree about
+   the shape of the code, whatever either of us calls it.
+2. **One-directional.** Our tree may have nodes the oracle does not; finer
+   granularity is fine. What it may not do is fail to see a boundary the
+   reference parser sees.
+3. **Separator-insensitive.** Two parsers can agree completely and still put
+   a `;` on different sides of a boundary. That is punctuation bookkeeping,
+   and it is thousands of hits — trimmed away by rule, on both sides, rather
+   than by allowlist entry.
+4. **The allowlist is keyed on PAIRS**, `"<TscKind> <- <our_kind>"`, not on
+   the oracle's kind alone. Ignoring `PropertySignature` outright would also
+   silence a real `PropertySignature` disagreement elsewhere, which is how a
+   check like this quietly stops working.
+
+`shape_policy.json` per grammar holds the declared granularity differences,
+each with its reasoning, and a `baseline_missed` ratchet. The ratchet is the
+part that makes it a gate rather than a report, and it earns its keep: the
+fix that raised the type operators above `PREC.cast` also lifted them above
+`type_operator`, so `readonly string[] | undefined` silently became
+`readonly (string[] | undefined)` in 119 files. The next shape run caught it.
+
+Offsets are bytes on both sides. tsc counts UTF-16 code units, so the
+conversion happens in the oracle script where the string is already decoded.
+
+Today only TypeScript and JavaScript have a span oracle. `treebank shape`
+says so rather than passing vacuously for the others.
 
 Two oracle rules, both absolute. **An unreadable file is never an invalid
 file**: an oracle that cannot read its input exits non-zero with no verdict,
