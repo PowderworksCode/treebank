@@ -490,13 +490,26 @@ module.exports = grammar({
       optional($.finally_clause),
     ),
 
-    catch_clause: $ => seq(
+    // `prec.dynamic(2)`, above `function_definition`'s 1. Its method form
+    // takes a name, parameters and a body with no `function` keyword, so at
+    // STATEMENT level `catch (e) { ... }` also derives a function named
+    // `catch` -- and the dynamic precedence made that reading win. The whole
+    // clause vanished from the tree: `try {} catch (e) {}` came out as a
+    // `try_statement` with no catch, followed by an unrelated
+    // `function_definition`. 66 corpus files, no error anywhere.
+    //
+    // The deeper fix is to stop the keyword-less method form being reachable
+    // at statement level at all -- it belongs to class bodies and object
+    // types. That is a larger refactor of `_declaration`, which class members
+    // route through on purpose; this raises the two clauses that actually
+    // collide, and the shape check now covers the rest of the class.
+    catch_clause: $ => prec.dynamic(2, seq(
       'catch',
       optional(seq('(', field('parameter', $._pattern), optional(seq(':', field('type', $._type))), ')')),
       field('body', $.block),
-    ),
+    )),
 
-    finally_clause: $ => seq('finally', field('body', $.block)),
+    finally_clause: $ => prec.dynamic(2, seq('finally', field('body', $.block))),
 
     // ── declarations ─────────────────────────────────────────────────
     _declaration: $ => choice(
