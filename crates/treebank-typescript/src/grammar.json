@@ -8547,12 +8547,20 @@
           "name": "function_type"
         },
         {
-          "type": "SYMBOL",
-          "name": "union_type"
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "union_type"
+          }
         },
         {
-          "type": "SYMBOL",
-          "name": "intersection_type"
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "intersection_type"
+          }
         },
         {
           "type": "SYMBOL",
@@ -8567,20 +8575,32 @@
           "name": "object_type"
         },
         {
-          "type": "SYMBOL",
-          "name": "array_type"
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "array_type"
+          }
         },
         {
           "type": "SYMBOL",
           "name": "tuple_type"
         },
         {
-          "type": "SYMBOL",
-          "name": "indexed_access_type"
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "indexed_access_type"
+          }
         },
         {
-          "type": "SYMBOL",
-          "name": "type_operator"
+          "type": "PREC_DYNAMIC",
+          "value": 1,
+          "content": {
+            "type": "SYMBOL",
+            "name": "type_operator"
+          }
         },
         {
           "type": "SYMBOL",

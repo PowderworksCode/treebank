@@ -1467,15 +1467,24 @@ module.exports = grammar({
       // cannot swallow the enclosing conditional's `?`.
       $.constructor_type,
       $.function_type,
-      $.union_type,
-      $.intersection_type,
+      // These carry `prec.dynamic` because `[$._type,
+      // $._no_conditional_type]` is a DECLARED conflict, and at
+      // `infer R extends P . [` the parser genuinely cannot tell whether `P`
+      // ENDS the constraint -- giving `(infer R extends P)[]` -- or
+      // CONTINUES into it, giving `infer R extends P[]`. tsc says the
+      // constraint is greedy. Both trees hold exactly one `array_type` and
+      // one `infer_type`, so nothing asymmetric existed to decide it; this
+      // is the asymmetry. Only the alternatives that can keep growing
+      // rightward or leftward need it.
+      prec.dynamic(1, $.union_type),
+      prec.dynamic(1, $.intersection_type),
       $.generic_type,
       $.nested_type_identifier,
       $.object_type,
-      $.array_type,
+      prec.dynamic(1, $.array_type),
       $.tuple_type,
-      $.indexed_access_type,
-      $.type_operator,
+      prec.dynamic(1, $.indexed_access_type),
+      prec.dynamic(1, $.type_operator),
       $.typeof_type,
       $.literal_type,
       $.template_literal_type,
