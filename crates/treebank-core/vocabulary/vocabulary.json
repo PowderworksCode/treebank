@@ -1,5 +1,5 @@
 {
-  "version": "0.2.0",
+  "version": "0.3.0",
   "table": [
     {
       "name": "_statement",
@@ -11,7 +11,7 @@
     },
     {
       "name": "_declaration",
-      "definition": "introduces a named entity \u2014 function, class or type, variable, interface \u2014 with or without a body"
+      "definition": "introduces a named entity — function, class or type, variable, interface — with or without a body"
     },
     {
       "name": "_pattern",
@@ -84,6 +84,10 @@
     {
       "name": "_access",
       "definition": "reads a place: member or index"
+    },
+    {
+      "name": "_interpolation",
+      "definition": "the embedded-expression part of a string: python's `{...}`, typescript's `${...}`. A language whose strings cannot embed expressions omits the term — rust's format! arguments are macro token soup and are deliberately NOT this."
     }
   ],
   "facets": [
@@ -100,8 +104,20 @@
       "definition": "delimits a lexical scope"
     },
     {
+      "name": "_comment",
+      "definition": "a comment. FACET tier, and the reasoning is worth keeping: a supertype over `extras` is expressible — a probe grammar proved `(_comment)` matches both kinds — but putting one in rust's extras perturbed the parse table, and the three cascading fixes it took cost 2,793 corpus files before being abandoned. Comments are type-level anyway: a line_comment is a comment wherever it appears, which is the facet criterion. The term exists because consumers otherwise hand-maintain the list per language, and rust having two kinds where python and typescript have one is exactly where that goes wrong."
+    },
+    {
       "name": "_clause",
-      "definition": "subordinate piece of a larger construct that is not naturally a statement or expression (else/except/finally/case/where clauses, match arms). FACET TIER: a clause is type-level, not position-level \u2014 every construct admits only its own clauses, so a shared _clause supertype would make `if a: ... except E:` parse. Measured in python, rust and typescript alike; see vocabulary 0.2.0 notes."
+      "definition": "subordinate piece of a larger construct that is not naturally a statement or expression (else/except/finally/case/where clauses, match arms). FACET TIER: a clause is type-level, not position-level — every construct admits only its own clauses, so a shared _clause supertype would make `if a: ... except E:` parse. Measured in python, rust and typescript alike; see vocabulary 0.2.0 notes."
+    },
+    {
+      "name": "_identifier",
+      "definition": "every node type that spells a name, whatever position it occupies: plain identifiers, qualified and dotted paths, private names, lifetimes. Facet tier because it is a property of the node type rather than of the occurrence — the opposite of `_name`, which is the table-tier role for a name IN a naming position. Both are wanted: `_name` answers 'what is this construct called', `_identifier` answers 'where are the names'."
+    },
+    {
+      "name": "_string",
+      "definition": "every node type that is a string literal, including the forms `_literal` cannot admit. Python's `string` rule carries f-strings, so no python string satisfies `_literal`'s per-rule test, and `(_literal)` is therefore not comparable across languages for strings. This term is what makes 'find every string' one query — the use it exists for (secret scanning, i18n extraction, injection analysis) does not care whether a particular string happens to interpolate."
     }
   ],
   "containments": [

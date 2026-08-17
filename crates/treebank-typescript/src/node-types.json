@@ -238,10 +238,6 @@
         "named": true
       },
       {
-        "type": "string",
-        "named": true
-      },
-      {
         "type": "super",
         "named": true
       },
@@ -263,6 +259,16 @@
       },
       {
         "type": "yield_expression",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_interpolation",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "template_substitution",
         "named": true
       }
     ]
@@ -321,6 +327,10 @@
       },
       {
         "type": "regex",
+        "named": true
+      },
+      {
+        "type": "string",
         "named": true
       },
       {
@@ -1951,10 +1961,6 @@
         },
         {
           "type": "sequence_expression",
-          "named": true
-        },
-        {
-          "type": "string",
           "named": true
         },
         {
@@ -4290,15 +4296,15 @@
       "required": false,
       "types": [
         {
+          "type": "_interpolation",
+          "named": true
+        },
+        {
           "type": "escape_sequence",
           "named": true
         },
         {
           "type": "string_content",
-          "named": true
-        },
-        {
-          "type": "template_substitution",
           "named": true
         }
       ]

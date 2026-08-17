@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.2.0",
+  "vocabulary": "0.3.0",
   "facets": {
     "_callable": [
       "function_definition",
@@ -51,6 +51,19 @@
       "export_clause",
       "finally_clause",
       "import_clause"
+    ],
+    "_identifier": [
+      "identifier",
+      "nested_identifier",
+      "private_name",
+      "type_identifier"
+    ],
+    "_string": [
+      "string",
+      "template_string"
+    ],
+    "_comment": [
+      "comment"
     ]
   },
   "uncategorised": [
@@ -69,10 +82,6 @@
     {
       "node": "class_heritage",
       "reason": "the extends/implements tail of a class definition"
-    },
-    {
-      "node": "comment",
-      "reason": "an extra; carries no syntactic role"
     },
     {
       "node": "computed_property_name",
@@ -131,10 +140,6 @@
       "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
     },
     {
-      "node": "nested_identifier",
-      "reason": "dotted namespace path (a.b.c) in name positions; same candidate-_name status as rust paths and python dotted_name"
-    },
-    {
       "node": "optional_type",
       "reason": "the T? form of a tuple ELEMENT; TS allows it only there, and keeping it out of the type tier is what stops  forking into a type-argument reading"
     },
@@ -145,10 +150,6 @@
     {
       "node": "parameters",
       "reason": "container node; its elements carry the role (_parameter)"
-    },
-    {
-      "node": "private_name",
-      "reason": "a #field name; a candidate _name member the vocabulary has not admitted"
     },
     {
       "node": "property_signature",
@@ -173,10 +174,6 @@
     {
       "node": "switch_body",
       "reason": "container node; its elements carry the role (case/default clauses)"
-    },
-    {
-      "node": "template_substitution",
-      "reason": "the ${…} of a template; its child carries _expression"
     },
     {
       "node": "type_arguments",

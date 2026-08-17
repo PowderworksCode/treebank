@@ -2,7 +2,7 @@
   "language": "python",
   "versions": "2.7 ∪ 3.x (through 3.13 syntax: match, PEP 695 type parameters and type aliases, except*, parenthesized with-items)",
   "generate_cli": "0.26.12",
-  "vocabulary": "0.2.0",
+  "vocabulary": "0.3.0",
   "oracles": [
     {
       "family": "python3",

@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.2.0",
+  "vocabulary": "0.3.0",
   "facets": {
     "_callable": [
       "function_definition",
@@ -49,6 +49,17 @@
       "for_in_clause",
       "if_clause",
       "with_item"
+    ],
+    "_identifier": [
+      "dotted_name",
+      "identifier"
+    ],
+    "_string": [
+      "concatenated_string",
+      "string"
+    ],
+    "_comment": [
+      "comment"
     ]
   },
   "uncategorised": [
@@ -61,10 +72,6 @@
       "reason": "the argument-list container; its elements carry _argument"
     },
     {
-      "node": "comment",
-      "reason": "an extra; carries no syntactic role"
-    },
-    {
       "node": "dictionary_pattern",
       "reason": "a mapping pattern's braces; its pairs carry the roles"
     },
@@ -73,20 +80,12 @@
       "reason": "key: pattern inside a mapping pattern"
     },
     {
-      "node": "dotted_name",
-      "reason": "qualified import path; _name is identifier-only because a supertype reference imports all members into a position, and dotted names are not valid where identifiers are (candidate for a wider _name \u2014 see ledger)"
-    },
-    {
       "node": "escape_sequence",
       "reason": "lexical component of a string literal, below the role layer"
     },
     {
       "node": "format_specifier",
       "reason": "the :spec inside an interpolation"
-    },
-    {
-      "node": "interpolation",
-      "reason": "the {\u2026} of an f-string; its expression child carries _expression"
     },
     {
       "node": "keyword_pattern",
@@ -106,7 +105,7 @@
     },
     {
       "node": "pattern_list",
-      "reason": "bare comma-joined patterns (`a, b = \u2026`); its elements carry _pattern"
+      "reason": "bare comma-joined patterns (`a, b = …`); its elements carry _pattern"
     },
     {
       "node": "relative_import",

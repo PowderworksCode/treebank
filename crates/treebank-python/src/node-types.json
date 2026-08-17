@@ -214,6 +214,16 @@
     ]
   },
   {
+    "type": "_interpolation",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "interpolation",
+        "named": true
+      }
+    ]
+  },
+  {
     "type": "_invocation",
     "named": true,
     "subtypes": [
@@ -2069,7 +2079,7 @@
       "required": false,
       "types": [
         {
-          "type": "interpolation",
+          "type": "_interpolation",
           "named": true
         }
       ]
@@ -3292,11 +3302,11 @@
       "required": true,
       "types": [
         {
-          "type": "escape_sequence",
+          "type": "_interpolation",
           "named": true
         },
         {
-          "type": "interpolation",
+          "type": "escape_sequence",
           "named": true
         },
         {

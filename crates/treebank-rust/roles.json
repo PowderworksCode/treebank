@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.2.0",
+  "vocabulary": "0.3.0",
   "facets": {
     "_callable": [
       "function_definition",
@@ -54,17 +54,25 @@
       "else_clause",
       "match_arm",
       "where_clause"
+    ],
+    "_comment": [
+      "block_comment",
+      "line_comment"
+    ],
+    "_identifier": [
+      "identifier",
+      "lifetime",
+      "metavariable",
+      "scoped_identifier",
+      "type_identifier"
+    ],
+    "_string": [
+      "char",
+      "raw_string",
+      "string"
     ]
   },
   "uncategorised": [
-    {
-      "node": "line_comment",
-      "reason": "an extra; carries no syntactic role"
-    },
-    {
-      "node": "block_comment",
-      "reason": "an extra; carries no syntactic role"
-    },
     {
       "node": "arguments",
       "reason": "container node; its elements carry the role (_argument)"
@@ -128,10 +136,6 @@
     {
       "node": "loop_label",
       "reason": "the 'label: prefix of a loop; names a loop, not a value"
-    },
-    {
-      "node": "lifetime",
-      "reason": "a lifetime is a name in the type system; a candidate _name member the vocabulary has not admitted yet"
     },
     {
       "node": "trait_bounds",

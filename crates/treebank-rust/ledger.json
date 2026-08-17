@@ -2,7 +2,7 @@
   "language": "rust",
   "versions": "editions 2015–2024 in one grammar: try!() coexists with ?, async/await/dyn are keywords, let-chains and let-else, labeled blocks, c\"…\" and cr\"…\" literals, &raw const/mut, PEP-nothing — plus `safe`/`raw`/`default`/`auto`/`union`/`box`/`macro_rules` handled as soft keywords so edition-crossing identifier uses keep parsing",
   "generate_cli": "0.26.12",
-  "vocabulary": "0.2.0",
+  "vocabulary": "0.3.0",
   "oracles": [
     {
       "family": "rust",

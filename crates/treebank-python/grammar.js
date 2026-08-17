@@ -73,6 +73,7 @@ module.exports = grammar({
     '_invocation',
     '_access',
     '_attribute',
+    '_interpolation',
   ]).map((name) => $[name]),
 
   conflicts: $ => [
@@ -914,7 +915,7 @@ module.exports = grammar({
       repeat(choice(
         $.string_content,
         $.escape_sequence,
-        $.interpolation,
+        $._interpolation,
       )),
       $.string_end,
     ),
@@ -933,6 +934,8 @@ module.exports = grammar({
       /\{\{/,
       /\}\}/,
     ))),
+
+    _interpolation: $ => choice($.interpolation),
 
     interpolation: $ => seq(
       token.immediate('{'),
@@ -953,7 +956,7 @@ module.exports = grammar({
       ':',
       repeat(choice(
         token.immediate(prec(1, /[^{}]+/)),
-        $.interpolation,
+        $._interpolation,
       )),
     ),
 
