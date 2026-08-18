@@ -744,6 +744,7 @@ crates/
   treebank-cli/               # fetch · rank · sweep · oracle · roles ·
                               # negative · ledger
 tools/consumer-test/          # downstream crate + wasm smoke tests
+tools/grammardoc/             # the grammar reference renderer
 test/rosetta/                 # parallel programs + expected-roles files
 ```
 
@@ -764,6 +765,37 @@ test/rosetta/                 # parallel programs + expected-roles files
   results, conformance-suite results, and the vocabulary's uncategorised
   list. Every number this document promises lives there, next to how it was
   measured.
+
+### 6.1 The grammar reference (`tools/grammardoc`)
+
+Owning the grammars means owning their documentation, and the honest way to
+document a parser is to render the parse table rather than describe it.
+
+`tools/grammardoc` renders each grammar the way a language manual does —
+every production as EBNF and as a railroad diagram, plus the precedence
+table and the vocabulary index. It reads **`src/grammar.json`**, not
+`grammar.js`: `grammar.js` is arbitrary JavaScript and reading it means
+running it, whereas `grammar.json` is what `tree-sitter generate` normalises
+it into, and is already an EBNF syntax tree over sixteen node kinds. So the
+renderer is a fold over those sixteen cases, with no per-language code, and
+the page cannot drift from the parser — if a production is on the page, the
+parse table has it.
+
+Two things it shows that a BNF listing cannot. **Precedence** is drawn
+around the production it applies to as well as tabulated, because EBNF
+cannot express it at all — which is why every language manual prints it
+separately. **Fields** appear as captions inside the boxes, so the edge
+names a query can use are visible next to the shape they attach to.
+
+Hidden rules are deliberately *not* inlined. The `_or_test` → `_and_test` →
+`_not_test` chain is the precedence structure; inlining it would delete the
+most informative part of the page, and it is exactly what a manual shows as
+`expr → boolean_primary → predicate → bit_expr → simple_expr`.
+
+CI renders every grammar on every change (`emit.py --check`). The renderer
+is total over grammar.json's node kinds and raises on one it does not know,
+so a grammar that starts using an unfamiliar DSL construct fails the build
+rather than silently losing part of a production from its documentation.
 
 ## 7. Design decisions
 
