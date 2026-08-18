@@ -19,6 +19,12 @@ pub struct RolesManifest {
     /// Facet term -> member node types.
     #[serde(default)]
     pub facets: BTreeMap<String, Vec<String>>,
+    /// Table-tier terms this grammar delivers as facets instead, each with
+    /// the reason its language forced the demotion. Only terms the
+    /// vocabulary marks `either_tier` may appear here, and a demoted term
+    /// must be a facet key rather than a declared supertype.
+    #[serde(default)]
+    pub demoted: BTreeMap<String, String>,
     /// Named nodes deliberately outside the vocabulary, with a reason each.
     #[serde(default)]
     pub uncategorised: Vec<Uncategorised>,

@@ -60,7 +60,8 @@ module.exports = grammar({
     '_type',
     '_name',
     '_literal',
-    '_parameter',
+    // `_parameter` is demoted to the facet tier here; see roles.json.
+    ...tb.assertDemotable([]),
     '_argument',
     '_member',
     '_directive',
@@ -284,17 +285,27 @@ module.exports = grammar({
       choice(field('body', $._body), ';'),
     ),
 
-    parameters: $ => seq(
-      '(',
-      optional(seq(commaSep1($._parameter), optional(','))),
-      ')',
+    // Rust's parameter list is ordered: a `self` receiver is only ever the
+    // FIRST parameter, and the C-variadic `...` is only ever the last. One
+    // `_parameter` alternation repeated by commas says neither, and accepts
+    // `fn f(a: i32, self)`. So the list is spelled out as "what may still
+    // follow", which is also why `_parameter` is a facet rather than a
+    // supertype here -- see roles.json's `demoted` and DESIGN.md 3.4.
+    parameters: $ => seq('(', optional($._parameter_list), ')'),
+
+    _parameter_list: $ => choice(
+      seq($.self_parameter, optional($._parameter_tail)),
+      seq($.parameter, optional($._parameter_tail)),
+      seq($.variadic_parameter, optional(',')),
     ),
 
-    _parameter: $ => choice(
-      $.parameter,
-      $.self_parameter,
-      $.variadic_parameter,
+    // `self` may not reappear; `...` closes the list.
+    _parameter_rest: $ => choice(
+      seq($.parameter, optional($._parameter_tail)),
+      seq($.variadic_parameter, optional(',')),
     ),
+
+    _parameter_tail: $ => seq(',', optional($._parameter_rest)),
 
     parameter: $ => seq(
       repeat($._attribute),

@@ -61,7 +61,10 @@ module.exports = grammar({
     '_pattern',
     '_name',
     '_literal',
-    '_parameter',
+    // `_parameter` is demoted to the facet tier in this grammar: Python's
+    // parameter list is ordered, so the six parameter node types no longer
+    // share one derivation. See `parameterRules` below and roles.json.
+    ...tb.assertDemotable([]),
     '_argument',
     '_member',
     '_directive',
@@ -370,7 +373,27 @@ module.exports = grammar({
       field('body', $._body),
     ),
 
-    parameters: $ => seq('(', optional(seq(commaSep1($._parameter), optional(','))), ')'),
+    parameters: $ => seq('(', optional($._params_list), ')'),
+
+    // `def f(...)`: annotations allowed.
+    ...parameterRules('_params', {
+      plain: $ => choice($.parameter, $.tuple_parameter),  // tuple: py2 `def f((a, b)):`
+      withDefault: $ => alias($._parameter_with_default, $.parameter),
+      star: $ => $.star_parameter,
+      doubleStar: $ => $.double_star_parameter,
+    }),
+
+    // `lambda ...`: annotations forbidden -- see the note on
+    // `_lambda_plain_parameter`.
+    ...parameterRules('_lambda_params', {
+      plain: $ => choice(
+        alias($._lambda_plain_parameter, $.parameter),
+        $.tuple_parameter,                               // py2 `lambda (a, b): ...`
+      ),
+      withDefault: $ => alias($._lambda_parameter_with_default, $.parameter),
+      star: $ => alias($._lambda_star_parameter, $.star_parameter),
+      doubleStar: $ => alias($._lambda_double_star_parameter, $.double_star_parameter),
+    }),
 
     // PEP 695: `def f[T](...)`, `class C[T]:`, `type X[T] = ...`.
     type_parameters: $ => seq(
@@ -386,19 +409,18 @@ module.exports = grammar({
       optional(seq('=', field('value', $._expression))),
     ),
 
-    _parameter: $ => choice(
-      $.parameter,
-      $.star_parameter,
-      $.double_star_parameter,
-      $.keyword_separator,
-      $.positional_separator,
-      $.tuple_parameter,        // py2: def f((a, b)):
-    ),
-
+    // A parameter with no default and one with a default are the same
+    // `parameter` node, but they are NOT interchangeable in the list, so
+    // they are separate rules. See `parameterRules`.
     parameter: $ => seq(
       field('name', $._name),
       optional(seq(':', field('type', $._expression))),
-      optional(seq('=', field('value', $._expression))),
+    ),
+    _parameter_with_default: $ => seq(
+      field('name', $._name),
+      optional(seq(':', field('type', $._expression))),
+      '=',
+      field('value', $._expression),
     ),
 
     star_parameter: $ => seq('*', field('name', $._name), optional(seq(':', field('type', $._expression)))),
@@ -759,7 +781,7 @@ module.exports = grammar({
     // error, invisible to the sweep.
     lambda: $ => prec.right(PREC.lambda, seq(
       'lambda',
-      field('parameters', optional(alias($._lambda_parameters, $.parameters))),
+      field('parameters', optional(alias($._lambda_params_list, $.parameters))),
       ':',
       field('body', $._expression),
     )),
@@ -768,20 +790,11 @@ module.exports = grammar({
     // whose KEY is a lambda) parsed as a SET holding one lambda, whose
     // parameter was annotated `x: x` and whose body was `1`. The dict's own
     // colon had been eaten as an annotation.
-    _lambda_parameters: $ => seq(commaSep1($._lambda_parameter), optional(',')),
-
-    _lambda_parameter: $ => choice(
-      alias($._lambda_plain_parameter, $.parameter),
-      alias($._lambda_star_parameter, $.star_parameter),
-      alias($._lambda_double_star_parameter, $.double_star_parameter),
-      $.keyword_separator,
-      $.positional_separator,
-      $.tuple_parameter,        // py2: lambda (a, b): ...
-    ),
-
-    _lambda_plain_parameter: $ => seq(
+    _lambda_plain_parameter: $ => seq(field('name', $._name)),
+    _lambda_parameter_with_default: $ => seq(
       field('name', $._name),
-      optional(seq('=', field('value', $._expression))),
+      '=',
+      field('value', $._expression),
     ),
     _lambda_star_parameter: $ => seq('*', field('name', $._name)),
     _lambda_double_star_parameter: $ => seq('**', field('name', $._name)),
@@ -1092,6 +1105,88 @@ module.exports = grammar({
     comment: _ => token(seq('#', /[^\r\n]*/)),
   },
 });
+
+/**
+ * Python's parameter list is ordered, and the order is enforced by the
+ * parser rather than by a later semantic pass: `def f(a=1, b)`,
+ * `def f(**kw, a)`, `def f(*)` and `def f(a, /, /)` are all SyntaxErrors
+ * out of CPython's own grammar. One `_parameter` alternation repeated by
+ * commas cannot say any of that, so the list is spelled out as a chain of
+ * "what may still follow" rules carrying two bits of state -- whether `/`
+ * has been seen, and whether a parameter with a default has been seen --
+ * and a separate section after `*`, where a parameter WITHOUT a default may
+ * legally follow one with a default (`def f(*, a=1, b)` is valid Python).
+ *
+ * This is the reason `_parameter` is a facet rather than a supertype in
+ * this grammar: the six parameter node types no longer share a derivation,
+ * so tree-sitter cannot collect them under one supertype. All six are
+ * concrete types that occur nowhere but a parameter list, so type-level
+ * facet membership selects exactly the nodes occurrence-level supertype
+ * membership would have. `(_parameter)` through treebank-core is unchanged.
+ * See roles.json's `demoted` and DESIGN.md section 3.4.
+ *
+ * @param {string} prefix   rule-name prefix for this family of rules
+ * @param {Object} p        the language-level pieces, which differ between
+ *                          `def` (annotations allowed) and `lambda` (not)
+ */
+function parameterRules(prefix, p) {
+  const R = (name) => `${prefix}_${name}`;
+  // What may follow a parameter: nothing, a trailing comma, or a comma and
+  // then whichever continuations `rest` still permits.
+  const tail = ($, rest) => optional(seq(',', optional($[R(rest)])));
+
+  return {
+    // A list may not open with `/`, which needs something to be positional.
+    [R('list')]: $ => choice(
+      seq(p.plain($), tail($, 'nodefault_rest')),
+      seq(p.withDefault($), tail($, 'default_rest')),
+      $[R('star_section')],
+    ),
+
+    // No `/` yet, no default yet: everything is still open.
+    [R('nodefault_rest')]: $ => choice(
+      seq(p.plain($), tail($, 'nodefault_rest')),
+      seq(p.withDefault($), tail($, 'default_rest')),
+      seq($.positional_separator, tail($, 'slash_nodefault_rest')),
+      $[R('star_section')],
+    ),
+
+    // A default has been seen: a parameter without one may no longer
+    // follow, and `/` does not reset that.
+    [R('default_rest')]: $ => choice(
+      seq(p.withDefault($), tail($, 'default_rest')),
+      seq($.positional_separator, tail($, 'slash_default_rest')),
+      $[R('star_section')],
+    ),
+
+    // `/` has been seen; a second one is not allowed.
+    [R('slash_nodefault_rest')]: $ => choice(
+      seq(p.plain($), tail($, 'slash_nodefault_rest')),
+      seq(p.withDefault($), tail($, 'slash_default_rest')),
+      $[R('star_section')],
+    ),
+
+    [R('slash_default_rest')]: $ => choice(
+      seq(p.withDefault($), tail($, 'slash_default_rest')),
+      $[R('star_section')],
+    ),
+
+    // Everything after `*` is keyword-only. A bare `*` is a separator, not
+    // a parameter, so it must be followed by at least one keyword-only
+    // parameter -- `def f(*)` and `def f(*, **kw)` are both errors -- while
+    // `*args` may stand alone. `**kwargs` closes the list.
+    [R('star_section')]: $ => choice(
+      seq(p.star($), tail($, 'keyword_rest')),
+      seq($.keyword_separator, ',', choice(p.plain($), p.withDefault($)), tail($, 'keyword_rest')),
+      seq(p.doubleStar($), optional(',')),
+    ),
+
+    [R('keyword_rest')]: $ => choice(
+      seq(choice(p.plain($), p.withDefault($)), tail($, 'keyword_rest')),
+      seq(p.doubleStar($), optional(',')),
+    ),
+  };
+}
 
 function commaSep1(rule) {
   return sep1(rule, ',');

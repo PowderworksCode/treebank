@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.3.0",
+  "vocabulary": "0.4.0",
   "facets": {
     "_callable": ["function_definition", "lambda"],
     "_scope": ["module", "function_definition", "lambda"]

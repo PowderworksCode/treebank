@@ -15,6 +15,7 @@ const vocabulary = require('./vocabulary.json');
 
 const TABLE_TIER = vocabulary.table.map((t) => t.name);
 const FACET_TIER = vocabulary.facets.map((t) => t.name);
+const EITHER_TIER = vocabulary.either_tier || [];
 
 /**
  * Assert every name is a table-tier vocabulary term, and return the list
@@ -39,10 +40,40 @@ function assertTableTerms(names) {
   return names;
 }
 
+/**
+ * Assert a table-tier term this grammar delivers as a facet instead is one
+ * the vocabulary allows to vary by grammar. Call it beside `supertypes:` so
+ * an omission that is really a typo fails the generate:
+ *
+ *   supertypes: $ => assertTableTerms([...]).map(name => $[name]),
+ *   // _parameter is demoted; see roles.json
+ *   ...assertDemotable(['_parameter'])
+ *
+ * The reason for the demotion, and the check that the term is a facet key
+ * and not also a supertype, live in the grammar's roles.json and are
+ * enforced by `treebank roles`.
+ *
+ * @param {string[]} names
+ * @returns {string[]}
+ */
+function assertDemotable(names) {
+  for (const name of names) {
+    if (!EITHER_TIER.includes(name)) {
+      throw new Error(
+        `"${name}" may not be demoted to the facet tier (vocabulary ${vocabulary.version}). ` +
+        `Demotable: ${EITHER_TIER.join(', ') || '(none)'}`,
+      );
+    }
+  }
+  return names;
+}
+
 module.exports = {
   vocabulary,
   VERSION: vocabulary.version,
   TABLE_TIER,
   FACET_TIER,
+  EITHER_TIER,
   assertTableTerms,
+  assertDemotable,
 };

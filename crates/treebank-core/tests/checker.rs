@@ -53,7 +53,81 @@ fn unknown_facet_key_is_a_finding() {
     let mut roles = good_roles();
     roles.facets.insert("_slop".into(), vec!["lambda".into()]);
     let f = check(&good_nt(), &roles, vocabulary());
-    assert!(f.iter().any(|m| m.contains("`_slop`") && m.contains("not a facet-tier")), "{f:#?}");
+    assert!(f.iter().any(|m| m.contains("`_slop`") && m.contains("neither a facet-tier")), "{f:#?}");
+}
+
+// Tier demotion (§3.1.1): a table-tier term a grammar delivers as a facet
+// instead. Each guard gets a mutation, because a demotion that is not
+// checked is indistinguishable from a supertype dropped by accident.
+
+/// `_parameter` demoted the way a real grammar does it: absent from the
+/// supertypes, present as a facet, declared with a reason.
+fn demoting_roles() -> RolesManifest {
+    let mut roles = good_roles();
+    roles
+        .demoted
+        .insert("_parameter".into(), "the language orders its parameter list".into());
+    roles
+        .facets
+        .insert("_parameter".into(), vec!["parameter".into()]);
+    roles
+}
+
+/// What tree-sitter actually generates once the grammar stops threading
+/// `_parameter`: the hidden rule is gone from node-types entirely, not
+/// merely absent from the supertypes map.
+fn nt_without_parameter_supertype() -> NodeTypes {
+    let mut nt = good_nt();
+    nt.supertypes.remove("_parameter");
+    nt.named.remove("_parameter");
+    nt
+}
+
+#[test]
+fn a_declared_demotion_is_conformant() {
+    let f = check(&nt_without_parameter_supertype(), &demoting_roles(), vocabulary());
+    assert!(f.is_empty(), "unexpected findings: {f:#?}");
+}
+
+#[test]
+fn demoting_a_term_the_vocabulary_pins_is_a_finding() {
+    let mut roles = good_roles();
+    roles.demoted.insert("_member".into(), "because".into());
+    let f = check(&good_nt(), &roles, vocabulary());
+    assert!(
+        f.iter().any(|m| m.contains("`_member`") && m.contains("does not allow")),
+        "{f:#?}"
+    );
+}
+
+#[test]
+fn demotion_without_a_reason_is_a_finding() {
+    let mut roles = demoting_roles();
+    roles.demoted.insert("_parameter".into(), "   ".into());
+    let f = check(&nt_without_parameter_supertype(), &roles, vocabulary());
+    assert!(f.iter().any(|m| m.contains("`_parameter`") && m.contains("no reason")), "{f:#?}");
+}
+
+#[test]
+fn a_term_in_both_tiers_is_a_finding() {
+    // The supertype is still declared, so the grammar would answer
+    // `(_parameter)` two ways at once.
+    let f = check(&good_nt(), &demoting_roles(), vocabulary());
+    assert!(
+        f.iter().any(|m| m.contains("`_parameter`") && m.contains("exactly one tier")),
+        "{f:#?}"
+    );
+}
+
+#[test]
+fn demotion_without_facet_members_is_a_finding() {
+    let mut roles = demoting_roles();
+    roles.facets.remove("_parameter");
+    let f = check(&nt_without_parameter_supertype(), &roles, vocabulary());
+    assert!(
+        f.iter().any(|m| m.contains("`_parameter`") && m.contains("no facet members")),
+        "{f:#?}"
+    );
 }
 
 #[test]

@@ -1,10 +1,9 @@
 {
-  "vocabulary": "0.3.0",
+  "vocabulary": "0.4.0",
+  "demoted": {
+    "_parameter": "Rust's parameter list is ordered: a `self` receiver is only ever the first parameter and the C-variadic `...` only ever the last, so the three parameter node types cannot share one supertype derivation without the grammar accepting `fn f(a: i32, self)`. All three are concrete types occurring nowhere but a parameter list, so facet membership selects the same nodes."
+  },
   "facets": {
-    "_callable": [
-      "function_definition",
-      "closure_expression"
-    ],
     "_binding": [
       "function_definition",
       "struct_definition",
@@ -34,21 +33,9 @@
       "field_pattern",
       "use_as_clause"
     ],
-    "_scope": [
-      "source_file",
+    "_callable": [
       "function_definition",
-      "block",
-      "closure_expression",
-      "module_definition",
-      "impl_block",
-      "trait_definition",
-      "async_block",
-      "const_block",
-      "unsafe_block",
-      "match_arm",
-      "loop_expression",
-      "while_expression",
-      "for_expression"
+      "closure_expression"
     ],
     "_clause": [
       "else_clause",
@@ -65,6 +52,27 @@
       "metavariable",
       "scoped_identifier",
       "type_identifier"
+    ],
+    "_parameter": [
+      "parameter",
+      "self_parameter",
+      "variadic_parameter"
+    ],
+    "_scope": [
+      "source_file",
+      "function_definition",
+      "block",
+      "closure_expression",
+      "module_definition",
+      "impl_block",
+      "trait_definition",
+      "async_block",
+      "const_block",
+      "unsafe_block",
+      "match_arm",
+      "loop_expression",
+      "while_expression",
+      "for_expression"
     ],
     "_string": [
       "char",

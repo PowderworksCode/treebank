@@ -11,6 +11,16 @@
 //!   (type-level membership) and expanded into concrete alternations at
 //!   query-load time by [`expand`].
 //!
+//! A term's tier is a property of the *grammar*, not of the vocabulary:
+//! terms listed in `either_tier` may be delivered by either mechanism, and
+//! each grammar picks. The table tier is stronger and is the default; a
+//! grammar demotes a term to a facet only when its language partitions the
+//! position (Python orders parameters, so `_parameter` cannot be one
+//! alternation without the grammar accepting `def f(a=1, b)`). Demotion is
+//! sound precisely when every member of the term is a concrete node type
+//! that occurs nowhere else, since then type-level and occurrence-level
+//! membership select the same nodes; see DESIGN.md §3.4.
+//!
 //! The vocabulary itself lives in `vocabulary/vocabulary.json`, embedded
 //! here and re-exported to JavaScript by `vocabulary/supertypes.js`, so the
 //! grammars and this crate can never disagree about what the vocabulary is.
@@ -40,6 +50,11 @@ pub struct Vocabulary {
     pub version: String,
     pub table: Vec<Term>,
     pub facets: Vec<Term>,
+    /// Table-tier terms a grammar may deliver as a facet instead, when its
+    /// language partitions the position. Demotion must be declared and
+    /// justified in the grammar's `roles.json` (`demoted`).
+    #[serde(default)]
+    pub either_tier: Vec<String>,
     /// Required containments, as (inner, outer): every grammar that
     /// declares both must nest inner inside outer.
     pub containments: Vec<(String, String)>,
@@ -61,6 +76,11 @@ impl Vocabulary {
     pub fn is_facet_term(&self, name: &str) -> bool {
         self.facets.iter().any(|t| t.name == name)
     }
+
+    /// Whether a grammar may choose this term's tier for itself.
+    pub fn is_either_tier(&self, name: &str) -> bool {
+        self.either_tier.iter().any(|t| t == name)
+    }
 }
 
 /// The vocabulary this build of treebank-core carries. Parsing the embedded
@@ -81,7 +101,7 @@ mod tests {
     #[test]
     fn embedded_vocabulary_parses_and_is_closed_and_underscored() {
         let v = vocabulary();
-        assert_eq!(v.version, "0.3.0");
+        assert_eq!(v.version, "0.4.0");
         assert_eq!(v.table.len(), 22);
         assert_eq!(v.facets.len(), 7);
         for t in v.table.iter().chain(v.facets.iter()) {
@@ -91,6 +111,13 @@ mod tests {
         // No name appears in both tiers.
         for f in &v.facets {
             assert!(!v.is_table_term(&f.name), "{} is in both tiers", f.name);
+        }
+        // Demotable terms are table-tier terms a grammar may deliver as a
+        // facet instead (§3.1.1). They must not be pre-declared facets,
+        // and each must be a real table term.
+        for name in &v.either_tier {
+            assert!(v.is_table_term(name), "{name} is not a table term");
+            assert!(!v.is_facet_term(name), "{name} is already a facet term");
         }
         // Containments reference table-tier terms only.
         for (inner, outer) in &v.containments {

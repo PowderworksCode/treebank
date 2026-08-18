@@ -29,11 +29,43 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
         }
     }
 
+    // Rule 1b: tier demotion is declared, justified, and exclusive. A
+    // table-tier term this grammar cannot express as one alternation may
+    // be delivered as a facet instead, but only if the vocabulary marks it
+    // `either_tier`, only with a reason, and never in both tiers at once —
+    // otherwise dropping a supertype by accident is indistinguishable from
+    // demoting one on purpose.
+    for (term, reason) in &roles.demoted {
+        if !vocab.is_either_tier(term) {
+            findings.push(format!(
+                "`{term}` is demoted to the facet tier, but the vocabulary does not \
+                 allow that term's tier to vary by grammar"
+            ));
+        }
+        if reason.trim().is_empty() {
+            findings.push(format!("demoted term `{term}` has no reason"));
+        }
+        if nt.supertypes.contains_key(term) {
+            findings.push(format!(
+                "`{term}` is demoted but is also declared as a supertype; a term \
+                 lives in exactly one tier per grammar"
+            ));
+        }
+        if !roles.facets.contains_key(term) {
+            findings.push(format!(
+                "`{term}` is demoted to the facet tier but has no facet members"
+            ));
+        }
+    }
+
     // Rule 5 (checked before coverage so bad keys don't grant coverage):
     // facet keys ⊆ the closed facet tier, members non-empty and existing.
     for (facet, members) in &roles.facets {
-        if !vocab.is_facet_term(facet) {
-            findings.push(format!("facet `{facet}` is not a facet-tier vocabulary term"));
+        if !vocab.is_facet_term(facet) && !roles.demoted.contains_key(facet) {
+            findings.push(format!(
+                "facet `{facet}` is neither a facet-tier vocabulary term nor a \
+                 declared demotion"
+            ));
         }
         if members.is_empty() {
             findings.push(format!("facet `{facet}` has no members; omit it instead"));
@@ -59,7 +91,7 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
     let facet_covered: BTreeSet<&str> = roles
         .facets
         .iter()
-        .filter(|(f, _)| vocab.is_facet_term(f))
+        .filter(|(f, _)| vocab.is_facet_term(f) || roles.demoted.contains_key(*f))
         .flat_map(|(_, ms)| ms.iter().map(String::as_str))
         .collect();
     let uncategorised: BTreeSet<&str> =
@@ -93,7 +125,9 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
         }
     }
 
-    // Rule 4: required containments hold wherever both terms are declared.
+    // Rule 4: required containments hold wherever both terms are declared
+    // as supertypes. A demoted term has no derivation closure to check, so
+    // its containments are unenforceable and deliberately skipped.
     for (inner, outer) in &vocab.containments {
         let (Some(_), Some(_)) = (nt.supertypes.get(inner), nt.supertypes.get(outer)) else {
             continue;
