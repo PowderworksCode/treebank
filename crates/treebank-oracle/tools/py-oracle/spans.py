@@ -30,6 +30,47 @@ def line_starts(data):
     return starts
 
 
+def edge_span(node, starts, size):
+    """Absolute byte span of an AST node, or None when it carries no position."""
+    lineno = getattr(node, "lineno", None)
+    end_lineno = getattr(node, "end_lineno", None)
+    if lineno is None or end_lineno is None:
+        return None
+    if lineno >= len(starts) or end_lineno >= len(starts):
+        return None
+    start = starts[lineno] + node.col_offset
+    end = starts[end_lineno] + node.end_col_offset
+    if not (0 <= start < end <= size):
+        return None
+    return start, end
+
+
+def edges_of(tree, starts, size):
+    """Labelled parent -> child edges: [pstart, pend, pkind, field, cstart, cend].
+
+    Spans say what is there; edges say how it is connected. Two trees can
+    agree on every node and still attach the children under different names,
+    and the names are what a consumer reads -- `orelse` versus `body` is the
+    difference between a program and its opposite.
+    """
+    out = []
+    for node in ast.walk(tree):
+        parent = edge_span(node, starts, size)
+        if parent is None:
+            continue
+        pkind = type(node).__name__
+        for field in node._fields:
+            value = getattr(node, field, None)
+            children = value if isinstance(value, list) else [value]
+            for child in children:
+                if not isinstance(child, ast.AST):
+                    continue
+                span = edge_span(child, starts, size)
+                if span is not None:
+                    out.append([parent[0], parent[1], pkind, field, span[0], span[1]])
+    return out
+
+
 def spans_of(tree, starts, size):
     out = []
     for node in ast.walk(tree):
@@ -62,7 +103,7 @@ def main():
             sys.stderr.write("py-oracle: cannot read %s: %s\n" % (path, exc))
             sys.exit(1)
 
-        record = {"path": path, "spans": []}
+        record = {"path": path, "spans": [], "edges": []}
 
         # `ast` reports columns as byte offsets into the source AS CPYTHON
         # DECODED IT. For a file with a PEP 263 coding declaration that is
@@ -90,7 +131,9 @@ def main():
             record["skipped"] = "parse: %s" % type(exc).__name__
         else:
             try:
-                record["spans"] = spans_of(tree, line_starts(data), len(data))
+                starts = line_starts(data)
+                record["spans"] = spans_of(tree, starts, len(data))
+                record["edges"] = edges_of(tree, starts, len(data))
             except RecursionError:
                 record["skipped"] = "walk: RecursionError"
         sys.stdout.write(json.dumps(record) + "\n")

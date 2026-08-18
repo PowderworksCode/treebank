@@ -448,6 +448,48 @@ whatever the grammar does today, bugs included. Only the token entries are
 mechanical, and they say so: `AmpersandAmpersandToken` is `&&` and there is
 no judgement in that.
 
+#### The field mapping
+
+Nodes are still only part of the structure. Two trees can agree on every
+span, every kind, and every nesting relation and still attach the children
+under different names — `orelse` where `body` belongs is a program and its
+opposite, with nothing else to tell them apart. Field names are also what a
+consumer reads: they are how a query asks for the *condition* of an `if`
+rather than its third child.
+
+`field_map.json` per grammar declares where each reference-parser labelled
+edge lands in ours, in four forms:
+
+- `["right"]` — the oracle's child IS the child under our `right` field.
+- `["body>"]` — it lives somewhere UNDER our `body` field. This is what a
+  list field looks like when we wrap it: CPython's `ClassDef.body` is a list
+  of statements and ours is one `block` node holding them. The weaker claim
+  is the true one there, and it still checks something.
+- `["="]` — the oracle's child has the same span as its parent, so there is
+  no edge of ours to label. tsc's `TypeReference.typeName` on a bare `Foo`
+  points at `Foo` itself.
+- `[]` — we attach this child positionally, with no field name at all.
+
+The last form is the interesting one. Roughly half of CPython's labelled
+edges and more than half of tsc's are `[]` here, and that is a finding
+rather than a formality: **an unnamed edge is one a consumer cannot query by
+role.** A call's `function` is labelled and its arguments are not; a
+`return`'s value has no name. Some are deliberate — positional lists, and
+slice bounds where the empty forms have to stay expressible — and some are
+gaps. Each entry carries which.
+
+Matching a parent is not simply matching a span, because the two parsers
+disagree about where a node begins and ends in four separate ways, each of
+which a real difference forced: the oracle may start a node LATER than we do
+(CPython's `FunctionDef` at `def`, ours at the first decorator), start it
+EARLIER (tsc keeps `export` inside the declaration, we wrap it), END it
+earlier (CPython's `arg` is `x: int` where our `parameter` is `x: int = 1`),
+or place its child one level INSIDE ours (CPython has no
+parenthesised-expression node).
+
+`syn` reports no edges at all — it has no generic field reflection — so Rust
+asks nothing here rather than inventing labels.
+
 Three comparison rules keep the signal usable, and all three are rules
 rather than allowlist entries — each was added for one language and then
 left the others' numbers unchanged, which is the test that it describes

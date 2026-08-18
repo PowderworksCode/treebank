@@ -48,10 +48,31 @@ pub struct Span {
     pub kind: String,
 }
 
+/// One labelled parent -> child edge.
+///
+/// Spans say what is there; edges say how it is CONNECTED. Two trees can
+/// agree on every node and still attach the children under different names,
+/// and the names are what a consumer reads -- `orelse` versus `body` is the
+/// difference between a program and its opposite, with every span and every
+/// kind identical.
+#[derive(Debug, Clone)]
+pub struct Edge {
+    pub parent: (usize, usize),
+    pub parent_kind: String,
+    pub field: String,
+    pub child: (usize, usize),
+}
+
 /// What the oracle saw in one file.
 #[derive(Debug, Clone, Default)]
 pub struct FileSpans {
     pub spans: Vec<Span>,
+    /// Empty when the oracle cannot report field names at all, which is not
+    /// the same as a file having none — `has_edges` says which.
+    pub edges: Vec<Edge>,
+    /// Whether this oracle reports edges. `syn` does not: it has no generic
+    /// field reflection, so a Rust node's children are positional to us.
+    pub has_edges: bool,
     /// Set when the oracle declined to report boundaries — its own parse
     /// errored, or it threw. Never silently an empty span list: an empty
     /// list means "this file has no nodes", which would pass the check
@@ -85,6 +106,8 @@ struct RawFile {
     path: String,
     #[serde(default)]
     spans: Vec<(usize, usize, String)>,
+    #[serde(default)]
+    edges: Vec<(usize, usize, String, String, usize, usize)>,
     #[serde(default)]
     skipped: Option<String>,
 }
@@ -139,6 +162,17 @@ fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileS
                     .into_iter()
                     .map(|(start, end, kind)| Span { start, end, kind })
                     .collect(),
+                edges: raw
+                    .edges
+                    .into_iter()
+                    .map(|(ps, pe, pk, field, cs, ce)| Edge {
+                        parent: (ps, pe),
+                        parent_kind: pk,
+                        field,
+                        child: (cs, ce),
+                    })
+                    .collect(),
+                has_edges: true,
                 skipped: raw.skipped,
             },
         );

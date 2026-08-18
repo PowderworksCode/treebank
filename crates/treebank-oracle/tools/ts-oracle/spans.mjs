@@ -82,15 +82,43 @@ for (const line of input.split("\n")) {
     } else {
       const m = byteMap(src);
       const spans = [];
+      const edges = [];
+      // Labelled parent -> child edges. Spans say what is there; edges say
+      // how it is connected, and two trees can agree on every node while
+      // attaching the children under different names -- which is the
+      // difference a consumer actually reads.
+      //
+      // tsc has no field-name API, but a node's named children ARE its own
+      // enumerable properties. `parent` has to go (it points back up and
+      // would make the walk infinite), and so does everything that is not a
+      // node: `pos`, `end`, `kind` and the flag caches are numbers.
+      const isNode = (v) =>
+        v !== null && typeof v === "object" && typeof v.kind === "number" &&
+        typeof v.pos === "number" && typeof v.end === "number";
       const walk = (node) => {
         const s = node.getStart(sf);
         const e = node.getEnd();
         // Zero-width nodes have no boundary to compare.
-        if (e > s) spans.push([m[s], m[e], KIND_NAME[node.kind] ?? String(node.kind)]);
+        if (e > s) {
+          spans.push([m[s], m[e], KIND_NAME[node.kind] ?? String(node.kind)]);
+          const pk = KIND_NAME[node.kind] ?? String(node.kind);
+          for (const key of Object.keys(node)) {
+            if (key === "parent" || key === "original" || key === "symbol") continue;
+            const value = node[key];
+            const children = Array.isArray(value) ? value : [value];
+            for (const child of children) {
+              if (!isNode(child)) continue;
+              const cs = child.getStart(sf);
+              const ce = child.getEnd();
+              if (ce > cs) edges.push([m[s], m[e], pk, key, m[cs], m[ce]]);
+            }
+          }
+        }
         ts.forEachChild(node, walk);
       };
       ts.forEachChild(sf, walk);
       out.spans = spans;
+      out.edges = edges;
     }
   } catch (e) {
     out.skipped = `oracle threw: ${e.message}`;

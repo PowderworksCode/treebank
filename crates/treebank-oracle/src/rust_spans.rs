@@ -50,13 +50,23 @@ impl SpanOracle for RustSpans {
                         Ok(ast) => {
                             let mut v = SpanVisitor { spans: Vec::new() };
                             v.visit_file(&ast);
-                            FileSpans { spans: v.spans, skipped: None }
+                            // `has_edges: false`: syn has no generic field
+                            // reflection, so there is no honest way to name
+                            // a child's role. Saying so beats inventing one.
+                            FileSpans {
+                                spans: v.spans,
+                                edges: Vec::new(),
+                                has_edges: false,
+                                skipped: None,
+                            }
                         }
                         // `syn` parses only valid Rust. A rejection is the
                         // sweep's business, not this check's; comparing
                         // shapes against a tree that does not exist is noise.
                         Err(e) => FileSpans {
                             spans: Vec::new(),
+                            edges: Vec::new(),
+                            has_edges: false,
                             skipped: Some(format!("syn: {e}")),
                         },
                     },
@@ -65,6 +75,8 @@ impl SpanOracle for RustSpans {
                     // against nothing. Recording the reason is enough.
                     Err(e) => FileSpans {
                         spans: Vec::new(),
+                        edges: Vec::new(),
+                        has_edges: false,
                         skipped: Some(format!("read: {e}")),
                     },
                 };

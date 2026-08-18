@@ -33,7 +33,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-pub use spans::{get as spans_for, FileSpans, Span, SpanOracle};
+pub use spans::{get as spans_for, Edge, FileSpans, Span, SpanOracle};
 pub use treebank_lang::LangName;
 
 /// The oracle programs shipped inside this crate.
