@@ -10,6 +10,7 @@ mod sweep;
 
 use std::path::PathBuf;
 
+use anyhow::Context as _;
 use clap::{Parser, Subcommand};
 
 use treebank_lang::LangName;
@@ -292,7 +293,23 @@ fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {
     })
 }
 
+/// Rayon workers get the platform default stack (2 MiB), and two of the
+/// recursive descents that run on them are unbounded in the corpus rather
+/// than in our code: `syn`'s visitor over a deeply nested Rust expression,
+/// and `serde_json`'s over a deeply nested oracle record. 2 MiB is enough
+/// for almost every file, which is the bad case -- the overflow depends on
+/// how rayon happened to nest stolen tasks, so it shows up as an
+/// intermittent abort on a corpus that passed an hour earlier rather than
+/// as a reproducible failure on one file. Ask for room once, here, so every
+/// command gets it. This is address space, not resident memory.
+const WORKER_STACK: usize = 64 * 1024 * 1024;
+
 fn main() -> anyhow::Result<()> {
+    rayon::ThreadPoolBuilder::new()
+        .stack_size(WORKER_STACK)
+        .build_global()
+        .context("configure the rayon worker pool")?;
+
     match Cli::parse().cmd {
         Cmd::Rank { lang, db, k, out } => treebank_corpus::rank::run(
             treebank_corpus::get(lang),
