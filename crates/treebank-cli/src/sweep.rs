@@ -132,6 +132,27 @@ fn first_error<'a>(root: Node<'a>) -> Option<Node<'a>> {
     }
 }
 
+/// Signature, 1-based line and source line for a tree's first error, so a
+/// round-trip failure clusters and reads exactly like a sweep gap.
+pub fn error_signature(root: Node, text: &str) -> (String, usize, String) {
+    let src = text.as_bytes();
+    match first_error(root) {
+        None => ("<no error>".into(), 0, String::new()),
+        Some(node) => {
+            let sig = signature_of(node, src);
+            let at = node.start_byte().min(src.len());
+            let lo = src[..at].iter().rposition(|b| *b == b'\n').map(|i| i + 1).unwrap_or(0);
+            let hi = src[at..].iter().position(|b| *b == b'\n').map(|i| at + i).unwrap_or(src.len());
+            let line = src[..at].iter().filter(|b| **b == b'\n').count() + 1;
+            (
+                sig,
+                line,
+                String::from_utf8_lossy(&src[lo..hi]).chars().take(90).collect(),
+            )
+        }
+    }
+}
+
 fn signature_of(node: Node, src: &[u8]) -> String {
     let parent = node.parent().map(|p| p.kind().to_string()).unwrap_or_else(|| "<root>".into());
     if node.is_missing() {
