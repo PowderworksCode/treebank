@@ -147,7 +147,7 @@ type Policy = (
 );
 
 fn load_policy(grammar_dir: &Path) -> Result<Policy> {
-    let path = grammar_dir.join("shape_policy.json");
+    let path = grammar_dir.join("shape_policy.toml");
     if !path.exists() {
         return Ok((
             Default::default(),
@@ -160,7 +160,7 @@ fn load_policy(grammar_dir: &Path) -> Result<Policy> {
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("read {}", path.display()))?;
-    let policy: ShapePolicy = serde_json::from_str(&text)
+    let policy: ShapePolicy = toml::from_str(&text)
         .with_context(|| format!("parse {}", path.display()))?;
     Ok((
         policy.ignore.into_iter().map(|i| i.signature).collect(),
@@ -1155,7 +1155,7 @@ pub fn run(
             report.field_mismatched <= max,
             "shape: {} edge mismatches, baseline is {}. Either a change moved a child to a \
              different field -- read the FIELD clusters above -- or the corpus grew and the \
-             baseline in {}/shape_policy.json needs raising DELIBERATELY.",
+             baseline in {}/shape_policy.toml needs raising DELIBERATELY.",
             report.field_mismatched,
             max,
             grammar_dir.display(),
@@ -1173,7 +1173,7 @@ pub fn run(
             "shape: {} missed boundaries, baseline is {}. Either a change \
              regrouped the tree -- read the clusters above, they name what \
              was built instead -- or the corpus grew and the baseline in \
-             {}/shape_policy.json needs raising DELIBERATELY.",
+             {}/shape_policy.toml needs raising DELIBERATELY.",
             report.missed_nodes,
             max,
             grammar_dir.display(),

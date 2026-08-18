@@ -46,7 +46,7 @@ pub struct Cluster {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub macros: Vec<String>,
     /// Valid-in-SOME-version files the grammar rejects ON PURPOSE, because
-    /// `version_policy.json` declares the construct rejected and the CURRENT
+    /// `version_policy.toml` declares the construct rejected and the CURRENT
     /// version's oracle rejects it too (DESIGN.md §4.2). Excluded from
     /// `valid_paths`: no grammar change should fix these.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -88,7 +88,7 @@ pub struct Report {
 }
 
 /// Signatures a grammar declares it rejects on purpose, from
-/// `version_policy.json` (DESIGN.md §4.2). Absent file means no declarations,
+/// `version_policy.toml` (DESIGN.md §4.2). Absent file means no declarations,
 /// which is the normal case; a malformed one is an error, because silently
 /// treating it as empty would turn declared rejections back into gaps and
 /// send a fix agent chasing decisions.
@@ -102,13 +102,13 @@ fn load_version_policy(grammar_dir: &Path) -> anyhow::Result<std::collections::H
         #[serde(default)]
         rejections: Vec<Rejection>,
     }
-    let path = grammar_dir.join("version_policy.json");
+    let path = grammar_dir.join("version_policy.toml");
     if !path.exists() {
         return Ok(Default::default());
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("read {}", path.display()))?;
-    let policy: Policy = serde_json::from_str(&text)
+    let policy: Policy = toml::from_str(&text)
         .with_context(|| format!("parse {}", path.display()))?;
     Ok(policy.rejections.into_iter().map(|r| r.signature).collect())
 }
@@ -405,7 +405,7 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
 
     // Declared version-policy rejections (DESIGN.md §4.2). TWO conditions,
     // both required: the cluster signature is declared in
-    // `version_policy.json`, AND the CURRENT version's oracle rejects the
+    // `version_policy.toml`, AND the CURRENT version's oracle rejects the
     // file. The second is what keeps a declaration from becoming a
     // self-granted exemption — a policy entry can never suppress a failure on
     // code that is still valid today, so a real gap cannot hide behind one.
@@ -670,7 +670,7 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
     for sig in &declared_versions {
         if !matched.contains(sig.as_str()) {
             eprintln!(
-                "sweep: WARNING version_policy.json declares `{sig}` rejected, but no \
+                "sweep: WARNING version_policy.toml declares `{sig}` rejected, but no \
                  failing file matches it. Stale entry, or the signature drifted."
             );
         }
@@ -759,7 +759,7 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
             if report.version_files > 0 {
                 extra.push_str(&format!(
                     ", and {} are valid only in an OLDER version of the language \
-                     and are rejected **on purpose** — see `version_policy.json`; \
+                     and are rejected **on purpose** — see `version_policy.toml`; \
                      those are decisions, not bugs, do not try to fix them",
                     report.version_files
                 ));
@@ -818,7 +818,7 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
              (DESIGN.md §4.2). In a GLR grammar an admitted old form is not a \
              quiet extra reading — it is a fork at every occurrence of the \
              token, and forks can win. Each construct below is declared in \
-             `version_policy.json` with its reasoning, and has a file in \
+             `version_policy.toml` with its reasoning, and has a file in \
              `test/negative/` so the rejection is a gate rather than a note.\n\n\
              Both conditions are required to land here: the signature is \
              declared, AND the CURRENT version's oracle also rejects the file. \

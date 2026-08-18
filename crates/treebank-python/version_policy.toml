@@ -1,0 +1,36 @@
+# Constructs this grammar rejects ON PURPOSE because a newer version of the
+# language removed them (DESIGN.md 4.2). Each needs the current oracle to
+# agree, so a policy entry cannot suppress a real failure.
+
+rule = '''
+DESIGN.md §4.2 — where a construct is valid only in an older version AND admitting it would change how current code parses, the current language wins and the construct is rejected. Each entry below is also a file in test/negative/, so the rejection is a gate rather than a note.'''
+not_rejected_note = '''
+Older-version syntax with no competing reading in any later version stays ACCEPTED — `except E, e:`, the py2 print and exec statements, backtick repr, old-style octal literals. No current program can contain them, so supporting them costs the present nothing. That is case (3) in §4.2, and it is most of what the py2 half of the union is.'''
+
+[[rejections]]
+construct = 'f((a)=1) — a parenthesized keyword argument'
+signature = 'arguments > ERROR(= integer)'
+valid_in = 'Python 3.0–3.7'
+rejected_from = 'Python 3.8'
+negative = 'test/negative/parenthesized-kwarg.py'
+why = '''
+Admitting it means `arguments` accepts a parenthesized expression before `=`, which forks against `f((a) == 1)` at every parenthesized first argument. The union claims py2.7 ∪ py3.x and never claimed py3 point releases; treating 3.0–3.7-only syntax as in scope would commit us to chasing every 3.x removal.'''
+
+[[rejections]]
+construct = '`nonlocal` used as a bare identifier'
+signature = 'module > ERROR(def identifier parameters : …)'
+valid_in = '''
+Python 2 (where `nonlocal` is not a keyword, so a bare `nonlocal` is an expression statement)'''
+rejected_from = 'Python 3.0'
+negative = 'test/negative/bare-nonlocal.py'
+why = '''
+Requires `nonlocal` to become a soft keyword, forking at every `nonlocal` statement in modern py3 code. The fork is one state deep, so this is the cheapest of the three — but the payoff is zero real code, and the rule does not bend for zero.'''
+
+[[rejections]]
+construct = '`await` used as a bare identifier'
+signature = 'await_expression > ERROR(identifier)'
+valid_in = 'Python 2 and Python 3.0–3.4'
+rejected_from = 'Python 3.7 (soft keyword in 3.5–3.6)'
+negative = 'test/negative/bare-await.py'
+why = '''
+The highest-risk of the three by a wide margin. `await` appears in expression position and `async` modifies def/for/with, so admitting them forks at every `await` in modern async code — most of the corpus. CPython itself staged this transition over four releases precisely because the ambiguity is nasty; re-introducing it deliberately is the opposite of what §4.2 asks for.'''
