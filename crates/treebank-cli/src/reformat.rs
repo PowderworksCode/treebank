@@ -125,8 +125,11 @@ pub fn run(
 ) -> Result<()> {
     let Some(fmt) = treebank_oracle::reformatter_for(lang) else {
         anyhow::bail!(
-            "no formatter for {lang}: this check needs the language's own formatter, \
-             and stating that is better than substituting something else"
+            "no formatter for {lang}. rust uses rustfmt (a toolchain component) and \
+             python uses black (`pip install black`); typescript has none vendored, \
+             since tsc exposes formatting only through the language service. This \
+             check needs the language's OWN formatter — substituting another tool's \
+             opinion would make a disagreement mean nothing."
         );
     };
     let manifest = Manifest::load(manifest_path)?;

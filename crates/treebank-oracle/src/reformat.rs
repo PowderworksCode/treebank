@@ -41,9 +41,13 @@ pub trait Reformatter: Sync {
     fn tool(&self) -> &'static str;
 }
 
-/// `None` where no formatter is available for the language. Python's is
-/// `black`, which is not part of the toolchain the way rustfmt is, so it is
-/// probed for rather than assumed.
+/// `None` where no formatter is available for the language.
+///
+/// Python's is `black`, which unlike rustfmt is not part of the toolchain,
+/// so it is probed for. The probe is not hedging about whether to depend on
+/// it — CI installs it and the check is expected to run — it is so that a
+/// machine without it gets a sentence naming the missing tool instead of a
+/// subprocess failure per file.
 pub fn get(name: LangName) -> Option<&'static dyn Reformatter> {
     static RS: RustFmt = RustFmt;
     static PY: BlackFmt = BlackFmt;

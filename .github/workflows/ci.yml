@@ -71,6 +71,13 @@ jobs:
           --grammar crates/treebank-${{ matrix.grammar }}
           --dir crates/treebank-${{ matrix.grammar }}/test/negative
 
+      # Layout must not move the tree. rust's formatter is a toolchain
+      # component; python's is black, installed here because the check is
+      # expected to run rather than to be skipped quietly.
+      - name: install black (python formatter)
+        if: matrix.grammar == 'python'
+        run: pip install black
+
       # I4 — vocabulary conformance: closed term lists, total node
       # coverage, containments, and a roles.json whose members all exist.
       - name: vocabulary conformance
