@@ -1,0 +1,595 @@
+{
+  "rule": "Where each TypeScript compiler labelled edge lands in our tree. The node map says the same things are there; this says they are CONNECTED the same way.",
+  "forms": "`[\"right\"]` -- the oracle's child IS the child under our `right` field. `[\"body>\"]` -- it lives somewhere UNDER our `body` field, which is what a list field looks like when we wrap it. `[]` -- we attach this child positionally, with no field name. `[\"=\"]` -- the oracle's child has the SAME span as its parent, so there is no edge of ours to label: tsc's `TypeReference.typeName` on a bare `Foo` points at `Foo` itself. Distinct from `[]`, which says the child is a real separate node we left unnamed.",
+  "review_note": "Started from what the corpus showed and then CORRECTED, because the observation is contaminated by parent-span collision: several of our nodes can share one span, so the fields of an ENCLOSING node get attributed to the inner one. Taken as generated, `ExpressionStatement.expression` would have been declared to be our `body` or `consequence` field, and `TypeReference.typeName` to be `constraint` or `return_type`. Both are false; both are the kind of thing a table built from observation quietly enshrines. Every entry naming a semantically loaded field -- left/right, condition/consequence/alternative, name/alias, key/value, object/property -- was read by hand.",
+  "unlabelled_note": "More than half the entries are `[]`. An unnamed edge is one a consumer cannot query by role, so the count is a queue rather than a formality: list members, modifiers, and the single child of a wrapper are the bulk of it.",
+  "map": {
+    "ImportDeclaration.moduleSpecifier": [
+      "source"
+    ],
+    "ImportDeclaration.importClause": [],
+    "ImportClause.namedBindings": [],
+    "TypeReference.typeName": [
+      "type",
+      "="
+    ],
+    "NamedImports.elements": [],
+    "ImportSpecifier.name": [
+      "alias",
+      "name"
+    ],
+    "Parameter.name": [
+      "pattern"
+    ],
+    "Parameter.type": [
+      "type"
+    ],
+    "VariableDeclarationList.declarations": [],
+    "VariableDeclaration.name": [
+      "name"
+    ],
+    "VariableStatement.declarationList": [],
+    "VariableDeclaration.type": [
+      "type"
+    ],
+    "VariableStatement.modifiers": [],
+    "TypeReference.typeArguments": [],
+    "UnionType.types": [],
+    "LiteralType.literal": [
+      "="
+    ],
+    "FunctionDeclaration.modifiers": [],
+    "FunctionDeclaration.parameters": [],
+    "PropertySignature.name": [
+      "name"
+    ],
+    "PropertySignature.type": [
+      "type"
+    ],
+    "FunctionDeclaration.type": [
+      "return_type"
+    ],
+    "FunctionDeclaration.name": [
+      "name"
+    ],
+    "Parameter.questionToken": [],
+    "FunctionType.type": [
+      "return_type"
+    ],
+    "TypeParameter.name": [
+      "name"
+    ],
+    "FunctionType.parameters": [],
+    "TypeLiteral.members": [],
+    "ArrayType.elementType": [],
+    "ExportDeclaration.exportClause": [],
+    "FunctionDeclaration.jsDoc": [],
+    "InterfaceDeclaration.members": [],
+    "ExportAssignment.expression": [],
+    "TypeAliasDeclaration.modifiers": [],
+    "PropertySignature.questionToken": [],
+    "TypeAliasDeclaration.name": [
+      "name"
+    ],
+    "TypeAliasDeclaration.type": [
+      "value"
+    ],
+    "InterfaceDeclaration.modifiers": [],
+    "InterfaceDeclaration.name": [
+      "name"
+    ],
+    "TypeParameter.constraint": [
+      "constraint"
+    ],
+    "HeritageClause.types": [],
+    "QualifiedName.left": [
+      "module",
+      "object"
+    ],
+    "QualifiedName.right": [
+      "name",
+      "property"
+    ],
+    "ClassDeclaration.members": [],
+    "IntersectionType.types": [],
+    "ClassDeclaration.modifiers": [],
+    "ImportType.argument": [],
+    "ImportType.qualifier": [],
+    "NamedExports.elements": [],
+    "VariableStatement.jsDoc": [],
+    "FunctionDeclaration.typeParameters": [],
+    "InterfaceDeclaration.heritageClauses": [],
+    "ClassDeclaration.name": [
+      "name"
+    ],
+    "MethodDeclaration.name": [
+      "name"
+    ],
+    "ExportDeclaration.moduleSpecifier": [
+      "source"
+    ],
+    "ExpressionWithTypeArguments.expression": [
+      "type",
+      "value",
+      "="
+    ],
+    "InterfaceDeclaration.jsDoc": [],
+    "PropertyDeclaration.name": [
+      "name"
+    ],
+    "MethodDeclaration.type": [
+      "return_type"
+    ],
+    "ExportSpecifier.name": [
+      "alias",
+      "name"
+    ],
+    "MethodDeclaration.parameters": [],
+    "TypeParameter.default": [
+      "value"
+    ],
+    "ClassDeclaration.heritageClauses": [],
+    "VariableDeclaration.initializer": [
+      "value"
+    ],
+    "ImportType.typeArguments": [],
+    "Constructor.parameters": [],
+    "PropertySignature.jsDoc": [],
+    "PropertyAccessExpression.expression": [
+      "module",
+      "object"
+    ],
+    "PropertyAccessExpression.name": [
+      "name",
+      "property"
+    ],
+    "ExpressionWithTypeArguments.typeArguments": [],
+    "TypeAliasDeclaration.typeParameters": [],
+    "ParenthesizedType.type": [],
+    "TypeAliasDeclaration.jsDoc": [],
+    "NamespaceImport.name": [
+      "alias"
+    ],
+    "CallExpression.expression": [
+      "function"
+    ],
+    "IndexedAccessType.indexType": [
+      "index"
+    ],
+    "IndexedAccessType.objectType": [
+      "object"
+    ],
+    "CallExpression.arguments": [],
+    "TypeOperator.type": [],
+    "PropertyDeclaration.type": [
+      "type"
+    ],
+    "PropertyDeclaration.modifiers": [],
+    "Block.statements": [],
+    "TupleType.elements": [],
+    "ClassDeclaration.jsDoc": [],
+    "TypeQuery.exprName": [],
+    "MethodSignature.name": [
+      "name"
+    ],
+    "MethodSignature.type": [
+      "return_type"
+    ],
+    "ArrowFunction.body": [
+      "body"
+    ],
+    "ArrowFunction.equalsGreaterThanToken": [],
+    "ExpressionStatement.expression": [
+      "="
+    ],
+    "InterfaceDeclaration.typeParameters": [],
+    "BinaryExpression.left": [
+      "left"
+    ],
+    "BinaryExpression.right": [
+      "right"
+    ],
+    "ReturnStatement.expression": [],
+    "ConditionalType.checkType": [
+      "left"
+    ],
+    "ConditionalType.extendsType": [
+      "right"
+    ],
+    "ConditionalType.falseType": [
+      "alternative"
+    ],
+    "ConditionalType.trueType": [
+      "consequence"
+    ],
+    "MethodSignature.parameters": [],
+    "ObjectLiteralExpression.properties": [],
+    "BinaryExpression.operatorToken": [
+      "operator"
+    ],
+    "Parameter.dotDotDotToken": [],
+    "ArrowFunction.parameters": [
+      "parameters",
+      "parameter"
+    ],
+    "MethodDeclaration.jsDoc": [],
+    "ObjectBindingPattern.elements": [],
+    "PropertyAssignment.initializer": [
+      "value"
+    ],
+    "PropertyAssignment.name": [
+      "key"
+    ],
+    "BindingElement.name": [
+      "name",
+      "value"
+    ],
+    "ModuleDeclaration.modifiers": [],
+    "ModuleBlock.statements": [],
+    "IfStatement.expression": [],
+    "IfStatement.thenStatement": [
+      "consequence"
+    ],
+    "FunctionDeclaration.body": [
+      "body"
+    ],
+    "MappedType.type": [
+      "type"
+    ],
+    "MappedType.typeParameter": [],
+    "ExportSpecifier.propertyName": [
+      "name"
+    ],
+    "ModuleDeclaration.body": [
+      "body"
+    ],
+    "ModuleDeclaration.name": [
+      "name"
+    ],
+    "ImportSpecifier.propertyName": [
+      "name"
+    ],
+    "PropertySignature.modifiers": [],
+    "AsExpression.expression": [],
+    "AsExpression.type": [],
+    "InferType.typeParameter": [],
+    "MethodDeclaration.modifiers": [],
+    "IndexSignature.parameters": [],
+    "IndexSignature.type": [
+      "type"
+    ],
+    "FunctionType.typeParameters": [],
+    "TypePredicate.parameterName": [],
+    "PrefixUnaryExpression.operand": [
+      "operand"
+    ],
+    "TypePredicate.type": [],
+    "ArrayLiteralExpression.elements": [],
+    "ParenthesizedExpression.expression": [
+      "="
+    ],
+    "ElementAccessExpression.argumentExpression": [
+      "subscript"
+    ],
+    "ElementAccessExpression.expression": [
+      "object"
+    ],
+    "NewExpression.expression": [
+      "constructor"
+    ],
+    "ConditionalExpression.colonToken": [],
+    "ConditionalExpression.condition": [
+      "condition"
+    ],
+    "ConditionalExpression.questionToken": [],
+    "ConditionalExpression.whenFalse": [
+      "alternative"
+    ],
+    "ConditionalExpression.whenTrue": [
+      "consequence"
+    ],
+    "ImportClause.name": [
+      "default"
+    ],
+    "ComputedPropertyName.expression": [],
+    "PropertyDeclaration.jsDoc": [],
+    "MethodDeclaration.typeParameters": [],
+    "MethodSignature.jsDoc": [],
+    "RestType.type": [],
+    "PropertyDeclaration.questionToken": [],
+    "NewExpression.arguments": [],
+    "ClassDeclaration.typeParameters": [],
+    "CallSignature.type": [
+      "return_type"
+    ],
+    "CallSignature.parameters": [],
+    "Constructor.jsDoc": [],
+    "TemplateExpression.templateSpans": [],
+    "TemplateSpan.expression": [],
+    "TemplateSpan.literal": [],
+    "TemplateExpression.head": [],
+    "EnumDeclaration.members": [],
+    "EnumMember.name": [
+      "name"
+    ],
+    "EnumMember.initializer": [
+      "value"
+    ],
+    "ShorthandPropertyAssignment.name": [
+      "name"
+    ],
+    "EnumDeclaration.modifiers": [],
+    "IfStatement.elseStatement": [],
+    "GetAccessor.name": [
+      "name"
+    ],
+    "CallExpression.typeArguments": [],
+    "EnumDeclaration.name": [
+      "name"
+    ],
+    "ConstructSignature.type": [
+      "return_type"
+    ],
+    "MappedType.questionToken": [],
+    "AwaitExpression.expression": [],
+    "GetAccessor.type": [
+      "return_type"
+    ],
+    "ArrowFunction.modifiers": [],
+    "MethodDeclaration.body": [
+      "body"
+    ],
+    "ConstructSignature.parameters": [],
+    "ThrowStatement.expression": [],
+    "TypeOfExpression.expression": [
+      "operand"
+    ],
+    "TemplateLiteralType.templateSpans": [],
+    "TemplateLiteralTypeSpan.literal": [],
+    "TemplateLiteralTypeSpan.type": [],
+    "TemplateLiteralType.head": [],
+    "Parameter.initializer": [
+      "value"
+    ],
+    "ImportDeclaration.jsDoc": [],
+    "NonNullExpression.expression": [
+      "="
+    ],
+    "MethodSignature.typeParameters": [],
+    "PostfixUnaryExpression.operand": [
+      "operand"
+    ],
+    "PropertyAccessExpression.questionDotToken": [
+      "operator"
+    ],
+    "BindingElement.propertyName": [
+      "key"
+    ],
+    "ExportDeclaration.jsDoc": [],
+    "ConstructorType.type": [
+      "return_type"
+    ],
+    "NamedTupleMember.name": [
+      "label"
+    ],
+    "NamedTupleMember.type": [
+      "type"
+    ],
+    "ConstructorType.parameters": [],
+    "Constructor.body": [
+      "body"
+    ],
+    "ForOfStatement.expression": [
+      "right"
+    ],
+    "ForOfStatement.initializer": [],
+    "ForOfStatement.statement": [
+      "body"
+    ],
+    "ForStatement.statement": [
+      "body"
+    ],
+    "MethodSignature.questionToken": [],
+    "PropertyDeclaration.initializer": [
+      "value"
+    ],
+    "SpreadElement.expression": [],
+    "ForStatement.condition": [
+      "condition"
+    ],
+    "TryStatement.tryBlock": [
+      "body"
+    ],
+    "EnumDeclaration.jsDoc": [],
+    "CaseClause.statements": [],
+    "CaseBlock.clauses": [],
+    "CaseClause.expression": [
+      "value"
+    ],
+    "SwitchStatement.caseBlock": [
+      "body"
+    ],
+    "SwitchStatement.expression": [],
+    "ForStatement.initializer": [
+      "initializer"
+    ],
+    "ForStatement.incrementor": [
+      "increment"
+    ],
+    "ArrayBindingPattern.elements": [],
+    "CatchClause.block": [
+      "body"
+    ],
+    "TryStatement.catchClause": [],
+    "DefaultClause.statements": [],
+    "GetAccessor.jsDoc": [],
+    "ImportEqualsDeclaration.moduleReference": [
+      "value"
+    ],
+    "ImportEqualsDeclaration.name": [
+      "name"
+    ],
+    "NewExpression.typeArguments": [],
+    "MappedType.nameType": [
+      "alias"
+    ],
+    "TaggedTemplateExpression.tag": [
+      "function"
+    ],
+    "TaggedTemplateExpression.template": [
+      "arguments"
+    ],
+    "ArrowFunction.type": [
+      "return_type"
+    ],
+    "CatchClause.variableDeclaration": [
+      "parameter"
+    ],
+    "SpreadAssignment.expression": [],
+    "ExternalModuleReference.expression": [],
+    "CallSignature.jsDoc": [],
+    "OptionalType.type": [],
+    "Constructor.modifiers": [],
+    "CallSignature.typeParameters": [],
+    "FunctionExpression.body": [
+      "body"
+    ],
+    "WhileStatement.expression": [],
+    "WhileStatement.statement": [
+      "body"
+    ],
+    "JsxAttributes.properties": [],
+    "JsxElement.children": [],
+    "JsxAttribute.initializer": [
+      "value"
+    ],
+    "JsxAttribute.name": [
+      "name"
+    ],
+    "JsxExpression.expression": [],
+    "JsxClosingElement.tagName": [
+      "name"
+    ],
+    "JsxElement.closingElement": [
+      "close_tag"
+    ],
+    "JsxElement.openingElement": [
+      "open_tag"
+    ],
+    "JsxOpeningElement.attributes": [],
+    "JsxOpeningElement.tagName": [
+      "name"
+    ],
+    "JsxSelfClosingElement.tagName": [
+      "name"
+    ],
+    "JsxSelfClosingElement.attributes": [],
+    "JsxSpreadAttribute.expression": [],
+    "NamespaceExport.name": [],
+    "FunctionExpression.parameters": [],
+    "MappedType.readonlyToken": [],
+    "ForInStatement.expression": [
+      "right"
+    ],
+    "ForInStatement.statement": [
+      "body"
+    ],
+    "ForInStatement.initializer": [
+      "left"
+    ],
+    "ConstructSignature.jsDoc": [],
+    "Parameter.jsDoc": [],
+    "EnumMember.jsDoc": [],
+    "SetAccessor.name": [
+      "name"
+    ],
+    "SetAccessor.parameters": [],
+    "TypePredicate.assertsModifier": [],
+    "Parameter.modifiers": [],
+    "BindingElement.dotDotDotToken": [],
+    "CallExpression.questionDotToken": [],
+    "ArrowFunction.typeParameters": [],
+    "GetAccessor.modifiers": [],
+    "ModuleDeclaration.jsDoc": [],
+    "DeleteExpression.expression": [
+      "operand"
+    ],
+    "ElementAccessExpression.questionDotToken": [],
+    "FunctionExpression.name": [
+      "name"
+    ],
+    "GetAccessor.body": [
+      "body"
+    ],
+    "IndexSignature.jsDoc": [],
+    "TypeParameter.modifiers": [],
+    "BindingElement.initializer": [
+      "default"
+    ],
+    "SatisfiesExpression.expression": [],
+    "SatisfiesExpression.type": [],
+    "ExpressionStatement.jsDoc": [],
+    "NamespaceExportDeclaration.name": [],
+    "TryStatement.finallyBlock": [],
+    "NamedTupleMember.questionToken": [],
+    "ExportSpecifier.jsDoc": [],
+    "SetAccessor.jsDoc": [],
+    "ConstructSignature.typeParameters": [],
+    "PropertyDeclaration.exclamationToken": [],
+    "DoStatement.expression": [],
+    "DoStatement.statement": [
+      "body"
+    ],
+    "IndexSignature.modifiers": [],
+    "NamedTupleMember.dotDotDotToken": [],
+    "FunctionExpression.type": [
+      "return_type"
+    ],
+    "ExportAssignment.jsDoc": [],
+    "TypeQuery.typeArguments": [],
+    "ImportEqualsDeclaration.jsDoc": [],
+    "ConstructorType.modifiers": [],
+    "Decorator.expression": [],
+    "ImportEqualsDeclaration.modifiers": [],
+    "VoidExpression.expression": [
+      "operand"
+    ],
+    "FunctionType.jsDoc": [],
+    "FunctionExpression.modifiers": [],
+    "MethodDeclaration.questionToken": [],
+    "VariableDeclaration.exclamationToken": [],
+    "PropertyAssignment.jsDoc": [],
+    "SetAccessor.modifiers": [],
+    "ShorthandPropertyAssignment.equalsToken": [],
+    "ShorthandPropertyAssignment.objectAssignmentInitializer": [
+      "default"
+    ],
+    "FunctionDeclaration.asteriskToken": [],
+    "ClassExpression.members": [],
+    "VariableDeclaration.jsDoc": [],
+    "ClassExpression.name": [
+      "name"
+    ],
+    "ForOfStatement.awaitModifier": [],
+    "LabeledStatement.label": [
+      "label"
+    ],
+    "LabeledStatement.statement": [
+      "body"
+    ],
+    "MetaProperty.name": [],
+    "SetAccessor.body": [
+      "body"
+    ],
+    "YieldExpression.expression": [],
+    "BreakStatement.label": [
+      "label"
+    ],
+    "ContinueStatement.label": [
+      "label"
+    ],
+    "ReturnStatement.jsDoc": [],
+    "ThrowStatement.jsDoc": [],
+    "PrivateIdentifier.escapedText": []
+  }
+}

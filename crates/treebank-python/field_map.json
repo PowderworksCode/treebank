@@ -1,0 +1,332 @@
+{
+  "rule": "Where each CPython `ast` labelled edge lands in our tree. The node map says the same things are there; this says they are CONNECTED the same way. Two trees can agree on every span and every kind and still attach the children under different names -- `orelse` where `body` belongs is a program and its opposite, with nothing else to tell them apart.",
+  "forms": "`[\"right\"]` -- the oracle's child IS the child under our `right` field. `[\"body>\"]` -- it lives SOMEWHERE UNDER our `body` field, which is what a list field looks like when we wrap it: CPython's `ClassDef.body` is a list of statements and ours is one `block` node holding them. The weaker claim is the true one there, and it still checks something. `[]` -- we attach this child POSITIONALLY, with no field name at all.",
+  "unlabelled_note": "Roughly half of CPython's labelled edges are `[]` here. That is a finding, not a formality: an unnamed edge is one a consumer cannot query by role. A call's `function` is labelled and its arguments are not; a `return`'s value has no name. Some of those are deliberate (positional lists, and slice bounds where the empty forms have to stay expressible) and some are just gaps. Each entry carries which.",
+  "map": {
+    "AnnAssign.target": [
+      "left",
+      "left>"
+    ],
+    "AnnAssign.annotation": [
+      "type"
+    ],
+    "AnnAssign.value": [
+      "right",
+      "right>"
+    ],
+    "Assign.targets": [
+      "left",
+      "left>"
+    ],
+    "Assign.value": [
+      "right",
+      "right>"
+    ],
+    "AugAssign.target": [
+      "left",
+      "left>"
+    ],
+    "AugAssign.value": [
+      "right",
+      "right>"
+    ],
+    "BinOp.left": [
+      "left",
+      "left>"
+    ],
+    "BinOp.right": [
+      "right",
+      "right>"
+    ],
+    "BoolOp.values": [
+      "left",
+      "right",
+      "left>",
+      "right>"
+    ],
+    "Attribute.value": [
+      "object",
+      "object>"
+    ],
+    "Call.func": [
+      "function",
+      "function>"
+    ],
+    "Subscript.value": [
+      "object",
+      "object>"
+    ],
+    "Subscript.slice": [
+      "subscript",
+      "subscript>"
+    ],
+    "IfExp.test": [
+      "condition",
+      "condition>"
+    ],
+    "IfExp.body": [
+      "consequence",
+      "consequence>"
+    ],
+    "IfExp.orelse": [
+      "alternative",
+      "alternative>"
+    ],
+    "If.test": [
+      "condition",
+      "condition>"
+    ],
+    "While.test": [
+      "condition",
+      "condition>"
+    ],
+    "For.target": [
+      "left",
+      "left>"
+    ],
+    "For.iter": [
+      "right",
+      "right>"
+    ],
+    "AsyncFor.target": [
+      "left",
+      "left>"
+    ],
+    "AsyncFor.iter": [
+      "right",
+      "right>"
+    ],
+    "Lambda.body": [
+      "body",
+      "body>"
+    ],
+    "UnaryOp.operand": [
+      "operand",
+      "operand>"
+    ],
+    "FormattedValue.value": [
+      "expression",
+      "expression>"
+    ],
+    "FormattedValue.format_spec": [
+      "format"
+    ],
+    "FunctionDef.returns": [
+      "return_type",
+      "return_type>"
+    ],
+    "AsyncFunctionDef.returns": [
+      "return_type",
+      "return_type>"
+    ],
+    "NamedExpr.target": [
+      "name"
+    ],
+    "NamedExpr.value": [
+      "value",
+      "value>"
+    ],
+    "Raise.cause": [
+      "cause",
+      "cause>"
+    ],
+    "Match.subject": [
+      "subject",
+      "subject>"
+    ],
+    "MatchAs.pattern": [
+      "pattern"
+    ],
+    "MatchClass.cls": [
+      "class"
+    ],
+    "TypeAlias.name": [
+      "name"
+    ],
+    "TypeAlias.value": [
+      "value",
+      "value>"
+    ],
+    "keyword.value": [
+      "value",
+      "value>"
+    ],
+    "arg.annotation": [
+      "type",
+      "type>"
+    ],
+    "ListComp.elt": [
+      "body",
+      "body>"
+    ],
+    "SetComp.elt": [
+      "body",
+      "body>"
+    ],
+    "GeneratorExp.elt": [
+      "body",
+      "body>"
+    ],
+    "FunctionDef.body": [
+      "body>"
+    ],
+    "AsyncFunctionDef.body": [
+      "body>"
+    ],
+    "ClassDef.body": [
+      "body>"
+    ],
+    "If.body": [
+      "body>"
+    ],
+    "For.body": [
+      "body>"
+    ],
+    "AsyncFor.body": [
+      "body>"
+    ],
+    "While.body": [
+      "body>"
+    ],
+    "With.body": [
+      "body>"
+    ],
+    "AsyncWith.body": [
+      "body>"
+    ],
+    "Try.body": [
+      "body>"
+    ],
+    "TryStar.body": [
+      "body>"
+    ],
+    "ExceptHandler.body": [
+      "body>"
+    ],
+    "Try.finalbody": [
+      "body>"
+    ],
+    "For.orelse": [
+      "body>"
+    ],
+    "While.orelse": [
+      "body>"
+    ],
+    "If.orelse": [
+      "alternative",
+      "alternative>"
+    ],
+    "Try.orelse": [
+      "alternative>"
+    ],
+    "Call.args": [],
+    "Call.keywords": [],
+    "Compare.left": [],
+    "Compare.comparators": [],
+    "Dict.keys": [],
+    "Dict.values": [],
+    "DictComp.key": [],
+    "DictComp.value": [],
+    "List.elts": [],
+    "Tuple.elts": [],
+    "Set.elts": [],
+    "Slice.lower": [],
+    "Slice.upper": [],
+    "Slice.step": [],
+    "Return.value": [],
+    "Yield.value": [],
+    "YieldFrom.value": [],
+    "Await.value": [],
+    "Raise.exc": [],
+    "Starred.value": [],
+    "Expr.value": [],
+    "Assert.test": [],
+    "Assert.msg": [],
+    "Delete.targets": [],
+    "Import.names": [],
+    "ImportFrom.names": [],
+    "JoinedStr.values": [],
+    "ClassDef.bases": [],
+    "ClassDef.keywords": [],
+    "ClassDef.decorator_list": [],
+    "FunctionDef.decorator_list": [],
+    "AsyncFunctionDef.decorator_list": [],
+    "ExceptHandler.type": [],
+    "Try.handlers": [],
+    "TryStar.handlers": [],
+    "MatchValue.value": [],
+    "MatchClass.patterns": [],
+    "MatchClass.kwd_patterns": [],
+    "MatchMapping.keys": [],
+    "MatchMapping.patterns": [],
+    "MatchOr.patterns": [],
+    "MatchSequence.patterns": [],
+    "MatchStar.name": [],
+    "MatchAs.name": [],
+    "MatchMapping.rest": [],
+    "TypeVar.bound": [],
+    "TypeAlias.type_params": [],
+    "FunctionDef.type_params": [],
+    "AsyncFunctionDef.type_params": [],
+    "ClassDef.type_params": [],
+    "TypeVarTuple.default_value": [],
+    "TypeVar.default_value": [],
+    "ParamSpec.default_value": []
+  },
+  "unlabelled_reasons": {
+    "Call.args": "a call's arguments sit in an `arguments` node, unnamed; only `function` is labelled",
+    "Call.keywords": "see Call.args",
+    "Compare.left": "comparison operands are positional; the chain form (`a < b < c`) is why",
+    "Compare.comparators": "see Compare.left",
+    "Dict.keys": "a dictionary's pairs are `pair` nodes with unnamed key and value",
+    "Dict.values": "see Dict.keys",
+    "DictComp.key": "see Dict.keys",
+    "DictComp.value": "see Dict.keys",
+    "List.elts": "collection elements are positional",
+    "Tuple.elts": "see List.elts",
+    "Set.elts": "see List.elts",
+    "Slice.lower": "slice bounds are positional, which is how the empty forms (`a[:]`, `a[::2]`) stay expressible",
+    "Slice.upper": "see Slice.lower",
+    "Slice.step": "see Slice.lower",
+    "Return.value": "the value of a jump is its only child",
+    "Yield.value": "see Return.value",
+    "YieldFrom.value": "see Return.value",
+    "Await.value": "see Return.value",
+    "Raise.exc": "see Return.value",
+    "Starred.value": "see Return.value",
+    "Expr.value": "an expression statement's only child",
+    "Assert.test": "assert's parts are positional",
+    "Assert.msg": "see Assert.test",
+    "Delete.targets": "see Assert.test",
+    "Import.names": "import aliases are positional",
+    "ImportFrom.names": "see Import.names",
+    "JoinedStr.values": "the pieces of an f-string are positional",
+    "ClassDef.bases": "a class's arguments sit in an `arguments` node, unnamed",
+    "ClassDef.keywords": "see ClassDef.bases",
+    "ClassDef.decorator_list": "decorators are `_attribute` members of the definition, positional",
+    "FunctionDef.decorator_list": "see ClassDef.decorator_list",
+    "AsyncFunctionDef.decorator_list": "see ClassDef.decorator_list",
+    "ExceptHandler.type": "the caught type is positional in an except clause",
+    "Try.handlers": "except clauses are positional members of the try statement",
+    "TryStar.handlers": "see Try.handlers",
+    "MatchValue.value": "match pattern parts are positional",
+    "MatchClass.patterns": "see MatchValue.value",
+    "MatchClass.kwd_patterns": "see MatchValue.value",
+    "MatchMapping.keys": "see MatchValue.value",
+    "MatchMapping.patterns": "see MatchValue.value",
+    "MatchOr.patterns": "see MatchValue.value",
+    "MatchSequence.patterns": "see MatchValue.value",
+    "MatchStar.name": "see MatchValue.value",
+    "MatchAs.name": "see MatchValue.value",
+    "MatchMapping.rest": "see MatchValue.value",
+    "TypeVar.bound": "PEP 695 type parameter bounds are positional",
+    "TypeAlias.type_params": "see TypeVar.bound",
+    "FunctionDef.type_params": "see TypeVar.bound",
+    "AsyncFunctionDef.type_params": "see TypeVar.bound",
+    "ClassDef.type_params": "see TypeVar.bound",
+    "TypeVarTuple.default_value": "see TypeVar.bound",
+    "TypeVar.default_value": "see TypeVar.bound",
+    "ParamSpec.default_value": "see TypeVar.bound"
+  },
+  "parens_note": "Many entries list both `\"right\"` and `\"right>\"`. CPython's AST has no parenthesised-expression node -- `x = (y)` gives `Assign.value = y` -- so its child can sit one or more levels inside ours. The containment form is the true claim wherever parentheses are legal, and it still says the child is under the right FIELD, which is the part that matters."
+}

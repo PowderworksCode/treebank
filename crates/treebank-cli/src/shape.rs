@@ -67,6 +67,16 @@ pub struct ShapeReport {
     /// Oracle kinds the mapping never mentions. Holes, not defects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub unmapped: Vec<ShapeCluster>,
+    /// Labelled edges that do not land where the field map says.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub field_mismatches: Vec<ShapeCluster>,
+    /// Oracle edges the field map never mentions.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub field_unmapped: Vec<ShapeCluster>,
+    #[serde(default)]
+    pub field_mismatched: usize,
+    #[serde(default)]
+    pub field_unmapped_count: usize,
     #[serde(default)]
     pub mismatched_nodes: usize,
     #[serde(default)]
@@ -101,6 +111,15 @@ struct ShapePolicy {
     /// forgives only the case where an identifier was the ONLY thing we had.
     #[serde(default)]
     mismatch_ignore: Vec<Ignored>,
+    /// Field pairings the map is allowed to fail on, by full signature.
+    #[serde(default)]
+    field_mismatch_ignore: Vec<Ignored>,
+    /// The edge ratchet, same idea as `baseline_missed`. Set where the field
+    /// queue is real but not yet worked through: it stops the number growing
+    /// while leaving every entry visible in the report, which an ignore list
+    /// would not.
+    #[serde(default)]
+    baseline_field_mismatched: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -108,10 +127,12 @@ struct Ignored {
     signature: String,
 }
 
-fn load_policy(grammar_dir: &Path) -> Result<(HashSet<String>, Option<usize>, HashSet<String>)> {
+type Policy = (HashSet<String>, Option<usize>, HashSet<String>, HashSet<String>, Option<usize>);
+
+fn load_policy(grammar_dir: &Path) -> Result<Policy> {
     let path = grammar_dir.join("shape_policy.json");
     if !path.exists() {
-        return Ok((Default::default(), None, Default::default()));
+        return Ok((Default::default(), None, Default::default(), Default::default(), None));
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("read {}", path.display()))?;
@@ -121,6 +142,8 @@ fn load_policy(grammar_dir: &Path) -> Result<(HashSet<String>, Option<usize>, Ha
         policy.ignore.into_iter().map(|i| i.signature).collect(),
         policy.baseline_missed,
         policy.mismatch_ignore.into_iter().map(|i| i.signature).collect(),
+        policy.field_mismatch_ignore.into_iter().map(|i| i.signature).collect(),
+        policy.baseline_field_mismatched,
     ))
 }
 
@@ -185,6 +208,146 @@ fn load_node_map(grammar_dir: &Path) -> Result<(HashMap<String, HashSet<String>>
     ))
 }
 
+/// Our labelled edges, keyed by (parent span, our field name) -> the child
+/// spans found under it.
+///
+/// Derived spans are included for the CHILD, the same trimming and trivia
+/// forgiveness the node comparison uses, because a field's child is a node
+/// like any other and the two parsers disagree about its punctuation in the
+/// same ways.
+fn our_edges(
+    root: tree_sitter::Node,
+    src: &[u8],
+) -> HashMap<((usize, usize), String), HashSet<(usize, usize)>> {
+    let mut out: HashMap<((usize, usize), String), HashSet<(usize, usize)>> = HashMap::new();
+    let mut stack = vec![root];
+    while let Some(node) = stack.pop() {
+        // The PARENT needs its derived spans too, not just the child's. Our
+        // `if_statement` runs to the end of the line and CPython's `If` stops
+        // at the last statement, so keying on the raw span alone made every
+        // edge look unlabelled -- which is what the first run of this check
+        // reported, and it was the checker's fault rather than the grammar's.
+        let (pa, pb) = (node.start_byte(), node.end_byte());
+        let pc = content_end(node);
+        let mut parents = vec![
+            (pa, pb),
+            (pa, trim_end(src, pa, pb.min(src.len()))),
+        ];
+        if pc > pa && pc < pb {
+            parents.push((pa, pc));
+            parents.push((pa, trim_end(src, pa, pc.min(src.len()))));
+        }
+        for lead in leading_starts(node) {
+            if lead < pa {
+                parents.push((lead, pb));
+                parents.push((lead, trim_end(src, lead, pb.min(src.len()))));
+            }
+        }
+        // ...and the node MINUS a prefix of its own children. The oracle
+        // often starts a node later than we do because it treats the prefix
+        // as separate: CPython's `FunctionDef` starts at `def` while our
+        // `function_definition` starts at the first decorator, and tsc's
+        // `ClassDeclaration` starts at `export`. Generic rather than a list
+        // of prefix kinds -- whatever the prefix is, dropping it is one of
+        // the spans the oracle might be naming. Capped at four, which covers
+        // decorators, modifiers and `async` without walking long bodies.
+        {
+            let mut c = node.walk();
+            let kids: Vec<_> = node.children(&mut c).collect();
+            for child in kids.iter().take(4) {
+                let cs = child.start_byte();
+                if cs > pa && cs < pb {
+                    parents.push((cs, pb));
+                    parents.push((cs, trim_end(src, cs, pb.min(src.len()))));
+                }
+            }
+            // ...and PLUS a preceding sibling, for the mirror case: the
+            // oracle can start a node EARLIER than we do. tsc keeps
+            // modifiers inside the declaration, so its `FunctionDeclaration`
+            // begins at `export` while our `function_definition` begins at
+            // `function` and the `export` is a sibling under an
+            // `export_statement`. The fields live on the inner node, so the
+            // outer span has to reach them.
+            {
+                let mut prev = node.prev_sibling();
+                for _ in 0..3 {
+                    let Some(ps) = prev else { break };
+                    let s0 = ps.start_byte();
+                    if s0 < pa {
+                        parents.push((s0, pb));
+                        parents.push((s0, trim_end(src, s0, pb.min(src.len()))));
+                    }
+                    prev = ps.prev_sibling();
+                }
+            }
+            // ...and minus a SUFFIX, for the same reason from the other end.
+            // CPython's `arg` is `x: int` where our `parameter` is
+            // `x: int = 1`, because the default belongs to a parallel list in
+            // its model and to the parameter in ours.
+            for child in kids.iter().rev().take(4) {
+                let ce = child.end_byte();
+                if ce > pa && ce < pb {
+                    parents.push((pa, ce));
+                    parents.push((pa, trim_end(src, pa, ce.min(src.len()))));
+                }
+            }
+        }
+        parents.sort_unstable();
+        parents.dedup();
+        let mut cursor = node.walk();
+        for (i, child) in node.children(&mut cursor).enumerate() {
+            stack.push(child);
+            let Some(field) = node.field_name_for_child(i as u32) else {
+                continue;
+            };
+            let (a, b) = (child.start_byte(), child.end_byte());
+            let mut kids = vec![(a, b), (a, trim_end(src, a, b.min(src.len())))];
+            let c = content_end(child);
+            if c > a && c < b {
+                kids.push((a, c));
+                kids.push((a, trim_end(src, a, c.min(src.len()))));
+            }
+            for lead in leading_starts(child) {
+                if lead < a {
+                    kids.push((lead, b));
+                    kids.push((lead, trim_end(src, lead, b.min(src.len()))));
+                }
+            }
+            for p in &parents {
+                let slot = out.entry((*p, field.to_string())).or_default();
+                slot.extend(kids.iter().copied());
+            }
+        }
+    }
+    out
+}
+
+/// The declared correspondence between the oracle's field names and ours,
+/// keyed `"<OracleKind>.<field>"`.
+///
+/// An empty list is a real answer, not a hole: it says the oracle names this
+/// edge and we attach the child POSITIONALLY. That is a decision worth
+/// writing down, because an unnamed edge is one a consumer cannot query.
+fn load_field_map(grammar_dir: &Path) -> Result<(HashMap<String, HashSet<String>>, bool)> {
+    #[derive(Deserialize, Default)]
+    struct FieldMap {
+        #[serde(default)]
+        map: HashMap<String, Vec<String>>,
+    }
+    let path = grammar_dir.join("field_map.json");
+    if !path.exists() {
+        return Ok((Default::default(), false));
+    }
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {}", path.display()))?;
+    let m: FieldMap = serde_json::from_str(&text)
+        .with_context(|| format!("parse {}", path.display()))?;
+    Ok((
+        m.map.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect(),
+        true,
+    ))
+}
+
 /// One file's contribution, kept as a struct because there are now three
 /// kinds of finding and a tuple of seven had stopped being readable.
 struct FileResult {
@@ -198,6 +361,10 @@ struct FileResult {
     mismatches: Vec<Miss>,
     /// An oracle kind the mapping does not mention.
     unmapped: Vec<Miss>,
+    /// The oracle's labelled edge is not where the field map says it is.
+    field_mismatches: Vec<Miss>,
+    /// An oracle edge the field map does not mention.
+    field_unmapped: Vec<Miss>,
 }
 
 impl FileResult {
@@ -210,6 +377,8 @@ impl FileResult {
             misses: Vec::new(),
             mismatches: Vec::new(),
             unmapped: Vec::new(),
+            field_mismatches: Vec::new(),
+            field_unmapped: Vec::new(),
         }
     }
 }
@@ -426,8 +595,10 @@ pub fn run(
         }
     };
 
-    let (ignore, baseline, mismatch_ignore) = load_policy(grammar_dir)?;
+    let (ignore, baseline, mismatch_ignore, field_ignore, field_baseline) =
+        load_policy(grammar_dir)?;
     let (node_map, has_map) = load_node_map(grammar_dir)?;
+    let (field_map, has_field_map) = load_field_map(grammar_dir)?;
     let dirs = crate::routing::grammar_dirs(lang);
     let langs: Vec<(tree_sitter::Language, String)> = dirs
         .iter()
@@ -455,12 +626,18 @@ pub fn run(
         clusters: Vec::new(),
         mismatches: Vec::new(),
         unmapped: Vec::new(),
+        field_mismatches: Vec::new(),
+        field_unmapped: Vec::new(),
+        field_mismatched: 0,
+        field_unmapped_count: 0,
         mismatched_nodes: 0,
         unmapped_nodes: 0,
     };
     let mut by_sig: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
     let mut by_mismatch: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
     let mut by_unmapped: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
+    let mut by_field: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
+    let mut by_field_unmapped: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
 
     for chunk in files.chunks(BATCH) {
         let batch: Vec<String> = chunk.to_vec();
@@ -598,6 +775,120 @@ pub fn run(
                         text: text.replace('\n', "\\n"),
                     });
                 }
+                // Edges. Only where the oracle reports them and the field
+                // map is declared -- syn has no field reflection, so Rust
+                // asks nothing here rather than pretending.
+                let mut field_mismatches = Vec::new();
+                let mut field_unmapped = Vec::new();
+                if has_field_map && file.has_edges {
+                    let mine = our_edges(tree.root_node(), &src);
+                    let mut by_child: HashMap<(usize, usize), Vec<((usize, usize), String)>> =
+                        HashMap::new();
+                    for ((p, f), kids) in &mine {
+                        for k in kids {
+                            by_child.entry(*k).or_default().push((*p, f.clone()));
+                        }
+                    }
+                    for e in &file.edges {
+                        let key = format!("{}.{}", e.parent_kind, e.field);
+                        let parents_probe = [
+                            e.parent,
+                            (e.parent.0, trim_end(&src, e.parent.0, e.parent.1.min(src.len()))),
+                        ];
+                        // Reverse index, not a scan. Answering "what field
+                        // did we actually put this child under" by walking
+                        // the whole per-file edge map is quadratic, and in
+                        // BOOTSTRAP mode -- where every edge is unmapped and
+                        // so every edge asks -- it took a 25-second corpus
+                        // run past ten minutes on a thousand files.
+                        let observed = |by_child: &HashMap<(usize, usize), Vec<((usize, usize), String)>>| {
+                            let mut got: Vec<String> = by_child
+                                .get(&e.child)
+                                .into_iter()
+                                .flatten()
+                                .filter(|(p, _)| parents_probe.contains(p))
+                                .map(|(_, f)| f.clone())
+                                .collect();
+                            got.sort();
+                            got.dedup();
+                            if got.is_empty() { "(no field)".to_string() } else { got.join("|") }
+                        };
+                        let Some(expected) = field_map.get(&key) else {
+                            let text = String::from_utf8_lossy(
+                                &src[e.child.0.min(src.len())..e.child.1.min(src.len())],
+                            );
+                            let text: String = text.chars().take(50).collect();
+                            field_unmapped.push(Miss {
+                                path: rel.to_string(),
+                                kind: format!("{key} => {}", observed(&by_child)),
+                                start: e.child.0,
+                                end: e.child.1,
+                                text: text.replace('\n', "\\n"),
+                            });
+                            continue;
+                        };
+                        // An empty list DECLARES that we attach this child
+                        // positionally. Nothing to look for.
+                        if expected.is_empty() {
+                            continue;
+                        }
+                        // The oracle's parent may correspond to any of our
+                        // nodes at that span; the edge holds if ANY of them
+                        // carries the child under a mapped field.
+                        let parents = [e.parent, (e.parent.0, trim_end(&src, e.parent.0, e.parent.1.min(src.len())))];
+                        // Two shapes of correspondence, and the difference
+                        // is real. `"right"` says the oracle's child IS the
+                        // child under our `right` field. `"body>"` says it
+                        // lives SOMEWHERE UNDER our `body` field -- which is
+                        // what a list field looks like when we wrap it:
+                        // CPython's `ClassDef.body` is a list of statements
+                        // and ours is one `block` node holding them. The
+                        // weaker claim is still a claim, and it is the true
+                        // one; declaring `[]` there would check nothing.
+                        let found = parents.iter().any(|p| {
+                            expected.iter().any(|f| match f.strip_suffix('>') {
+                                _ if f == "=" => {
+                                    // A wrapper whose child has the SAME span:
+                                    // tsc's `TypeReference.typeName` on a bare
+                                    // `Foo` points at `Foo` itself, and there
+                                    // is no edge of ours to label because
+                                    // there is no second node. Distinct from
+                                    // `[]`, which says the child is real and
+                                    // we left it unnamed.
+                                    p.0 == e.child.0 && p.1 == e.child.1
+                                }
+                                Some(base) => mine
+                                    .get(&(*p, base.to_string()))
+                                    .is_some_and(|kids| {
+                                        kids.iter().any(|k| {
+                                            k.0 <= e.child.0 && k.1 >= e.child.1
+                                        })
+                                    }),
+                                None => mine
+                                    .get(&(*p, f.clone()))
+                                    .is_some_and(|kids| kids.contains(&e.child)),
+                            })
+                        });
+                        if !found {
+                            let sig = format!("{key} => {}", observed(&by_child));
+                            if field_ignore.contains(&sig) {
+                                continue;
+                            }
+                            let label = observed(&by_child);
+                            let text = String::from_utf8_lossy(
+                                &src[e.child.0.min(src.len())..e.child.1.min(src.len())],
+                            );
+                            let text: String = text.chars().take(50).collect();
+                            field_mismatches.push(Miss {
+                                path: rel.to_string(),
+                                kind: format!("{key} => {label}"),
+                                start: e.child.0,
+                                end: e.child.1,
+                                text: text.replace('\n', "\\n"),
+                            });
+                        }
+                    }
+                }
                 let n = misses.len();
                 Ok(FileResult {
                     oracle_nodes: file.spans.len(),
@@ -607,6 +898,8 @@ pub fn run(
                     misses,
                     mismatches,
                     unmapped,
+                    field_mismatches,
+                    field_unmapped,
                 })
             })
             .collect::<Result<_>>()?;
@@ -631,6 +924,12 @@ pub fn run(
             for m in r.unmapped {
                 by_unmapped.entry(m.kind.clone()).or_default().push(m);
             }
+            for m in r.field_mismatches {
+                by_field.entry(m.kind.clone()).or_default().push(m);
+            }
+            for m in r.field_unmapped {
+                by_field_unmapped.entry(m.kind.clone()).or_default().push(m);
+            }
         }
     }
 
@@ -643,6 +942,12 @@ pub fn run(
             examples: ms.into_iter().take(4).collect(),
         }
     };
+    report.field_mismatched = by_field.values().map(|v| v.len()).sum();
+    report.field_unmapped_count = by_field_unmapped.values().map(|v| v.len()).sum();
+    report.field_mismatches = by_field.into_iter().map(cluster_of).collect();
+    report.field_mismatches.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report.field_unmapped = by_field_unmapped.into_iter().map(cluster_of).collect();
+    report.field_unmapped.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
     report.mismatched_nodes = by_mismatch.values().map(|v| v.len()).sum();
     report.unmapped_nodes = by_unmapped.values().map(|v| v.len()).sum();
     report.mismatches = by_mismatch.into_iter().map(cluster_of).collect();
@@ -694,6 +999,27 @@ pub fn run(
             }
         }
     }
+    if has_field_map {
+        println!(
+            "shape: fields — {} edge mismatch(es) in {} cluster(s), {} unmapped edge(s) in {} kind(s)",
+            report.field_mismatched,
+            report.field_mismatches.len(),
+            report.field_unmapped_count,
+            report.field_unmapped.len(),
+        );
+        for c in report.field_mismatches.iter().take(14) {
+            println!("  FIELD    {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            if let Some(e) = c.examples.first() {
+                println!("            e.g. {}  {:?}", e.path, e.text);
+            }
+        }
+        for c in report.field_unmapped.iter().take(14) {
+            println!("  FIELD-U  {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            if let Some(e) = c.examples.first() {
+                println!("            e.g. {}  {:?}", e.path, e.text);
+            }
+        }
+    }
     for c in report.clusters.iter().take(12) {
         println!("  {:>6} files {:>7}x  {}", c.files, c.count, c.signature);
         if let Some(e) = c.examples.first() {
@@ -705,6 +1031,17 @@ pub fn run(
     std::fs::write(out, serde_json::to_string_pretty(&report)?)?;
     println!("shape: report at {}", out.display());
 
+    if let (Some(max), None) = (field_baseline, limit) {
+        anyhow::ensure!(
+            report.field_mismatched <= max,
+            "shape: {} edge mismatches, baseline is {}. Either a change moved a child to a \
+             different field -- read the FIELD clusters above -- or the corpus grew and the \
+             baseline in {}/shape_policy.json needs raising DELIBERATELY.",
+            report.field_mismatched,
+            max,
+            grammar_dir.display(),
+        );
+    }
     // A fixture directory is a ZERO ratchet -- every file in it is there
     // because a specific mis-parse was fixed, so any miss is that mis-parse
     // coming back.

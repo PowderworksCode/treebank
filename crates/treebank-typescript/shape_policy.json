@@ -114,5 +114,7 @@
       "signature": "RestType => conditional_type",
       "why": "The one deeply nested type-fest conditional already recorded under known_limits."
     }
-  ]
+  ],
+  "baseline_field_mismatched": 14634,
+  "field_note": "14,634 edge mismatches across 23 clusters, ratcheted rather than ignore-listed. Every one is an edge tsc labels and we do not carry under the mapped field -- `ArrowFunction.parameters`, `TypeParameter.name`, `BinaryExpression.operatorToken` and the rest. That is a work queue, and a ratchet keeps it visible where an ignore list would bury it. The python field map is at zero for comparison, so this is TypeScript's remaining distance rather than a limit of the check."
 }
