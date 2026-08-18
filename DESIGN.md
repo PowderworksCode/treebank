@@ -389,8 +389,45 @@ fix that raised the type operators above `PREC.cast` also lifted them above
 Offsets are bytes on both sides. tsc counts UTF-16 code units, so the
 conversion happens in the oracle script where the string is already decoded.
 
-Today only TypeScript and JavaScript have a span oracle. `treebank shape`
-says so rather than passing vacuously for the others.
+Every language has a span oracle, and each came from a different place:
+
+- **typescript / javascript** — `ts.createSourceFile`, walked with
+  `forEachChild`. Positions are UTF-16 code units, converted to bytes in the
+  oracle script where the string is already decoded.
+- **python** — CPython's `ast`. Columns are already UTF-8 byte offsets within
+  a line, so only the line starts have to be added back. Files whose PEP 263
+  coding declaration or BOM means `ast` reports offsets into a byte string
+  that is not the one on disk are skipped, not guessed at.
+- **rust** — `syn`, in-process, with `proc-macro2`'s `span-locations` feature
+  turning every span into a file-relative `byte_range()`.
+
+The rust choice is worth writing down, because the obvious candidate is the
+wrong one. **HIR is post-desugaring**: `for` and `while` become `loop` plus
+`match`, `?` becomes a match on `Try`, closures are rewritten. Comparing a
+surface tree against it would report a disagreement at every one of those,
+and none of them is a parser defect — HIR answers *what does this mean*, and
+this check asks *how is this written*. rustc's own AST is the right level but
+not reachable: `-Zast-json` was removed in 2020, and `-Zunpretty=ast-tree`
+prints session-global `BytePos` that would have to be mapped back per file,
+on nightly. `syn` is the right level, already a dependency, and needs no
+subprocess at all.
+
+Three comparison rules keep the signal usable, and all three are rules
+rather than allowlist entries — each was added for one language and then
+left the others' numbers unchanged, which is the test that it describes
+trivia rather than papering over a difference:
+
+1. **Separator-insensitive** — two parsers can agree completely and still put
+   a `;` on different sides of a boundary.
+2. **Trailing trivia** — a comment has to belong to somebody and they need
+   not agree on whom. Uses tree-sitter's own extra flag, so the checker knows
+   nothing about comments in any particular language.
+3. **Leading trivia** — the mirror, and Rust forces it: `syn` turns a `///`
+   doc comment into a `#[doc]` attribute *inside* the item, while we keep it
+   as an extra in front. Every prefix of the run of leading extras counts,
+   not just the longest, because a file that opens with `//!` and then
+   documents its first item has two contiguous extras and the oracle takes
+   only the second.
 
 Two oracle rules, both absolute. **An unreadable file is never an invalid
 file**: an oracle that cannot read its input exits non-zero with no verdict,

@@ -75,8 +75,61 @@
           ]
         },
         {
-          "type": "PREC",
+          "type": "PREC_DYNAMIC",
           "value": 1,
+          "content": {
+            "type": "PREC",
+            "value": 17,
+            "content": {
+              "type": "SEQ",
+              "members": [
+                {
+                  "type": "REPEAT",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_attribute"
+                  }
+                },
+                {
+                  "type": "CHOICE",
+                  "members": [
+                    {
+                      "type": "SYMBOL",
+                      "name": "_branch"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "_loop"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "async_block"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "const_block"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "unsafe_block"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "labeled_block"
+                    },
+                    {
+                      "type": "SYMBOL",
+                      "name": "_body"
+                    }
+                  ]
+                }
+              ]
+            }
+          }
+        },
+        {
+          "type": "PREC_DYNAMIC",
+          "value": -1,
           "content": {
             "type": "SEQ",
             "members": [
@@ -89,7 +142,7 @@
               },
               {
                 "type": "SYMBOL",
-                "name": "_expression_with_block"
+                "name": "macro_invocation"
               }
             ]
           }
@@ -8362,6 +8415,10 @@
     }
   ],
   "conflicts": [
+    [
+      "_invocation",
+      "expression_statement"
+    ],
     [
       "scoped_identifier",
       "generic_function",

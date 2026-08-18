@@ -153,6 +153,36 @@ fn content_end(node: tree_sitter::Node) -> usize {
     }
 }
 
+/// Where a node's span begins once the trivia immediately in front of it is
+/// counted as its own.
+///
+/// The mirror of `content_end`, and Rust is what forces it: `syn` turns a
+/// `///` doc comment into a `#[doc]` attribute, which is part of the item,
+/// while we keep it as a comment extra in front of the item. Neither is
+/// wrong -- one parser thinks the documentation is part of the thing
+/// documented and the other thinks it is trivia -- and it is the single
+/// largest source of disagreement in the Rust corpus.
+///
+/// Language-agnostic for the same reason as `content_end`: tree-sitter
+/// marks extras itself.
+/// Every prefix of that run, not just the longest. A file that opens with a
+/// `//!` module comment, then a blank line, then a `///` doc comment on the
+/// item, has TWO contiguous extras in front of the item, and syn takes only
+/// the second -- the one that is the item's documentation. Taking only the
+/// longest extension would miss it by exactly one comment.
+fn leading_starts(node: tree_sitter::Node) -> Vec<usize> {
+    let mut out = Vec::new();
+    let mut prev = node.prev_sibling();
+    while let Some(p) = prev {
+        if !p.is_extra() {
+            break;
+        }
+        out.push(p.start_byte());
+        prev = p.prev_sibling();
+    }
+    out
+}
+
 /// Every byte span in our tree, named and anonymous alike, plus each one's
 /// separator-trimmed form. Anonymous nodes count: the oracle reports keyword
 /// and punctuation nodes too, and a keyword we tokenise identically is
@@ -174,6 +204,20 @@ fn our_spans(root: tree_sitter::Node, src: &[u8]) -> HashSet<(usize, usize)> {
             if c > a && c < b {
                 out.insert((a, c));
                 out.insert((a, trim_end(src, a, c.min(src.len()))));
+            }
+            // ...and the same node counting the trivia in FRONT of it as its
+            // own, which is where the two parsers disagree about doc
+            // comments.
+            for lead in leading_starts(n) {
+                if lead >= a {
+                    continue;
+                }
+                out.insert((lead, b));
+                out.insert((lead, trim_end(src, lead, b.min(src.len()))));
+                if c > lead && c < b {
+                    out.insert((lead, c));
+                    out.insert((lead, trim_end(src, lead, c.min(src.len()))));
+                }
             }
         }
         if recurse && cursor.goto_first_child() {

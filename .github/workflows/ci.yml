@@ -85,7 +85,7 @@ jobs:
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
       - name: shape (tree agrees with the reference parser)
-        if: matrix.grammar == 'typescript' || matrix.grammar == 'python'
+        # every grammar has a span oracle now
         run: ./target/debug/treebank shape
           --lang ${{ matrix.grammar }}
           --grammar crates/treebank-${{ matrix.grammar }}

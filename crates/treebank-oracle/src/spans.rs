@@ -63,16 +63,17 @@ pub trait SpanOracle: Sync {
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>>;
 }
 
-/// The languages whose oracle can report boundaries. `None` is an honest
-/// answer, not a silent no-op: a caller that asks for a shape check on a
-/// language without one gets told so.
+/// The languages whose oracle can report boundaries. Every one of them has
+/// one now; the `Option` stays because the next language added will not,
+/// and `None` is an honest answer where a silent no-op would not be.
 pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
     static TS: TypeScriptSpans = TypeScriptSpans;
     static PY: PythonSpans = PythonSpans;
+    static RS: crate::rust_spans::RustSpans = crate::rust_spans::RustSpans;
     match name {
         LangName::Typescript | LangName::Javascript => Some(&TS),
         LangName::Python => Some(&PY),
-        _ => None,
+        LangName::Rust => Some(&RS),
     }
 }
 
