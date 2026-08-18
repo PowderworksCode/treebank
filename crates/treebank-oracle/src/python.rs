@@ -60,6 +60,24 @@ impl Oracle for Python {
         Ok(verdicts)
     }
 
+    /// `ast.parse` alone: the parser without the checks CPython runs after
+    /// it. `validate` uses `compile`, deliberately and for reasons its
+    /// script's header sets out; the gap between the two is what this
+    /// measures.
+    fn validate_syntax_only(
+        &self,
+        srcroot: &Path,
+        paths: &[String],
+    ) -> Result<Option<HashMap<String, bool>>> {
+        Ok(Some(stdin_oracle::run(
+            "python3",
+            &[crate::tool("py-oracle/syntax.py").to_string_lossy().as_ref()],
+            "python3 tools/py-oracle/syntax.py — is python3 installed?",
+            srcroot,
+            paths,
+        )?))
+    }
+
     /// CPython 3 alone — the current language. `validate` above is the union
     /// of py3 and py2.7; this is the py3 half, and the difference between
     /// the two is exactly the set of py2-only files.

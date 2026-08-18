@@ -2387,7 +2387,7 @@
                   "name": "guard",
                   "content": {
                     "type": "SYMBOL",
-                    "name": "_no_conditional_expression"
+                    "name": "_expression"
                   }
                 }
               ]

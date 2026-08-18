@@ -72,6 +72,17 @@ pub struct Report {
     /// valid in a version the language once had.
     #[serde(default)]
     pub version_files: usize,
+    /// Noise files that the PARSER alone would have accepted. The oracle
+    /// judges with `compile`, which also runs the checks CPython performs
+    /// after parsing, and its script's header states the cost of that: a
+    /// file invalid for a post-parse reason AND holding a real grammar gap
+    /// is recorded as noise. This is that cost, counted rather than assumed
+    /// small. Every one of these is a gap the sweep cannot see.
+    #[serde(default)]
+    pub hidden_gap_files: usize,
+    /// Their paths, so they can be read.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hidden_gaps: Vec<String>,
     pub noise_files: usize,
     pub clusters: Vec<Cluster>,
 }
@@ -626,6 +637,27 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
     let version_files: usize = clusters.iter().map(|c| c.version_paths.len()).sum();
     let noise_files = failures.len() - gap_files - config_files - version_files;
 
+    // Measure the oracle's documented blind spot rather than assuming it is
+    // small. Among the files booked as noise, ask the PARSER alone: the ones
+    // it accepts are syntactically valid, so our rejection of them is a
+    // grammar gap that `compile`'s extra strictness hid.
+    let noise_paths: Vec<String> = failures
+        .iter()
+        .map(|f| f.path.clone())
+        .filter(|p| !validity.get(p).copied().unwrap_or(false))
+        .collect();
+    let mut hidden_gaps: Vec<String> = Vec::new();
+    if !noise_paths.is_empty() {
+        if let Some(syntax) = treebank_oracle::get(lang).validate_syntax_only(&corpus_src, &noise_paths)? {
+            for p in &noise_paths {
+                if syntax.get(p).copied() == Some(true) {
+                    hidden_gaps.push(p.clone());
+                }
+            }
+        }
+    }
+    hidden_gaps.sort();
+
     // A declared rejection that matches nothing is stale: either the corpus
     // no longer contains it or the signature drifted when the grammar
     // changed. Loud, because a policy file that quietly stops describing
@@ -653,6 +685,8 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         config_files,
         version_files,
         noise_files,
+        hidden_gap_files: hidden_gaps.len(),
+        hidden_gaps,
         clusters,
     };
     std::fs::create_dir_all(out.parent().unwrap_or(Path::new(".")))?;
@@ -672,6 +706,15 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         report.noise_files,
         report.clusters.len()
     );
+    if report.hidden_gap_files > 0 {
+        println!(
+            "sweep: {} of the noise files are SYNTACTICALLY valid — the oracle judges with \
+             compile(), which also runs CPython's post-parse checks, so these are gaps it \
+             cannot see. First few: {:?}",
+            report.hidden_gap_files,
+            &report.hidden_gaps[..report.hidden_gaps.len().min(3)],
+        );
+    }
     for c in report.clusters.iter().take(10) {
         println!("  {:>5} {:>6}  {}", c.verdict, c.count, c.signature);
         if let Some(e) = c.examples.first() {
