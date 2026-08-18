@@ -3993,7 +3993,27 @@
       "required": false,
       "types": [
         {
-          "type": "_statement",
+          "type": "_declaration",
+          "named": true
+        },
+        {
+          "type": "_directive",
+          "named": true
+        },
+        {
+          "type": "expression_statement",
+          "named": true
+        },
+        {
+          "type": "extern_block",
+          "named": true
+        },
+        {
+          "type": "impl_block",
+          "named": true
+        },
+        {
+          "type": "inner_attribute_item",
           "named": true
         }
       ]

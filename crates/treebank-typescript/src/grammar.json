@@ -7667,13 +7667,17 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "SYMBOL",
-                "name": "_type"
+                "type": "STRING",
+                "value": "|"
               },
               {
                 "type": "BLANK"
               }
             ]
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_type"
           },
           {
             "type": "STRING",
@@ -7696,13 +7700,17 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "SYMBOL",
-                "name": "_type"
+                "type": "STRING",
+                "value": "&"
               },
               {
                 "type": "BLANK"
               }
             ]
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_type"
           },
           {
             "type": "STRING",
@@ -9903,6 +9911,12 @@
     }
   ],
   "conflicts": [
+    [
+      "intersection_type"
+    ],
+    [
+      "union_type"
+    ],
     [
       "_expression",
       "named_tuple_member"

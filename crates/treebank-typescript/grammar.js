@@ -91,6 +91,8 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$.intersection_type],
+    [$.union_type],
     [$._expression, $.named_tuple_member],
     [$.import_type, $._literal],
     [$.nested_identifier, $.import_type, $._name],
@@ -1383,8 +1385,28 @@ module.exports = grammar({
     // bitwise-and over an object literal, which is silently well-formed
     // and silently wrong. Their order relative to each other is unchanged:
     // `&` still binds tighter than `|`.
-    union_type: $ => prec.left(PREC.cast + 1, seq(optional($._type), '|', $._type)),
-    intersection_type: $ => prec.left(PREC.cast + 2, seq(optional($._type), '&', $._type)),
+    // The leading bar goes INSIDE the binary rule, not on the left operand.
+    // The old shape was `seq(optional($._type), '|', $._type)`, which
+    // admitted an empty left operand ANYWHERE -- so `X || Y`, `X && Y` and
+    // `string | | Date` all parsed, and tsc rejects all three.
+    //
+    // The bar itself has to stay: `type T =\n  | A\n  | B` is what every
+    // formatter emits, and removing it outright cost 438 corpus files.
+    // Written this way it is legal only at the HEAD, because a bare `| Y`
+    // still needs two operands to be a union and so cannot be the right
+    // operand of the bar before it.
+    //
+    // Binary rather than n-ary, and that matters: an n-ary form with
+    // `repeat1(seq('|', $._type))` loses the precedence that keeps the
+    // operands tight, and `keyof T & \`${number}\` extends U ? A : B` then
+    // parses as `keyof T & (... extends ...)`. Measured -- it moved the
+    // shape check from 23 missed boundaries to 65.
+    //
+    // A single member with a leading bar (`type T = | X`) stays rejected.
+    // tsc accepts it; nothing in 11,988 files writes it, and admitting it
+    // would make `| Y` an operand again and undo the fix.
+    union_type: $ => prec.left(PREC.cast + 1, seq(optional('|'), $._type, '|', $._type)),
+    intersection_type: $ => prec.left(PREC.cast + 2, seq(optional('&'), $._type, '&', $._type)),
 
     // `prec.right`, not `prec.left`: a function type's RETURN extends as far
     // right as it can. `() => X extends T ? 1 : 2` is
