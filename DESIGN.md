@@ -781,6 +781,26 @@ while a tape does not care what it drives. Running off the end of the tape
 yields the first alternative, so a truncated tape still produces a complete
 program and shrinking can cut freely without emitting half a sentence.
 
+**Ask the parser, not the compiler.** Where an oracle can separate the two,
+`fuzz` uses `validate_syntax_only`. The first python run made the reason
+plain: nearly every finding was `break`, `yield` or `* x` at module level —
+all of which CPython's *parser* accepts and its *compiler* rejects. "`break`
+outside a loop" is not a syntax error, and a tree-sitter grammar has no
+business tracking loop nesting in order to produce one. Judged by
+`compile()` the check mostly rediscovers CPython's semantic pass; judged by
+`ast.parse` it reports what it is for. Where the reference tool has no
+parse-only mode — rust's `syn` has none — it falls back, and the report says
+which question was asked.
+
+**Declared widenings.** Some over-acceptance is deliberate: python's grammar
+is 2.7 ∪ 3.x by design, so `print x` is a widening against py3's parser and
+is meant to be one. Left undeclared, that single decision dominates every
+run and buries the findings that are not decisions. Each grammar may carry a
+`fuzz_policy.json` naming what it accepts on purpose, matched narrowly
+against a prefix of the shrunk program — the same discipline
+`shape_policy.json` uses, for the same reason: a blanket ignore silences the
+real finding that arrives next month wearing similar clothes.
+
 Minimal examples also collapse together, so the tape doubles as the
 clustering key. The first run over rust reduced 474 findings to 156 distinct
 programs, and those to a handful of causes — one alternation putting `mut`
