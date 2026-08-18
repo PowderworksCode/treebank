@@ -412,6 +412,42 @@ prints session-global `BytePos` that would have to be mapped back per file,
 on nightly. `syn` is the right level, already a dependency, and needs no
 subprocess at all.
 
+#### The node mapping
+
+Boundaries are half the question. Where the two parsers agree on the bytes,
+what is left is whether they agree on WHAT is there — and they can disagree
+completely while covering identical spans. `foo();` parsed as a bodyless
+function declaration occupies exactly the bytes of the call it should be, so
+nothing about the boundaries is wrong; only the names are, and only a table
+can say so.
+
+`node_map.json` per grammar declares what each reference-parser kind is
+expected to be in our tree. Three properties make it useful rather than
+ceremonial:
+
+- **It is a set, not a function.** A chain like `expression_statement >
+  call_expression > identifier` can have three nodes on one span, and the
+  oracle names one of them. An oracle node passes when ANY of our kinds at
+  its span is listed, which is why only the CORE kind needs an entry and
+  wrappers come along free.
+- **It is not required to be one-to-one.** Several of our kinds answer
+  `Expr::Lit`; `function_definition` answers four TypeScript kinds. What it
+  is required to be is **total and declared** — every oracle kind the corpus
+  produces has an entry, and anything unlisted is reported as a hole rather
+  than assumed away.
+- **`"*"` marks a wrapper** whose span coincides with its only child, so the
+  child's entry carries the check. One entry uses it: syn's `Stmt::Expr`,
+  which for a block's tail expression spans exactly the expression while we
+  build no statement node at all. It is a claim about the oracle's shape,
+  not a way to silence a kind.
+
+The table is bootstrapped from the corpus — an empty `map` makes every kind
+report as unmapped together with the kinds actually found at its span — and
+then written by hand, because a table generated from observation encodes
+whatever the grammar does today, bugs included. Only the token entries are
+mechanical, and they say so: `AmpersandAmpersandToken` is `&&` and there is
+no judgement in that.
+
 Three comparison rules keep the signal usable, and all three are rules
 rather than allowlist entries — each was added for one language and then
 left the others' numbers unchanged, which is the test that it describes

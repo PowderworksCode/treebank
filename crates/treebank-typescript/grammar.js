@@ -1112,7 +1112,18 @@ module.exports = grammar({
         ),
       ),
       '=>',
-      field('body', choice($._expression, $._body)),
+      // A `{` after `=>` opens a BLOCK, always. An object literal there needs
+      // parentheses -- `() => ({ a: 1 })` -- which is the whole reason that
+      // idiom exists. Without the weighting, `(fn) => { notifyFn = fn }` read
+      // as an OBJECT holding a shorthand property with a default, and since
+      // that is well-formed nothing errored. `prec.dynamic` rather than
+      // static precedence because both readings are complete parses; they
+      // differ in what they contain, which is what makes them weighable.
+      // `prec.dynamic(2)`. One is not enough: the object reading picks up
+      // weight of its own from `_pattern`'s negative dynamic precedence and
+      // the shorthand-property rules, so the two totals were closer than
+      // they look. Two is the smallest value that decides it, checked.
+      field('body', choice(prec.dynamic(2, $.block), $._expression)),
     )),
 
     function_expression: $ => seq(
@@ -1546,7 +1557,14 @@ module.exports = grammar({
       $.this_type,
     ),
 
-    mapped_type: $ => seq(
+    // `prec.dynamic`: `{ [K in N]: V }` is unambiguously a mapped type, but
+    // `[K in N]` also reads as a computed property NAME whose expression is
+    // an `in` test, and `[$.mapped_type, $.object_type]` is a declared
+    // conflict so static precedence is not consulted. In a `type T = ...`
+    // position the mapped reading already won; in an ANNOTATION position the
+    // object reading did, which is the kind of split a boundary check cannot
+    // see -- both cover the same bytes and only the names differ.
+    mapped_type: $ => prec.dynamic(1, seq(
       '{',
       optional(choice('+', '-')),
       optional($.readonly_modifier),
@@ -1561,7 +1579,7 @@ module.exports = grammar({
       optional(seq(':', field('type', $._type))),
       optional(choice(',', ';')),
       '}',
-    ),
+    )),
 
     indexed_access_type: $ => prec(PREC.member, seq(
       field('object', $._type),

@@ -75,5 +75,11 @@
     }
   ],
   "baseline_missed": 0,
-  "baseline_note": "Zero, and it started at 1,682,942. Every remaining difference between our tree and CPython ast is declared above with its reasoning. Raising this number is a decision that belongs in a commit message."
+  "baseline_note": "Zero, and it started at 1,682,942. Every remaining difference between our tree and CPython ast is declared above with its reasoning. Raising this number is a decision that belongs in a commit message.",
+  "mismatch_ignore": [
+    {
+      "signature": "Tuple => starred_expression",
+      "why": "`lst[*index]` -- PEP 646 unpacking in a subscript. CPython wraps the starred element in a one-element Tuple; we build no tuple node in subscript position at all, which is the same granularity the `Tuple <- subscript_expression` entry above declares. It surfaces here rather than as a boundary miss because there is no trailing comma to trim: the Tuple's span is exactly the starred expression's."
+    }
+  ]
 }

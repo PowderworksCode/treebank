@@ -1,0 +1,761 @@
+{
+  "rule": "What each TypeScript compiler node kind is expected to be in our tree. A boundary comparison asks whether we have a node at these bytes; this asks whether it is the RIGHT node, which is the half a boundary check cannot see -- `foo();` parsed as a bodyless function declaration occupies exactly the bytes of the call it should be.",
+  "semantics": "Several of our nodes can cover one span, so an oracle node passes when ANY of our kinds at its span is listed. Only the CORE kind needs an entry; wrappers that share the span come along free. The mapping is not one-to-one and is not required to be -- it is required to be TOTAL and DECLARED, so anything not listed is reported rather than assumed.",
+  "modifiers_note": "tsc keeps modifiers INSIDE the declaration they modify, so a ClassDeclaration's span starts at `export`. We wrap the declaration in an `export_statement` instead. That is why every exportable declaration lists `export_statement` alongside its own kind.",
+  "tokens_note": "Entries whose oracle kind ends in Token or Keyword were generated from the corpus, not written by hand: `AmpersandAmpersandToken` is `&&` and there is no judgement in saying so. They are kept rather than skipped because tokenising the same run of bytes is worth checking -- `&&` read as two `&` would show up here.",
+  "map": {
+    "Block": [
+      "block"
+    ],
+    "ModuleBlock": [
+      "block"
+    ],
+    "EmptyStatement": [
+      "empty_statement"
+    ],
+    "BreakStatement": [
+      "break_statement"
+    ],
+    "ContinueStatement": [
+      "continue_statement"
+    ],
+    "ReturnStatement": [
+      "return_statement"
+    ],
+    "ThrowStatement": [
+      "throw_statement"
+    ],
+    "IfStatement": [
+      "if_statement"
+    ],
+    "DoStatement": [
+      "do_statement"
+    ],
+    "WhileStatement": [
+      "while_statement"
+    ],
+    "ForStatement": [
+      "for_statement"
+    ],
+    "ForInStatement": [
+      "for_in_statement"
+    ],
+    "ForOfStatement": [
+      "for_in_statement"
+    ],
+    "SwitchStatement": [
+      "switch_statement"
+    ],
+    "CaseBlock": [
+      "switch_body"
+    ],
+    "CaseClause": [
+      "case_clause"
+    ],
+    "DefaultClause": [
+      "default_clause"
+    ],
+    "TryStatement": [
+      "try_statement"
+    ],
+    "CatchClause": [
+      "catch_clause"
+    ],
+    "LabeledStatement": [
+      "labeled_statement"
+    ],
+    "DebuggerStatement": [
+      "debugger_statement"
+    ],
+    "WithStatement": [
+      "with_statement"
+    ],
+    "VariableStatement": [
+      "variable_declaration",
+      "export_statement"
+    ],
+    "VariableDeclarationList": [
+      "variable_declaration"
+    ],
+    "VariableDeclaration": [
+      "variable_declarator",
+      "identifier",
+      "array_pattern",
+      "object_pattern"
+    ],
+    "ClassDeclaration": [
+      "class_definition",
+      "export_statement"
+    ],
+    "FunctionDeclaration": [
+      "function_definition",
+      "export_statement"
+    ],
+    "InterfaceDeclaration": [
+      "interface_definition",
+      "export_statement"
+    ],
+    "TypeAliasDeclaration": [
+      "type_alias",
+      "export_statement"
+    ],
+    "EnumDeclaration": [
+      "enum_definition",
+      "export_statement"
+    ],
+    "ModuleDeclaration": [
+      "namespace_definition",
+      "export_statement"
+    ],
+    "ImportDeclaration": [
+      "import_statement"
+    ],
+    "ImportEqualsDeclaration": [
+      "import_alias"
+    ],
+    "ExportDeclaration": [
+      "export_statement"
+    ],
+    "ExportAssignment": [
+      "export_statement"
+    ],
+    "NamespaceExportDeclaration": [
+      "export_statement"
+    ],
+    "ExternalModuleReference": [
+      "call_expression"
+    ],
+    "ImportClause": [
+      "import_clause",
+      "named_imports",
+      "namespace_import",
+      "identifier"
+    ],
+    "NamedImports": [
+      "named_imports",
+      "import_clause"
+    ],
+    "NamespaceImport": [
+      "namespace_import",
+      "import_clause"
+    ],
+    "ImportSpecifier": [
+      "import_specifier"
+    ],
+    "ExportSpecifier": [
+      "export_specifier"
+    ],
+    "NamedExports": [
+      "export_clause"
+    ],
+    "NamespaceExport": [
+      "namespace_export"
+    ],
+    "ImportAttributes": [
+      "import_attribute"
+    ],
+    "ImportAttribute": [
+      "import_attribute"
+    ],
+    "ExpressionStatement": [
+      "expression_statement"
+    ],
+    "EnumMember": [
+      "enum_member"
+    ],
+    "Identifier": [
+      "identifier",
+      "type_identifier",
+      "import_specifier",
+      "export_specifier",
+      "type_parameter",
+      "shorthand_property_identifier",
+      "property_identifier",
+      "undefined",
+      "this",
+      "const",
+      "function",
+      "meta",
+      "target"
+    ],
+    "PrivateIdentifier": [
+      "private_name"
+    ],
+    "PropertyAccessExpression": [
+      "member_expression",
+      "nested_type_identifier",
+      "nested_identifier"
+    ],
+    "ElementAccessExpression": [
+      "subscript_expression"
+    ],
+    "CallExpression": [
+      "call_expression",
+      "import_expression"
+    ],
+    "NewExpression": [
+      "new_expression"
+    ],
+    "TaggedTemplateExpression": [
+      "call_expression"
+    ],
+    "ParenthesizedExpression": [
+      "parenthesized_expression"
+    ],
+    "ArrowFunction": [
+      "arrow_function"
+    ],
+    "FunctionExpression": [
+      "function_expression"
+    ],
+    "ClassExpression": [
+      "class_definition"
+    ],
+    "BinaryExpression": [
+      "binary_expression",
+      "assignment_expression",
+      "augmented_assignment_expression",
+      "sequence_expression",
+      "instanceof_expression",
+      "in_expression",
+      "shorthand_property",
+      "shorthand_property_pattern"
+    ],
+    "PrefixUnaryExpression": [
+      "unary_expression",
+      "update_expression",
+      "number",
+      "literal_type"
+    ],
+    "PostfixUnaryExpression": [
+      "update_expression"
+    ],
+    "ConditionalExpression": [
+      "conditional_expression"
+    ],
+    "TypeOfExpression": [
+      "unary_expression"
+    ],
+    "VoidExpression": [
+      "unary_expression"
+    ],
+    "DeleteExpression": [
+      "unary_expression"
+    ],
+    "AwaitExpression": [
+      "await_expression"
+    ],
+    "YieldExpression": [
+      "yield_expression"
+    ],
+    "SpreadElement": [
+      "spread_element"
+    ],
+    "SpreadAssignment": [
+      "spread_element"
+    ],
+    "ObjectLiteralExpression": [
+      "object",
+      "object_pattern"
+    ],
+    "ArrayLiteralExpression": [
+      "array",
+      "array_pattern"
+    ],
+    "PropertyAssignment": [
+      "pair",
+      "pair_pattern"
+    ],
+    "ShorthandPropertyAssignment": [
+      "shorthand_property",
+      "shorthand_property_pattern",
+      "identifier"
+    ],
+    "ComputedPropertyName": [
+      "computed_property_name"
+    ],
+    "AsExpression": [
+      "as_expression"
+    ],
+    "SatisfiesExpression": [
+      "satisfies_expression"
+    ],
+    "NonNullExpression": [
+      "non_null_expression"
+    ],
+    "MetaProperty": [
+      "import_meta",
+      "new_target"
+    ],
+    "TemplateExpression": [
+      "template_string"
+    ],
+    "TemplateSpan": [
+      "template_substitution"
+    ],
+    "NoSubstitutionTemplateLiteral": [
+      "template_string",
+      "template_literal_type"
+    ],
+    "OmittedExpression": [
+      "empty_expression"
+    ],
+    "StringLiteral": [
+      "string",
+      "literal_type"
+    ],
+    "NumericLiteral": [
+      "number",
+      "literal_type"
+    ],
+    "BigIntLiteral": [
+      "number",
+      "literal_type"
+    ],
+    "RegularExpressionLiteral": [
+      "regex"
+    ],
+    "LiteralType": [
+      "literal_type",
+      "string",
+      "number",
+      "null",
+      "true",
+      "false",
+      "undefined",
+      "unary_expression",
+      "template_literal_type"
+    ],
+    "MethodDeclaration": [
+      "function_definition"
+    ],
+    "MethodSignature": [
+      "function_definition"
+    ],
+    "Constructor": [
+      "function_definition"
+    ],
+    "ConstructSignature": [
+      "function_definition",
+      "construct_signature"
+    ],
+    "CallSignature": [
+      "call_signature"
+    ],
+    "IndexSignature": [
+      "index_signature"
+    ],
+    "GetAccessor": [
+      "function_definition"
+    ],
+    "SetAccessor": [
+      "function_definition"
+    ],
+    "PropertyDeclaration": [
+      "field_definition"
+    ],
+    "PropertySignature": [
+      "property_signature"
+    ],
+    "ClassStaticBlockDeclaration": [
+      "static_block"
+    ],
+    "Parameter": [
+      "parameter",
+      "rest_parameter",
+      "identifier",
+      "object_pattern",
+      "array_pattern"
+    ],
+    "BindingElement": [
+      "shorthand_property_pattern",
+      "pair_pattern",
+      "rest_pattern",
+      "identifier"
+    ],
+    "ObjectBindingPattern": [
+      "object_pattern"
+    ],
+    "ArrayBindingPattern": [
+      "array_pattern"
+    ],
+    "Decorator": [
+      "decorator"
+    ],
+    "HeritageClause": [
+      "class_heritage"
+    ],
+    "ExpressionWithTypeArguments": [
+      "generic_type",
+      "type_identifier",
+      "nested_type_identifier",
+      "identifier",
+      "member_expression"
+    ],
+    "TypeReference": [
+      "type_identifier",
+      "generic_type",
+      "nested_type_identifier",
+      "const"
+    ],
+    "QualifiedName": [
+      "nested_type_identifier",
+      "nested_identifier"
+    ],
+    "ArrayType": [
+      "array_type"
+    ],
+    "TupleType": [
+      "tuple_type"
+    ],
+    "NamedTupleMember": [
+      "named_tuple_member"
+    ],
+    "OptionalType": [
+      "optional_type"
+    ],
+    "RestType": [
+      "rest_type"
+    ],
+    "UnionType": [
+      "union_type"
+    ],
+    "IntersectionType": [
+      "intersection_type"
+    ],
+    "ParenthesizedType": [
+      "parenthesized_type"
+    ],
+    "TypeLiteral": [
+      "object_type"
+    ],
+    "FunctionType": [
+      "function_type"
+    ],
+    "ConstructorType": [
+      "constructor_type"
+    ],
+    "ConditionalType": [
+      "conditional_type"
+    ],
+    "InferType": [
+      "infer_type"
+    ],
+    "MappedType": [
+      "mapped_type"
+    ],
+    "IndexedAccessType": [
+      "indexed_access_type"
+    ],
+    "TypeOperator": [
+      "type_operator"
+    ],
+    "TypeQuery": [
+      "typeof_type"
+    ],
+    "ImportType": [
+      "import_type",
+      "typeof_type"
+    ],
+    "TypePredicate": [
+      "predicate_type"
+    ],
+    "ThisType": [
+      "this_type",
+      "this"
+    ],
+    "TypeParameter": [
+      "type_parameter",
+      "type_identifier"
+    ],
+    "TemplateLiteralType": [
+      "template_literal_type"
+    ],
+    "TemplateLiteralTypeSpan": [
+      "template_type"
+    ],
+    "JsxElement": [
+      "jsx_element"
+    ],
+    "JsxSelfClosingElement": [
+      "jsx_self_closing_element"
+    ],
+    "JsxOpeningElement": [
+      "jsx_opening_element"
+    ],
+    "JsxClosingElement": [
+      "jsx_closing_element"
+    ],
+    "JsxFragment": [
+      "jsx_fragment"
+    ],
+    "JsxAttribute": [
+      "jsx_attribute"
+    ],
+    "JsxAttributes": [
+      "jsx_attribute",
+      "jsx_expression"
+    ],
+    "JsxSpreadAttribute": [
+      "jsx_expression"
+    ],
+    "JsxExpression": [
+      "jsx_expression"
+    ],
+    "JsxText": [
+      "jsx_text"
+    ],
+    "JsxNamespacedName": [
+      "jsx_namespace_name"
+    ],
+    "AbstractKeyword": [
+      "abstract",
+      "abstract_modifier"
+    ],
+    "AccessorKeyword": [
+      "accessor",
+      "accessor_modifier"
+    ],
+    "AmpersandAmpersandToken": [
+      "&&"
+    ],
+    "AmpersandToken": [
+      "&"
+    ],
+    "AnyKeyword": [
+      "any",
+      "type_identifier"
+    ],
+    "AssertsKeyword": [
+      "asserts"
+    ],
+    "AsteriskAsteriskToken": [
+      "**"
+    ],
+    "AsteriskToken": [
+      "*"
+    ],
+    "AsyncKeyword": [
+      "async"
+    ],
+    "AwaitKeyword": [
+      "await"
+    ],
+    "BarBarEqualsToken": [
+      "",
+      "=",
+      "||="
+    ],
+    "BarBarToken": [
+      "",
+      "||"
+    ],
+    "BarEqualsToken": [
+      "",
+      "=",
+      "|="
+    ],
+    "BarToken": [
+      "",
+      "|"
+    ],
+    "BigIntKeyword": [
+      "type_identifier"
+    ],
+    "BooleanKeyword": [
+      "type_identifier"
+    ],
+    "CaretEqualsToken": [
+      "^="
+    ],
+    "CaretToken": [
+      "^"
+    ],
+    "ColonToken": [
+      ":"
+    ],
+    "CommaToken": [
+      ","
+    ],
+    "ConstKeyword": [
+      "const"
+    ],
+    "DeclareKeyword": [
+      "declare",
+      "declare_modifier"
+    ],
+    "DefaultKeyword": [
+      "default"
+    ],
+    "DotDotDotToken": [
+      "..."
+    ],
+    "EqualsEqualsEqualsToken": [
+      "==="
+    ],
+    "EqualsEqualsToken": [
+      "=="
+    ],
+    "EqualsGreaterThanToken": [
+      "=>"
+    ],
+    "EqualsToken": [
+      "="
+    ],
+    "ExclamationEqualsEqualsToken": [
+      "!=="
+    ],
+    "ExclamationEqualsToken": [
+      "!="
+    ],
+    "ExclamationToken": [
+      "!"
+    ],
+    "ExportKeyword": [
+      "export"
+    ],
+    "FalseKeyword": [
+      "false",
+      "literal_type"
+    ],
+    "GreaterThanEqualsToken": [
+      ">="
+    ],
+    "GreaterThanGreaterThanEqualsToken": [
+      ">>="
+    ],
+    "GreaterThanGreaterThanGreaterThanEqualsToken": [
+      ">>>="
+    ],
+    "GreaterThanGreaterThanGreaterThanToken": [
+      ">>>"
+    ],
+    "GreaterThanGreaterThanToken": [
+      ">>"
+    ],
+    "GreaterThanToken": [
+      ">"
+    ],
+    "ImportKeyword": [
+      "import"
+    ],
+    "InKeyword": [
+      "in"
+    ],
+    "InstanceOfKeyword": [
+      "instanceof"
+    ],
+    "LessThanEqualsToken": [
+      "<="
+    ],
+    "LessThanLessThanEqualsToken": [
+      "<<="
+    ],
+    "LessThanLessThanToken": [
+      "<<"
+    ],
+    "LessThanToken": [
+      "<"
+    ],
+    "MinusEqualsToken": [
+      "-="
+    ],
+    "MinusToken": [
+      "-"
+    ],
+    "NeverKeyword": [
+      "never",
+      "predefined_type"
+    ],
+    "NullKeyword": [
+      "literal_type",
+      "null"
+    ],
+    "NumberKeyword": [
+      "type_identifier"
+    ],
+    "ObjectKeyword": [
+      "type_identifier"
+    ],
+    "OutKeyword": [
+      "out"
+    ],
+    "OverrideKeyword": [
+      "override",
+      "override_modifier"
+    ],
+    "PercentToken": [
+      "%"
+    ],
+    "PlusEqualsToken": [
+      "+="
+    ],
+    "PlusToken": [
+      "+"
+    ],
+    "PrivateKeyword": [
+      "accessibility_modifier",
+      "private"
+    ],
+    "ProtectedKeyword": [
+      "accessibility_modifier",
+      "protected"
+    ],
+    "PublicKeyword": [
+      "accessibility_modifier",
+      "public"
+    ],
+    "QuestionDotToken": [
+      "?."
+    ],
+    "QuestionQuestionEqualsToken": [
+      "??="
+    ],
+    "QuestionQuestionToken": [
+      "??"
+    ],
+    "QuestionToken": [
+      "?"
+    ],
+    "ReadonlyKeyword": [
+      "readonly",
+      "readonly_modifier"
+    ],
+    "SlashToken": [
+      "/"
+    ],
+    "StaticKeyword": [
+      "static",
+      "static_modifier"
+    ],
+    "StringKeyword": [
+      "type_identifier"
+    ],
+    "SuperKeyword": [
+      "super"
+    ],
+    "SymbolKeyword": [
+      "predefined_type",
+      "symbol"
+    ],
+    "ThisKeyword": [
+      "this"
+    ],
+    "TrueKeyword": [
+      "literal_type",
+      "true"
+    ],
+    "UndefinedKeyword": [
+      "literal_type",
+      "undefined"
+    ],
+    "UnknownKeyword": [
+      "predefined_type",
+      "unknown"
+    ],
+    "VoidKeyword": [
+      "predefined_type",
+      "void"
+    ]
+  }
+}

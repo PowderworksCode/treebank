@@ -60,6 +60,17 @@ pub struct ShapeReport {
     pub missed_nodes: usize,
     pub files_with_misses: usize,
     pub clusters: Vec<ShapeCluster>,
+    /// Boundaries that agree while the kinds do not — the mapping is
+    /// declared and the tree does not honour it.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mismatches: Vec<ShapeCluster>,
+    /// Oracle kinds the mapping never mentions. Holes, not defects.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub unmapped: Vec<ShapeCluster>,
+    #[serde(default)]
+    pub mismatched_nodes: usize,
+    #[serde(default)]
+    pub unmapped_nodes: usize,
 }
 
 /// Boundaries this grammar deliberately does not mirror, as
@@ -83,6 +94,13 @@ struct ShapePolicy {
     /// been through this yet.
     #[serde(default)]
     baseline_missed: Option<usize>,
+    /// Kind pairings the mapping is allowed to fail on, as the full
+    /// `"<OracleKind> => <our|kinds>"` signature the report prints. The whole
+    /// signature, not the oracle kind alone: forgiving `Tuple` outright would
+    /// forgive every Tuple confusion, where forgiving `Tuple => identifier`
+    /// forgives only the case where an identifier was the ONLY thing we had.
+    #[serde(default)]
+    mismatch_ignore: Vec<Ignored>,
 }
 
 #[derive(Deserialize)]
@@ -90,10 +108,10 @@ struct Ignored {
     signature: String,
 }
 
-fn load_policy(grammar_dir: &Path) -> Result<(HashSet<String>, Option<usize>)> {
+fn load_policy(grammar_dir: &Path) -> Result<(HashSet<String>, Option<usize>, HashSet<String>)> {
     let path = grammar_dir.join("shape_policy.json");
     if !path.exists() {
-        return Ok((Default::default(), None));
+        return Ok((Default::default(), None, Default::default()));
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("read {}", path.display()))?;
@@ -102,6 +120,7 @@ fn load_policy(grammar_dir: &Path) -> Result<(HashSet<String>, Option<usize>)> {
     Ok((
         policy.ignore.into_iter().map(|i| i.signature).collect(),
         policy.baseline_missed,
+        policy.mismatch_ignore.into_iter().map(|i| i.signature).collect(),
     ))
 }
 
@@ -125,6 +144,74 @@ fn trim_end(src: &[u8], start: usize, mut end: usize) -> usize {
         }
     }
     end
+}
+
+/// The declared correspondence between the reference parser's node kinds and
+/// ours: `"<OracleKind>": ["our_kind", ...]`.
+///
+/// This is the part a boundary comparison cannot do. Where the two parsers
+/// agree on the bytes, the question left is whether they agree on WHAT is
+/// there -- and they can disagree completely while covering identical spans.
+/// `foo();` parsed as a bodyless function declaration occupies exactly the
+/// bytes of the call it should be, so nothing about the boundaries is wrong;
+/// only the names are, and only a table can say so.
+///
+/// Not required to be one-to-one. Several of our kinds may answer one oracle
+/// kind (`Expr::Lit` is `integer`, `float`, `string`, `boolean_literal`, ...)
+/// and one of ours may answer several oracle kinds. What it must be is
+/// TOTAL and DECLARED: every oracle kind the corpus produces has an entry,
+/// and every pair the corpus produces is in it. A mapping with holes is a
+/// mapping nobody is checking.
+fn load_node_map(grammar_dir: &Path) -> Result<(HashMap<String, HashSet<String>>, bool)> {
+    #[derive(Deserialize, Default)]
+    struct NodeMap {
+        #[serde(default)]
+        map: HashMap<String, Vec<String>>,
+    }
+    let path = grammar_dir.join("node_map.json");
+    if !path.exists() {
+        return Ok((Default::default(), false));
+    }
+    let text = std::fs::read_to_string(&path)
+        .with_context(|| format!("read {}", path.display()))?;
+    let m: NodeMap = serde_json::from_str(&text)
+        .with_context(|| format!("parse {}", path.display()))?;
+    // Present-but-empty is how the table is BOOTSTRAPPED: every oracle kind
+    // then reports as unmapped, together with the kinds of ours actually
+    // found at its span, which is the raw material for writing the entries.
+    Ok((
+        m.map.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect(),
+        true,
+    ))
+}
+
+/// One file's contribution, kept as a struct because there are now three
+/// kinds of finding and a tuple of seven had stopped being readable.
+struct FileResult {
+    oracle_nodes: usize,
+    missed: usize,
+    had_miss: bool,
+    skipped: bool,
+    /// The oracle saw a boundary we have no node for.
+    misses: Vec<Miss>,
+    /// The boundary agrees and the KINDS do not.
+    mismatches: Vec<Miss>,
+    /// An oracle kind the mapping does not mention.
+    unmapped: Vec<Miss>,
+}
+
+impl FileResult {
+    fn skipped() -> Self {
+        FileResult {
+            oracle_nodes: 0,
+            missed: 0,
+            had_miss: false,
+            skipped: true,
+            misses: Vec::new(),
+            mismatches: Vec::new(),
+            unmapped: Vec::new(),
+        }
+    }
 }
 
 /// Where a node's CONTENT ends, ignoring trailing trivia it happens to own.
@@ -187,23 +274,38 @@ fn leading_starts(node: tree_sitter::Node) -> Vec<usize> {
 /// separator-trimmed form. Anonymous nodes count: the oracle reports keyword
 /// and punctuation nodes too, and a keyword we tokenise identically is
 /// agreement, not a finer grouping.
-fn our_spans(root: tree_sitter::Node, src: &[u8]) -> HashSet<(usize, usize)> {
-    let mut out = HashSet::new();
+/// Span -> the kinds of every node of ours that occupies it.
+///
+/// A SET of kinds, not one, and that is not a compromise: a chain like
+/// `expression_statement > call_expression > identifier` can have all three
+/// nodes covering the same bytes, and the reference parser will name exactly
+/// one of them. The question the mapping asks is "is the thing we built at
+/// these bytes one of the things this oracle kind is allowed to be", and a
+/// chain answers it honestly.
+fn our_spans(root: tree_sitter::Node, src: &[u8]) -> HashMap<(usize, usize), Vec<&'static str>> {
+    let mut out: HashMap<(usize, usize), Vec<&'static str>> = HashMap::new();
     let mut cursor = root.walk();
     let mut recurse = true;
     loop {
         if recurse {
             let n = cursor.node();
+            let kind = n.kind();
+            let mut add = |span: (usize, usize)| {
+                let slot = out.entry(span).or_default();
+                if !slot.contains(&kind) {
+                    slot.push(kind);
+                }
+            };
             let (a, b) = (n.start_byte(), n.end_byte());
-            out.insert((a, b));
-            out.insert((a, trim_end(src, a, b.min(src.len()))));
+            add((a, b));
+            add((a, trim_end(src, a, b.min(src.len()))));
             // ...and the same node with any trailing trivia it owns removed,
             // then separator-trimmed again, since the trivia may sit after a
             // terminator.
             let c = content_end(n);
             if c > a && c < b {
-                out.insert((a, c));
-                out.insert((a, trim_end(src, a, c.min(src.len()))));
+                add((a, c));
+                add((a, trim_end(src, a, c.min(src.len()))));
             }
             // ...and the same node counting the trivia in FRONT of it as its
             // own, which is where the two parsers disagree about doc
@@ -212,11 +314,11 @@ fn our_spans(root: tree_sitter::Node, src: &[u8]) -> HashSet<(usize, usize)> {
                 if lead >= a {
                     continue;
                 }
-                out.insert((lead, b));
-                out.insert((lead, trim_end(src, lead, b.min(src.len()))));
+                add((lead, b));
+                add((lead, trim_end(src, lead, b.min(src.len()))));
                 if c > lead && c < b {
-                    out.insert((lead, c));
-                    out.insert((lead, trim_end(src, lead, c.min(src.len()))));
+                    add((lead, c));
+                    add((lead, trim_end(src, lead, c.min(src.len()))));
                 }
             }
         }
@@ -324,7 +426,8 @@ pub fn run(
         }
     };
 
-    let (ignore, baseline) = load_policy(grammar_dir)?;
+    let (ignore, baseline, mismatch_ignore) = load_policy(grammar_dir)?;
+    let (node_map, has_map) = load_node_map(grammar_dir)?;
     let dirs = crate::routing::grammar_dirs(lang);
     let langs: Vec<(tree_sitter::Language, String)> = dirs
         .iter()
@@ -350,45 +453,128 @@ pub fn run(
         missed_nodes: 0,
         files_with_misses: 0,
         clusters: Vec::new(),
+        mismatches: Vec::new(),
+        unmapped: Vec::new(),
+        mismatched_nodes: 0,
+        unmapped_nodes: 0,
     };
     let mut by_sig: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
+    let mut by_mismatch: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
+    let mut by_unmapped: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
 
     for chunk in files.chunks(BATCH) {
         let batch: Vec<String> = chunk.to_vec();
         let oracle_spans = oracle.spans(&corpus_src, &batch)?;
 
-        let results: Vec<(usize, usize, bool, bool, Vec<Miss>)> = batch
+        let results: Vec<FileResult> = batch
             .par_iter()
-            .map(|rel| -> Result<(usize, usize, bool, bool, Vec<Miss>)> {
+            .map(|rel| -> Result<FileResult> {
                 let Some(file) = oracle_spans.get(rel) else {
                     // The oracle must answer every path it was asked about;
                     // a missing answer is an oracle failure, not a pass.
                     anyhow::bail!("ts-oracle returned no span record for {rel}");
                 };
                 if file.skipped.is_some() {
-                    return Ok((0, 0, false, true, Vec::new()));
+                    return Ok(FileResult::skipped());
                 }
                 let src = std::fs::read(corpus_src.join(rel))?;
                 let idx = dialect.get(rel.as_str()).copied().unwrap_or(0);
                 let mut parser = Parser::new();
                 parser.set_language(&langs[idx].0)?;
                 let Some(tree) = parser.parse(&src, None) else {
-                    return Ok((0, 0, false, true, Vec::new()));
+                    return Ok(FileResult::skipped());
                 };
                 // A file we cannot parse is the SWEEP's business, not this
                 // check's; comparing shapes against an error tree is noise.
                 if tree.root_node().has_error() {
-                    return Ok((0, 0, false, true, Vec::new()));
+                    return Ok(FileResult::skipped());
                 }
                 let ours = our_spans(tree.root_node(), &src);
                 let mut misses = Vec::new();
+                let mut mismatches = Vec::new();
+                let mut unmapped = Vec::new();
                 for s in &file.spans {
-                    if ours.contains(&(s.start, s.end)) {
-                        continue;
-                    }
+                    // Two questions per oracle node, and the second only
+                    // makes sense once the first is answered yes:
+                    //   1. do we have a node with these bytes at all?
+                    //   2. is it the KIND we said this oracle kind is?
                     let trimmed = trim_end(&src, s.start, s.end.min(src.len()));
-                    if ours.contains(&(s.start, trimmed)) {
-                        continue;
+                    let exact = ours.get(&(s.start, s.end));
+                    let at = exact.or_else(|| ours.get(&(s.start, trimmed)));
+                    if let Some(kinds) = at {
+                        if let Some(expected) = node_map.get(&s.kind) {
+                            // `"*"` marks a WRAPPER kind: one whose span
+                            // coincides with its only child, so the child's
+                            // own entry already carries the check and a
+                            // second one here would say nothing. syn's
+                            // `Stmt::Expr` is the case -- for a block's tail
+                            // expression it spans exactly the expression, and
+                            // we build no statement node at all. Narrow on
+                            // purpose: it is a claim about the ORACLE's
+                            // shape, not a way to silence a kind.
+                            let agrees = expected.contains("*")
+                                || kinds.iter().any(|k| expected.contains(*k));
+                            // A trim-only match whose kinds do not line up is
+                            // not a mismatch -- it is not a match at all. The
+                            // separator trim exists to forgive punctuation
+                            // between two parsers naming the SAME node; when
+                            // the names say they are not the same node, the
+                            // honest reading is that we have no counterpart
+                            // here, and this belongs on the boundary side
+                            // where the granularity policy can speak to it.
+                            // `x[a,]` is the case: CPython's one-element
+                            // Tuple trims to `a`, which is our identifier,
+                            // and we build no tuple node there at all.
+                            if !agrees && exact.is_none() {
+                                // fall through to the boundary-miss path
+                            } else if !agrees {
+                                // The boundary agrees and the NAMES do not.
+                                // This is the class a boundary check is blind
+                                // to by construction: `foo();` parsed as a
+                                // bodyless function declaration spans exactly
+                                // the same bytes as the call it should be.
+                                let mut got: Vec<&str> = kinds.to_vec();
+                                got.sort_unstable();
+                                let signature = format!("{} => {}", s.kind, got.join("|"));
+                                if mismatch_ignore.contains(&signature) {
+                                    continue;
+                                }
+                                let text = String::from_utf8_lossy(
+                                    &src[s.start.min(src.len())..s.end.min(src.len())],
+                                );
+                                let text: String = text.chars().take(60).collect();
+                                mismatches.push(Miss {
+                                    path: rel.to_string(),
+                                    kind: signature,
+                                    start: s.start,
+                                    end: s.end,
+                                    text: text.replace('\n', "\\n"),
+                                });
+                                continue;
+                            } else {
+                                continue;
+                            }
+                        } else if has_map {
+                            // An oracle kind with no entry at all. Not a
+                            // parse defect -- a hole in the table, which is
+                            // exactly as worth knowing.
+                            let text = String::from_utf8_lossy(
+                                &src[s.start.min(src.len())..s.end.min(src.len())],
+                            );
+                            let text: String = text.chars().take(60).collect();
+                            let mut got: Vec<&str> = kinds.to_vec();
+                            got.sort_unstable();
+                            unmapped.push(Miss {
+                                path: rel.to_string(),
+                                kind: format!("{} => {}", s.kind, got.join("|")),
+                                start: s.start,
+                                end: s.end,
+                                text: text.replace('\n', "\\n"),
+                            });
+                            continue;
+                        } else {
+                            continue;
+                        }
                     }
                     // Name what we built instead. The PAIR is the signature,
                     // and the pair is what the allowlist matches on: ignoring
@@ -413,26 +599,56 @@ pub fn run(
                     });
                 }
                 let n = misses.len();
-                Ok((file.spans.len(), n, n > 0, false, misses))
+                Ok(FileResult {
+                    oracle_nodes: file.spans.len(),
+                    missed: n,
+                    had_miss: n > 0,
+                    skipped: false,
+                    misses,
+                    mismatches,
+                    unmapped,
+                })
             })
             .collect::<Result<_>>()?;
 
-        for (nodes, missed, had, skipped, misses) in results {
-            report.oracle_nodes += nodes;
-            report.missed_nodes += missed;
-            if skipped {
+        for r in results {
+            report.oracle_nodes += r.oracle_nodes;
+            report.missed_nodes += r.missed;
+            if r.skipped {
                 report.files_skipped += 1;
             } else {
                 report.files_checked += 1;
             }
-            if had {
+            if r.had_miss {
                 report.files_with_misses += 1;
             }
-            for m in misses {
+            for m in r.misses {
                 by_sig.entry(m.kind.clone()).or_default().push(m);
+            }
+            for m in r.mismatches {
+                by_mismatch.entry(m.kind.clone()).or_default().push(m);
+            }
+            for m in r.unmapped {
+                by_unmapped.entry(m.kind.clone()).or_default().push(m);
             }
         }
     }
+
+    let cluster_of = |(signature, ms): (String, Vec<Miss>)| {
+        let files: HashSet<&str> = ms.iter().map(|m| m.path.as_str()).collect();
+        ShapeCluster {
+            signature,
+            count: ms.len(),
+            files: files.len(),
+            examples: ms.into_iter().take(4).collect(),
+        }
+    };
+    report.mismatched_nodes = by_mismatch.values().map(|v| v.len()).sum();
+    report.unmapped_nodes = by_unmapped.values().map(|v| v.len()).sum();
+    report.mismatches = by_mismatch.into_iter().map(cluster_of).collect();
+    report.mismatches.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report.unmapped = by_unmapped.into_iter().map(cluster_of).collect();
+    report.unmapped.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
 
     report.clusters = by_sig
         .into_iter()
@@ -457,6 +673,27 @@ pub fn run(
         report.files_with_misses,
         report.clusters.len(),
     );
+    if has_map {
+        println!(
+            "shape: mapping — {} kind mismatch(es) in {} cluster(s), {} unmapped oracle node(s) in {} kind(s)",
+            report.mismatched_nodes,
+            report.mismatches.len(),
+            report.unmapped_nodes,
+            report.unmapped.len(),
+        );
+        for c in report.mismatches.iter().take(12) {
+            println!("  MISMATCH {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            if let Some(e) = c.examples.first() {
+                println!("            e.g. {}  {:?}", e.path, e.text);
+            }
+        }
+        for c in report.unmapped.iter().take(12) {
+            println!("  UNMAPPED {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            if let Some(e) = c.examples.first() {
+                println!("            e.g. {}  {:?}", e.path, e.text);
+            }
+        }
+    }
     for c in report.clusters.iter().take(12) {
         println!("  {:>6} files {:>7}x  {}", c.files, c.count, c.signature);
         if let Some(e) = c.examples.first() {
