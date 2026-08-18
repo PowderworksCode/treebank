@@ -3,6 +3,7 @@ mod rosetta;
 mod routing;
 mod verify;
 mod errpos;
+mod roundtrip;
 mod mutate;
 mod shape;
 mod sweep;
@@ -117,6 +118,23 @@ enum Cmd {
         /// Reproducibility: the same seed gives the same mutants
         #[arg(long, default_value_t = 1)]
         seed: u64,
+    },
+    /// Re-render every file through the language's own printer and reparse
+    /// it. Finds constructs we handle in the spelling people write and not
+    /// in the one the toolchain emits.
+    Roundtrip {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/roundtrip.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        limit: Option<usize>,
     },
     Sweep {
         #[arg(long, value_enum, default_value_t = LangName::Rust)]
@@ -311,6 +329,13 @@ fn main() -> anyhow::Result<()> {
             files,
             per_file,
             seed,
+        ),
+        Cmd::Roundtrip { lang, grammar, manifest, out, limit } => roundtrip::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            &lang_path(lang, out, "reports/roundtrip.json"),
+            limit,
         ),
         Cmd::Sweep { lang, grammar, manifest, out } => sweep::run(
             lang,

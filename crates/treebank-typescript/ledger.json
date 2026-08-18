@@ -164,5 +164,6 @@
       "why_not_fixed": "needs `_declaration` split so members and statements stop sharing a rule."
     }
   ],
-  "error_positions": "`treebank errors` — 6 of 12 rejected files are comparable: 1 exact, 4 within 128 bytes, 1 further. Median |delta| 106. Every outlier is the same construct, `export = function ...`: we report at the `export =` and tsc at the `function`."
+  "error_positions": "`treebank errors` — 6 of 12 rejected files are comparable: 1 exact, 4 within 128 bytes, 1 further. Median |delta| 106. Every outlier is the same construct, `export = function ...`: we report at the `export =` and tsc at the `function`.",
+  "roundtrip_check": "`treebank roundtrip` — all 11,988 files re-rendered through `ts.createPrinter` and reparsed: 11,982 rendered, 4 failures, and every one is a gap already recorded under known_gaps (the `symbol` parameter in a bare function type, and the angle-bracket cast). The canonical spelling of everything else parses, which is the result worth having: the check doubled the corpus with source no human wrote and found no new construct."
 }

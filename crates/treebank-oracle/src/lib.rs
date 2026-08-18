@@ -25,6 +25,7 @@ mod python;
 mod rust;
 mod rust_spans;
 mod spans;
+mod unparse;
 mod stdin_oracle;
 mod typescript;
 
@@ -34,6 +35,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 pub use spans::{get as spans_for, Edge, FileSpans, Span, SpanOracle};
+pub use unparse::{get as unparser_for, Rendered, Unparser};
 pub use treebank_lang::LangName;
 
 /// The oracle programs shipped inside this crate.

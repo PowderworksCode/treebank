@@ -448,6 +448,24 @@ whatever the grammar does today, bugs included. Only the token entries are
 mechanical, and they say so: `AmpersandAmpersandToken` is `&&` and there is
 no judgement in that.
 
+#### The round trip (`treebank roundtrip`)
+
+The corpus is written by people, and people write a construct the usual way.
+A grammar can handle every spelling that appears in 139,205 files and still
+miss the one the language's own printer emits — parentheses dropped where
+the tree does not need them, quotes and spacing normalised, a trailing comma
+gone.
+
+`ast.unparse` and `ts.createPrinter` render the reference tree back to source
+in one canonical spelling. Re-parsing that costs a single pass and doubles
+the corpus with source no human wrote. A failure is a real gap that no amount
+of real source would ever show; an absence of failures is evidence rather
+than silence, because the input genuinely differs from what was already
+tested.
+
+`syn` has no printer in the dependency set, so Rust is skipped rather than
+approximated.
+
 #### The lexical layer
 
 `ast` is not the only oracle CPython ships. `tokenize` is a second one, a
