@@ -748,6 +748,47 @@ conformance suites, and the ledger says which population covers what. A
 clean sweep over a biased corpus is weak evidence on its own; the ledger is
 where that weakness is written down instead of discovered.
 
+### 5.9 Generating from the grammar (`treebank fuzz`)
+
+Every other check starts from source somebody wrote. The sweep reads the
+corpus, `mutate` perturbs it, `roundtrip` reprints it — all three are
+bounded by what the corpus happens to contain. That bound bites hardest in
+the accepts-invalid direction, because real source is *valid*: no quantity
+of it can demonstrate that we reject what the language rejects.
+
+So generate instead. `grammar.json` is already an EBNF syntax tree, which
+makes it a generator as well as a description — a random derivation is a
+walk that chooses branches and emits terminals. **No unparser is needed in
+this direction; the grammar is the emitter.** Then the oracle judges, and
+anything we accept that it rejects is a widening.
+
+**Soundness, given that the generator is not faithful.** Joining tokens with
+spaces is a lie — `'a` is a lifetime and `' a` is not — so some derivations
+produce text whose tokenisation differs from the derivation behind it. This
+does not weaken a finding. A case is reported only when *our parser accepts
+the text* and *the oracle rejects it*, and that pair is a widening whatever
+derivation produced the bytes: accepting a program the language does not is
+the defect, and how we came to type it is irrelevant. Infidelity costs
+yield, never correctness — an unfaithful derivation we then reject is
+discarded before it can be reported, which is most of them.
+
+**Shrinking is over the choice tape, not the program.** Generation consumes
+a byte tape and is deterministic in it, so shrinking searches for a shorter,
+smaller tape that still reproduces — Hypothesis's model rather than
+proptest's typed `Strategy`. That is the right fit here because the grammar
+is *runtime data*: a typed strategy would have to be written per grammar,
+while a tape does not care what it drives. Running off the end of the tape
+yields the first alternative, so a truncated tape still produces a complete
+program and shrinking can cut freely without emitting half a sentence.
+
+Minimal examples also collapse together, so the tape doubles as the
+clustering key. The first run over rust reduced 474 findings to 156 distinct
+programs, and those to a handful of causes — one alternation putting `mut`
+where only visibility belongs, `metavariable` reachable outside a macro
+body, an `extern` ABI accepting a byte string. This is the difference from
+`mutate`, which reports *a corpus file that does it*: here the report is
+`mut use r#XX ;`.
+
 ## 6. Code organization
 
 ```

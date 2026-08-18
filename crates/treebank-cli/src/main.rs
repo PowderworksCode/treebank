@@ -4,6 +4,7 @@ mod routing;
 mod verify;
 mod errpos;
 mod roundtrip;
+mod fuzz;
 mod mutate;
 mod shape;
 mod sweep;
@@ -98,6 +99,26 @@ enum Cmd {
         out: Option<PathBuf>,
         #[arg(long)]
         limit: Option<usize>,
+    },
+    /// Derive programs FROM the grammar and ask the oracle whether they
+    /// are in the language. The sweep, `mutate` and `roundtrip` are all
+    /// bounded by what the corpus contains; this is not, which matters most
+    /// for accepts-invalid — real source is valid, so no amount of it shows
+    /// that we reject what the language rejects. Failures arrive shrunk.
+    Fuzz {
+        #[arg(long, value_enum, default_value_t = LangName::Rust)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/reports/fuzz.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Programs to derive
+        #[arg(long, default_value_t = 2000)]
+        iterations: usize,
+        /// Reproduces a run exactly
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
     },
     Mutate {
         #[arg(long, value_enum, default_value_t = LangName::Python)]
@@ -353,6 +374,13 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/errors.json"),
             limit,
+        ),
+        Cmd::Fuzz { lang, grammar, out, iterations, seed } => fuzz::run(
+            lang,
+            &grammar,
+            iterations,
+            seed,
+            &out.unwrap_or_else(|| fuzz::default_out(lang)),
         ),
         Cmd::Mutate { lang, grammar, manifest, out, files, per_file, seed } => mutate::run(
             lang,
