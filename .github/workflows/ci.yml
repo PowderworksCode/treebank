@@ -233,6 +233,14 @@ jobs:
           --dir crates/treebank-${{ matrix.grammar }}/test/shape
           --out /tmp/shape-fixture.json
 
+      # The reference renderer is total over grammar.json's node kinds and
+      # raises on one it does not know, so this fails the day a grammar
+      # starts using a DSL construct it has never seen. Without it, a
+      # missing case silently omits part of a production from the docs.
+      - name: grammar reference renders
+        run: python3 tools/grammardoc/emit.py --check
+          crates/treebank-${{ matrix.grammar }}
+
   rosetta:
     name: gates (cross-language rosetta)
     runs-on: ubuntu-latest
