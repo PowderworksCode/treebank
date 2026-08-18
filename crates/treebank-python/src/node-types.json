@@ -32,6 +32,10 @@
       {
         "type": "splat_argument",
         "named": true
+      },
+      {
+        "type": "starred_expression",
+        "named": true
       }
     ]
   },
@@ -193,10 +197,6 @@
       },
       {
         "type": "set_comprehension",
-        "named": true
-      },
-      {
-        "type": "starred_expression",
         "named": true
       },
       {
@@ -610,11 +610,19 @@
         "required": true,
         "types": [
           {
-            "type": "_pattern",
+            "type": "identifier",
             "named": true
           },
           {
-            "type": "pattern_list",
+            "type": "member_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "subscript_expression",
             "named": true
           }
         ]
@@ -1756,7 +1764,11 @@
       "required": true,
       "types": [
         {
-          "type": "_expression",
+          "type": "_pattern",
+          "named": true
+        },
+        {
+          "type": "pattern_list",
           "named": true
         }
       ]
@@ -2791,6 +2803,10 @@
           "named": true
         },
         {
+          "type": "starred_expression",
+          "named": true
+        },
+        {
           "type": "yield_expression",
           "named": true
         }
@@ -3393,6 +3409,10 @@
           "named": true
         },
         {
+          "type": "starred_expression",
+          "named": true
+        },
+        {
           "type": "yield_expression",
           "named": true
         }
@@ -3479,6 +3499,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "starred_expression",
             "named": true
           }
         ]
@@ -3647,6 +3671,10 @@
           {
             "type": "slice",
             "named": true
+          },
+          {
+            "type": "starred_expression",
+            "named": true
           }
         ]
       }
@@ -3696,6 +3724,10 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "starred_expression",
           "named": true
         },
         {

@@ -210,8 +210,13 @@ module.exports = grammar({
       ),
     ),
 
+    // A single target, never a list: `a, b += 1` and `[a] += 1` are both
+    // `illegal expression for augmented assignment`. Plain assignment takes
+    // `_left_hand_side`; this one may not. Parentheses ARE allowed, and
+    // nest -- `(o.a) += v` and `((a)) += 1` are both valid -- so the target
+    // is recursive through them.
     augmented_assignment: $ => seq(
-      field('left', $._left_hand_side),
+      field('left', $._augmented_target),
       field('operator', choice(
         '+=', '-=', '*=', '/=', '//=', '%=', '@=', '**=',
         '>>=', '<<=', '&=', '^=', '|=',
@@ -222,6 +227,22 @@ module.exports = grammar({
     _left_hand_side: $ => choice(
       $._pattern,
       $.pattern_list,
+    ),
+
+    // Parentheses come in as `parenthesized_expression` rather than as part
+    // of this rule. Spelling them out here means `( identifier )` cannot be
+    // told from a name, a pattern or an access until the `+=` arrives, and
+    // paying for that with four declared conflicts -- in a grammar where a
+    // declared conflict also switches static precedence off -- is not worth
+    // one form. The cost is that `(a + b) += 1` is still accepted, which
+    // CPython calls `'BinOp' is an illegal expression`; `a, b += 1` and
+    // `[a] += 1` are now rejected, which is what was reported.
+    _augmented_target: $ => choice(
+      $.identifier,
+      alias($._soft_keyword, $.identifier),
+      $.member_expression,
+      $.subscript_expression,
+      $.parenthesized_expression,
     ),
 
     _right_hand_side: $ => choice(
@@ -277,6 +298,15 @@ module.exports = grammar({
       $.raise_statement,
     ),
 
+    // `yield_expression` stays, and `return yield x` stays accepted. Taking
+    // it out does not reject that program: tree-sitter prefers an extracted
+    // keyword only where the keyword is VALID, so with `yield` no longer a
+    // legal continuation of `return` the lexer simply falls back to
+    // `identifier` and the program parses as returning a variable called
+    // `yield` -- the same acceptance wearing a worse tree. Rejecting it
+    // needs `yield` to be unable to lex as an identifier at all, which is
+    // what tree-sitter's `reserved` word sets are for and is a change of a
+    // different size. Queued in ledger.toml with that diagnosis.
     return_statement: $ => prec.right(seq('return', optional(choice($._expression, $._expression_list_tuple, $.yield_expression)))),
     break_statement: _ => 'break',
     continue_statement: _ => 'continue',
@@ -292,7 +322,10 @@ module.exports = grammar({
       )),
     )),
 
-    delete_statement: $ => seq('del', choice($._expression, $._expression_list_tuple)),
+    // `del` takes TARGETS, not expressions: `del a if b else c` is
+    // `cannot delete conditional expression` to CPython, and admitting the
+    // whole expression tier here is what let it through.
+    delete_statement: $ => seq('del', $._left_hand_side),
 
     assert_statement: $ => seq('assert', $._expression, optional(seq(',', $._expression))),
 
@@ -423,7 +456,14 @@ module.exports = grammar({
       field('value', $._expression),
     ),
 
-    star_parameter: $ => seq('*', field('name', $._name), optional(seq(':', field('type', $._expression)))),
+    // PEP 646: a variadic parameter's annotation may itself be starred --
+    // `def fn(*args: *tuple[*A, B])`. It is the only annotation position
+    // that takes a star; `def f(x: *a)` is not valid.
+    star_parameter: $ => seq(
+      '*',
+      field('name', $._name),
+      optional(seq(':', field('type', choice($._expression, $.starred_expression)))),
+    ),
     double_star_parameter: $ => seq('**', field('name', $._name), optional(seq(':', field('type', $._expression)))),
     keyword_separator: _ => '*',
     positional_separator: _ => '/',
@@ -709,9 +749,18 @@ module.exports = grammar({
     // ── expressions ──────────────────────────────────────────────────
     _expression: $ => choice(
       $.conditional_expression,
-      $.starred_expression,
       $._no_conditional_expression,
     ),
+
+    // `*x` is NOT an expression in python; it is an element of something
+    // list-shaped. CPython admits it in a call, a display, a subscript and a
+    // comma-separated list, and nowhere else -- `assert *x`, `if *x:`,
+    // `while *x:` and `*x if c else y` are all `invalid syntax` from its
+    // parser, and having it inside `_expression` made every one of them
+    // parse. So `starred_expression` is written out at each position that
+    // takes it, rather than hidden behind a rule: a hidden rule is a unit
+    // reduction, and at `(yield x , …)` that reduction has to happen before
+    // the parser can tell a yielded expression from a collection element.
 
     // Python's comprehension conditions and iterables are `or_test`: a bare
     // conditional is excluded by construction, which is also what lets
@@ -889,6 +938,7 @@ module.exports = grammar({
     // parentheses, so the bare form gets its own rule, aliased to the node.
     _argument: $ => choice(
       $._expression,
+      $.starred_expression,
       $.keyword_argument,
       alias($._double_starred_expression, $.splat_argument),
       alias($.bare_generator, $.generator_expression),
@@ -913,7 +963,7 @@ module.exports = grammar({
     subscript_expression: $ => prec(PREC.postfix, seq(
       field('object', $._primary_expression),
       '[',
-      commaSep1(field('subscript', choice($._expression, $.slice))),
+      commaSep1(field('subscript', choice($._expression, $.starred_expression, $.slice))),
       optional(','),
       ']',
     )),
@@ -954,10 +1004,10 @@ module.exports = grammar({
     // tuples, the merged one holds a `pattern_list` and a tuple. Weighting
     // the tuple is the asymmetry.
     _comma_expressions: $ => prec.dynamic(1, seq(
-      $._expression,
+      choice($._expression, $.starred_expression),
       choice(
         ',',
-        seq(repeat1(seq(',', $._expression)), optional(',')),
+        seq(repeat1(seq(',', choice($._expression, $.starred_expression))), optional(',')),
       ),
     )),
 
@@ -967,7 +1017,7 @@ module.exports = grammar({
     tuple: $ => seq('(', optional($._collection_elements), ')'),
 
     _collection_elements: $ => seq(
-      commaSep1(choice($._expression, $.yield_expression)),
+      commaSep1(choice($._expression, $.starred_expression, $.yield_expression)),
       optional(','),
     ),
 
