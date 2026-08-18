@@ -26,7 +26,7 @@ grammar policy, the testing invariants, and the crate layout. Start there.
 | `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors (no current target needs it; kept for the languages that will) |
 | `test/rosetta` | the same program in every owned language, with the role counts all three must produce |
 
-Each grammar crate ships its `roles.json` and `ledger.json` inside the
+Each grammar crate ships its `roles.json` and `ledger.toml` inside the
 published package, so a consumer gets the facet membership and the
 evidence — versions covered, pinned oracles, corpus numbers, known gaps,
 declared deviations — without fetching anything.
@@ -65,7 +65,7 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 
 Corpus sweeps are not in CI: the corpora are gigabytes and gitignored.
-Their numbers live in each grammar's `ledger.json`, alongside what the
+Their numbers live in each grammar's `ledger.toml`, alongside what the
 corpus is blind to and the mutation test proving the pipeline can report
 non-zero.
 

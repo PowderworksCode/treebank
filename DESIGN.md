@@ -854,7 +854,7 @@ crates/
                               #   the `treebank roles` checker
   treebank-python/
     grammar.js  src/scanner.c  src/ (generated, committed)
-    roles.json  ledger.json
+    roles.json  ledger.toml
     test/corpus/  test/negative/  test/negative/<version>/
     bindings/                 # rust crate + wasm
   treebank-rust/              # same shape
@@ -876,7 +876,13 @@ test/rosetta/                 # parallel programs + expected-roles files
   `tree-sitter-<lang>.wasm` alongside the Rust crate, and `treebank-core`
   ships a JS/wasm package that loads them and provides facet-aware queries.
   `roles.json` travels inside both the crate and the npm package.
-- **`ledger.json`** is each grammar's evidence file, machine-validated by
+- **`ledger.toml`** is TOML rather than JSON because it is mostly prose. A
+  paragraph explaining why a deviation exists is one escaped line in JSON
+  and a readable block in TOML, and this is the file someone reads when
+  deciding whether to trust the grammar. The machine-readable manifests
+  next to it — `roles.json`, `node_map.json`, `field_map.json` — stay JSON:
+  they are lists of node names, where TOML buys nothing.
+- **`ledger.toml`** is each grammar's evidence file, machine-validated by
   `treebank ledger`: language, versions covered, one pinned oracle per
   version family, corpus description and its declared blind spots, sweep
   results, conformance-suite results, and the vocabulary's uncategorised
@@ -913,7 +919,7 @@ test/rosetta/                 # parallel programs + expected-roles files
 
    That skew was not free while it lasted: a *query* valid under 0.25
    could be an impossible pattern under 0.26, which is how the
-   supertype-field rule in `treebank-rust/ledger.json` came to light.
+   supertype-field rule in `treebank-rust/ledger.toml` came to light.
 
 ## 8. Order of work
 

@@ -31,7 +31,7 @@
 # real knob rather than an incidental: `match` is 3.10+, parenthesised
 # context managers are 3.9+ (3.10 in practice), and the walrus is 3.8+. A
 # file that needs syntax newer than this interpreter is not valid Python
-# *here*, and recording it as corpus noise is the honest answer. ledger.json
+# *here*, and recording it as corpus noise is the honest answer. ledger.toml
 # records the version the sweep numbers were produced with, exactly as
 # generate_cli records the CLI.
 #
