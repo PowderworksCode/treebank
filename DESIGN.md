@@ -448,6 +448,42 @@ whatever the grammar does today, bugs included. Only the token entries are
 mechanical, and they say so: `AmpersandAmpersandToken` is `&&` and there is
 no judgement in that.
 
+#### Mutation (`treebank mutate`)
+
+The sweep measures ONE direction. It takes the corpus, asks which files we
+reject, and adjudicates each with a reference parser — a strong measurement
+of rejects-valid-code that says nothing about the other direction, because a
+corpus of real source is almost entirely valid and offers a too-permissive
+grammar nothing to trip over.
+
+The other direction was measured against `test/negative/`: eighteen
+hand-written files for python, fourteen for rust, thirteen for typescript.
+Set against 139,205, that asymmetry was the weakest part of the claim, and
+it pointed the wrong way — optimising a pass rate drifts *toward* accepting
+more, and the only guard was a list somebody had to think of entries for.
+
+`treebank mutate` mutates real files mechanically (delete a token, duplicate
+one, swap adjacent ones, substitute another token from the same file), parses
+each mutant, and asks the oracle **only about the ones we accept**. Where the
+oracle rejects what we accept, that is a widening.
+
+Three things make it sound and affordable:
+
+- **The mutants do not have to be reliably invalid.** Mutants both parsers
+  accept are simply uninteresting, and there is no need to know in advance
+  which is which.
+- **Only files the oracle already accepts are mutated.** Without that the
+  method is unsound: a file the reference parser rejects produces mutants it
+  also rejects, and every one reads as a widening. The first run reported
+  exactly that.
+- **Only accepted mutants cost an oracle call**, which is most of the reason
+  it is cheap — roughly three quarters get rejected by the grammar first.
+
+Mutation happens at OUR token boundaries rather than at byte offsets: cutting
+in the middle of an identifier mostly yields a different identifier, which is
+still valid and teaches nothing. Runs are seeded and reproducible, because a
+fuzzer nobody can re-run is a fuzzer whose findings cannot be confirmed.
+
 #### The field mapping
 
 Nodes are still only part of the structure. Two trees can agree on every
