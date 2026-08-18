@@ -77,6 +77,10 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    // Whether a macro statement owns its semicolon. Both readings are
+    // complete; the negative dynamic precedence on the no-semicolon
+    // alternative of `expression_statement` is what decides it.
+    [$._invocation, $.expression_statement],
     [$.scoped_identifier, $.generic_function, $._path_ref],
     [$.scoped_identifier, $._path_ref],
     [$._soft_keyword, $.box_pattern],
@@ -150,7 +154,38 @@ module.exports = grammar({
 
     expression_statement: $ => choice(
       seq(repeat($._attribute), $._expression, ';'),
-      prec(1, seq(repeat($._attribute), $._expression_with_block)),
+      // Above every binary operator, because in STATEMENT position a
+      // block-like expression ends the statement. rustc's rule, and the
+      // reason `if c { g(); }` followed by a line starting with `*`, `-` or
+      // `&` is two statements rather than one:
+      //
+      //     if c { *rem = 0; }
+      //     *buf = Some(slice);
+      //
+      // At prec 1 -- below `mul` (11) -- the operator won the shift and the
+      // two statements became one `binary_expression` whose left operand was
+      // the `if`. No error, so no sweep could see it. In EXPRESSION position
+      // nothing changes: this alternative is not reachable there, and
+      // `({ 1 }) * 3` still means what it says.
+      // `prec.dynamic` as well as the static precedence: this is a declared
+      // GLR conflict, and a declared conflict ignores static precedence
+      // entirely. The two readings differ in what they contain -- splitting
+      // gives TWO expression_statements, merging gives one -- so weighting
+      // this alternative is what decides it.
+      prec.dynamic(1, prec(PREC.field + 1, seq(repeat($._attribute), choice(
+        $._branch, $._loop, $.async_block, $.const_block, $.unsafe_block,
+        $.labeled_block, $._body,
+      )))),
+      // A macro invocation is block-LIKE (`cfg_if! { ... }` needs no
+      // semicolon) but it is not a block: `println!("x");` is ONE statement
+      // and the semicolon is part of it, which is what syn says too
+      // (`Stmt::Macro` carries the semi). So it gets its own alternative
+      // with a NEGATIVE dynamic precedence -- available when there is no
+      // semicolon, and losing to the first alternative whenever there is.
+      // Without the negative weight the two readings tied and the semicolon
+      // was orphaned into an `empty_statement` after every macro call in the
+      // language.
+      prec.dynamic(-1, seq(repeat($._attribute), $.macro_invocation)),
     ),
 
     let_declaration: $ => seq(

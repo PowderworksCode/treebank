@@ -1024,6 +1024,7 @@ name = "treebank-oracle"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "proc-macro2",
  "rayon",
  "serde",
  "serde_json",

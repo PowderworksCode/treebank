@@ -1,0 +1,225 @@
+{
+  "rule": "Boundaries `treebank shape` may ignore, as `\"<synKind> <- <our_kind>\"` pairs. Each is a place our tree groups the code DIFFERENTLY from syn on purpose, not a place we disagree about the code. Pairs rather than bare syn kinds: ignoring `Expr::Path` outright would also silence a real Expr::Path disagreement elsewhere, which is how a check like this quietly stops working.",
+  "oracle_note": "syn, in-process, with proc-macro2's `span-locations` feature turning every span into a file-relative byte_range(). HIR was the obvious candidate and the wrong one: it is post-desugaring, so `for` and `while` become `loop` plus `match` and `?` becomes a match on Try, and comparing a surface tree against it would report a disagreement at each, none of them a parser defect. rustc's AST is the right level but unreachable — `-Zast-json` was removed in 2020 and `-Zunpretty=ast-tree` prints session-global BytePos on nightly.",
+  "ignore": [
+    {
+      "signature": "Pat::Type <- let_declaration",
+      "why": "`let x: T = ...` — syn wraps the pattern and its type in a `Pat::Type` node; our `let_declaration` carries them as `pattern` and `type` fields. The largest single difference in the corpus, and purely a grouping choice: ours names the parts, syn boxes them."
+    },
+    {
+      "signature": "Field <- ordered_field_declaration_list",
+      "why": "`struct Magi<T>(pub T);` — syn's Field covers the visibility and the type of a tuple-struct field; we keep them as children of the field list with no wrapping node, the same way we treat other positional lists."
+    },
+    {
+      "signature": "Expr::Binary <- let_chain",
+      "why": "`if let Some(x) = a && cond` — syn has no let-chain node and models the whole thing as a Binary whose operands include a `let`. We have `let_chain`, which says what the construct is."
+    },
+    {
+      "signature": "Pat::Reference <- reference_pattern",
+      "why": "`&line` as a pattern — syn's Pat::Reference includes the `mut` of `&mut x`; our `reference_pattern` splits the mutability out as its own node."
+    },
+    {
+      "signature": "Stmt::Expr <- block",
+      "why": "An expression carrying an attribute (`#[allow(...)] expr`) in a position where we do not wrap: syn folds the attribute into the expression's own span, our attribute is a sibling. See the shared note below."
+    },
+    {
+      "signature": "Expr::Call <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::MethodCall <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Path <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Struct <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Macro <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Stmt::Macro <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Path <- arguments",
+      "why": "See `Stmt::Expr <- block`; an attributed expression in an argument list."
+    },
+    {
+      "signature": "Expr::MethodCall <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Closure <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Call <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Reference <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Field <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Struct <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Lit <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Block <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Path <- array_expression",
+      "why": "See `Stmt::Expr <- block`; an attributed element of an array."
+    },
+    {
+      "signature": "Expr::Lit <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Reference <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Macro <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Block <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::MethodCall <- tuple_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Tuple <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Tuple <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Array <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Call <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Index <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Reference <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Binary <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Binary <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Await <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Try <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::If <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Match <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Unary <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Index <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Await <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Try <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Cast <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Range <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Macro <- arguments",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Field <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Cast <- block",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Struct <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::MethodCall <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Field <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    },
+    {
+      "signature": "Expr::Tuple <- array_expression",
+      "why": "See `Stmt::Expr <- block`."
+    }
+  ],
+  "attribute_note": "The `Expr::* <- block|arguments|array_expression|tuple_expression` family is one difference seen from many angles: syn treats an attribute on an EXPRESSION as part of that expression, while our grammar attaches attributes to statements and items but leaves them as siblings elsewhere. Not a mis-parse — the attribute is adjacent to the thing it decorates either way — but a place our tree says less than syn's, and a candidate for a real change later.",
+  "known_limits": [
+    {
+      "signature": "Expr::Binary / Expr::Unary / Expr::Reference / Expr::Cast <- binary_expression",
+      "files": 100,
+      "why": "The operands of a RANGE are not greedy enough. `v[start * size..(start + len) * size]` parses as a call on an open range — `((start*size..)(start+len)) * size` — because after `start*size..` the range is already complete and `(` reads as a call; `v[start..*end]` becomes `(start..) * end` for the same reason. Making the two-ended form greedy fixes both and breaks `for i in 0u32.. { ... }`, where the loop body then becomes the range's end operand. The correct fix is an operand tier that excludes block-like expressions, which the grammar does not have yet — `_no_struct_expression` restricts the wrong thing. Measured both ways; the committed behaviour is the one that keeps the sweep at 2 gaps."
+    },
+    {
+      "signature": "Item::* <- source_file and ImplItem/Variant <- *_list",
+      "files": 1300,
+      "why": "A `///` doc comment becomes a `#[doc]` attribute in syn and is inside the item; ours stays a comment extra outside it. The checker already counts leading extras as a node's own, which fixes the common case, but not when an ATTRIBUTE sits between the doc comment and the item (`/// doc` then `#[derive(Debug)]` then `struct`): the attribute is a real node, so the walk back over extras stops there. Modelling doc comments as attributes is the real answer and is a grammar change, not a checker one."
+    }
+  ],
+  "baseline_missed": 237,
+  "baseline_note": "237 of 31,558,086 oracle nodes, in 111 files of 27,509. Most of it is the range-operand limit above; the rest is a long tail of one-file oddities. This is the first ratchet for rust. Raising this number is a decision that belongs in a commit message."
+}

@@ -23,6 +23,7 @@
 mod javascript;
 mod python;
 mod rust;
+mod rust_spans;
 mod spans;
 mod stdin_oracle;
 mod typescript;
