@@ -259,6 +259,28 @@ and *find everything that introduces a name* as two queries, not one.
 Three facets at launch. A term moves between tiers only with a vocabulary
 version bump.
 
+### 3.2.1 On the vocabulary version
+
+`vocabulary.json` carries a `version`, and every `roles.json` declares the
+one it targets. That string is an **identity, not a compatibility promise**,
+and it is deliberately not bumped per change while the vocabulary is still
+being worked out — a number climbing through 0.4 in a fortnight claims a
+stability nothing here has yet, and there is no consumer outside this
+repository to claim it to.
+
+Nothing is lost by holding it still, because the version is not what
+protects a stale manifest. The structural rules in §3.3 are: a term removed
+or renamed fails rule 1 (supertypes ⊆ table tier) or rule 5 (facet keys ⊆
+facet tier); a term that moved tier fails the demotion rules; a node left
+uncovered fails rule 2. Every *breaking* vocabulary change is caught by what
+the manifest says, not by what it claims to target. Omitting a newly added
+term is caught by nothing, and should not be — a grammar may always omit
+terms its language lacks.
+
+Start versioning for real when something outside this repository depends on
+the vocabulary. Until then the field exists to name the vocabulary, not to
+grade it.
+
 ### 3.3 What the checker enforces (`treebank roles`, in CI)
 
 1. Declared supertypes ⊆ the closed table-tier list; `roles.json` keys ⊆ the
