@@ -142,5 +142,26 @@
     }
   ],
   "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses).",
-  "shape_check": "`treebank shape` compares our node BOUNDARIES against tsc's over the whole corpus: 3,128,811 oracle nodes across 11,976 files. 3,229 missed boundaries at introduction, 23 now — the remaining 6 files are recorded under known_limits in shape_policy.json, each a GLR tie where the two readings hold identical node multisets so dynamic precedence has nothing to weigh. Declared granularity differences (places our tree groups differently on purpose) are `<TscKind> <- <our_kind>` pairs in the same file, each read by hand. Every fix has a fixture under test/shape/, checked in CI with a ceiling of zero."
+  "shape_check": "`treebank shape` compares our node BOUNDARIES against tsc's over the whole corpus: 3,128,811 oracle nodes across 11,976 files. 3,229 missed boundaries at introduction, 23 now — the remaining 6 files are recorded under known_limits in shape_policy.json, each a GLR tie where the two readings hold identical node multisets so dynamic precedence has nothing to weigh. Declared granularity differences (places our tree groups differently on purpose) are `<TscKind> <- <our_kind>` pairs in the same file, each read by hand. Every fix has a fixture under test/shape/, checked in CI with a ceiling of zero.",
+  "mutation_check": "`treebank mutate` — 3,877 mutants over 500 corpus files, 57 widenings in 30 clusters.",
+  "known_widenings": [
+    {
+      "construct": "`A || B` and `A && B` in TYPE position",
+      "found_by": "mutate (duplicate `|`, duplicate `&`)",
+      "why_accepted": "union and intersection are built from a single `|`/`&` and nothing forbids the doubled token there.",
+      "why_not_fixed": "not yet attempted."
+    },
+    {
+      "construct": "an empty union member, `string | | Date`",
+      "found_by": "mutate (delete a type name)",
+      "why_accepted": "`union_type` is `seq(optional($._type), '|', $._type)` — the leading `optional` exists for the leading-bar style `type T =\\n | A\\n | B`, and it also admits an empty member mid-union.",
+      "why_not_fixed": "not yet attempted; the fix is to allow a leading bar only at the head."
+    },
+    {
+      "construct": "a top-level declaration with no `function` keyword, `declare foo(): void`",
+      "found_by": "mutate (delete `function`)",
+      "why_accepted": "the keyword-less method form of `function_definition` is reachable at statement level, which is the same root cause as the `foo();` mis-parse fixed earlier — that fix reordered the readings without removing the form.",
+      "why_not_fixed": "needs `_declaration` split so members and statements stop sharing a rule."
+    }
+  ]
 }

@@ -2,6 +2,7 @@ mod grammar;
 mod rosetta;
 mod routing;
 mod verify;
+mod mutate;
 mod shape;
 mod sweep;
 
@@ -73,6 +74,31 @@ enum Cmd {
         /// fixed, so any miss is it coming back.
         #[arg(long)]
         dir: Option<PathBuf>,
+    },
+    /// Mutate corpus files and ask whether the grammar accepts things the
+    /// language does not. The sweep measures rejects-valid over the whole
+    /// corpus; this measures the other direction, which `test/negative/`
+    /// has been measuring with a dozen hand-written files.
+    Mutate {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/mutate.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        /// Corpus files to sample, spread evenly through the manifest
+        #[arg(long, default_value_t = 2000)]
+        files: usize,
+        /// Mutants per file
+        #[arg(long, default_value_t = 10)]
+        per_file: usize,
+        /// Reproducibility: the same seed gives the same mutants
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
     },
     Sweep {
         #[arg(long, value_enum, default_value_t = LangName::Rust)]
@@ -251,6 +277,15 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, out, "reports/shape.json"),
             limit,
             dir.as_deref(),
+        ),
+        Cmd::Mutate { lang, grammar, manifest, out, files, per_file, seed } => mutate::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            &lang_path(lang, out, "reports/mutate.json"),
+            files,
+            per_file,
+            seed,
         ),
         Cmd::Sweep { lang, grammar, manifest, out } => sweep::run(
             lang,
