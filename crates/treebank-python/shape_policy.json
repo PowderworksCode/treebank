@@ -156,6 +156,10 @@
       "signature": "AnnAssign.annotation => (no field)",
       "why": "Residual, 6 files. NOT yet isolated.",
       "unresolved": true
+    },
+    {
+      "signature": "If.orelse => body",
+      "why": "The elif-chain difference again, in the INLINE suite form (`if 1: 10` / `elif 2: 20` / `else: 30`): CPython's nested If points its orelse at the whole remainder of the chain, and the node of ours at that span is the preceding clause's body. Same cause as the other three `If.*` entries above."
     }
   ],
   "lex_ignore": [

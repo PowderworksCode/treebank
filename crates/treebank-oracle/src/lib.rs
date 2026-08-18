@@ -70,6 +70,23 @@ pub trait Oracle: Sync {
     fn validate_current(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
         self.validate(srcroot, paths)
     }
+
+    /// Validity judged by the PARSER alone, where the oracle can separate
+    /// that from the checks a compiler runs afterwards.
+    ///
+    /// `None` means the oracle cannot make the distinction, which is the
+    /// honest answer for every language whose reference tool does not
+    /// expose a parse-only mode. Where it can, the difference between this
+    /// and `validate` is exactly the set of files that are syntactically
+    /// fine and semantically not — and a file in that set which the grammar
+    /// ALSO rejects is a gap the sweep records as noise.
+    fn validate_syntax_only(
+        &self,
+        _srcroot: &Path,
+        _paths: &[String],
+    ) -> Result<Option<HashMap<String, bool>>> {
+        Ok(None)
+    }
 }
 
 /// Total: an unsupported name cannot be constructed, because clap and serde

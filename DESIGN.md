@@ -341,6 +341,16 @@ Adjudication over the version set:
   `new Date().getFullYear()` binding as `new (Date().getFullYear())` and the
   `catch` clause vanishing out of `try`/`catch` entirely. §5.6 is the check
   for it.
+- **hidden gap** — the grammar rejects a file the oracle calls invalid, but
+  the PARSER alone would have accepted it. Python's oracle judges with
+  `compile()`, which also runs the checks CPython performs after parsing —
+  `return` outside a function, a bare `except:` that is not last — and that
+  choice is deliberate, because it keeps deliberately-broken test fixtures
+  out of the gap count. Its cost is stated in the same place: a file invalid
+  for a post-parse reason AND holding a real grammar gap is recorded as
+  noise. The sweep measures that cost rather than assuming it small, by
+  asking `ast.parse` about every noise file, and reports the count. It is
+  currently zero; the one construct it found is fixed.
 - the sweep stores the full per-oracle verdict vector per file.
 
 ### 5.6 The shape check (`treebank shape`)

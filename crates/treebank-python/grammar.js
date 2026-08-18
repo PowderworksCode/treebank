@@ -461,7 +461,12 @@ module.exports = grammar({
     case_clause: $ => seq(
       'case',
       $._case_patterns,
-      optional(seq('if', field('guard', $._no_conditional_expression))),
+      // CPython's grammar reads `guard: 'if' named_expression`, and a
+      // named_expression is a full expression -- so a CONDITIONAL is a legal
+      // guard: `case y if a if True else b:`. Restricting it here rejected
+      // that, and the sweep could not see the gap because the fixture
+      // carrying it is also invalid to `compile()` for an unrelated reason.
+      optional(seq('if', field('guard', $._expression))),
       ':',
       field('body', $._body),
     ),
