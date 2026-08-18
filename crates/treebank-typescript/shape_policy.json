@@ -68,8 +68,37 @@
     {
       "signature": "VariableDeclaration <- catch_clause",
       "why": "tsc wraps a catch parameter in a VariableDeclaration; we expose it as `parameter` and `type` fields of `catch_clause` with no wrapping node. Same call as `Parameter <- index_signature`."
+    },
+    {
+      "signature": "JsxAttributes <- jsx_self_closing_element",
+      "why": "tsc wraps an element's attributes in a JsxAttributes container; ours are direct children of the element. No information is lost -- they are already unambiguously that element's attributes -- so this is the same call as `arguments` or `class_heritage`."
+    },
+    {
+      "signature": "JsxAttributes <- jsx_opening_element",
+      "why": "See `JsxAttributes <- jsx_self_closing_element`."
+    },
+    {
+      "signature": "BinaryExpression <- sequence_expression",
+      "why": "tsc models the comma operator as a left-associative BinaryExpression, so `a, b, c` nests; we model it as one flat `sequence_expression`. Different shape for the same operator, and ours is the one the vocabulary wants -- see the `sequence_expression` note in roles.json."
     }
   ],
-  "baseline_missed": 3229,
-  "baseline_note": "The current count, recorded so it can only go DOWN without a deliberate edit. It is not zero and is not meant to be yet: the 21 remaining clusters are listed by `treebank shape` and are the work queue. Raising this number is a decision that belongs in a commit message."
+  "baseline_missed": 23,
+  "baseline_note": "Down from 3,229. What remains is the three entries in known_limits — 6 files, each a GLR tie where the two readings hold identical node multisets, so there is nothing for dynamic precedence to weigh. Raising this number is a decision that belongs in a commit message.",
+  "known_limits": [
+    {
+      "signature": "ArrayType <- array_type / TypeParameter <- array_type",
+      "files": 4,
+      "why": "`infer R extends PropertyKey[][]` binds one `[]` into the constraint and leaves the other outside. The single-`[]` case was fixed by weighting `_no_conditional_type`'s growable alternatives, but at two levels the readings are exactly symmetric: whichever way it nests, precisely one `array_type` is reached through `_no_conditional_type`, so any bonus cancels. The real fix is to forbid a bare `infer_type` as the base of `array_type` -- `(infer R extends P)[]` needs parentheses in TypeScript anyway -- which costs a duplicated type tier. Not worth it for 4 files."
+    },
+    {
+      "signature": "CallExpression <- call_expression",
+      "files": 1,
+      "why": "`await f<T>(x)` binds as `(await f)<T>(x)`. `[binary_expression, await_expression, call_expression]` is a declared GLR conflict and the two readings hold IDENTICAL node multisets -- one await, one call, one type_arguments each -- so dynamic precedence has nothing to weigh. Would need the ambiguity removed structurally."
+    },
+    {
+      "signature": "ConditionalType <- conditional_type",
+      "files": 1,
+      "why": "One deeply nested conditional inside a spread inside a tuple, in type-fest. Same shape as the resolved cases; not isolated further."
+    }
+  ]
 }

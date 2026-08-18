@@ -187,8 +187,9 @@ declare const env: `prefix-${string}`
         type: (type_identifier)
         type_arguments: (type_arguments
           (infer_type
-            (type_identifier)
-            (type_identifier))))
+            (type_parameter
+              name: (type_identifier)
+              constraint: (type_identifier)))))
       consequence: (type_identifier)
       alternative: (predefined_type)))
   (type_alias

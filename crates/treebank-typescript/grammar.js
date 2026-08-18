@@ -91,6 +91,7 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._expression, $.named_tuple_member],
     [$.import_type, $._literal],
     [$.nested_identifier, $.import_type, $._name],
     [$.nested_identifier, $._no_conditional_type, $._name],
@@ -753,11 +754,19 @@ module.exports = grammar({
       seq(repeat($._modifier), field('name', alias('global', $.identifier)), field('body', $.block)),
     ),
 
-    nested_identifier: $ => seq(
+    // `prec.dynamic(1)` for the same reason `nested_type_identifier` has it,
+    // and it has to be here too or the tie comes back one level deeper.
+    // `x as z.core.$ZodString` splits into `nested_type_identifier(z, core)`
+    // plus a `member_expression`, and that reading ALSO holds exactly one
+    // `nested_type_identifier` -- so the +1 there cancels out. The module
+    // part of a three-level name is a `nested_identifier`, and only the
+    // correct reading contains one, which is the asymmetry. The margin grows
+    // with each further level, so deeper names stay decided.
+    nested_identifier: $ => prec.dynamic(1, seq(
       field('object', choice($.identifier, $.nested_identifier)),
       '.',
       field('property', $.identifier),
-    ),
+    )),
 
     import_alias: $ => seq(
       optional('export'),
@@ -950,7 +959,13 @@ module.exports = grammar({
       field('alternative', $._expression),
     )),
 
-    await_expression: $ => prec(PREC.unary, seq('await', $._expression)),
+    // `prec.right`: `await f<T>(x)` is `await (f<T>(x))`, not
+    // `(await f)<T>(x)`. Plain `prec` left the two readings tied -- both
+    // hold one `await_expression`, one `call_expression` and one
+    // `type_arguments`, so the dynamic precedence on type arguments cancels
+    // out -- and the wrong one was winning. Right associativity extends the
+    // operand instead of reducing the await.
+    await_expression: $ => prec.right(PREC.unary, seq('await', $._expression)),
 
     yield_expression: $ => prec.right(PREC.yield, seq(
       'yield',
@@ -1016,7 +1031,17 @@ module.exports = grammar({
       $._constructable_primary,
       alias($._constructable_member, $.member_expression),
       alias($._constructable_subscript, $.subscript_expression),
+      // `new WebSocketCtor!(url)` -- the `!` asserts the CONSTRUCTOR is
+      // non-null, so it belongs inside `new`, and the arguments belong to
+      // `new`. Without this the constructor tier stopped at the `!` and the
+      // call came out as `(new WebSocketCtor!)(url)`.
+      alias($._constructable_non_null, $.non_null_expression),
     ),
+
+    // Above `new_no_args` (18), or the `new` reduces at the `!` and the
+    // assertion lands OUTSIDE: `(new WebSocketCtor!)(url)` instead of
+    // `new (WebSocketCtor!)(url)`.
+    _constructable_non_null: $ => prec.left(PREC.member, seq($._constructable, '!')),
 
     // A `new` chain is itself constructable (`new new X()()`), and so is a
     // parenthesised anything -- `new (f())()` is how you say the reading
@@ -1350,14 +1375,20 @@ module.exports = grammar({
     union_type: $ => prec.left(PREC.cast + 1, seq(optional($._type), '|', $._type)),
     intersection_type: $ => prec.left(PREC.cast + 2, seq(optional($._type), '&', $._type)),
 
-    function_type: $ => prec.left(1, seq(
+    // `prec.right`, not `prec.left`: a function type's RETURN extends as far
+    // right as it can. `() => X extends T ? 1 : 2` is
+    // `() => (X extends T ? 1 : 2)`, and with left associativity at the same
+    // precedence as `conditional_type` we reduced the function type first
+    // and read `(() => X) extends T ? 1 : 2` instead. A conditional needs
+    // `extends`, so the greed cannot run past anything else.
+    function_type: $ => prec.right(1, seq(
       field('type_parameters', optional($.type_parameters)),
       field('parameters', $.parameters),
       '=>',
       field('return_type', $._type),
     )),
 
-    constructor_type: $ => prec.left(1, seq(
+    constructor_type: $ => prec.right(1, seq(
       optional('abstract'),
       'new',
       field('type_parameters', optional($.type_parameters)),
@@ -1438,10 +1469,20 @@ module.exports = grammar({
       optional(seq(commaSep1(choice(
         $._type,
         $.optional_type,
-        seq(field('label', $._name), optional('?'), ':', $._type),
-        seq('...', field('label', $._name), ':', $._type),
+        $.named_tuple_member,
       )), optional(','))),
       ']',
+    ),
+
+    // `[opts?: X, ...rest: Y[]]` -- a LABELLED tuple element. The label and
+    // the type it labels were loose children of `tuple_type` with no node
+    // spanning the pair, so nothing in the tree said which type each label
+    // belonged to. 92 files, 640 occurrences. tsc calls it a
+    // NamedTupleMember and puts the `...` inside, so the rest form is one
+    // node too.
+    named_tuple_member: $ => choice(
+      seq(field('label', $._name), optional('?'), ':', field('type', $._type)),
+      seq('...', field('label', $._name), ':', field('type', $._type)),
     ),
 
     conditional_type: $ => prec.right(1, seq(
@@ -1457,7 +1498,19 @@ module.exports = grammar({
     // The constraint of `infer R extends C` may not be a bare conditional
     // — the `?` after it belongs to the enclosing conditional type. TS's
     // own grammar makes the same exclusion.
-    infer_type: $ => prec.right(1, seq('infer', alias($.identifier, $.type_identifier), optional(seq('extends', $._no_conditional_type)))),
+    // The inferred name and its constraint are ONE thing -- tsc models
+    // `infer U extends t.Node | null` as an InferType wrapping a
+    // TypeParameter spanning `U extends t.Node | null`, and we had no node
+    // for that span at all. Aliased to the existing `type_parameter` rather
+    // than reusing that rule directly, because it also admits `in`/`out`/
+    // `const` variance and an `= default`, none of which is legal after
+    // `infer`. Same node name, no widening.
+    infer_type: $ => prec.right(1, seq('infer', alias($._infer_parameter, $.type_parameter))),
+
+    _infer_parameter: $ => prec.right(seq(
+      field('name', alias($.identifier, $.type_identifier)),
+      optional(seq('extends', field('constraint', $._no_conditional_type))),
+    )),
 
     _no_conditional_type: $ => choice(
       alias($.identifier, $.type_identifier),
@@ -1467,15 +1520,24 @@ module.exports = grammar({
       // cannot swallow the enclosing conditional's `?`.
       $.constructor_type,
       $.function_type,
-      $.union_type,
-      $.intersection_type,
+      // These carry `prec.dynamic` because `[$._type,
+      // $._no_conditional_type]` is a DECLARED conflict, and at
+      // `infer R extends P . [` the parser genuinely cannot tell whether `P`
+      // ENDS the constraint -- giving `(infer R extends P)[]` -- or
+      // CONTINUES into it, giving `infer R extends P[]`. tsc says the
+      // constraint is greedy. Both trees hold exactly one `array_type` and
+      // one `infer_type`, so nothing asymmetric existed to decide it; this
+      // is the asymmetry. Only the alternatives that can keep growing
+      // rightward or leftward need it.
+      prec.dynamic(1, $.union_type),
+      prec.dynamic(1, $.intersection_type),
       $.generic_type,
       $.nested_type_identifier,
       $.object_type,
-      $.array_type,
+      prec.dynamic(1, $.array_type),
       $.tuple_type,
-      $.indexed_access_type,
-      $.type_operator,
+      prec.dynamic(1, $.indexed_access_type),
+      prec.dynamic(1, $.type_operator),
       $.typeof_type,
       $.literal_type,
       $.template_literal_type,
@@ -1582,12 +1644,22 @@ module.exports = grammar({
       optional(seq('=', field('value', $._type))),
     ),
 
-    type_arguments: $ => seq(
+    // `prec.dynamic(1)`, because `a.b<T>(x)` is genuinely ambiguous with the
+    // comparison chain `a.b < T > (x)` and both are complete parses. Nothing
+    // asymmetric decided it, so the comparison won and generic calls on a
+    // MEMBER function -- `vi.importActual<any>('v')`, `z.custom<string>(f)`
+    // -- came out as `binary_expression`. A plain `f<T>(x)` already worked,
+    // which is why this hid in a handful of files rather than all of them.
+    //
+    // +1 rather than more, so it stays BELOW the JSX arbitration: a `<` in
+    // a .tsx file still has `jsx_opening_element` at -1 yielding to an
+    // arrow, and this does not disturb that balance.
+    type_arguments: $ => prec.dynamic(1, seq(
       '<',
       commaSep1($._type),
       optional(','),
       '>',
-    ),
+    )),
 
     // ── names & literals ─────────────────────────────────────────────
     _name: $ => choice(
