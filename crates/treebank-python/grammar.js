@@ -1080,7 +1080,11 @@ module.exports = grammar({
 
     identifier: _ => /[_\p{XID_Start}][_\p{XID_Continue}]*/,
 
-    comment: _ => token(seq('#', /.*/)),
+    // `[^\r\n]*`, not `.*`: tree-sitter's `.` excludes \n but MATCHES \r, so
+    // on a CRLF file the comment swallowed the carriage return and every
+    // comment node ended one byte late. Found by comparing against CPython's
+    // `tokenize`, which is the only oracle we have below the tree.
+    comment: _ => token(seq('#', /[^\r\n]*/)),
   },
 });
 

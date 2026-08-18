@@ -57,6 +57,9 @@ impl SpanOracle for RustSpans {
                                 spans: v.spans,
                                 edges: Vec::new(),
                                 has_edges: false,
+                                tokens: Vec::new(),
+                                has_tokens: false,
+                                error: None,
                                 skipped: None,
                             }
                         }
@@ -67,6 +70,9 @@ impl SpanOracle for RustSpans {
                             spans: Vec::new(),
                             edges: Vec::new(),
                             has_edges: false,
+                            tokens: Vec::new(),
+                            has_tokens: false,
+                            error: Some(e.span().byte_range().start),
                             skipped: Some(format!("syn: {e}")),
                         },
                     },
@@ -77,6 +83,9 @@ impl SpanOracle for RustSpans {
                         spans: Vec::new(),
                         edges: Vec::new(),
                         has_edges: false,
+                        tokens: Vec::new(),
+                        has_tokens: false,
+                        error: None,
                         skipped: Some(format!("read: {e}")),
                     },
                 };

@@ -76,9 +76,17 @@ for (const line of input.split("\n")) {
   let out = { path, spans: [] };
   try {
     const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, scriptKind(path));
-    if ((sf.parseDiagnostics ?? []).length > 0) {
+    const diags = sf.parseDiagnostics ?? [];
+    if (diags.length > 0) {
       // Only clean parses have meaningful boundaries.
       out.skipped = "parse errors";
+      // ...but WHERE it failed is worth reporting. Rejecting the right files
+      // at the wrong offset makes error recovery useless to an editor, and
+      // nothing has ever checked it.
+      const first = diags.reduce((a, b) => (b.start < a.start ? b : a));
+      if (typeof first.start === "number") {
+        out.error = byteMap(src)[first.start] ?? first.start;
+      }
     } else {
       const m = byteMap(src);
       const spans = [];

@@ -2,6 +2,7 @@ mod grammar;
 mod rosetta;
 mod routing;
 mod verify;
+mod errpos;
 mod mutate;
 mod shape;
 mod sweep;
@@ -79,6 +80,23 @@ enum Cmd {
     /// language does not. The sweep measures rejects-valid over the whole
     /// corpus; this measures the other direction, which `test/negative/`
     /// has been measuring with a dozen hand-written files.
+    /// When the grammar rejects a file, does it reject in the right place?
+    /// Compares our first ERROR node against where the reference parser
+    /// reported its first error, over the files both reject.
+    Errors {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/errors.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        limit: Option<usize>,
+    },
     Mutate {
         #[arg(long, value_enum, default_value_t = LangName::Python)]
         lang: LangName,
@@ -277,6 +295,13 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, out, "reports/shape.json"),
             limit,
             dir.as_deref(),
+        ),
+        Cmd::Errors { lang, grammar, manifest, out, limit } => errpos::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            &lang_path(lang, out, "reports/errors.json"),
+            limit,
         ),
         Cmd::Mutate { lang, grammar, manifest, out, files, per_file, seed } => mutate::run(
             lang,
