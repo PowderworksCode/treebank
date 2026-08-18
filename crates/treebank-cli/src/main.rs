@@ -5,6 +5,8 @@ mod verify;
 mod errpos;
 mod roundtrip;
 mod fuzz;
+mod incremental;
+mod recovery;
 mod reformat;
 mod mutate;
 mod shape;
@@ -135,6 +137,46 @@ enum Cmd {
         #[arg(long)]
         manifest: Option<PathBuf>,
         /// [default: corpus/<lang>/reports/reformat.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Parse, edit, reparse incrementally, and compare against a fresh
+    /// parse of the edited text. tree-sitter's contract is that the two are
+    /// indistinguishable; every other check here parses from scratch, so a
+    /// grammar can pass all of them and still hand a broken tree to an
+    /// editor. The usual cause is an external scanner whose serialize and
+    /// deserialize do not round-trip.
+    Incremental {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/incremental.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        limit: Option<usize>,
+        #[arg(long, default_value_t = 1)]
+        seed: u64,
+    },
+    /// Delete one token from a file that parses cleanly and measure how
+    /// much of the file lands inside an ERROR. Editors spend most of their
+    /// time on broken source, and what they can do with it depends on how
+    /// much structure survives — a property no other check here looks at.
+    Recovery {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/recovery.json]
         #[arg(long)]
         out: Option<PathBuf>,
         #[arg(long)]
@@ -401,6 +443,21 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, manifest, "manifest.json"),
             limit,
             &out.unwrap_or_else(|| reformat::default_out(lang)),
+        ),
+        Cmd::Incremental { lang, grammar, manifest, out, limit, seed } => incremental::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            limit,
+            seed,
+            &out.unwrap_or_else(|| incremental::default_out(lang)),
+        ),
+        Cmd::Recovery { lang, grammar, manifest, out, limit } => recovery::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            limit,
+            &out.unwrap_or_else(|| recovery::default_out(lang)),
         ),
         Cmd::Fuzz { lang, grammar, out, iterations, seed } => fuzz::run(
             lang,

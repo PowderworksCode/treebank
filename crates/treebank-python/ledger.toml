@@ -30,6 +30,12 @@ Enforcing `f(a=1, b)` as an error needs the argument list split into a positiona
 fuzz_check = '''
 `treebank fuzz` — programs derived from grammar.json and judged by CPython's PARSER (`ast.parse`, via validate_syntax_only) rather than by `compile()`. That distinction is the whole result: judged by `compile()` the run was dominated by `break`, `yield` and `* x` at module level, which CPython's parser accepts and its compiler rejects — no tree-sitter grammar should track loop nesting to reproduce those. Judged by the parser, 400 derivations gave 21 distinct shrunk programs, 4 of them the declared py2 union (fuzz_policy.toml) and the rest the five causes in known_widenings. All were confirmed against ast.parse.'''
 
+incremental_check = '''
+`treebank incremental` — 3000 files, 8898 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 0 diverged, 0 of them on text that still parses cleanly. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
+
+recovery_check = '''
+`treebank recovery` — 1978 files, 10920 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.3%, p90 17.1%, p99 99.1%; 240 deletions put more than half of a file of at least 1 KiB inside an error, most often `"""` x59, `:` x34, `(` x23, `)` x22. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
+
 [corpus]
 source = '''
 top-1000 PyPI packages by download rank (hugovk top-pypi-packages), sdists only; 951 of 1000 publish one'''
