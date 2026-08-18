@@ -74,7 +74,10 @@ module.exports = grammar({
     '_invocation',
     '_access',
     '_attribute',
-    '_modifier',
+    // `_modifier` is demoted to the facet tier here: rust never lets
+    // visibility and `mut` occupy the same slot, so one alternation across
+    // both is exactly the rule that accepted `mut use x;`. See roles.json.
+    ...tb.assertDemotable([]),
   ]).map((name) => $[name]),
 
   conflicts: $ => [
@@ -259,8 +262,6 @@ module.exports = grammar({
       $.macro_definition,
     ),
 
-    _modifier: $ => choice($.visibility_modifier, $.mutable_specifier),
-
     visibility_modifier: $ => seq(
       'pub',
       optional(seq(
@@ -274,8 +275,9 @@ module.exports = grammar({
 
     function_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
-      repeat(choice('default', 'const', 'async', 'unsafe', 'safe', seq('extern', optional($.string)))),
+      optional($.visibility_modifier),
+      repeat(choice('default', 'const', 'async', 'unsafe', 'safe',
+        seq('extern', optional(alias($._abi, $.string))))),
       'fn',
       field('name', $._name),
       field('type_parameters', optional($.type_parameters)),
@@ -327,7 +329,7 @@ module.exports = grammar({
 
     struct_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'struct',
       field('name', $._name),
       field('type_parameters', optional($.type_parameters)),
@@ -347,7 +349,7 @@ module.exports = grammar({
 
     field_declaration: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       field('name', $._name),
       ':',
       field('type', $._type),
@@ -356,7 +358,7 @@ module.exports = grammar({
     ordered_field_declaration_list: $ => seq(
       '(',
       optional(seq(
-        commaSep1(seq(repeat($._attribute), optional($._modifier), field('type', $._type))),
+        commaSep1(seq(repeat($._attribute), optional($.visibility_modifier), field('type', $._type))),
         optional(','),
       )),
       ')',
@@ -364,7 +366,7 @@ module.exports = grammar({
 
     enum_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'enum',
       field('name', $._name),
       field('type_parameters', optional($.type_parameters)),
@@ -390,7 +392,7 @@ module.exports = grammar({
 
     union_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'union',
       field('name', $._name),
       field('type_parameters', optional($.type_parameters)),
@@ -400,7 +402,7 @@ module.exports = grammar({
 
     trait_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       optional('unsafe'),
       optional('auto'),
       'trait',
@@ -413,18 +415,32 @@ module.exports = grammar({
 
     // impl and trait bodies hold declarations, threaded through `_member`
     // so `(_member)` matches exactly the items that are members.
-    declaration_list: $ => seq('{', repeat(choice($._member, ';')), '}'),
+    // No bare `;`: rustc calls it `non-item in item list` in every list
+    // this rule serves — extern blocks, impls, traits and modules alike.
+    declaration_list: $ => seq('{', repeat($._member), '}'),
     _member: $ => choice(
       $._declaration,
       $.inner_attribute_item,
       alias($.member_macro_invocation, $.macro_invocation),
     ),
 
+    // A macro in an item list carries its own terminator, which is why
+    // `declaration_list` no longer offers a bare `;` to lend it. The
+    // delimiter decides: `m! { … }` is complete, `m!( … )` and `m![ … ]`
+    // need the semicolon and `m! { … };` does not take one.
     member_macro_invocation: $ => seq(
       repeat($._attribute),
       field('macro', $._path_ref),
       '!',
-      $.token_tree,
+      choice(
+        alias($._brace_token_tree, $.token_tree),
+        seq(alias($._delimited_token_tree, $.token_tree), ';'),
+      ),
+    ),
+
+    _delimited_token_tree: $ => choice(
+      seq('(', repeat($._token), ')'),
+      seq('[', repeat($._token), ']'),
     ),
 
     impl_block: $ => seq(
@@ -439,12 +455,13 @@ module.exports = grammar({
       )),
       field('type', $._type),
       optional($.where_clause),
-      choice(field('body', $.declaration_list), ';'),
+      // `impl X;` is `expected {}, found ;`.
+      field('body', $.declaration_list),
     ),
 
     module_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       optional('unsafe'),
       'mod',
       field('name', $._name),
@@ -455,7 +472,7 @@ module.exports = grammar({
 
     module_declaration: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       optional('unsafe'),
       'mod',
       field('name', $._name),
@@ -464,7 +481,7 @@ module.exports = grammar({
 
     const_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'const',
       field('name', $._name),
       ':',
@@ -475,7 +492,7 @@ module.exports = grammar({
 
     static_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'static',
       optional('safe'),
       optional($.mutable_specifier),
@@ -488,7 +505,7 @@ module.exports = grammar({
 
     type_alias: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       optional('default'),
       'type',
       field('name', $._name),
@@ -507,7 +524,7 @@ module.exports = grammar({
     // `use x;;` through.
     macro_definition: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'macro_rules',
       token.immediate('!'),
       field('name', $._name),
@@ -521,13 +538,13 @@ module.exports = grammar({
       repeat($._attribute),
       optional('unsafe'),
       'extern',
-      optional($.string),
+      optional(alias($._abi, $.string)),
       field('body', $.declaration_list),
     ),
 
     extern_crate_declaration: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'extern',
       'crate',
       field('name', $._name),
@@ -543,7 +560,7 @@ module.exports = grammar({
 
     use_declaration: $ => seq(
       repeat($._attribute),
-      optional($._modifier),
+      optional($.visibility_modifier),
       'use',
       $._use_clause,
       ';',
@@ -716,7 +733,7 @@ module.exports = grammar({
         // Fn / FnMut / FnOnce parenthesized sugar: Fn(i32) -> i32
         field('trait', choice(alias($.identifier, $.type_identifier), $.scoped_type_identifier)),
         seq(
-          repeat(choice('unsafe', seq('extern', optional($.string)))),
+          repeat(choice('unsafe', seq('extern', optional(alias($._abi, $.string))))),
           'fn',
         ),
       ),
@@ -1332,6 +1349,17 @@ module.exports = grammar({
     // the scanner is consulted at every token boundary — a multi-part
     // string would let a "/*" inside the text start a hundred-line
     // phantom comment. A single token has no interior boundaries.
+    // An ABI is a PLAIN string: `extern b"C"` is `non-string ABI literal`
+    // to rustc, and the `[bc]?` in `string` let it through. A separate token
+    // rather than a check, because the two are only ever valid in disjoint
+    // states, so the lexer can tell them apart from context. Aliased to
+    // `string` so node-types.json does not gain a type for it.
+    _abi: _ => token(seq(
+      '"',
+      repeat(choice(/[^"\\]+/, /\\(.|\r?\n)/)),
+      '"',
+    )),
+
     string: _ => token(seq(
       /[bc]?"/,
       repeat(choice(/[^"\\]+/, /\\(.|\r?\n)/)),

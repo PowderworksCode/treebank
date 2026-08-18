@@ -1,6 +1,7 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
+    "_modifier": "Rust never lets visibility and `mut` occupy the same slot: visibility precedes an item, `mut` attaches to a binding, a reference or a `static` AFTER the keyword. One alternation across both is exactly the rule that accepted `mut use x;`. Both members are concrete types occurring nowhere else, so facet membership selects the same nodes.",
     "_parameter": "Rust's parameter list is ordered: a `self` receiver is only ever the first parameter and the C-variadic `...` only ever the last, so the three parameter node types cannot share one supertype derivation without the grammar accepting `fn f(a: i32, self)`. All three are concrete types occurring nowhere but a parameter list, so facet membership selects the same nodes."
   },
   "facets": {
@@ -52,6 +53,10 @@
       "metavariable",
       "scoped_identifier",
       "type_identifier"
+    ],
+    "_modifier": [
+      "mutable_specifier",
+      "visibility_modifier"
     ],
     "_parameter": [
       "parameter",
