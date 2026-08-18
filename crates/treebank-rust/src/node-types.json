@@ -402,24 +402,6 @@
     ]
   },
   {
-    "type": "_parameter",
-    "named": true,
-    "subtypes": [
-      {
-        "type": "parameter",
-        "named": true
-      },
-      {
-        "type": "self_parameter",
-        "named": true
-      },
-      {
-        "type": "variadic_parameter",
-        "named": true
-      }
-    ]
-  },
-  {
     "type": "_pattern",
     "named": true,
     "subtypes": [
@@ -3516,11 +3498,19 @@
       "required": false,
       "types": [
         {
-          "type": "_parameter",
+          "type": "_type",
           "named": true
         },
         {
-          "type": "_type",
+          "type": "parameter",
+          "named": true
+        },
+        {
+          "type": "self_parameter",
+          "named": true
+        },
+        {
+          "type": "variadic_parameter",
           "named": true
         }
       ]

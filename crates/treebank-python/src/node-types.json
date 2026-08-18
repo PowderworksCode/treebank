@@ -320,36 +320,6 @@
     ]
   },
   {
-    "type": "_parameter",
-    "named": true,
-    "subtypes": [
-      {
-        "type": "double_star_parameter",
-        "named": true
-      },
-      {
-        "type": "keyword_separator",
-        "named": true
-      },
-      {
-        "type": "parameter",
-        "named": true
-      },
-      {
-        "type": "positional_separator",
-        "named": true
-      },
-      {
-        "type": "star_parameter",
-        "named": true
-      },
-      {
-        "type": "tuple_parameter",
-        "named": true
-      }
-    ]
-  },
-  {
     "type": "_pattern",
     "named": true,
     "subtypes": [
@@ -3227,7 +3197,27 @@
       "required": false,
       "types": [
         {
-          "type": "_parameter",
+          "type": "double_star_parameter",
+          "named": true
+        },
+        {
+          "type": "keyword_separator",
+          "named": true
+        },
+        {
+          "type": "parameter",
+          "named": true
+        },
+        {
+          "type": "positional_separator",
+          "named": true
+        },
+        {
+          "type": "star_parameter",
+          "named": true
+        },
+        {
+          "type": "tuple_parameter",
           "named": true
         }
       ]

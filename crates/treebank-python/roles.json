@@ -1,10 +1,9 @@
 {
-  "vocabulary": "0.3.0",
+  "vocabulary": "0.4.0",
+  "demoted": {
+    "_parameter": "Python's parameter list is ordered by the grammar itself -- `def f(a=1, b)` and `def f(**kw, a)` are SyntaxErrors from CPython's parser -- so the six parameter node types cannot share one supertype derivation. All six are concrete types occurring nowhere but a parameter list, so facet membership selects the same nodes."
+  },
   "facets": {
-    "_callable": [
-      "function_definition",
-      "lambda"
-    ],
     "_binding": [
       "as_pattern",
       "assignment",
@@ -30,15 +29,9 @@
       "type_parameter",
       "with_item"
     ],
-    "_scope": [
-      "module",
+    "_callable": [
       "function_definition",
-      "lambda",
-      "class_definition",
-      "list_comprehension",
-      "set_comprehension",
-      "dictionary_comprehension",
-      "generator_expression"
+      "lambda"
     ],
     "_clause": [
       "case_clause",
@@ -50,16 +43,34 @@
       "if_clause",
       "with_item"
     ],
+    "_comment": [
+      "comment"
+    ],
     "_identifier": [
       "dotted_name",
       "identifier"
     ],
+    "_parameter": [
+      "double_star_parameter",
+      "keyword_separator",
+      "parameter",
+      "positional_separator",
+      "star_parameter",
+      "tuple_parameter"
+    ],
+    "_scope": [
+      "module",
+      "function_definition",
+      "lambda",
+      "class_definition",
+      "list_comprehension",
+      "set_comprehension",
+      "dictionary_comprehension",
+      "generator_expression"
+    ],
     "_string": [
       "concatenated_string",
       "string"
-    ],
-    "_comment": [
-      "comment"
     ]
   },
   "uncategorised": [
@@ -105,7 +116,7 @@
     },
     {
       "node": "pattern_list",
-      "reason": "bare comma-joined patterns (`a, b = …`); its elements carry _pattern"
+      "reason": "bare comma-joined patterns (`a, b = \u2026`); its elements carry _pattern"
     },
     {
       "node": "relative_import",

@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.3.0",
+  "vocabulary": "0.4.0",
   "facets": {
     "_callable": [
       "function_definition",
@@ -121,7 +121,7 @@
     },
     {
       "node": "jsx_expression",
-      "reason": "the {…} container inside JSX; its child carries _expression"
+      "reason": "the {\u2026} container inside JSX; its child carries _expression"
     },
     {
       "node": "jsx_namespace_name",
@@ -165,7 +165,7 @@
     },
     {
       "node": "sequence_expression",
-      "reason": "comma-joined expressions; each operand carries _expression — the sequence itself is deliberately outside so `(_expression)` does not double-count"
+      "reason": "comma-joined expressions; each operand carries _expression \u2014 the sequence itself is deliberately outside so `(_expression)` does not double-count"
     },
     {
       "node": "shorthand_property",

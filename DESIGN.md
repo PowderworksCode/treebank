@@ -111,6 +111,62 @@ The facet tier is a compromise forced by the parse table's limits, kept
 honest by being closed, machine-checked, and shipped inside the same crate
 as the grammar — not a hand-maintained query pack.
 
+### 3.1.1 A term's tier is per-grammar
+
+The tier is a property of the **grammar**, not of the term. A term the
+vocabulary marks `either_tier` may be delivered by either mechanism, and
+each grammar picks.
+
+The forcing case is `_parameter`. Python's parameter list is ordered by the
+grammar itself — `def f(a=1, b)` and `def f(**kw, a)` are SyntaxErrors out
+of CPython's own parser, not later semantic checks — and Rust's is too: a
+`self` receiver is only ever first, a C-variadic `...` only ever last. A
+supertype is one alternation repeated by commas, so a grammar that keeps
+`_parameter` in the table tier necessarily accepts all four of those. The
+ordering has to be spelled out as a chain of "what may still follow" rules,
+and once it is, the parameter node types no longer share a derivation and
+tree-sitter cannot collect them under a supertype. TypeScript does not
+partition the position, so it keeps `_parameter` as a real supertype.
+
+**Why this is one meaning and not two.** Occurrence-level and type-level
+membership agree exactly when every member of the term is a concrete node
+type that occurs nowhere else. Python's six (`parameter`,
+`star_parameter`, `double_star_parameter`, `keyword_separator`,
+`positional_separator`, `tuple_parameter`) and Rust's three (`parameter`,
+`self_parameter`, `variadic_parameter`) all satisfy that, so the facet
+selects precisely the nodes the supertype would have. That is also the
+condition under which the demotion is *permitted* — so the choice is
+between two implementations of one meaning, never between two meanings.
+`_argument` fails the test in all three languages, because a positional
+argument is a bare `_expression` with no type of its own; it stays in the
+table tier until it has a node of its own.
+
+**What it costs.** Native queryability stops being uniform: a consumer
+using the parser through raw tree-sitter, with none of treebank's crates,
+can write `(_parameter)` against TypeScript and not against Python. This
+fails *loudly* — a supertype a grammar does not declare is a `QueryError`
+at `Query::new`, not a silent zero-match — and everything going through
+`treebank-core`, which expands facets at load time, sees no difference at
+all. The rosetta suite asserts that directly: `(_parameter) @p` counts the
+same in all three languages with Python and Rust on the facet tier and
+TypeScript on the table tier.
+
+**The rule.** *Use the table tier wherever the language leaves the position
+unpartitioned; it is stronger and needs no treebank machinery. Demote to the
+facet tier only in the grammars that must partition it, and only when every
+member of the term is a concrete node type occurring nowhere else.* The
+alternative — moving a term globally the first time any language partitions
+it — erodes the table tier to whatever no supported language ever
+partitions, a race to the bottom set by the most constrained grammar in the
+set.
+
+Demotion is declared, not inferred: the grammar lists the term in
+`roles.json`'s `demoted` map with the reason its language forced it, and the
+checker rejects a demotion the vocabulary does not allow, one without a
+reason, one that is also a declared supertype, and one with no facet
+members. Without that, dropping a supertype by accident would be
+indistinguishable from demoting one on purpose.
+
 ### 3.2 The terms
 
 The list is **closed**. A grammar may omit terms its language lacks
@@ -206,7 +262,10 @@ version bump.
 ### 3.3 What the checker enforces (`treebank roles`, in CI)
 
 1. Declared supertypes ⊆ the closed table-tier list; `roles.json` keys ⊆ the
-   closed facet list.
+   closed facet list, or a term this grammar declares as `demoted` (§3.1.1).
+   A demoted term must be `either_tier` in the vocabulary, must carry a
+   reason, must have facet members, and must **not** also be a declared
+   supertype — a term lives in exactly one tier per grammar.
 2. Every named, non-`extras` node type is reachable through at least one
    table role, **or** listed in a facet, **or** recorded in the ledger as
    uncategorised with a one-line reason. Nothing is silently outside the
