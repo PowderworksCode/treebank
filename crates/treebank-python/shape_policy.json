@@ -157,5 +157,20 @@
       "why": "Residual, 6 files. NOT yet isolated.",
       "unresolved": true
     }
-  ]
+  ],
+  "lex_ignore": [
+    {
+      "signature": "token start inside `type_conversion`",
+      "why": "`f\"{x!r}\"` — CPython's tokenizer emits `!` and `r` separately because it has no notion of a conversion specifier; we keep `!r` as one `type_conversion` token, which is the thing the language actually has. A place we are deliberately COARSER than the reference lexer."
+    },
+    {
+      "signature": "token end inside `type_conversion`",
+      "why": "See `token start inside type_conversion`."
+    },
+    {
+      "signature": "token end inside `escape_sequence`",
+      "why": "`f\"Multi{{Device}}\"` — CPython folds a doubled brace into the surrounding FSTRING_MIDDLE, whose value is the single brace; we give `{{` its own `escape_sequence` token, which keeps the source text recoverable. Coarser on their side, finer on ours, and the boundary falls in different places."
+    }
+  ],
+  "lex_note": "`treebank shape` also compares TOKEN boundaries against CPython's `tokenize`, which is the only oracle we have below the tree. The claim is one-directional like the node one: the reference lexer's boundaries must be a SUBSET of ours. We may be finer -- a string is one token to CPython and start/content/end to us -- but never coarser, because coarser means we glued together two things the language keeps apart. The three entries above are the declared exceptions, all in f-strings."
 }

@@ -20,6 +20,14 @@ import json
 import sys
 import tokenize
 
+# Token types that mark no text: layout the parser synthesises, and the
+# stream's own bookends. Everything else has a real extent to compare.
+LAYOUT = frozenset(
+    getattr(tokenize, n)
+    for n in ("ENCODING", "ENDMARKER", "NEWLINE", "NL", "INDENT", "DEDENT")
+    if hasattr(tokenize, n)
+)
+
 
 def line_starts(data):
     """Byte offset of the start of each 1-indexed line."""
@@ -68,6 +76,42 @@ def edges_of(tree, starts, size):
                 span = edge_span(child, starts, size)
                 if span is not None:
                     out.append([parent[0], parent[1], pkind, field, span[0], span[1]])
+    return out
+
+
+def tokens_of(data, starts, size, text_lines):
+    """Token extents from CPython's own tokenizer, as byte spans.
+
+    A second oracle one level below `ast`, and the only one we have for the
+    lexer. Two parsers can build identical trees over a token stream they
+    disagree about -- a numeric literal form, an operator glued together, a
+    string prefix -- and nothing above this level would notice.
+    """
+    # `tokenize` and `ast` do NOT agree on what a column is. `ast.col_offset`
+    # is documented as a UTF-8 BYTE offset; a token's start and end are
+    # CHARACTER indices into the decoded line. Reading the second as the first
+    # puts every token after a non-ASCII character on the wrong byte, which is
+    # exactly what the first run of this check reported -- boundaries landing
+    # inside identifiers, in files containing box-drawing characters.
+    def at(row, col):
+        line = text_lines[row] if row < len(text_lines) else ""
+        return starts[row] + len(line[:col].encode("utf-8"))
+
+    out = []
+    try:
+        for t in tokenize.tokenize(io.BytesIO(data).readline):
+            if t.type in LAYOUT:
+                continue
+            if t.start[0] >= len(starts) or t.end[0] >= len(starts):
+                continue
+            start = at(t.start[0], t.start[1])
+            end = at(t.end[0], t.end[1])
+            if 0 <= start < end <= size:
+                out.append([start, end])
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
+        # The tokenizer gave up part way. What it produced before that is
+        # not a complete account of the file, so report none of it.
+        return None
     return out
 
 
@@ -129,11 +173,36 @@ def main():
             # Only clean parses have meaningful boundaries. python2-only
             # files land here and are skipped, not counted as agreement.
             record["skipped"] = "parse: %s" % type(exc).__name__
+            # ...but WHERE it failed is worth reporting. Rejecting the right
+            # files at the wrong offset makes error recovery useless to an
+            # editor and misleads every gap investigation, and nothing has
+            # ever checked it.
+            lineno = getattr(exc, "lineno", None)
+            offset = getattr(exc, "offset", None)
+            if lineno is not None and offset is not None:
+                starts = line_starts(data)
+                if 0 < lineno < len(starts):
+                    lines = [""] + data.decode("utf-8", "replace").split("\n")
+                    line = lines[lineno] if lineno < len(lines) else ""
+                    # `offset` is a 1-based CHARACTER column.
+                    col = max(0, offset - 1)
+                    record["error"] = starts[lineno] + len(line[:col].encode("utf-8"))
         else:
             try:
                 starts = line_starts(data)
                 record["spans"] = spans_of(tree, starts, len(data))
                 record["edges"] = edges_of(tree, starts, len(data))
+                # Split on "\n" ONLY, and 1-index to match `starts`.
+                # `splitlines()` also breaks on \r\n, \x0c and \u2028, while
+                # `starts` counts \n -- so on any file containing one of
+                # those the two lists desync and every column after it lands
+                # on the wrong byte. Which is what the second run of this
+                # check reported: boundaries inside identifiers, in files
+                # with a LINE SEPARATOR in a string literal.
+                text_lines = [""] + data.decode("utf-8", "replace").split("\n")
+                toks = tokens_of(data, starts, len(data), text_lines)
+                if toks is not None:
+                    record["tokens"] = toks
             except RecursionError:
                 record["skipped"] = "walk: RecursionError"
         sys.stdout.write(json.dumps(record) + "\n")

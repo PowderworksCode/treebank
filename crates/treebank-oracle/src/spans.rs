@@ -73,6 +73,15 @@ pub struct FileSpans {
     /// Whether this oracle reports edges. `syn` does not: it has no generic
     /// field reflection, so a Rust node's children are positional to us.
     pub has_edges: bool,
+    /// Token extents from a LEXICAL oracle, where one exists. CPython ships
+    /// `tokenize` alongside `ast`; tsc and syn expose no separate token
+    /// stream with positions, so they report none.
+    pub tokens: Vec<(usize, usize)>,
+    pub has_tokens: bool,
+    /// Byte offset where the reference parser reported its FIRST error, when
+    /// it rejected the file. Rejecting the right files at the wrong offset
+    /// makes error recovery useless downstream, and nothing checks it.
+    pub error: Option<usize>,
     /// Set when the oracle declined to report boundaries — its own parse
     /// errored, or it threw. Never silently an empty span list: an empty
     /// list means "this file has no nodes", which would pass the check
@@ -108,6 +117,10 @@ struct RawFile {
     spans: Vec<(usize, usize, String)>,
     #[serde(default)]
     edges: Vec<(usize, usize, String, String, usize, usize)>,
+    #[serde(default)]
+    tokens: Option<Vec<(usize, usize)>>,
+    #[serde(default)]
+    error: Option<usize>,
     #[serde(default)]
     skipped: Option<String>,
 }
@@ -173,6 +186,9 @@ fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileS
                     })
                     .collect(),
                 has_edges: true,
+                has_tokens: raw.tokens.is_some(),
+                tokens: raw.tokens.unwrap_or_default(),
+                error: raw.error,
                 skipped: raw.skipped,
             },
         );

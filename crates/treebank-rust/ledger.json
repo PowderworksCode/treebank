@@ -93,5 +93,6 @@
       "why_accepted": "not isolated.",
       "why_not_fixed": "not yet attempted."
     }
-  ]
+  ],
+  "error_positions": "`treebank errors` — 13 of 15 rejected files are comparable: 1 exact, 10 within 16 bytes, 2 further. Median |delta| 2 bytes."
 }

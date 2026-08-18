@@ -448,6 +448,43 @@ whatever the grammar does today, bugs included. Only the token entries are
 mechanical, and they say so: `AmpersandAmpersandToken` is `&&` and there is
 no judgement in that.
 
+#### The lexical layer
+
+`ast` is not the only oracle CPython ships. `tokenize` is a second one, a
+level below, and it is the only reference we have for the LEXER — two
+parsers can build identical trees over a token stream they disagree about,
+and nothing above this level would notice a numeric literal form, an
+operator glued together, or a string prefix read differently.
+
+The claim is one-directional, like the node one: **the reference lexer's
+token boundaries must be a subset of ours.** We may be finer — a string is
+one token to CPython and `string_start`/`string_content`/`string_end` to us
+— but never coarser, because coarser means we glued together two things the
+language keeps apart. Where we are coarser on purpose it is declared, and
+there are three such places, all in f-strings: `!r` is one `type_conversion`
+to us and two tokens to CPython, and `{{` is an `escape_sequence` where
+CPython folds it into the surrounding text.
+
+tsc and syn expose no separate token stream with positions, so they report
+none and the check is skipped for them.
+
+#### Error positions (`treebank errors`)
+
+Every other check is about which files we accept and what tree we build.
+None looks at the REJECTIONS, and a grammar can reject exactly the right
+files while pointing at a wildly wrong offset. That costs twice: an editor's
+error recovery is only as good as the position it is given, and every gap
+investigation starts by reading the first ERROR node, so a misplaced one
+sends the reader to the wrong construct.
+
+The corpus already exists and was being discarded — the files the sweep
+books as *noise* are exactly the ones both parsers reject. No claim is made
+that the offsets should be equal: two parsers legitimately notice a problem
+at different points, and a token or two apart is normal. What is worth
+knowing is the distribution, and especially the tail, because a rejection
+hundreds of bytes from where the reference parser looked is one nobody can
+act on.
+
 #### Mutation (`treebank mutate`)
 
 The sweep measures ONE direction. It takes the corpus, asks which files we

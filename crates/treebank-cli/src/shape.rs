@@ -73,6 +73,11 @@ pub struct ShapeReport {
     /// Oracle edges the field map never mentions.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub field_unmapped: Vec<ShapeCluster>,
+    /// Token boundaries the lexer oracle draws inside one of ours.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub lex: Vec<ShapeCluster>,
+    #[serde(default)]
+    pub lex_disagreements: usize,
     #[serde(default)]
     pub field_mismatched: usize,
     #[serde(default)]
@@ -120,6 +125,11 @@ struct ShapePolicy {
     /// would not.
     #[serde(default)]
     baseline_field_mismatched: Option<usize>,
+    /// Lexical boundary disagreements the grammar declares on purpose, by
+    /// full signature — places we deliberately tokenise COARSER than the
+    /// reference lexer.
+    #[serde(default)]
+    lex_ignore: Vec<Ignored>,
 }
 
 #[derive(Deserialize)]
@@ -127,12 +137,26 @@ struct Ignored {
     signature: String,
 }
 
-type Policy = (HashSet<String>, Option<usize>, HashSet<String>, HashSet<String>, Option<usize>);
+type Policy = (
+    HashSet<String>,
+    Option<usize>,
+    HashSet<String>,
+    HashSet<String>,
+    Option<usize>,
+    HashSet<String>,
+);
 
 fn load_policy(grammar_dir: &Path) -> Result<Policy> {
     let path = grammar_dir.join("shape_policy.json");
     if !path.exists() {
-        return Ok((Default::default(), None, Default::default(), Default::default(), None));
+        return Ok((
+            Default::default(),
+            None,
+            Default::default(),
+            Default::default(),
+            None,
+            Default::default(),
+        ));
     }
     let text = std::fs::read_to_string(&path)
         .with_context(|| format!("read {}", path.display()))?;
@@ -144,6 +168,7 @@ fn load_policy(grammar_dir: &Path) -> Result<Policy> {
         policy.mismatch_ignore.into_iter().map(|i| i.signature).collect(),
         policy.field_mismatch_ignore.into_iter().map(|i| i.signature).collect(),
         policy.baseline_field_mismatched,
+        policy.lex_ignore.into_iter().map(|i| i.signature).collect(),
     ))
 }
 
@@ -365,6 +390,8 @@ struct FileResult {
     field_mismatches: Vec<Miss>,
     /// An oracle edge the field map does not mention.
     field_unmapped: Vec<Miss>,
+    /// A token boundary of the lexer oracle that falls inside one of ours.
+    lex: Vec<Miss>,
 }
 
 impl FileResult {
@@ -379,6 +406,7 @@ impl FileResult {
             unmapped: Vec::new(),
             field_mismatches: Vec::new(),
             field_unmapped: Vec::new(),
+            lex: Vec::new(),
         }
     }
 }
@@ -595,7 +623,7 @@ pub fn run(
         }
     };
 
-    let (ignore, baseline, mismatch_ignore, field_ignore, field_baseline) =
+    let (ignore, baseline, mismatch_ignore, field_ignore, field_baseline, lex_ignore) =
         load_policy(grammar_dir)?;
     let (node_map, has_map) = load_node_map(grammar_dir)?;
     let (field_map, has_field_map) = load_field_map(grammar_dir)?;
@@ -628,6 +656,8 @@ pub fn run(
         unmapped: Vec::new(),
         field_mismatches: Vec::new(),
         field_unmapped: Vec::new(),
+        lex: Vec::new(),
+        lex_disagreements: 0,
         field_mismatched: 0,
         field_unmapped_count: 0,
         mismatched_nodes: 0,
@@ -638,6 +668,7 @@ pub fn run(
     let mut by_unmapped: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
     let mut by_field: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
     let mut by_field_unmapped: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
+    let mut by_lex: BTreeMap<String, Vec<Miss>> = BTreeMap::new();
 
     for chunk in files.chunks(BATCH) {
         let batch: Vec<String> = chunk.to_vec();
@@ -889,6 +920,74 @@ pub fn run(
                         }
                     }
                 }
+                // The LEXICAL layer. Two parsers can build identical trees
+                // over a token stream they disagree about -- a numeric
+                // literal form, an operator glued together, a string prefix
+                // -- and nothing above this level would notice.
+                //
+                // The claim is one-directional, like the node one: the
+                // oracle's token boundaries must be a SUBSET of ours. We are
+                // allowed to be finer (a string is one token to CPython and
+                // start/content/end to us); we are not allowed to be coarser,
+                // because that means we glued together two things the
+                // language keeps apart.
+                let mut lex = Vec::new();
+                if file.has_tokens {
+                    let mut edges: HashSet<usize> = HashSet::new();
+                    let mut c = tree.root_node().walk();
+                    let mut recurse = true;
+                    loop {
+                        let node = c.node();
+                        if recurse && node.child_count() == 0 {
+                            edges.insert(node.start_byte());
+                            edges.insert(node.end_byte());
+                        }
+                        if recurse && c.goto_first_child() {
+                            continue;
+                        }
+                        if c.goto_next_sibling() {
+                            recurse = true;
+                            continue;
+                        }
+                        if !c.goto_parent() {
+                            break;
+                        }
+                        recurse = false;
+                    }
+                    for (a, b) in &file.tokens {
+                        for (at, side) in [(*a, "start"), (*b, "end")] {
+                            if edges.contains(&at) {
+                                continue;
+                            }
+                            // Name OUR token that swallowed the boundary.
+                            // "a boundary is missing" is not actionable;
+                            // "`type_conversion` covers it" says at once
+                            // that `!r` is one token here and two to
+                            // CPython, and whether that is deliberate.
+                            let inside = tree
+                                .root_node()
+                                .descendant_for_byte_range(at.saturating_sub(1), at)
+                                .map(|n| n.kind().to_string())
+                                .unwrap_or_else(|| "?".into());
+                            let text = String::from_utf8_lossy(
+                                &src[a.min(&src.len()).to_owned()..(*b).min(src.len())],
+                            );
+                            let text: String = text.chars().take(40).collect();
+                            let sig = format!("token {side} inside `{inside}`");
+                            if lex_ignore.contains(&sig) {
+                                break;
+                            }
+                            lex.push(Miss {
+                                path: rel.to_string(),
+                                kind: sig,
+                                start: *a,
+                                end: *b,
+                                text: text.replace('\n', "\\n"),
+                            });
+                            break;
+                        }
+                    }
+                }
                 let n = misses.len();
                 Ok(FileResult {
                     oracle_nodes: file.spans.len(),
@@ -900,6 +999,7 @@ pub fn run(
                     unmapped,
                     field_mismatches,
                     field_unmapped,
+                    lex,
                 })
             })
             .collect::<Result<_>>()?;
@@ -930,6 +1030,9 @@ pub fn run(
             for m in r.field_unmapped {
                 by_field_unmapped.entry(m.kind.clone()).or_default().push(m);
             }
+            for m in r.lex {
+                by_lex.entry(m.kind.clone()).or_default().push(m);
+            }
         }
     }
 
@@ -942,6 +1045,9 @@ pub fn run(
             examples: ms.into_iter().take(4).collect(),
         }
     };
+    report.lex_disagreements = by_lex.values().map(|v| v.len()).sum();
+    report.lex = by_lex.into_iter().map(cluster_of).collect();
+    report.lex.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
     report.field_mismatched = by_field.values().map(|v| v.len()).sum();
     report.field_unmapped_count = by_field_unmapped.values().map(|v| v.len()).sum();
     report.field_mismatches = by_field.into_iter().map(cluster_of).collect();
@@ -994,6 +1100,19 @@ pub fn run(
         }
         for c in report.unmapped.iter().take(12) {
             println!("  UNMAPPED {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            if let Some(e) = c.examples.first() {
+                println!("            e.g. {}  {:?}", e.path, e.text);
+            }
+        }
+    }
+    if report.lex_disagreements > 0 || !report.lex.is_empty() {
+        println!(
+            "shape: lexer — {} token boundary disagreement(s) in {} cluster(s)",
+            report.lex_disagreements,
+            report.lex.len(),
+        );
+        for c in report.lex.iter().take(8) {
+            println!("  LEX      {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
             if let Some(e) = c.examples.first() {
                 println!("            e.g. {}  {:?}", e.path, e.text);
             }

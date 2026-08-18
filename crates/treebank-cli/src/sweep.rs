@@ -102,6 +102,13 @@ fn load_version_policy(grammar_dir: &Path) -> anyhow::Result<std::collections::H
     Ok(policy.rejections.into_iter().map(|r| r.signature).collect())
 }
 
+/// Byte offset of the first ERROR or MISSING node, for the error-position
+/// check. Same traversal `first_error` uses; exposed so `errpos` does not
+/// need its own idea of where a rejection happened.
+pub fn first_error_offset(root: Node) -> Option<usize> {
+    first_error(root).map(|n| n.start_byte())
+}
+
 /// First ERROR or MISSING node in document order.
 fn first_error<'a>(root: Node<'a>) -> Option<Node<'a>> {
     let mut cursor = root.walk();
