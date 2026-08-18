@@ -809,6 +809,41 @@ body, an `extern` ABI accepting a byte string. This is the difference from
 `mutate`, which reports *a corpus file that does it*: here the report is
 `mut use r#XX ;`.
 
+### 5.10 Reformat invariance (`treebank reformat`)
+
+The sibling of the round trip, asking the opposite question of the same two
+tools. A *printer* renders from the tree and never sees the original bytes,
+so it asks whether we handle the canonical spelling. A *formatter* is
+text-to-text — it reflows a token stream it never stopped holding, keeps
+comments and keeps the author's spelling — so it asks whether **layout moves
+our tree**, which it must not. A rule that reads whitespace it should not,
+or a token that only lexes when it abuts its neighbour, shows up here and
+nowhere else.
+
+**Only files the formatter changed in whitespace alone are compared**, and
+that restriction is the check rather than a detail of it, because a
+formatter is *not* tree-preserving. rustfmt reorders `use` declarations,
+rewrites `extern {` into `extern "C" {`, adds a semicolon after a tail
+`return`, and collapses `|x| { f() }` to `|x| f()`. Every one is
+semantically neutral and syntactically real: the tree moves and nothing is
+wrong. Two of those are configured off; the rest cannot be.
+
+The alternative was to compare everything and keep a list of the formatter's
+known rewrites, and it is worse — the list is open-ended, and each entry is
+a blanket that also silences a genuine finding wearing the same node pair.
+Comparing the two texts with all whitespace removed costs a little yield (a
+file where black added a trailing comma is skipped) and buys a question with
+an unambiguous answer: a divergence that survives was caused by layout, and
+is therefore ours.
+
+Measured: rust 171 whitespace-only reformats of 2,000 files, **0 diverged**;
+python 157 of 1,200, **0 diverged**. Python matters most of the three,
+because python's layout is load-bearing and the invariant is not obvious
+there the way it is in a free-form language. TypeScript has no formatter
+here — tsc exposes formatting only through the language service and prettier
+is not vendored — and the command says so rather than substituting
+something else.
+
 ## 6. Code organization
 
 ```

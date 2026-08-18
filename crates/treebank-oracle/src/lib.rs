@@ -25,6 +25,7 @@ mod python;
 mod rust;
 mod rust_spans;
 mod spans;
+mod reformat;
 mod unparse;
 mod stdin_oracle;
 mod typescript;
@@ -35,6 +36,7 @@ use std::path::{Path, PathBuf};
 use anyhow::Result;
 
 pub use spans::{get as spans_for, Edge, FileSpans, Span, SpanOracle};
+pub use reformat::{get as reformatter_for, Reformatted, Reformatter};
 pub use unparse::{get as unparser_for, Rendered, Unparser};
 pub use treebank_lang::LangName;
 
