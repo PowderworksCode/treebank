@@ -5,6 +5,10 @@
 //! else is ours: a rule reading layout it should not, or a token that only
 //! lexes when it happens to abut its neighbour.
 //!
+//! Like the sweep, `mutate` and `fuzz`, this needs the corpus and so runs
+//! locally rather than in CI — a formatter has nothing to say about the
+//! handful of committed fixtures, most of which are already in its style.
+//!
 //! The comparison is a pre-order sequence of named node kinds with their
 //! field names — deliberately NOT the spans, since every span moves and that
 //! is the point. Comments are included: they are `extras`, and a formatter
