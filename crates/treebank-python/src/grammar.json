@@ -4186,7 +4186,7 @@
                 "name": "left",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "_expression"
+                  "name": "_or_test"
                 }
               },
               {
@@ -4202,7 +4202,7 @@
                 "name": "right",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "_expression"
+                  "name": "_or_test"
                 }
               }
             ]
@@ -4219,7 +4219,7 @@
                 "name": "left",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "_expression"
+                  "name": "_or_test"
                 }
               },
               {
@@ -4235,7 +4235,7 @@
                 "name": "right",
                 "content": {
                   "type": "SYMBOL",
-                  "name": "_expression"
+                  "name": "_or_test"
                 }
               }
             ]
@@ -4262,7 +4262,7 @@
             "name": "operand",
             "content": {
               "type": "SYMBOL",
-              "name": "_expression"
+              "name": "_or_test"
             }
           }
         ]

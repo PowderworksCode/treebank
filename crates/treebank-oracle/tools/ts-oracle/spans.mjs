@@ -51,6 +51,23 @@ function byteMap(src) {
   return map;
 }
 
+// `ts.SyntaxKind[n]` returns the FIRST name with that numeric value, and the
+// enum is full of range markers aliased onto real kinds -- SyntaxKind.
+// FirstStatement is VariableStatement, FirstNode is QualifiedName. Reading
+// those back gives a mapping table full of names that describe nothing.
+// Build the reverse table once, preferring any name that is not a marker.
+const KIND_NAME = (() => {
+  const names = {};
+  for (const [name, value] of Object.entries(ts.SyntaxKind)) {
+    if (typeof value !== "number") continue;
+    const marker = /^(First|Last)/.test(name);
+    if (names[value] === undefined || (marker === false && /^(First|Last)/.test(names[value]))) {
+      names[value] = name;
+    }
+  }
+  return names;
+})();
+
 const input = fs.readFileSync(0, "utf8");
 for (const line of input.split("\n")) {
   const path = line.trim();
@@ -69,7 +86,7 @@ for (const line of input.split("\n")) {
         const s = node.getStart(sf);
         const e = node.getEnd();
         // Zero-width nodes have no boundary to compare.
-        if (e > s) spans.push([m[s], m[e], ts.SyntaxKind[node.kind]]);
+        if (e > s) spans.push([m[s], m[e], KIND_NAME[node.kind] ?? String(node.kind)]);
         ts.forEachChild(node, walk);
       };
       ts.forEachChild(sf, walk);

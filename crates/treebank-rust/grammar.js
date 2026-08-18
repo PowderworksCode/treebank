@@ -77,6 +77,10 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._control_flow, $._callee],
+    [$._no_struct_expression, $._callee],
+    [$._expression_with_block, $._callee],
+    [$._callee, $.tuple_struct_pattern],
     // Whether a macro statement owns its semicolon. Both readings are
     // complete; the negative dynamic precedence on the no-semicolon
     // alternative of `expression_statement` is what decides it.
@@ -926,10 +930,44 @@ module.exports = grammar({
 
     _invocation: $ => choice($.call_expression, $.macro_invocation),
 
+    // The callee is a restricted tier, not `$._expression`. Rust has no
+    // callable jump or range, so `break (None, None)` is a break carrying a
+    // tuple and `p[(a + b)..(a + c)]` is a range between two parenthesised
+    // sums -- but with the full expression on the left we read both as CALLS,
+    // of `break` and of the open range respectively. Well-formed either way,
+    // so no sweep saw it; the node mapping did, because the kinds disagree
+    // while the bytes do not.
     call_expression: $ => prec(PREC.call, seq(
-      field('function', $._expression),
+      field('function', $._callee),
       field('arguments', $.arguments),
     )),
+
+    _callee: $ => choice(
+      $._invocation,
+      $._access,
+      $._literal,
+      $._name,
+      $.scoped_identifier,
+      $.generic_function,
+      $.self,
+      $.metavariable,
+      $.parenthesized_expression,
+      $.try_expression,
+      $.await_expression,
+      $.unsafe_block,
+      $.const_block,
+      $.async_block,
+      $._body,
+      $._branch,
+      $._loop,
+      // `|| -> T { ... }()` -- an immediately-invoked closure. ONLY the form
+      // with an explicit return type, which forces a block body and so has a
+      // definite end. A bodyless-typed closure is greedy over its body, so
+      // admitting the general form made `|x| f(x)` a CALL of the closure
+      // `|x| f` -- 6,143 corpus files, measured.
+      alias($._returning_closure, $.closure_expression),
+
+    ),
 
     arguments: $ => seq(
       '(',
@@ -983,6 +1021,16 @@ module.exports = grammar({
       '[',
       field('subscript', $._expression),
       ']',
+    )),
+
+    _returning_closure: $ => prec(PREC.closure, seq(
+      optional('static'),
+      optional('async'),
+      optional('move'),
+      field('parameters', $.closure_parameters),
+      '->',
+      field('return_type', $._type),
+      field('body', $.block),
     )),
 
     closure_expression: $ => prec(PREC.closure, seq(

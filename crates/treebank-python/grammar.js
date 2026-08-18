@@ -787,12 +787,18 @@ module.exports = grammar({
       field('value', $._expression),
     )),
 
+    // Operands are `_or_test`, never a bare conditional. CPython's grammar
+    // reads `or_test: and_test ('or' and_test)*`, so a conditional can only
+    // be an operand of `or` in parentheses -- and it is the LOOSEST operator
+    // in the language, `a or b if c else d` being `(a or b) if c else d`.
+    // With `$._expression` on the right we produced `a or (b if c else d)`
+    // instead: a different program, no error, and no sweep could see it.
     boolean_expression: $ => choice(
-      prec.left(PREC.or, seq(field('left', $._expression), field('operator', 'or'), field('right', $._expression))),
-      prec.left(PREC.and, seq(field('left', $._expression), field('operator', 'and'), field('right', $._expression))),
+      prec.left(PREC.or, seq(field('left', $._or_test), field('operator', 'or'), field('right', $._or_test))),
+      prec.left(PREC.and, seq(field('left', $._or_test), field('operator', 'and'), field('right', $._or_test))),
     ),
 
-    not_expression: $ => prec(PREC.not, seq(field('operator', 'not'), field('operand', $._expression))),
+    not_expression: $ => prec(PREC.not, seq(field('operator', 'not'), field('operand', $._or_test))),
 
     binary_expression: $ => {
       const table = [

@@ -719,11 +719,11 @@
         "required": true,
         "types": [
           {
-            "type": "_body",
+            "type": "_expression",
             "named": true
           },
           {
-            "type": "_expression",
+            "type": "block",
             "named": true
           }
         ]

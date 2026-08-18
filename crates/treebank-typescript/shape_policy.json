@@ -35,7 +35,7 @@
     },
     {
       "signature": "TemplateSpan <- template_string",
-      "why": "tsc decomposes a template literal into Head / Span / Middle / Tail, each of which straddles a `}...${` boundary. We model it as alternating `string_content` and `template_substitution`, so no node of ours spans a substitution's close brace plus the following text. A different decomposition of the same string, not a different reading of it. Applies to the four TemplateSpan/Head/Middle/LastTemplateToken entries here and their `template_literal_type` twins."
+      "why": "tsc decomposes a template literal into Head / Span / Middle / Tail, each of which straddles a `}...${` boundary. We model it as alternating `string_content` and `template_substitution`, so no node of ours spans a substitution's close brace plus the following text. A different decomposition of the same string, not a different reading of it. Applies to the four TemplateSpan/Head/Middle/TemplateTail entries here and their `template_literal_type` twins."
     },
     {
       "signature": "TemplateHead <- template_string",
@@ -46,7 +46,7 @@
       "why": "See `TemplateSpan <- template_string`."
     },
     {
-      "signature": "LastTemplateToken <- template_string",
+      "signature": "TemplateTail <- template_string",
       "why": "See `TemplateSpan <- template_string`."
     },
     {
@@ -62,7 +62,7 @@
       "why": "See `TemplateSpan <- template_string`."
     },
     {
-      "signature": "LastTemplateToken <- template_literal_type",
+      "signature": "TemplateTail <- template_literal_type",
       "why": "See `TemplateSpan <- template_string`."
     },
     {
@@ -99,6 +99,20 @@
       "signature": "ConditionalType <- conditional_type",
       "files": 1,
       "why": "One deeply nested conditional inside a spread inside a tuple, in type-fest. Same shape as the resolved cases; not isolated further."
+    }
+  ],
+  "mismatch_ignore": [
+    {
+      "signature": "InferType => array_type",
+      "why": "The nested `infer R extends PropertyKey[][]` limit already recorded under known_limits, arriving through the mapping instead of the boundary: the outer `[]` lands outside the infer, so the InferType's span holds our array_type and not our infer_type."
+    },
+    {
+      "signature": "AwaitExpression => call_expression",
+      "why": "The `await f<T>(x)` limit already recorded under known_limits. Same bytes, opposite nesting, so the mapping sees it where the boundary check cannot."
+    },
+    {
+      "signature": "RestType => conditional_type",
+      "why": "The one deeply nested type-fest conditional already recorded under known_limits."
     }
   ]
 }

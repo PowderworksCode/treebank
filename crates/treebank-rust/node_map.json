@@ -1,0 +1,459 @@
+{
+  "rule": "What each `syn` node kind is expected to be in our tree. A boundary comparison asks whether we have a node at these bytes; this asks whether it is the RIGHT node, which is the half a boundary check cannot see.",
+  "semantics": "Several of our nodes can cover one span, so an oracle node passes when ANY of our kinds at its span is listed. Only the CORE kind needs an entry; wrappers that share the span come along free. The mapping is not one-to-one and is not required to be -- it is required to be TOTAL and DECLARED, so anything not listed is reported rather than assumed.",
+  "doc_comment_note": "`syn` turns a `///` comment into a `#[doc = \"...\"]` attribute, so an Attribute's span can be a `line_comment` of ours, and the string literal inside it has the same span again -- which is why `Expr::Lit` lists the comment kinds too.",
+  "map": {
+    "Item::Const": [
+      "const_definition"
+    ],
+    "Item::Static": [
+      "static_definition"
+    ],
+    "Item::Enum": [
+      "enum_definition"
+    ],
+    "Item::Struct": [
+      "struct_definition"
+    ],
+    "Item::Union": [
+      "union_definition"
+    ],
+    "Item::Fn": [
+      "function_definition"
+    ],
+    "Item::Trait": [
+      "trait_definition"
+    ],
+    "Item::TraitAlias": [
+      "trait_alias"
+    ],
+    "Item::Impl": [
+      "impl_block"
+    ],
+    "Item::Type": [
+      "type_alias"
+    ],
+    "Item::Use": [
+      "use_declaration"
+    ],
+    "Item::Mod": [
+      "module_declaration",
+      "module_definition"
+    ],
+    "Item::ForeignMod": [
+      "extern_block"
+    ],
+    "Item::ExternCrate": [
+      "extern_crate_declaration"
+    ],
+    "Item::Macro": [
+      "macro_invocation",
+      "macro_definition",
+      "expression_statement"
+    ],
+    "Item::Other": [
+      "function_definition",
+      "use_declaration"
+    ],
+    "ImplItem": [
+      "function_definition",
+      "type_alias",
+      "const_definition",
+      "macro_invocation"
+    ],
+    "TraitItem": [
+      "function_definition",
+      "type_alias",
+      "const_definition",
+      "macro_invocation"
+    ],
+    "Field": [
+      "field_declaration",
+      "type_identifier",
+      "generic_type",
+      "scoped_type_identifier",
+      "reference_type",
+      "array_type",
+      "primitive_type",
+      "tuple_type",
+      "pointer_type",
+      "function_type",
+      "dyn_type",
+      "impl_type",
+      "never_type",
+      "unit_type",
+      "bounded_type",
+      "macro_invocation"
+    ],
+    "Variant": [
+      "enum_variant",
+      "identifier"
+    ],
+    "Arm": [
+      "match_arm"
+    ],
+    "Block": [
+      "block"
+    ],
+    "WherePredicate": [
+      "where_predicate"
+    ],
+    "GenericParam": [
+      "type_parameter",
+      "const_parameter",
+      "lifetime_parameter",
+      "identifier",
+      "lifetime",
+      "type_identifier"
+    ],
+    "Lifetime": [
+      "lifetime",
+      "lifetime_parameter",
+      "loop_label",
+      "trait_bounds"
+    ],
+    "Attribute": [
+      "attribute_item",
+      "inner_attribute_item",
+      "line_comment",
+      "block_comment"
+    ],
+    "FnArg": [
+      "parameter",
+      "self_parameter",
+      "self"
+    ],
+    "Stmt::Local": [
+      "let_declaration"
+    ],
+    "Stmt::Item": [
+      "function_definition",
+      "use_declaration",
+      "type_alias",
+      "const_definition",
+      "struct_definition",
+      "static_definition",
+      "enum_definition",
+      "impl_block",
+      "trait_definition",
+      "module_definition",
+      "module_declaration",
+      "union_definition",
+      "extern_crate_declaration",
+      "extern_block",
+      "macro_definition",
+      "macro_invocation"
+    ],
+    "Stmt::Expr": [
+      "expression_statement",
+      "*"
+    ],
+    "Stmt::Macro": [
+      "expression_statement",
+      "macro_invocation"
+    ],
+    "Expr::Array": [
+      "array_expression",
+      "expression_statement"
+    ],
+    "Expr::Repeat": [
+      "array_expression",
+      "expression_statement"
+    ],
+    "Expr::Assign": [
+      "assignment_expression",
+      "expression_statement"
+    ],
+    "Expr::Binary": [
+      "binary_expression",
+      "compound_assignment",
+      "let_chain",
+      "expression_statement"
+    ],
+    "Expr::Unary": [
+      "unary_expression",
+      "negative_literal",
+      "expression_statement"
+    ],
+    "Expr::Async": [
+      "async_block",
+      "expression_statement"
+    ],
+    "Expr::Await": [
+      "await_expression",
+      "expression_statement"
+    ],
+    "Expr::Block": [
+      "block",
+      "labeled_block",
+      "expression_statement"
+    ],
+    "Expr::Const": [
+      "const_block",
+      "expression_statement"
+    ],
+    "Expr::Unsafe": [
+      "unsafe_block",
+      "expression_statement"
+    ],
+    "Expr::Break": [
+      "break_expression",
+      "break",
+      "expression_statement"
+    ],
+    "Expr::Continue": [
+      "continue_expression",
+      "continue",
+      "expression_statement"
+    ],
+    "Expr::Return": [
+      "return_expression",
+      "return",
+      "expression_statement"
+    ],
+    "Expr::Call": [
+      "call_expression",
+      "expression_statement"
+    ],
+    "Expr::MethodCall": [
+      "call_expression",
+      "expression_statement"
+    ],
+    "Expr::Cast": [
+      "cast_expression",
+      "expression_statement"
+    ],
+    "Expr::Closure": [
+      "closure_expression",
+      "expression_statement"
+    ],
+    "Expr::Field": [
+      "member_expression",
+      "expression_statement"
+    ],
+    "Expr::Index": [
+      "subscript_expression",
+      "expression_statement"
+    ],
+    "Expr::ForLoop": [
+      "for_expression",
+      "expression_statement"
+    ],
+    "Expr::While": [
+      "while_expression",
+      "expression_statement"
+    ],
+    "Expr::Loop": [
+      "loop_expression",
+      "expression_statement"
+    ],
+    "Expr::If": [
+      "if_expression",
+      "expression_statement"
+    ],
+    "Expr::Match": [
+      "match_expression",
+      "expression_statement"
+    ],
+    "Expr::Let": [
+      "let_condition",
+      "expression_statement"
+    ],
+    "Expr::Macro": [
+      "macro_invocation",
+      "expression_statement"
+    ],
+    "Expr::Paren": [
+      "parenthesized_expression",
+      "expression_statement"
+    ],
+    "Expr::Tuple": [
+      "tuple_expression",
+      "parenthesized_expression",
+      "expression_statement"
+    ],
+    "Expr::Range": [
+      "range_expression",
+      "..",
+      "expression_statement"
+    ],
+    "Expr::Reference": [
+      "reference_expression",
+      "expression_statement"
+    ],
+    "Expr::Other": [
+      "reference_expression",
+      "expression_statement"
+    ],
+    "Expr::Struct": [
+      "struct_expression",
+      "expression_statement"
+    ],
+    "Expr::Try": [
+      "try_expression",
+      "expression_statement"
+    ],
+    "Expr::Infer": [
+      "identifier",
+      "expression_statement"
+    ],
+    "Expr::Path": [
+      "identifier",
+      "scoped_identifier",
+      "self",
+      "generic_function",
+      "shorthand_field_initializer",
+      "raw",
+      "metavariable",
+      "crate",
+      "super",
+      "expression_statement"
+    ],
+    "Expr::Lit": [
+      "integer",
+      "float",
+      "string",
+      "raw_string",
+      "char",
+      "boolean_literal",
+      "true",
+      "false",
+      "line_comment",
+      "block_comment",
+      "negative_literal",
+      "expression_statement"
+    ],
+    "Expr::Yield": [
+      "yield_expression"
+    ],
+    "Expr::TryBlock": [
+      "try_block"
+    ],
+    "Pat::Ident": [
+      "identifier",
+      "mut_pattern",
+      "parameter",
+      "field_pattern",
+      "ref_pattern",
+      "capture_pattern"
+    ],
+    "Pat::Lit": [
+      "integer",
+      "float",
+      "string",
+      "raw_string",
+      "char",
+      "true",
+      "false",
+      "negative_literal"
+    ],
+    "Pat::Or": [
+      "or_pattern"
+    ],
+    "Pat::Paren": [
+      "tuple_pattern"
+    ],
+    "Pat::Path": [
+      "scoped_identifier",
+      "generic_function"
+    ],
+    "Pat::Range": [
+      "range_pattern"
+    ],
+    "Pat::Reference": [
+      "reference_pattern",
+      "parameter"
+    ],
+    "Pat::Rest": [
+      "rest_pattern",
+      ".."
+    ],
+    "Pat::Slice": [
+      "slice_pattern",
+      "parameter"
+    ],
+    "Pat::Struct": [
+      "struct_pattern",
+      "parameter"
+    ],
+    "Pat::Tuple": [
+      "tuple_pattern",
+      "parameter"
+    ],
+    "Pat::TupleStruct": [
+      "tuple_struct_pattern",
+      "parameter"
+    ],
+    "Pat::Type": [
+      "parameter"
+    ],
+    "Pat::Wild": [
+      "identifier",
+      "parameter"
+    ],
+    "Pat::Macro": [
+      "macro_invocation"
+    ],
+    "Pat::Const": [
+      "const_block"
+    ],
+    "Pat::Other": [
+      "box_pattern"
+    ],
+    "Type::Array": [
+      "array_type"
+    ],
+    "Type::Slice": [
+      "array_type"
+    ],
+    "Type::BareFn": [
+      "function_type"
+    ],
+    "Type::ImplTrait": [
+      "impl_type"
+    ],
+    "Type::Infer": [
+      "type_identifier"
+    ],
+    "Type::Macro": [
+      "macro_invocation"
+    ],
+    "Type::Never": [
+      "never_type",
+      "!"
+    ],
+    "Type::Paren": [
+      "tuple_type"
+    ],
+    "Type::Tuple": [
+      "tuple_type",
+      "unit_type"
+    ],
+    "Type::Path": [
+      "type_identifier",
+      "scoped_type_identifier",
+      "generic_type",
+      "self",
+      "self_parameter",
+      "primitive_type",
+      "crate",
+      "metavariable"
+    ],
+    "Type::Ptr": [
+      "pointer_type"
+    ],
+    "Type::Reference": [
+      "reference_type",
+      "self_parameter"
+    ],
+    "Type::TraitObject": [
+      "dyn_type",
+      "bounded_type"
+    ],
+    "Type::Group": [
+      "tuple_type"
+    ]
+  },
+  "wrapper_note": "`\"*\"` marks a wrapper kind whose span coincides with its only child. syn's `Stmt::Expr` is one: for a block's TAIL expression it spans exactly the expression, and we build no statement node there at all. The expression's own entry already checks what is there, so a second claim here would say nothing. It is a statement about syn's shape, not a way to silence a kind -- one entry uses it.",
+  "attribute_note": "Every `Expr::*` entry lists `expression_statement`. syn folds an attribute on an EXPRESSION into that expression's span (`#[cfg(test)] { ... }` is one Expr::Block); our `expression_statement` is what carries attributes, and the inner expression starts after them. Same bytes, and the difference is where the attribute is attached -- which the boundary policy already declares from the other side."
+}

@@ -994,7 +994,75 @@
         "required": true,
         "types": [
           {
-            "type": "_expression",
+            "type": "_access",
+            "named": true
+          },
+          {
+            "type": "_body",
+            "named": true
+          },
+          {
+            "type": "_branch",
+            "named": true
+          },
+          {
+            "type": "_invocation",
+            "named": true
+          },
+          {
+            "type": "_literal",
+            "named": true
+          },
+          {
+            "type": "_loop",
+            "named": true
+          },
+          {
+            "type": "_name",
+            "named": true
+          },
+          {
+            "type": "async_block",
+            "named": true
+          },
+          {
+            "type": "await_expression",
+            "named": true
+          },
+          {
+            "type": "closure_expression",
+            "named": true
+          },
+          {
+            "type": "const_block",
+            "named": true
+          },
+          {
+            "type": "generic_function",
+            "named": true
+          },
+          {
+            "type": "metavariable",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "scoped_identifier",
+            "named": true
+          },
+          {
+            "type": "self",
+            "named": true
+          },
+          {
+            "type": "try_expression",
+            "named": true
+          },
+          {
+            "type": "unsafe_block",
             "named": true
           }
         ]

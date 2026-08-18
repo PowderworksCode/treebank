@@ -6139,7 +6139,7 @@
             "name": "function",
             "content": {
               "type": "SYMBOL",
-              "name": "_expression"
+              "name": "_callee"
             }
           },
           {
@@ -6152,6 +6152,88 @@
           }
         ]
       }
+    },
+    "_callee": {
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SYMBOL",
+          "name": "_invocation"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_access"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_literal"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_name"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "scoped_identifier"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "generic_function"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "self"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "metavariable"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "parenthesized_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "try_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "await_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "unsafe_block"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "const_block"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "async_block"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_body"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_branch"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_loop"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_returning_closure"
+          },
+          "named": true,
+          "value": "closure_expression"
+        }
+      ]
     },
     "arguments": {
       "type": "SEQ",
@@ -6493,6 +6575,79 @@
           {
             "type": "STRING",
             "value": "]"
+          }
+        ]
+      }
+    },
+    "_returning_closure": {
+      "type": "PREC",
+      "value": -2,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "static"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "async"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "STRING",
+                "value": "move"
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
+          },
+          {
+            "type": "FIELD",
+            "name": "parameters",
+            "content": {
+              "type": "SYMBOL",
+              "name": "closure_parameters"
+            }
+          },
+          {
+            "type": "STRING",
+            "value": "->"
+          },
+          {
+            "type": "FIELD",
+            "name": "return_type",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_type"
+            }
+          },
+          {
+            "type": "FIELD",
+            "name": "body",
+            "content": {
+              "type": "SYMBOL",
+              "name": "block"
+            }
           }
         ]
       }
@@ -8415,6 +8570,22 @@
     }
   ],
   "conflicts": [
+    [
+      "_control_flow",
+      "_callee"
+    ],
+    [
+      "_no_struct_expression",
+      "_callee"
+    ],
+    [
+      "_expression_with_block",
+      "_callee"
+    ],
+    [
+      "_callee",
+      "tuple_struct_pattern"
+    ],
     [
       "_invocation",
       "expression_statement"
