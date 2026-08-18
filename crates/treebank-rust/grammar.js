@@ -77,6 +77,7 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._brace_token_tree, $.token_tree],
     [$._control_flow, $._callee],
     [$._no_struct_expression, $._callee],
     [$._expression_with_block, $._callee],
@@ -140,7 +141,44 @@ module.exports = grammar({
   ],
 
   rules: {
-    source_file: $ => repeat($._statement),
+    // ITEMS, not statements. `repeat($._statement)` accepted `let x = 1;`,
+    // `x + 1;` and `if true {}` at the top level of a file, none of which is
+    // valid Rust -- and it is also what made a stray `;` an item (`use x;;`)
+    // and let a paren-delimited macro stand as an item without its semicolon.
+    // Three catalogued widenings, one cause.
+    source_file: $ => repeat($._item),
+
+    // What may appear where items are expected: a file's top level, a
+    // module body, an `extern` block. A macro invocation is one too, but
+    // only brace-delimited without a semicolon -- `cfg_if! { ... }` needs
+    // none and `criterion_main!(benches)` does.
+    _item: $ => choice(
+      $._declaration,
+      $._directive,
+      $.impl_block,
+      $.extern_block,
+      $.inner_attribute_item,
+      alias($._macro_item, $.expression_statement),
+    ),
+
+    _macro_item: $ => seq(
+      repeat($._attribute),
+      choice(
+        // Brace-delimited needs no semicolon: `cfg_if! { ... }`.
+        alias($._brace_macro_invocation, $.macro_invocation),
+        // Paren- and bracket-delimited require one, which is why
+        // `criterion_main!(benches)` alone is not an item.
+        seq($.macro_invocation, ';'),
+      ),
+    ),
+
+    _brace_macro_invocation: $ => seq(
+      field('macro', $._path_ref),
+      '!',
+      alias($._brace_token_tree, $.token_tree),
+    ),
+
+    _brace_token_tree: $ => seq('{', repeat($._token), '}'),
 
     // ── statements ───────────────────────────────────────────────────
     _statement: $ => choice(
@@ -401,7 +439,8 @@ module.exports = grammar({
       field('name', $._name),
       field('body', alias($.mod_block, $.block)),
     ),
-    mod_block: $ => seq('{', repeat($._statement), '}'),
+    // Items, like a file's top level -- a module body is not a block.
+    mod_block: $ => seq('{', repeat($._item), '}'),
 
     module_declaration: $ => seq(
       repeat($._attribute),
@@ -450,13 +489,21 @@ module.exports = grammar({
       ';',
     ),
 
+    // Same delimiter rule as a macro INVOCATION at item level: a
+    // brace-delimited body needs no semicolon, a paren- or
+    // bracket-delimited one requires it. `macro_rules! m ( ... );` used to
+    // parse only because a stray `;` was itself an item, which is what let
+    // `use x;;` through.
     macro_definition: $ => seq(
       repeat($._attribute),
       optional($._modifier),
       'macro_rules',
       token.immediate('!'),
       field('name', $._name),
-      field('body', $.token_tree),
+      choice(
+        field('body', alias($._brace_token_tree, $.token_tree)),
+        seq(field('body', $.token_tree), ';'),
+      ),
     ),
 
     extern_block: $ => seq(

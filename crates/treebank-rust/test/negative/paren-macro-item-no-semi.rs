@@ -1,0 +1,1 @@
+criterion_main!(benches)

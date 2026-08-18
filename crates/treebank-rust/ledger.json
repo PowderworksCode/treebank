@@ -70,26 +70,8 @@
   "mutation_check": "`treebank mutate` — 3,904 mutants over 500 corpus files, 143 widenings in 80 clusters.",
   "known_widenings": [
     {
-      "construct": "a stray semicolon after an item, `use x;;`",
-      "found_by": "mutate (duplicate `;`)",
-      "why_accepted": "`empty_statement` is reachable where items are.",
-      "why_not_fixed": "not yet attempted."
-    },
-    {
-      "construct": "a macro invocation as an ITEM with no semicolon, `criterion_main!(benches)`",
-      "found_by": "mutate (delete `;`)",
-      "why_accepted": "the no-semicolon macro alternative added for `cfg_if! { ... }` is reachable for paren-delimited macros too, where rustc requires the semicolon.",
-      "why_not_fixed": "needs the alternative restricted by delimiter — brace-delimited macros need no semicolon, paren- and bracket-delimited ones do."
-    },
-    {
       "construct": "`_:: Errno` — a doubled colon in a parameter",
-      "found_by": "mutate (duplicate `:`)",
-      "why_accepted": "unclear; not isolated.",
-      "why_not_fixed": "not yet attempted."
-    },
-    {
-      "construct": "an expression statement at ITEM level, `debug;`",
-      "found_by": "mutate (delete `mod`)",
+      "found_by": "mutate",
       "why_accepted": "not isolated.",
       "why_not_fixed": "not yet attempted."
     }
