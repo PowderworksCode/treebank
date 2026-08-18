@@ -68,13 +68,16 @@ pub trait SpanOracle: Sync {
 /// language without one gets told so.
 pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
     static TS: TypeScriptSpans = TypeScriptSpans;
+    static PY: PythonSpans = PythonSpans;
     match name {
         LangName::Typescript | LangName::Javascript => Some(&TS),
+        LangName::Python => Some(&PY),
         _ => None,
     }
 }
 
 struct TypeScriptSpans;
+struct PythonSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -94,25 +97,50 @@ impl SpanOracle for TypeScriptSpans {
             srcroot,
             paths,
         )?;
-        let mut out = HashMap::new();
-        for line in &lines {
-            if line.trim().is_empty() {
-                continue;
-            }
-            let raw: RawFile = serde_json::from_str(line)
-                .with_context(|| format!("parse ts-oracle spans output: {line:.200}"))?;
-            out.insert(
-                stdin_oracle::relativize(&raw.path, srcroot),
-                FileSpans {
-                    spans: raw
-                        .spans
-                        .into_iter()
-                        .map(|(start, end, kind)| Span { start, end, kind })
-                        .collect(),
-                    skipped: raw.skipped,
-                },
-            );
-        }
-        Ok(out)
+        parse_jsonl(&lines, srcroot)
     }
+}
+
+impl SpanOracle for PythonSpans {
+    /// CPython 3 only. `validate` unions py3 with py2.7 because a union
+    /// grammar must be judged against every version it claims, but py2 has
+    /// no `ast` we can ask for positions and a py2-only file has no py3
+    /// tree to compare against — those come back `skipped`, which is
+    /// honest, rather than counted as agreement.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        let script = crate::tool("py-oracle/spans.py");
+        let lines = stdin_oracle::run_lines(
+            "python3",
+            &[script.to_string_lossy().as_ref()],
+            "python3 tools/py-oracle/spans.py — is python3 installed?",
+            srcroot,
+            paths,
+        )?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
+/// Both span oracles answer in the same JSON-lines shape, so the decoding is
+/// shared: one object per file, spans as `[start, end, kind]` triples.
+fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileSpans>> {
+    let mut out = HashMap::new();
+    for line in lines {
+        if line.trim().is_empty() {
+            continue;
+        }
+        let raw: RawFile = serde_json::from_str(line)
+            .with_context(|| format!("parse span oracle output: {line:.200}"))?;
+        out.insert(
+            stdin_oracle::relativize(&raw.path, srcroot),
+            FileSpans {
+                spans: raw
+                    .spans
+                    .into_iter()
+                    .map(|(start, end, kind)| Span { start, end, kind })
+                    .collect(),
+                skipped: raw.skipped,
+            },
+        );
+    }
+    Ok(out)
 }

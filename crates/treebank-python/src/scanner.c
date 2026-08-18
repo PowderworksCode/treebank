@@ -192,6 +192,60 @@ static bool scan_string_body(TSLexer *lexer, Scanner *s, const bool *valid) {
 
 // ── the entry points ────────────────────────────────────────────────────
 
+/* Indentation of the next line that has CODE on it, skipping comment-only
+ * and blank lines the way CPython's tokenizer does. Pure lookahead: every
+ * character is consumed with skip(), and the caller has already marked the
+ * token end, so nothing here widens the token. Returns 0 at EOF, which
+ * closes every open block -- which is what EOF should do. */
+#define NO_DEDENT UINT32_MAX
+
+static uint32_t next_code_column(TSLexer *lexer) {
+  for (;;) {
+    /* Skip to the end of the current line. */
+    while (lexer->lookahead != 0 && lexer->lookahead != '\n' &&
+           lexer->lookahead != '\r') {
+      skip(lexer);
+    }
+    if (lexer->lookahead == 0) return 0;
+    if (lexer->lookahead == '\r') skip(lexer);
+    if (lexer->lookahead == '\n') skip(lexer);
+
+    /* Measure the next line's indentation. */
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t' ||
+           lexer->lookahead == '\f') {
+      skip(lexer);
+    }
+    if (lexer->lookahead == 0) return 0;
+    /* Blank or comment: not a line of code, keep looking. */
+    if (lexer->lookahead == '\n' || lexer->lookahead == '\r' ||
+        lexer->lookahead == '#') {
+      continue;
+    }
+    /* A continuation clause means the compound statement is NOT over, so
+     * nothing may be closed in front of the comment -- and a comment sitting
+     * above an `else` reads as belonging to the body it follows anyway.
+     * Report a column no dedent can trigger on. Same four keywords the
+     * LINE_START peek uses, and for the same reason: at a block boundary the
+     * token stream is shared across GLR forks, and closing early kills the
+     * fork that is waiting for the clause. */
+    uint32_t col = lexer->get_column(lexer);
+    if (lexer->lookahead == 'e' || lexer->lookahead == 'f') {
+      char word[9];
+      int n = 0;
+      while (n < 8 && lexer->lookahead >= 'a' && lexer->lookahead <= 'z') {
+        word[n++] = (char)lexer->lookahead;
+        skip(lexer);
+      }
+      word[n] = 0;
+      if (strcmp(word, "elif") == 0 || strcmp(word, "else") == 0 ||
+          strcmp(word, "except") == 0 || strcmp(word, "finally") == 0) {
+        return NO_DEDENT;
+      }
+    }
+    return col;
+  }
+}
+
 bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
                                               const bool *valid) {
   Scanner *s = (Scanner *)payload;
@@ -283,7 +337,46 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
 
   // A comment is a node, not skippable here. Decline; the internal lexer
   // lexes it as an extra and we are consulted again on the far side.
-  if (lexer->lookahead == '#') return false;
+  //
+  // But first close any block the comment is NOT inside. Declining
+  // unconditionally put every trailing comment INSIDE the block above it,
+  // because the DEDENT is only emitted on the far side -- so
+  //
+  //     if x:
+  //       body()
+  //
+  //     # a comment about what comes next
+  //     if y:
+  //
+  // gave the first `if_statement` a span running to the second one. Asking
+  // for that statement's source text handed back a comment that is not part
+  // of it, which matters most to anything that re-emits code.
+  //
+  // CPython's tokenizer ignores comment lines for indentation, and so do we:
+  // the decision uses the indentation of the next line with actual CODE on
+  // it, scanning past any run of comment and blank lines. A comment sitting
+  // at the block's own indentation therefore stays inside it.
+  if (lexer->lookahead == '#') {
+    if (valid[DEDENT] && !error_recovery && s->line_start_pending &&
+        s->indent_count > 0) {
+      uint32_t col = next_code_column(lexer);
+      if (col < s->indents[s->indent_count - 1]) {
+        uint32_t pops = 0;
+        while (s->indent_count > 0 && s->indents[s->indent_count - 1] > col) {
+          s->indent_count--;
+          pops++;
+        }
+        if (pops > 0) {
+          s->pending_dedents = pops - 1;
+          // No mark_end: this token is ZERO WIDTH and must not swallow the
+          // comment it is closing in front of.
+          lexer->result_symbol = DEDENT;
+          return true;
+        }
+      }
+    }
+    return false;
+  }
 
   // At EOF: close what remains — the final logical line, then the open
   // indent levels. Never during error recovery, where every symbol is

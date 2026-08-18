@@ -127,6 +127,32 @@ fn trim_end(src: &[u8], start: usize, mut end: usize) -> usize {
     end
 }
 
+/// Where a node's CONTENT ends, ignoring trailing trivia it happens to own.
+///
+/// A trailing comment has to belong to somebody, and the two parsers do not
+/// have to agree on whom. `return  # No prctl.` is the last statement of a
+/// function body; CPython ends the FunctionDef at `return`, and we end the
+/// block after the comment, because tree-sitter attaches an extra to
+/// whatever node is open when it is consumed. Neither is wrong, and there
+/// are thousands of it.
+///
+/// Handled as a RULE, like the separator trim, and a language-agnostic one:
+/// tree-sitter marks extras itself, so this walks back past trailing extras
+/// without knowing what a comment looks like in any particular language.
+fn content_end(node: tree_sitter::Node) -> usize {
+    let mut cursor = node.walk();
+    let mut last = None;
+    for child in node.children(&mut cursor) {
+        if !child.is_extra() {
+            last = Some(child);
+        }
+    }
+    match last {
+        Some(child) => content_end(child),
+        None => node.end_byte(),
+    }
+}
+
 /// Every byte span in our tree, named and anonymous alike, plus each one's
 /// separator-trimmed form. Anonymous nodes count: the oracle reports keyword
 /// and punctuation nodes too, and a keyword we tokenise identically is
@@ -141,6 +167,14 @@ fn our_spans(root: tree_sitter::Node, src: &[u8]) -> HashSet<(usize, usize)> {
             let (a, b) = (n.start_byte(), n.end_byte());
             out.insert((a, b));
             out.insert((a, trim_end(src, a, b.min(src.len()))));
+            // ...and the same node with any trailing trivia it owns removed,
+            // then separator-trimmed again, since the trivia may sit after a
+            // terminator.
+            let c = content_end(n);
+            if c > a && c < b {
+                out.insert((a, c));
+                out.insert((a, trim_end(src, a, c.min(src.len()))));
+            }
         }
         if recurse && cursor.goto_first_child() {
             continue;
@@ -206,7 +240,7 @@ pub fn run(
     let (corpus_src, files, dialect) = match dir {
         Some(d) => {
             let mut files = Vec::new();
-            collect(d, d, &mut files)?;
+            collect(d, d, extensions(lang), &mut files)?;
             files.sort();
             anyhow::ensure!(!files.is_empty(), "no source files under {}", d.display());
             let dialect = files
@@ -412,16 +446,28 @@ pub fn run(
     Ok(())
 }
 
+/// The source extensions a language's fixture directory may hold.
+fn extensions(lang: LangName) -> &'static [&'static str] {
+    match lang {
+        LangName::Python => &["py", "pyi"],
+        LangName::Rust => &["rs"],
+        LangName::Typescript | LangName::Javascript => {
+            &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]
+        }
+    }
+}
+
 /// Source files under a fixture directory, as paths relative to it.
-fn collect(root: &Path, dir: &Path, out: &mut Vec<String>) -> Result<()> {
+fn collect(root: &Path, dir: &Path, exts: &[&str], out: &mut Vec<String>) -> Result<()> {
     for entry in std::fs::read_dir(dir).with_context(|| format!("read {}", dir.display()))? {
         let path = entry?.path();
         if path.is_dir() {
-            collect(root, &path, out)?;
-        } else if matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("ts" | "tsx" | "mts" | "cts" | "js" | "jsx" | "mjs" | "cjs")
-        ) {
+            collect(root, &path, exts, out)?;
+        } else if path
+            .extension()
+            .and_then(|e| e.to_str())
+            .is_some_and(|e| exts.contains(&e))
+        {
             out.push(
                 path.strip_prefix(root)
                     .unwrap_or(&path)

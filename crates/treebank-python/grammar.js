@@ -77,6 +77,8 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._comma_expressions],
+    [$._no_conditional_expression, $.conditional_expression],
     [$._patterns_comma, $._closed_pattern],
     [$._match_shape, $._access],
     [$._match_shape, $._primary_expression],
@@ -687,8 +689,20 @@ module.exports = grammar({
     // Python's comprehension conditions and iterables are `or_test`: a bare
     // conditional is excluded by construction, which is also what lets
     // `... if a if b` chain instead of swallowing the second `if`.
-    _no_conditional_expression: $ => choice(
-      $.lambda,
+    _no_conditional_expression: $ => choice($.lambda, $._or_test),
+
+    // CPython's `or_test`: everything a conditional's consequence and
+    // condition may be, which notably EXCLUDES a lambda. Its grammar reads
+    //
+    //     test: or_test ['if' or_test 'else' test] | lambdef
+    //
+    // so only the ELSE branch may be a bare lambda. Encoding that is what
+    // settles `lambda x: A if c else B`: with the consequence allowed to be
+    // a lambda, `(lambda x: A) if c else B` and `lambda x: (A if c else B)`
+    // were both complete parses holding identical node multisets -- one
+    // lambda, one conditional -- so neither precedence nor dynamic
+    // precedence had anything to weigh, and the wrong one won.
+    _or_test: $ => choice(
       alias($.boolean_expression, $.binary_expression),
       alias($.not_expression, $.unary_expression),
       $.comparison_expression,
@@ -725,20 +739,47 @@ module.exports = grammar({
     _soft_keyword: _ => choice('print', 'exec', 'match', 'case', 'type'),
 
     conditional_expression: $ => prec.right(PREC.conditional, seq(
-      field('consequence', $._expression),
+      field('consequence', $._or_test),
       'if',
-      field('condition', $._expression),
+      field('condition', $._or_test),
       'else',
       field('alternative', $._expression),
     )),
 
-    lambda: $ => prec(PREC.lambda, seq(
+    // `prec.right`: a lambda BODY is greedy. Python's grammar gives it a
+    // full `test`, so `lambda x: A if c else B` is
+    // `lambda x: (A if c else B)`. With plain `prec` the lambda (2) reduced
+    // rather than shifting into the conditional (0), and the whole family
+    // came out as `(lambda x: A) if c else B` -- a different program, no
+    // error, invisible to the sweep.
+    lambda: $ => prec.right(PREC.lambda, seq(
       'lambda',
       field('parameters', optional(alias($._lambda_parameters, $.parameters))),
       ':',
       field('body', $._expression),
     )),
-    _lambda_parameters: $ => seq(commaSep1($._parameter), optional(',')),
+    // A lambda's parameters carry NO annotations -- Python forbids them
+    // there. With the annotated form reachable, `{lambda x: x: 1}` (a dict
+    // whose KEY is a lambda) parsed as a SET holding one lambda, whose
+    // parameter was annotated `x: x` and whose body was `1`. The dict's own
+    // colon had been eaten as an annotation.
+    _lambda_parameters: $ => seq(commaSep1($._lambda_parameter), optional(',')),
+
+    _lambda_parameter: $ => choice(
+      alias($._lambda_plain_parameter, $.parameter),
+      alias($._lambda_star_parameter, $.star_parameter),
+      alias($._lambda_double_star_parameter, $.double_star_parameter),
+      $.keyword_separator,
+      $.positional_separator,
+      $.tuple_parameter,        // py2: lambda (a, b): ...
+    ),
+
+    _lambda_plain_parameter: $ => seq(
+      field('name', $._name),
+      optional(seq('=', field('value', $._expression))),
+    ),
+    _lambda_star_parameter: $ => seq('*', field('name', $._name)),
+    _lambda_double_star_parameter: $ => seq('**', field('name', $._name)),
 
     named_expression: $ => prec.right(PREC.walrus, seq(
       field('name', $._name),
@@ -870,7 +911,25 @@ module.exports = grammar({
 
     // A bare comma-joined expression list is a tuple in all but name.
     _expression_list_tuple: $ => alias($._comma_expressions, $.tuple),
-    _comma_expressions: $ => prec.right(seq(
+    // No `prec.right` here. It resolved the decision at `expr , .` in favour
+    // of shifting -- of expecting another element -- which REMOVED the
+    // reduce action, so `_newline` was no longer a valid lookahead in that
+    // state, so the scanner was never asked for one. A trailing comma then
+    // ran the tuple straight across the line break:
+    //
+    //     x = int,
+    //     y = 1, 2
+    //
+    // became the single chained assignment `x = (int, y) = (1, 2)`. Two
+    // statements silently became one. With the reduce available the scanner
+    // is consulted, emits NEWLINE, and the continuation fork dies where it
+    // should.
+    //
+    // `prec.dynamic` because both readings are COMPLETE parses and GLR has
+    // to choose. They differ in what they contain: the correct one holds two
+    // tuples, the merged one holds a `pattern_list` and a tuple. Weighting
+    // the tuple is the asymmetry.
+    _comma_expressions: $ => prec.dynamic(1, seq(
       $._expression,
       choice(
         ',',

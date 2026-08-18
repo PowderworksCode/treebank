@@ -82,9 +82,34 @@
       "was": "after `f\"{num` both `:` and `:=` were valid, and tree-sitter's longest-match rule handed the colon to the walrus: the whole family parsed as `named_expression`. CPython reads it as a width-10 format spec (`'         5'`).",
       "now": "`format_specifier` opens with `token(prec(1, ':'))`. Lexical precedence outranks match length, so this colon wins wherever a format spec can start. It is a distinct token from the plain `:` of dicts, slices and annotations, and a PARENTHESISED walrus -- `f\"{(x := 10)}\"`, the only form CPython accepts here -- still lexes `:=` because no format spec is valid inside the parentheses.",
       "note": "SILENT except where the spec was not itself a valid walrus right-hand side: only `f\"{num:=.2Uf}\"` errored, 1 file in mpmath."
+    },
+    {
+      "construct": "`lambda x: A if c else B`",
+      "was": "`(lambda x: A) if c else B` — the conditional wrapped the lambda instead of being its body.",
+      "now": "CPython's grammar reads `test: or_test ['if' or_test 'else' test] | lambdef`, so only the ELSE branch may be a bare lambda. `conditional_expression`'s consequence and condition now use an `_or_test` tier that excludes it.",
+      "note": "SILENT. Both readings held identical node multisets — one lambda, one conditional — so neither static nor dynamic precedence had anything to weigh; the fix had to remove the ambiguity."
+    },
+    {
+      "construct": "`{lambda x: x: 1}`",
+      "was": "a SET holding one lambda whose parameter was annotated `x: x` and whose body was `1` — the dict's own colon eaten as an annotation.",
+      "now": "lambda parameters carry no annotations, which is what Python says, so this is a dict with a lambda key.",
+      "note": "SILENT, and a widening as well: annotated lambda parameters were accepted."
+    },
+    {
+      "construct": "`x = int,` followed by another statement",
+      "was": "the tuple ran across the line break: `x = int,` / `y = 1, 2` became the single chained assignment `x = (int, y) = (1, 2)`. Two statements silently became one.",
+      "now": "`prec.right` on `_comma_expressions` had resolved `expr , .` in favour of shifting, which REMOVED the reduce action, so `_newline` was no longer a valid lookahead there and the scanner was never asked for one. Without it the scanner is consulted; a `prec.dynamic` on the tuple then decides the remaining GLR tie, which the two readings differ in — two tuples versus a tuple and a pattern_list.",
+      "note": "SILENT."
+    },
+    {
+      "construct": "a comment between a block and the next statement",
+      "was": "the block above owned it, so `if_statement` and `function_definition` spans ran past the construct to the start of the next one. Asking for a statement's source text returned a comment that is not part of it.",
+      "now": "the scanner closes open blocks in front of a comment whose next line of CODE is dedented, skipping comment and blank lines for that decision the way CPython's tokenizer does. Not before a continuation clause: `elif`/`else`/`except`/`finally` mean the statement is not over, and closing early kills the fork waiting for the clause.",
+      "note": "Matters most to anything that re-emits code."
     }
   ],
   "roles_note": "18 of 22 table-tier terms are threaded. Omitted: _type (python annotations are ordinary expressions — the vocabulary's own position), _modifier (python has no named modifier nodes yet; async/await are anonymous), _control_flow (unthreadable here: a supertype's members enter every position that references it, and clauses/jump-vs-branch positions are construct-specific — see the uncategorised reasons in roles.json). _clause MOVED to the facet tier in vocabulary 0.2.0 on exactly this evidence, gathered independently in python, rust and typescript; _control_flow remains the open candidate.",
   "patterns_note": "match patterns are a dedicated sub-grammar (PEP 634), not the expression rules. The shapes reuse the destructuring node names by alias — `(tuple_pattern)`, `(list_pattern)`, `(star_pattern)` mean the same thing in `a, b = x` and in `case (a, b)` — but they are NOT threaded through the `_pattern` supertype, and that is a measured decision rather than an oversight: python's destructuring and match positions admit different member sets (`x[0]` and `*rest` destructure but do not match; `Point(x=0)` and `{'k': v}` match but do not destructure), and a supertype's members enter every position that references it. Routing them through `_pattern` made `a, Point(x=0) = z` parse, which CPython rejects. This is the `_clause` law in a second place; rust does not hit it because its `let` and `match` patterns are one set. Consequence: `(_pattern)` covers destructuring positions here, and match patterns are reached by their shared concrete names.",
-  "version_policy": "DESIGN.md §4.2: where a construct is valid only in an older version AND admitting it would change how current code parses, the current language wins. Three constructs are rejected on purpose — `f((a)=1)` (py3.0–3.7), bare `nonlocal` (py2), bare `await` (py2, py3.0–3.4). Declared with reasoning in version_policy.json, gated by test/negative/, and booked by the sweep as `version` rather than `gap`. Older syntax with no competing reading in any later version stays ACCEPTED (`except E, e:`, py2 print/exec, backticks, old octal) — that is most of what the py2 half of the union is."
+  "version_policy": "DESIGN.md §4.2: where a construct is valid only in an older version AND admitting it would change how current code parses, the current language wins. Three constructs are rejected on purpose — `f((a)=1)` (py3.0–3.7), bare `nonlocal` (py2), bare `await` (py2, py3.0–3.4). Declared with reasoning in version_policy.json, gated by test/negative/, and booked by the sweep as `version` rather than `gap`. Older syntax with no competing reading in any later version stays ACCEPTED (`except E, e:`, py2 print/exec, backticks, old octal) — that is most of what the py2 half of the union is.",
+  "shape_check": "`treebank shape` compares our node BOUNDARIES against CPython `ast` over the whole corpus: 112,138,339 oracle nodes across 137,876 files, 0 missed. It started at 1,682,942. Everything left is declared in shape_policy.json as a granularity difference with its reasoning — CPython nests `elif` as a new If, starts a FunctionDef at `def` rather than the decorator, splits parameter defaults into a parallel list, folds implicitly concatenated strings, and treats BoolOp as n-ary. 1,329 files are skipped: python2-only sources, and files whose PEP 263 coding declaration or BOM means `ast` reports offsets into a byte string that is not the one on disk."
 }
