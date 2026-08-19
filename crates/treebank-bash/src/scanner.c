@@ -24,6 +24,7 @@ enum TokenType {
   HEREDOC_END,
   CONCAT,
   ASSIGNMENT_NAME,
+  FILE_DESCRIPTOR,
   ERROR_SENTINEL,
 };
 
@@ -181,14 +182,11 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   // on one file. Decline the scanner there and let ordinary recovery run.
   if (valid[ERROR_SENTINEL]) return false;
 
-  if (valid[ASSIGNMENT_NAME] && !valid[HEREDOC_BODY]) {
-    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
-    if (scan_assignment_name(lexer)) return true;
-  }
-
-  // CONCAT is zero-width and must be decided before anything is consumed:
-  // it says only that the previous token ended exactly where this one
-  // begins.
+  // CONCAT is zero-width and judged on the RAW lookahead -- it says only
+  // that the previous token ended exactly where this one begins -- so it
+  // must be decided before ANY block that skips whitespace runs. It fell
+  // after such a block once, saw the post-skip character, and glued two
+  // arguments a space separated.
   if (valid[CONCAT] && !valid[HEREDOC_BODY]) {
     int32_t c = lexer->lookahead;
     bool joins = c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != 0 &&
@@ -199,8 +197,37 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
       lexer->mark_end(lexer);
       return true;
     }
-    return false;
+    // Not a join: fall through rather than return, because a redirect's
+    // file descriptor may legitimately start after this very whitespace.
   }
+
+  // A digit run is a file descriptor ONLY when a redirect operator abuts
+  // it: `echo 2> f` redirects fd 2, `echo 2 > f` passes an argument. Both
+  // `number` and this token match the same characters, the internal lexer
+  // must pick one per state, and whichever it picks the other reading is
+  // gone -- the same shape as ASSIGNMENT_NAME below, resolved the same
+  // way: look past the digits, emit only when the operator is really
+  // there.
+  if (valid[FILE_DESCRIPTOR] && !valid[HEREDOC_BODY]) {
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    if (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
+      while (lexer->lookahead >= '0' && lexer->lookahead <= '9') advance(lexer);
+      lexer->mark_end(lexer);
+      if (lexer->lookahead == '<' || lexer->lookahead == '>') {
+        lexer->result_symbol = FILE_DESCRIPTOR;
+        return true;
+      }
+      // Digits not followed by an operator can be nothing else we scan
+      // for; let the internal lexer have them back.
+      return false;
+    }
+  }
+
+  if (valid[ASSIGNMENT_NAME] && !valid[HEREDOC_BODY]) {
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    if (scan_assignment_name(lexer)) return true;
+  }
+
 
   if (valid[HEREDOC_END] && s->length > 0 && s->started) {
     if (scan_heredoc_end(s, lexer)) return true;

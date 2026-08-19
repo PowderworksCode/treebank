@@ -1,0 +1,65 @@
+# Declared exceptions for `treebank shape`. Same contract as the python and
+# java policies: pairs, hand-confirmed on corpus examples, nothing here to
+# make a number go down.
+#
+# One caution the other two policies do not need: bash's span oracle is
+# mvdan/sh, an independent reimplementation, NOT the reference -- bash has
+# no AST to ask for. A declared pair here records whose grouping we kept,
+# knowing neither party is automatically right.
+
+rule = '''
+Boundaries `treebank shape` may ignore, as `"<mvdan/sh node> <- <our_kind>"` pairs. Each is a place our tree groups the code differently from mvdan/sh on purpose or by a recorded not-yet decision, never a place we disagree about the code silently.'''
+baseline_missed = 0
+baseline_note = '''
+Measured over the corpus files that parse cleanly under BOTH parsers; bash's sweep pass rate (see ledger) bounds how much of the corpus that is. The oracle's first 300-file run caught the `2>` file-descriptor mis-parse, which is exactly the class it exists for.'''
+
+[[ignore]]
+signature = 'Lit <- string'
+why = '''
+mvdan/sh gives every literal fragment inside a double-quoted string its own Lit node -- `"a $x b"` holds Lit `a ` and Lit ` b`. Our string node keeps the raw fragments as unnamed content between expansions. Sub-token granularity we do not carry.'''
+
+[[ignore]]
+signature = 'CallExpr <- command'
+why = '''
+mvdan/sh's CallExpr covers a command's words ONLY; redirects hang off the enclosing Stmt. Ours attaches redirects to the command itself, so our node matches their Stmt and nothing matches their CallExpr. A deliberate difference in who owns the redirect.'''
+
+[[ignore]]
+signature = 'Redirect <- command'
+why = '''
+The other face of `CallExpr <- command`: with redirects inside our command node, mvdan/sh's standalone Redirect spans have our redirect node -- but theirs includes surrounding layout in ways ours does not when a descriptor is present. Confirmed by hand to be the same redirect, differently trimmed.'''
+
+[[ignore]]
+signature = 'IfClause <- if_statement'
+why = '''
+mvdan/sh nests `elif` as a fresh IfClause inside the parent's else branch, exactly as CPython nests If. We model `elif_clause` flat, which is what the `_clause` vocabulary term exists for -- same decision as python's policy.'''
+
+[[ignore]]
+signature = 'BinaryTest <- test_command'
+why = '''
+Inside `[[ ... ]]` mvdan/sh builds a real expression tree (BinaryTest, UnaryTest). Our _conditional is deliberately flat -- a decision recorded in the grammar; the flat reading loses no bytes, only structure. Revisit if conditional structure is ever needed.'''
+
+[[ignore]]
+signature = 'Lit <- word'
+why = '''
+Arithmetic: inside `$(( ... ))` we parse a flat concatenation of words where mvdan/sh builds BinaryArithm/Word/Lit structure. Unmodelled, not disagreed -- these entries should be DELETED when arithmetic expansion gets a real grammar, and the misses they hide will be its acceptance test.'''
+
+[[ignore]]
+signature = 'Word <- word'
+why = 'See `Lit <- word`: the arithmetic-expansion gap.'
+
+[[ignore]]
+signature = 'BinaryArithm <- concatenation'
+why = 'See `Lit <- word`: the arithmetic-expansion gap.'
+
+[[ignore]]
+signature = 'Lit <- concatenation'
+why = '''
+`a$b` is one word to shell; mvdan/sh keeps `a` as a Lit inside its Word, we keep it as a word inside a concatenation with different fragment boundaries at expansions. Sub-word granularity, same family as `Lit <- string`.'''
+
+[[ignore]]
+signature = 'Lit <- heredoc_redirect'
+why = 'The heredoc delimiter word: mvdan Lit vs our external-scanner heredoc_start token. Same bytes, different layer.'
+
+[[ignore]]
+signature = 'Word <- heredoc_redirect'
+why = 'See `Lit <- heredoc_redirect`.'

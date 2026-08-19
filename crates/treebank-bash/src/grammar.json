@@ -1335,8 +1335,13 @@
                     "type": "FIELD",
                     "name": "descriptor",
                     "content": {
-                      "type": "SYMBOL",
-                      "name": "file_descriptor"
+                      "type": "ALIAS",
+                      "content": {
+                        "type": "SYMBOL",
+                        "name": "_file_descriptor"
+                      },
+                      "named": true,
+                      "value": "file_descriptor"
                     }
                   },
                   {
@@ -1416,8 +1421,13 @@
               "type": "FIELD",
               "name": "descriptor",
               "content": {
-                "type": "SYMBOL",
-                "name": "file_descriptor"
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_file_descriptor"
+                },
+                "named": true,
+                "value": "file_descriptor"
               }
             },
             {
@@ -1467,13 +1477,6 @@
           ]
         }
       ]
-    },
-    "file_descriptor": {
-      "type": "TOKEN",
-      "content": {
-        "type": "PATTERN",
-        "value": "[0-9]+"
-      }
     },
     "test_command": {
       "type": "CHOICE",
@@ -2411,10 +2414,6 @@
       "_statements"
     ],
     [
-      "file_descriptor",
-      "number"
-    ],
-    [
       "command",
       "_assignment"
     ],
@@ -2455,6 +2454,10 @@
     {
       "type": "SYMBOL",
       "name": "_assignment_name"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_file_descriptor"
     },
     {
       "type": "SYMBOL",
