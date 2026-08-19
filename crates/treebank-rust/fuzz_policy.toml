@@ -1,0 +1,9 @@
+
+[[declared]]
+starts_with = 'safe fn'
+why = '''
+`safe` is a foreign-item qualifier: legal only inside an `unsafe extern` block (RFC 3484). Our function_definition is shared between module, trait, impl and extern bodies through one declaration_list, so the qualifier is accepted everywhere until that body is split per context. A real restriction, deliberately deferred; the qualifier ordering fix stops the doubled and misordered forms.'''
+
+[[declared]]
+starts_with = 'static safe'
+why = 'Same deferral as `safe fn`: a foreign-static qualifier accepted module-wide until the extern body splits.'
