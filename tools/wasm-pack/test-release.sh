@@ -26,6 +26,8 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT"
 PY=${TREEBANK_WASM_PYTHON:-python3}
+# shellcheck source=tools/wasm-pack/variant.sh
+. "$ROOT/tools/wasm-pack/variant.sh"
 PREFIX="rehearsal-wasm/"
 STAGE=$(mktemp -d)
 SRV_PID=""
@@ -71,7 +73,8 @@ for lang in "${GRAMMARS[@]}"; do
   # Both consumers, on the fetched pack. Each grammar's negative corpus is
   # the fixture: it must still be REJECTED after crossing the wasm boundary,
   # which is the direction a build problem would silently break.
-  neg=$(find "crates/treebank-$lang/test/negative" -name '*' -type f | head -1)
+  neg=$(find "$(variant_dir "crates/treebank-$lang")/test/negative" -name '*' -type f | head -1)
+  [ -n "$neg" ] || fail "$lang: no negative fixture found for the default variant"
   out_py=$("$PY" tools/wasm-pack/examples/parse.py "$FETCHED/$rel/treebank-$lang.wasm" "$neg")
   out_js=$(node tools/wasm-pack/examples/parse.mjs "$FETCHED/$rel/treebank-$lang.wasm" "$neg")
   echo "$out_py" | grep -q "error(s)" || fail "$lang: python consumer did not reject the negative fixture"

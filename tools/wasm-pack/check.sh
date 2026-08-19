@@ -12,6 +12,8 @@ cd "$ROOT"
 OUT=${TREEBANK_WASM_OUT:-dist/wasm}
 GRAMMARS=${*:-python rust typescript}
 PY=${TREEBANK_WASM_PYTHON:-python3}
+# shellcheck source=tools/wasm-pack/variant.sh
+. "$ROOT/tools/wasm-pack/variant.sh"
 
 fail() { echo "wasm-check: FAIL — $*" >&2; exit 1; }
 
@@ -29,23 +31,19 @@ for g in $GRAMMARS; do
   #    what it is. A pack built from the wrong grammar would otherwise look
   #    fine: the name is the one fact that catches it, and grammar.json is
   #    its authority, not the directory.
-  "$PY" - "$g" "$OUT/treebank-$g.wasm" <<'PY'
+  variant=$(variant_dir "crates/treebank-$g") || fail "$g: cannot resolve its default variant"
+  "$PY" - "$g" "$OUT/treebank-$g.wasm" "$variant" <<'PY'
 import json, tomllib, sys
 from wasmtime import Engine, Linker, Module, Store, WasiConfig
 
-lang, path = sys.argv[1:3]
+lang, path, variant = sys.argv[1:4]
 eng = Engine(); store = Store(eng); store.set_wasi(WasiConfig())
 lk = Linker(eng); lk.define_wasi()
 e = lk.instantiate(store, Module.from_file(eng, path)).exports(store)
 mem = e["memory"]; e["_initialize"](store)
 blob = lambda p, n: json.loads(mem.read(store, p, p + n))
 
-crate = f"crates/treebank-{lang}"
-try:
-    variant = json.load(open(f"{crate}/tree-sitter.json"))["grammars"][0].get("path", ".")
-except Exception:
-    variant = "."
-want_name = json.load(open(f"{crate}/{variant}/src/grammar.json"))["name"]
+want_name = json.load(open(f"{variant}/src/grammar.json"))["name"]
 got_name = mem.read(store, e["tb_language_name"](store),
                     e["tb_language_name"](store) + e["tb_strlen"](store, e["tb_language_name"](store))).decode()
 assert got_name == want_name, f"{lang}: module says {got_name!r}, grammar.json says {want_name!r}"

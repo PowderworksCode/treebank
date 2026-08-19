@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Build a treebank wasm pack: one grammar, self-contained, byte-reproducible.
 #
-#   crates/treebank-<lang>/src/     (generated, committed, checked by CI)
+#   crates/treebank-<lang>[/<variant>]/src/  (generated, committed, CI-checked)
 #   + the tree-sitter runtime       (pinned by sha256, cached)
 #   + tools/wasm-pack/shim.c        (the pack ABI)
 #   + provenance + roles generated from ledger.toml and roles.json
@@ -29,6 +29,8 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 # shellcheck source=tools/wasm-pack/toolchain.sh
 . "$ROOT/tools/wasm-pack/toolchain.sh"
+# shellcheck source=tools/wasm-pack/variant.sh
+. "$ROOT/tools/wasm-pack/variant.sh"
 
 LANG=${1:?usage: build.sh <language> [--out DIR]}
 OUT="$ROOT/dist/wasm"
@@ -43,23 +45,9 @@ done
 CRATE="$ROOT/crates/treebank-$LANG"
 [ -d "$CRATE" ] || { echo "build.sh: no such grammar: $LANG" >&2; exit 2; }
 
-# A multi-variant language keeps its generated parser under a variant
-# directory (VARIANTS.md §2). The pack is built for the DEFAULT variant --
-# the first one tree-sitter.json declares -- because that is what the
-# language's name means to a consumer: `treebank-python.wasm` is python 3,
-# the same way treebank_python::LANGUAGE is. A pack per variant is a
-# separate decision and a separate artifact name; nothing needs it yet.
-VARIANT=$(python3 - "$CRATE" <<'PY'
-import json, sys, pathlib
-crate = pathlib.Path(sys.argv[1])
-try:
-    grammars = json.load(open(crate / "tree-sitter.json"))["grammars"]
-    print(crate / grammars[0].get("path", "."))
-except Exception:
-    print(crate)
-PY
-)
-[ -d "$VARIANT/src" ] || { echo "build.sh: no generated grammar at $VARIANT" >&2; exit 2; }
+# A pack per variant is a separate decision and a separate artifact name;
+# nothing needs it yet, so this is the default variant's pack.
+VARIANT=$(variant_dir "$CRATE") || exit 2
 
 SDK=$(wasi_sdk_ensure)
 BINARYEN=$(binaryen_ensure)
