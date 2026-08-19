@@ -63,7 +63,6 @@ impl Ecosystem for Python {
         }
         (rel.extension()?.to_str()? == "py").then_some(None)
     }
-
 }
 
 /// PyPI publishes no download counts through its own API — the numbers live

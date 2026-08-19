@@ -57,8 +57,8 @@ impl NodeTypes {
     }
 
     pub fn load(path: &Path) -> Result<NodeTypes> {
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
         Self::parse(&text)
     }
 

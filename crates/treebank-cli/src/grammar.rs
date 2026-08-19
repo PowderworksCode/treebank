@@ -13,7 +13,10 @@ pub fn load(grammar_dir: &Path) -> Result<(tree_sitter::Language, String)> {
     let src = grammar_dir.join("src");
     let parser_c = src.join("parser.c");
     if !parser_c.exists() {
-        bail!("{} not found — not a generated grammar dir?", parser_c.display());
+        bail!(
+            "{} not found — not a generated grammar dir?",
+            parser_c.display()
+        );
     }
     let scanner_c = src.join("scanner.c");
 
@@ -35,7 +38,11 @@ pub fn load(grammar_dir: &Path) -> Result<(tree_sitter::Language, String)> {
 
     if !dylib.exists() {
         let mut cmd = Command::new("cc");
-        cmd.arg("-fPIC").arg("-shared").arg("-O1").arg("-I").arg(&src);
+        cmd.arg("-fPIC")
+            .arg("-shared")
+            .arg("-O1")
+            .arg("-I")
+            .arg(&src);
         cmd.arg(&parser_c);
         if scanner_c.exists() {
             cmd.arg(&scanner_c);
@@ -51,9 +58,9 @@ pub fn load(grammar_dir: &Path) -> Result<(tree_sitter::Language, String)> {
     let symbol_name = format!("tree_sitter_{name}");
     unsafe {
         let lib = libloading::Library::new(&dylib)?;
-        let func: libloading::Symbol<unsafe extern "C" fn() -> *const ()> =
-            lib.get(symbol_name.as_bytes())
-                .with_context(|| format!("symbol {symbol_name}"))?;
+        let func: libloading::Symbol<unsafe extern "C" fn() -> *const ()> = lib
+            .get(symbol_name.as_bytes())
+            .with_context(|| format!("symbol {symbol_name}"))?;
         let language = tree_sitter::Language::from_raw(func() as *const _);
         // Keep the dylib mapped for the life of the process.
         std::mem::forget(lib);

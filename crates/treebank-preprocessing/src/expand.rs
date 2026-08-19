@@ -56,13 +56,57 @@ pub struct Macro {
 /// expanded: `void`, `const` and `__attribute__` appeared as "macros" at
 /// hundreds of error sites.
 const NEVER_EXPAND: &[&str] = &[
-    "auto", "break", "case", "char", "const", "continue", "default", "do", "double", "else",
-    "enum", "extern", "float", "for", "goto", "if", "inline", "int", "long", "register",
-    "restrict", "return", "short", "signed", "sizeof", "static", "struct", "switch", "typedef",
-    "union", "unsigned", "void", "volatile", "while", "_Bool", "_Complex", "_Noreturn",
+    "auto",
+    "break",
+    "case",
+    "char",
+    "const",
+    "continue",
+    "default",
+    "do",
+    "double",
+    "else",
+    "enum",
+    "extern",
+    "float",
+    "for",
+    "goto",
+    "if",
+    "inline",
+    "int",
+    "long",
+    "register",
+    "restrict",
+    "return",
+    "short",
+    "signed",
+    "sizeof",
+    "static",
+    "struct",
+    "switch",
+    "typedef",
+    "union",
+    "unsigned",
+    "void",
+    "volatile",
+    "while",
+    "_Bool",
+    "_Complex",
+    "_Noreturn",
     // GNU spellings the grammar already models itself
-    "__attribute__", "__extension__", "__inline", "__inline__", "__const", "__signed",
-    "__volatile", "__volatile__", "__restrict", "__restrict__", "__asm", "__asm__", "__typeof",
+    "__attribute__",
+    "__extension__",
+    "__inline",
+    "__inline__",
+    "__const",
+    "__signed",
+    "__volatile",
+    "__volatile__",
+    "__restrict",
+    "__restrict__",
+    "__asm",
+    "__asm__",
+    "__typeof",
     "__typeof__",
 ];
 
@@ -79,7 +123,11 @@ impl Macro {
         if self.params.is_some() && has_stringify(&self.body) {
             return Some("stringify");
         }
-        if self.params.as_ref().is_some_and(|p| p.iter().any(|x| x == "...")) {
+        if self
+            .params
+            .as_ref()
+            .is_some_and(|p| p.iter().any(|x| x == "..."))
+        {
             return Some("variadic");
         }
         None
@@ -125,7 +173,9 @@ impl Macros {
     pub fn add_source(&mut self, source: &str) {
         for line in logical_lines(source) {
             let t = line.trim_start();
-            let Some(rest) = t.strip_prefix('#') else { continue };
+            let Some(rest) = t.strip_prefix('#') else {
+                continue;
+            };
             let rest = rest.trim_start();
             if let Some(def) = rest.strip_prefix("define") {
                 if let Some(m) = parse_define(def) {
@@ -264,7 +314,11 @@ pub fn expand(source: &str, macros: &Macros) -> Expansion {
             }
         }
     }
-    Expansion { text: out, expanded, refused }
+    Expansion {
+        text: out,
+        expanded,
+        refused,
+    }
 }
 
 enum Segment<'a> {
@@ -591,9 +645,15 @@ mod tests {
 
     #[test]
     fn function_like_macro_with_arguments() {
-        let m = macros("#define list_for_each(p, head) for (p = (head)->next; p != (head); p = p->next)\n");
+        let m = macros(
+            "#define list_for_each(p, head) for (p = (head)->next; p != (head); p = p->next)\n",
+        );
         let e = expand("list_for_each(li, &q->ifaces) { work(); }\n", &m);
-        assert!(e.text.starts_with("for (li = (&q->ifaces)->next;"), "got {:?}", e.text);
+        assert!(
+            e.text.starts_with("for (li = (&q->ifaces)->next;"),
+            "got {:?}",
+            e.text
+        );
         assert!(e.text.contains("{ work(); }"), "the block must survive");
     }
 
@@ -601,7 +661,11 @@ mod tests {
     fn a_type_can_be_passed_as_an_argument() {
         let m = macros("#define list_entry(ptr, type, member) ((type *)((char *)(ptr)))\n");
         let e = expand("x = list_entry(a, struct file_element, file_list);\n", &m);
-        assert!(e.text.contains("((struct file_element *)"), "got {:?}", e.text);
+        assert!(
+            e.text.contains("((struct file_element *)"),
+            "got {:?}",
+            e.text
+        );
     }
 
     #[test]
@@ -609,7 +673,11 @@ mod tests {
         let m = macros("#define foo foo\n#define bar bar + baz\n#define baz bar\n");
         let e = expand("foo; bar;\n", &m);
         assert!(e.text.contains("foo;"), "self-reference must terminate");
-        assert!(e.text.contains("bar"), "mutual recursion must terminate: {:?}", e.text);
+        assert!(
+            e.text.contains("bar"),
+            "mutual recursion must terminate: {:?}",
+            e.text
+        );
     }
 
     #[test]
@@ -625,7 +693,10 @@ mod tests {
         let src = "#include <FOO.h>\n/* FOO in a comment */\nconst char *s = \"FOO\";\nFOO;\n";
         let e = expand(src, &m);
         assert!(e.text.contains("#include <FOO.h>"), "directive untouched");
-        assert!(e.text.contains("/* FOO in a comment */"), "comment untouched");
+        assert!(
+            e.text.contains("/* FOO in a comment */"),
+            "comment untouched"
+        );
         assert!(e.text.contains("\"FOO\""), "string literal untouched");
         assert!(e.text.contains("bar;"), "real use expanded: {:?}", e.text);
     }
@@ -645,7 +716,11 @@ mod tests {
     fn a_bare_mention_of_a_function_like_macro_is_not_an_invocation() {
         let m = macros("#define f(x) ((x) + 1)\n");
         let e = expand("void (*p)(int) = f;\n", &m);
-        assert!(e.text.contains("= f;"), "no parens, no expansion: {:?}", e.text);
+        assert!(
+            e.text.contains("= f;"),
+            "no parens, no expansion: {:?}",
+            e.text
+        );
     }
 
     #[test]
@@ -654,8 +729,15 @@ mod tests {
         // for non-GNU compilers. Expanding them deletes keywords from live code.
         let m = macros("#define const\n#define __attribute__(x)\n");
         let e = expand("static const int x __attribute__((unused)) = 1;\n", &m);
-        assert!(e.text.contains("static const int x"), "keyword survived: {:?}", e.text);
-        assert!(e.text.contains("__attribute__((unused))"), "attribute survived");
+        assert!(
+            e.text.contains("static const int x"),
+            "keyword survived: {:?}",
+            e.text
+        );
+        assert!(
+            e.text.contains("__attribute__((unused))"),
+            "attribute survived"
+        );
         assert!(e
             .refused
             .iter()
@@ -667,7 +749,10 @@ mod tests {
         let m = macros("#define pair(a, b) a, b\n");
         let e = expand("pair(1);\n", &m);
         assert!(e.text.contains("pair(1)"));
-        assert!(e.refused.iter().any(|(_, why)| *why == "argument count mismatch"));
+        assert!(e
+            .refused
+            .iter()
+            .any(|(_, why)| *why == "argument count mismatch"));
     }
 
     #[test]
@@ -690,6 +775,10 @@ mod tests {
     fn multi_line_definitions_are_joined() {
         let m = macros("#define LOOP(p, h) \\\n    for (p = h; p; p = p->next)\n");
         let e = expand("LOOP(a, b) {}\n", &m);
-        assert!(e.text.contains("for (a = b; a; a = a->next)"), "got {:?}", e.text);
+        assert!(
+            e.text.contains("for (a = b; a; a = a->next)"),
+            "got {:?}",
+            e.text
+        );
     }
 }

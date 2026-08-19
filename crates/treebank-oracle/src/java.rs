@@ -41,13 +41,17 @@ impl Oracle for Java {
             Mutex::new(
                 stdin_oracle::Persistent::spawn(
                     "java",
-                    &[crate::tool("java-oracle/Check.java").to_string_lossy().as_ref()],
+                    &[crate::tool("java-oracle/Check.java")
+                        .to_string_lossy()
+                        .as_ref()],
                     "java tools/java-oracle/Check.java — is a JDK (not just a JRE) installed?",
                 )
                 .expect("start the java oracle"),
             )
         });
-        let mut oracle = cell.lock().map_err(|_| anyhow::anyhow!("java oracle poisoned"))?;
+        let mut oracle = cell
+            .lock()
+            .map_err(|_| anyhow::anyhow!("java oracle poisoned"))?;
         oracle.ask(srcroot, paths)
     }
 }

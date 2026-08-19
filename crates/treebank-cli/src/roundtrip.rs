@@ -72,7 +72,9 @@ pub fn run(
     limit: Option<usize>,
 ) -> Result<()> {
     let printer = treebank_oracle::unparser_for(lang).ok_or_else(|| {
-        anyhow::anyhow!("no printer for {lang}: round-tripping needs the toolchain to render its own tree")
+        anyhow::anyhow!(
+            "no printer for {lang}: round-tripping needs the toolchain to render its own tree"
+        )
     })?;
     let manifest = Manifest::load(manifest_path)?;
     let corpus_src = manifest_path.parent().unwrap_or(Path::new(".")).join("src");
@@ -88,7 +90,10 @@ pub fn run(
         .map(|d| grammar::load(&grammar_dir.join(d)).map(|(l, _)| l))
         .collect::<Result<_>>()?;
 
-    println!("roundtrip: {} files through the {lang} printer", entries.len());
+    println!(
+        "roundtrip: {} files through the {lang} printer",
+        entries.len()
+    );
 
     let mut rendered = 0usize;
     let mut skipped = 0usize;
@@ -97,38 +102,67 @@ pub fn run(
     let mut skip_reasons: BTreeMap<String, usize> = BTreeMap::new();
 
     for chunk in entries.chunks(400) {
-        let paths: Vec<String> = chunk.iter().map(|f| format!("{}/{}", f.pkgdir, f.rel)).collect();
+        let paths: Vec<String> = chunk
+            .iter()
+            .map(|f| format!("{}/{}", f.pkgdir, f.rel))
+            .collect();
         let out_map = printer.unparse(&corpus_src, &paths)?;
         let results: Vec<(bool, bool, Option<(String, Failure)>, Option<String>)> = chunk
             .par_iter()
             .zip(&paths)
-            .map(|(f, rel)| -> Result<(bool, bool, Option<(String, Failure)>, Option<String>)> {
-                let Some(r) = out_map.get(rel) else {
-                    return Ok((false, false, None, Some("printer returned no record".into())));
-                };
-                let Some(text) = r.source.as_ref() else {
-                    let why = r.skipped.clone().unwrap_or_else(|| "unstated".into());
-                    return Ok((false, false, None, Some(skip_kind(&why))));
-                };
-                let idx = crate::routing::route(lang, &f.dialect, &f.rel);
-                let mut parser = Parser::new();
-                parser.set_language(&langs[idx])?;
-                let Some(tree) = parser.parse(text.as_bytes(), None) else {
-                    return Ok((true, false, None, None));
-                };
-                if !tree.root_node().has_error() {
-                    return Ok((true, true, None, None));
-                }
-                // Cluster by the same signature the sweep uses, so a
-                // round-trip failure reads like a gap and can be chased the
-                // same way.
-                let (sig, line, snippet) = crate::sweep::error_signature(tree.root_node(), text);
-                Ok((true, true, Some((sig, Failure { path: rel.clone(), line, snippet })), None))
-            })
+            .map(
+                |(f, rel)| -> Result<(bool, bool, Option<(String, Failure)>, Option<String>)> {
+                    let Some(r) = out_map.get(rel) else {
+                        return Ok((
+                            false,
+                            false,
+                            None,
+                            Some("printer returned no record".into()),
+                        ));
+                    };
+                    let Some(text) = r.source.as_ref() else {
+                        let why = r.skipped.clone().unwrap_or_else(|| "unstated".into());
+                        return Ok((false, false, None, Some(skip_kind(&why))));
+                    };
+                    let idx = crate::routing::route(lang, &f.dialect, &f.rel);
+                    let mut parser = Parser::new();
+                    parser.set_language(&langs[idx])?;
+                    let Some(tree) = parser.parse(text.as_bytes(), None) else {
+                        return Ok((true, false, None, None));
+                    };
+                    if !tree.root_node().has_error() {
+                        return Ok((true, true, None, None));
+                    }
+                    // Cluster by the same signature the sweep uses, so a
+                    // round-trip failure reads like a gap and can be chased the
+                    // same way.
+                    let (sig, line, snippet) =
+                        crate::sweep::error_signature(tree.root_node(), text);
+                    Ok((
+                        true,
+                        true,
+                        Some((
+                            sig,
+                            Failure {
+                                path: rel.clone(),
+                                line,
+                                snippet,
+                            },
+                        )),
+                        None,
+                    ))
+                },
+            )
             .collect::<Result<_>>()?;
         for (r, p, fail, why) in results {
-            if r { rendered += 1 } else { skipped += 1 }
-            if p { reparsed += 1 }
+            if r {
+                rendered += 1
+            } else {
+                skipped += 1
+            }
+            if p {
+                reparsed += 1
+            }
             if let Some((sig, f)) = fail {
                 by_sig.entry(sig).or_default().push(f);
             }

@@ -56,7 +56,13 @@ pub struct ErrReport {
     pub worst: Vec<Case>,
 }
 
-pub fn run(lang: LangName, grammar_dir: &Path, manifest_path: &Path, out: &Path, limit: Option<usize>) -> Result<()> {
+pub fn run(
+    lang: LangName,
+    grammar_dir: &Path,
+    manifest_path: &Path,
+    out: &Path,
+    limit: Option<usize>,
+) -> Result<()> {
     let oracle = treebank_oracle::spans_for(lang)
         .ok_or_else(|| anyhow::anyhow!("no span oracle for {lang}"))?;
     let manifest = Manifest::load(manifest_path)?;
@@ -163,7 +169,12 @@ pub fn run(lang: LangName, grammar_dir: &Path, manifest_path: &Path, out: &Path,
     );
     for c in report.worst.iter().take(6) {
         println!("  {:>9} bytes  {}", c.delta, c.path);
-        println!("             ours@{} theirs@{}  {}", c.ours, c.theirs, c.context.trim());
+        println!(
+            "             ours@{} theirs@{}  {}",
+            c.ours,
+            c.theirs,
+            c.context.trim()
+        );
     }
     std::fs::create_dir_all(out.parent().unwrap_or(Path::new(".")))?;
     std::fs::write(out, serde_json::to_string_pretty(&report)?)?;

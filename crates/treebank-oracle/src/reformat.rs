@@ -71,7 +71,9 @@ fn which(bin: &str) -> Option<String> {
         .arg(format!("command -v {bin}"))
         .output()
         .ok()?;
-    out.status.success().then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
 struct RustFmt;
@@ -109,7 +111,10 @@ fn format_stdin(
                 if !out.status.success() {
                     let why = String::from_utf8_lossy(&out.stderr);
                     let head = why.lines().next().unwrap_or("declined").trim().to_string();
-                    return Ok(Reformatted { source: None, skipped: Some(head) });
+                    return Ok(Reformatted {
+                        source: None,
+                        skipped: Some(head),
+                    });
                 }
                 Ok(Reformatted {
                     source: Some(String::from_utf8_lossy(&out.stdout).into_owned()),
@@ -118,7 +123,13 @@ fn format_stdin(
             })();
             match result {
                 Ok(r) => (rel.clone(), r),
-                Err(e) => (rel.clone(), Reformatted { source: None, skipped: Some(e.to_string()) }),
+                Err(e) => (
+                    rel.clone(),
+                    Reformatted {
+                        source: None,
+                        skipped: Some(e.to_string()),
+                    },
+                ),
             }
         })
         .collect())
@@ -148,14 +159,26 @@ fn format_in_place(
                 if !status.status.success() {
                     let why = String::from_utf8_lossy(&status.stderr);
                     let head = why.lines().next().unwrap_or("declined").trim().to_string();
-                    return Ok(Reformatted { source: None, skipped: Some(head) });
+                    return Ok(Reformatted {
+                        source: None,
+                        skipped: Some(head),
+                    });
                 }
-                Ok(Reformatted { source: Some(std::fs::read_to_string(&scratch)?), skipped: None })
+                Ok(Reformatted {
+                    source: Some(std::fs::read_to_string(&scratch)?),
+                    skipped: None,
+                })
             })();
             let _ = std::fs::remove_file(&scratch);
             match result {
                 Ok(r) => (rel.clone(), r),
-                Err(e) => (rel.clone(), Reformatted { source: None, skipped: Some(e.to_string()) }),
+                Err(e) => (
+                    rel.clone(),
+                    Reformatted {
+                        source: None,
+                        skipped: Some(e.to_string()),
+                    },
+                ),
             }
         })
         .collect();
@@ -194,4 +217,3 @@ impl Reformatter for BlackFmt {
         format_stdin(srcroot, paths, &["black", "-q", "--fast", "-"])
     }
 }
-

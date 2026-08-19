@@ -22,7 +22,9 @@ impl Oracle for Bash {
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
         stdin_oracle::run(
             "bash",
-            &[crate::tool("bash-oracle/check.sh").to_string_lossy().as_ref()],
+            &[crate::tool("bash-oracle/check.sh")
+                .to_string_lossy()
+                .as_ref()],
             "bash tools/bash-oracle/check.sh — is bash installed?",
             srcroot,
             paths,

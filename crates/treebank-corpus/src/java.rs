@@ -89,11 +89,15 @@ fn rank_maven(k: usize) -> Result<Vec<RankedCrate>> {
         if batch.is_empty() {
             break;
         }
-        eprintln!("rank: ecosyste.ms maven page {page} ({} artifacts)", batch.len());
+        eprintln!(
+            "rank: ecosyste.ms maven page {page} ({} artifacts)",
+            batch.len()
+        );
         for entry in batch {
-            let (Some(name), Some(dependents)) =
-                (entry["name"].as_str(), entry["dependent_repos_count"].as_u64())
-            else {
+            let (Some(name), Some(dependents)) = (
+                entry["name"].as_str(),
+                entry["dependent_repos_count"].as_u64(),
+            ) else {
                 continue;
             };
             if !name.contains(':') {

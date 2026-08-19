@@ -202,9 +202,11 @@ const UNBOUNDED: usize = 1 << 20;
 impl Grammar {
     fn load(path: &Path) -> Result<Grammar> {
         let text = std::fs::read_to_string(path)?;
-        let v: Value = serde_json::from_str(&text)
-            .with_context(|| format!("parse {}", path.display()))?;
-        let obj = v["rules"].as_object().context("grammar.json has no rules")?;
+        let v: Value =
+            serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+        let obj = v["rules"]
+            .as_object()
+            .context("grammar.json has no rules")?;
         // The start symbol is the FIRST rule as authored, and serde_json's
         // map is sorted, so it cannot be recovered from the parsed value --
         // asking it for the first key yields whatever sorts first, which for
@@ -293,7 +295,10 @@ impl Grammar {
             Rule::Str(s) => s.len().max(1),
             Rule::Pattern(_) => 1,
             Rule::Symbol(n) => self.min_len.get(n).copied().unwrap_or(1),
-            Rule::Seq(ms) => ms.iter().map(|m| self.rule_min(m)).fold(0, usize::saturating_add),
+            Rule::Seq(ms) => ms
+                .iter()
+                .map(|m| self.rule_min(m))
+                .fold(0, usize::saturating_add),
             Rule::Choice(_, ms) => ms.iter().map(|m| self.rule_min(m)).min().unwrap_or(0),
             Rule::Repeat(_) => 0,
             Rule::Repeat1(c) => self.rule_min(c),
@@ -633,13 +638,21 @@ impl Gen<'_, '_> {
                 self.emit(&chosen, depth);
             }
             Rule::Repeat(c) => {
-                let n = if depth >= MAX_DEPTH { 0 } else { self.tape.choose(3) };
+                let n = if depth >= MAX_DEPTH {
+                    0
+                } else {
+                    self.tape.choose(3)
+                };
                 for _ in 0..n {
                     self.emit(c, depth + 1);
                 }
             }
             Rule::Repeat1(c) => {
-                let n = if depth >= MAX_DEPTH { 1 } else { 1 + self.tape.choose(2) };
+                let n = if depth >= MAX_DEPTH {
+                    1
+                } else {
+                    1 + self.tape.choose(2)
+                };
                 for _ in 0..n {
                     self.emit(c, depth + 1);
                 }
@@ -655,7 +668,11 @@ fn generate(g: &Grammar, lang: LangName, tape_bytes: &[u8]) -> String {
 
 /// The program and the alternatives its derivation took.
 fn derive(g: &Grammar, lang: LangName, tape_bytes: &[u8]) -> (String, Vec<(u32, u32)>) {
-    let mut tape = Tape { bytes: tape_bytes, pos: 0, rec: None };
+    let mut tape = Tape {
+        bytes: tape_bytes,
+        pos: 0,
+        rec: None,
+    };
     let start = g.rules[&g.start].clone();
     let mut gen = Gen {
         g,
@@ -670,7 +687,11 @@ fn derive(g: &Grammar, lang: LangName, tape_bytes: &[u8]) -> (String, Vec<(u32, 
     gen.emit(&start, 0);
     let text = gen.render();
     // A file that does not end in a newline leaves python's scanner mid-line.
-    let text = if text.ends_with('\n') { text } else { text + "\n" };
+    let text = if text.ends_with('\n') {
+        text
+    } else {
+        text + "\n"
+    };
     (text, gen.cov)
 }
 
@@ -685,7 +706,11 @@ fn seek_tape(
     rng: &mut Rng,
 ) -> Vec<u8> {
     let random = rng.tape(256);
-    let mut tape = Tape { bytes: &random, pos: 0, rec: Some(Vec::new()) };
+    let mut tape = Tape {
+        bytes: &random,
+        pos: 0,
+        rec: Some(Vec::new()),
+    };
     let start = g.rules[&g.start].clone();
     let mut gen = Gen {
         g,
@@ -693,7 +718,11 @@ fn seek_tape(
         tape: &mut tape,
         out: Vec::new(),
         cov: Vec::new(),
-        seek: Some(Box::new(Seeker { seen, rare, tape: Vec::new() })),
+        seek: Some(Box::new(Seeker {
+            seen,
+            rare,
+            tape: Vec::new(),
+        })),
         level: 0,
         steps: 0,
     };
@@ -792,6 +821,15 @@ pub struct FuzzReport {
     /// Generated programs our parser accepted — the only ones worth asking
     /// the oracle about.
     pub we_accepted: usize,
+    /// Distinct shapes the accepted programs built. Comparable to the
+    /// `kinds` report over the corpus: the interesting number is not either
+    /// alone but what fuzzing reaches that no real file does.
+    pub built_kinds: usize,
+    pub built_tokens: usize,
+    pub built_edges: usize,
+    pub built_kind_names: Vec<String>,
+    pub built_token_names: Vec<String>,
+    pub built_edge_names: Vec<String>,
     /// Generated programs our parser rejected. These are generator
     /// infidelity (token spacing, sampled patterns), not grammar defects,
     /// and are discarded rather than reported.
@@ -857,8 +895,9 @@ impl Judge<'_> {
             return Ok(Vec::new());
         }
         let ext = ext(self.lang);
-        let names: Vec<String> =
-            (0..texts.len()).map(|i| format!("probe{i}.{ext}")).collect();
+        let names: Vec<String> = (0..texts.len())
+            .map(|i| format!("probe{i}.{ext}"))
+            .collect();
         for (name, text) in names.iter().zip(texts) {
             std::fs::write(self.dir.join(name), text)?;
         }
@@ -866,7 +905,10 @@ impl Judge<'_> {
             Some(v) => v,
             None => self.oracle.validate(self.dir, &names)?,
         };
-        let out = names.iter().map(|n| verdicts.get(n).copied().unwrap_or(false)).collect();
+        let out = names
+            .iter()
+            .map(|n| verdicts.get(n).copied().unwrap_or(false))
+            .collect();
         for name in &names {
             let _ = std::fs::remove_file(self.dir.join(name));
         }
@@ -944,7 +986,7 @@ fn surviving(
     Ok(owners
         .into_iter()
         .zip(verdicts)
-        .filter(|(_, accepted)| !accepted)   // the oracle REJECTS it: reproduces
+        .filter(|(_, accepted)| !accepted) // the oracle REJECTS it: reproduces
         .map(|(i, _)| i)
         .collect())
 }
@@ -1043,9 +1085,10 @@ pub fn run(
                 never
                     .iter()
                     .filter_map(|x| x.as_str().map(String::from))
-                    .chain(thin.iter().filter_map(|x| {
-                        x.as_array()?.first()?.as_str().map(String::from)
-                    }))
+                    .chain(
+                        thin.iter()
+                            .filter_map(|x| x.as_array()?.first()?.as_str().map(String::from)),
+                    )
                     .collect()
             }
             Err(_) => Default::default(),
@@ -1071,7 +1114,11 @@ pub fn run(
     let oracle = treebank_oracle::get(lang);
     let tmp = std::env::temp_dir().join(format!("treebank-fuzz-{}", std::process::id()));
     std::fs::create_dir_all(&tmp)?;
-    let judge = Judge { oracle, dir: &tmp, lang };
+    let judge = Judge {
+        oracle,
+        dir: &tmp,
+        lang,
+    };
 
     let syntax_mode = oracle.validate_syntax_only(&tmp, &[])?.is_some();
     println!(
@@ -1081,6 +1128,10 @@ pub fn run(
 
     let mut rng = Rng(seed | 1);
     let mut we_accepted = 0usize;
+    let mut built_kinds: std::collections::BTreeMap<u16, u64> = Default::default();
+    let mut built_tokens: std::collections::BTreeMap<u16, u64> = Default::default();
+    let mut built_edges: std::collections::BTreeMap<(u16, Option<String>, u16), u64> =
+        Default::default();
     let mut we_rejected = 0usize;
     let mut agreed = 0usize;
     let mut by_program: BTreeMap<String, usize> = BTreeMap::new();
@@ -1127,6 +1178,13 @@ pub fn run(
             continue;
         }
         we_accepted += 1;
+        // What did this program actually BUILD? Alternative coverage says
+        // which choices the generator took; this says which shapes the
+        // parser ended up with — the same yardstick `kinds` puts on the
+        // corpus, so the two are directly comparable.
+        crate::kinds::count_kinds(tree.root_node(), &mut built_kinds);
+        crate::kinds::count_all_kinds(tree.root_node(), &mut built_tokens);
+        crate::kinds::count_edges(tree.root_node(), &mut built_edges);
         if judge.accepts(&text)? {
             agreed += 1;
             continue;
@@ -1164,16 +1222,44 @@ pub fn run(
     let report = FuzzReport {
         lang: lang.to_string(),
         grammar: grammar_dir.display().to_string(),
-        judged_by: if syntax_only { "parser" } else { "parser+compiler" },
+        judged_by: if syntax_only {
+            "parser"
+        } else {
+            "parser+compiler"
+        },
         iterations,
         we_accepted,
+        built_kinds: built_kinds.len(),
+        built_tokens: built_tokens.len(),
+        built_edges: built_edges.len(),
+        built_kind_names: built_kinds
+            .keys()
+            .filter_map(|k| language.node_kind_for_id(*k).map(str::to_string))
+            .collect(),
+        built_token_names: built_tokens
+            .keys()
+            .filter(|k| !language.node_kind_is_named(**k))
+            .filter_map(|k| language.node_kind_for_id(*k).map(str::to_string))
+            .collect(),
+        built_edge_names: built_edges
+            .keys()
+            .map(|(pa, f, c)| {
+                let n = |i: u16| language.node_kind_for_id(i).unwrap_or("?").to_string();
+                match f {
+                    Some(f) => format!("{} {}: {}", n(*pa), f, n(*c)),
+                    None => format!("{} · {}", n(*pa), n(*c)),
+                }
+            })
+            .collect(),
         we_rejected,
         agreed,
         widenings: findings.iter().map(|f| f.seeds).sum(),
         coverage: Coverage {
             alternatives_total: total,
             alternatives_covered: seen.len(),
-            percent: if total == 0 { 0.0 } else {
+            percent: if total == 0 {
+                0.0
+            } else {
                 (seen.len() as f64 * 1000.0 / total as f64).round() / 10.0
             },
             uncovered_by_rule: uncovered_by_rule.iter().take(20).cloned().collect(),
@@ -1182,8 +1268,11 @@ pub fn run(
         findings,
     };
 
-    let undeclared: Vec<&Finding> =
-        report.findings.iter().filter(|f| f.declared.is_none()).collect();
+    let undeclared: Vec<&Finding> = report
+        .findings
+        .iter()
+        .filter(|f| f.declared.is_none())
+        .collect();
     let declared_count = report.findings.len() - undeclared.len();
     println!(
         "fuzz: {} accepted by us ({} discarded as unfaithful), {} agreed, {} widening(s) in {} distinct program(s) — {} undeclared, {} declared",

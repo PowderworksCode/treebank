@@ -6,8 +6,8 @@ use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser};
 
-use treebank_corpus::fetch::Manifest;
 use crate::grammar;
+use treebank_corpus::fetch::Manifest;
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Failure {
@@ -106,10 +106,10 @@ fn load_version_policy(grammar_dir: &Path) -> anyhow::Result<std::collections::H
     if !path.exists() {
         return Ok(Default::default());
     }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let policy: Policy = toml::from_str(&text)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let policy: Policy =
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     Ok(policy.rejections.into_iter().map(|r| r.signature).collect())
 }
 
@@ -152,20 +152,34 @@ pub fn error_signature(root: Node, text: &str) -> (String, usize, String) {
         Some(node) => {
             let sig = signature_of(node, src);
             let at = node.start_byte().min(src.len());
-            let lo = src[..at].iter().rposition(|b| *b == b'\n').map(|i| i + 1).unwrap_or(0);
-            let hi = src[at..].iter().position(|b| *b == b'\n').map(|i| at + i).unwrap_or(src.len());
+            let lo = src[..at]
+                .iter()
+                .rposition(|b| *b == b'\n')
+                .map(|i| i + 1)
+                .unwrap_or(0);
+            let hi = src[at..]
+                .iter()
+                .position(|b| *b == b'\n')
+                .map(|i| at + i)
+                .unwrap_or(src.len());
             let line = src[..at].iter().filter(|b| **b == b'\n').count() + 1;
             (
                 sig,
                 line,
-                String::from_utf8_lossy(&src[lo..hi]).chars().take(90).collect(),
+                String::from_utf8_lossy(&src[lo..hi])
+                    .chars()
+                    .take(90)
+                    .collect(),
             )
         }
     }
 }
 
 fn signature_of(node: Node, src: &[u8]) -> String {
-    let parent = node.parent().map(|p| p.kind().to_string()).unwrap_or_else(|| "<root>".into());
+    let parent = node
+        .parent()
+        .map(|p| p.kind().to_string())
+        .unwrap_or_else(|| "<root>".into());
     if node.is_missing() {
         return format!("{parent} > MISSING {}", node.kind());
     }
@@ -201,7 +215,11 @@ fn signature_of(node: Node, src: &[u8]) -> String {
 /// this can meet.
 fn snippet_at(src: &[u8], byte: usize) -> (usize, String) {
     let text = String::from_utf8_lossy(src);
-    let line_no = src[..byte.min(src.len())].iter().filter(|b| **b == b'\n').count() + 1;
+    let line_no = src[..byte.min(src.len())]
+        .iter()
+        .filter(|b| **b == b'\n')
+        .count()
+        + 1;
     let line = text.lines().nth(line_no - 1).unwrap_or("");
     let line: String = line.trim().chars().take(160).collect();
     (line_no, line)
@@ -264,9 +282,7 @@ fn resolve_splits(
     let mut current = original.clone();
     let mut resolved = 0;
     for _ in 0..MAX_SPLITS {
-        let Some(region) =
-            treebank_preprocessing::innermost_containing(&text, current.line)
-        else {
+        let Some(region) = treebank_preprocessing::innermost_containing(&text, current.line) else {
             break;
         };
         let mut progressed = false;
@@ -296,12 +312,21 @@ fn resolve_splits(
     (Some(current), resolved)
 }
 
-pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Path, out: &Path) -> Result<()> {
+pub fn run(
+    lang: treebank_lang::LangName,
+    grammar_dir: &Path,
+    manifest_path: &Path,
+    out: &Path,
+) -> Result<()> {
     let loaded: Vec<(tree_sitter::Language, String)> = crate::routing::grammar_dirs(lang)
         .iter()
         .map(|d| grammar::load(&grammar_dir.join(d)))
         .collect::<Result<_>>()?;
-    let fingerprint = loaded.iter().map(|(_, f)| f.as_str()).collect::<Vec<_>>().join("+");
+    let fingerprint = loaded
+        .iter()
+        .map(|(_, f)| f.as_str())
+        .collect::<Vec<_>>()
+        .join("+");
     let languages: Vec<tree_sitter::Language> = loaded.into_iter().map(|(l, _)| l).collect();
     let manifest = Manifest::load(manifest_path)?;
     let corpus_root = manifest_path.parent().unwrap();
@@ -319,8 +344,9 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         .unwrap_or_default();
     let known_pass: std::collections::HashSet<&str> =
         cache.passed_sha256.iter().map(|s| s.as_str()).collect();
-    let (skipped, work): (Vec<_>, Vec<_>) =
-        files.iter().partition(|f| known_pass.contains(f.sha256.as_str()));
+    let (skipped, work): (Vec<_>, Vec<_>) = files
+        .iter()
+        .partition(|f| known_pass.contains(f.sha256.as_str()));
     eprintln!(
         "sweep: {} files against {} ({} unchanged-and-passing, {} to parse)",
         files.len(),
@@ -347,7 +373,12 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
                 let Ok(src) = std::fs::read(&full) else {
                     return None;
                 };
-                let package = f.pkgdir.rsplitn(2, '-').last().unwrap_or(&f.pkgdir).to_string();
+                let package = f
+                    .pkgdir
+                    .rsplitn(2, '-')
+                    .last()
+                    .unwrap_or(&f.pkgdir)
+                    .to_string();
                 let parser = &mut parsers[crate::routing::route(lang, &f.dialect, &f.rel)];
                 let failure =
                     check_file(parser, &package, &format!("{}/{}", f.pkgdir, f.rel), &src);
@@ -356,21 +387,25 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         )
         .flatten()
         .collect();
-    let failures: Vec<Failure> =
-        results.iter().filter_map(|(_, f)| f.clone()).collect();
+    let failures: Vec<Failure> = results.iter().filter_map(|(_, f)| f.clone()).collect();
 
     // Persist the cache: previously-known passes (still present in the
     // corpus) plus this run's fresh passes.
-    let mut passed_sha256: Vec<String> =
-        skipped.iter().map(|f| f.sha256.clone()).collect();
+    let mut passed_sha256: Vec<String> = skipped.iter().map(|f| f.sha256.clone()).collect();
     passed_sha256.extend(
-        results.iter().filter(|(_, f)| f.is_none()).map(|(sha, _)| sha.clone()),
+        results
+            .iter()
+            .filter(|(_, f)| f.is_none())
+            .map(|(sha, _)| sha.clone()),
     );
     passed_sha256.sort();
     passed_sha256.dedup();
     std::fs::write(
         &cache_path,
-        serde_json::to_string(&SweepCache { grammar: fingerprint, passed_sha256 })?,
+        serde_json::to_string(&SweepCache {
+            grammar: fingerprint,
+            passed_sha256,
+        })?,
     )?;
 
     // Adjudicate every failing file with the language's reference parser so
@@ -432,35 +467,36 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
     // file parse cleanly, the rejection is a property of the preprocessor and
     // no grammar patch can fix it — so it must not be filed as a gap, where it
     // would sit at the top of the queue absorbing a fix agent's attempts.
-    let mut config_inherent: std::collections::HashSet<String> = match crate::routing::preprocessing(lang) {
-        None => Default::default(),
-        Some(symbols) => {
-            let hits: Vec<String> = failures
-                .par_iter()
-                .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
-                .filter_map(|f| {
-                    let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
-                    let reduced = treebank_preprocessing::reduce(&src, symbols);
-                    if !reduced.changed() {
-                        return None;
-                    }
-                    let mut parser = Parser::new();
-                    let index = crate::routing::route(lang, &None, &f.path);
-                    parser.set_language(&languages[index]).ok()?;
-                    let tree = parser.parse(reduced.text.as_bytes(), None)?;
-                    (!tree.root_node().has_error()).then(|| f.path.clone())
-                })
-                .collect();
-            if !hits.is_empty() {
-                eprintln!(
-                    "preprocessing: {} valid file(s) parse cleanly once dead branches are \
+    let mut config_inherent: std::collections::HashSet<String> =
+        match crate::routing::preprocessing(lang) {
+            None => Default::default(),
+            Some(symbols) => {
+                let hits: Vec<String> = failures
+                    .par_iter()
+                    .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
+                    .filter_map(|f| {
+                        let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
+                        let reduced = treebank_preprocessing::reduce(&src, symbols);
+                        if !reduced.changed() {
+                            return None;
+                        }
+                        let mut parser = Parser::new();
+                        let index = crate::routing::route(lang, &None, &f.path);
+                        parser.set_language(&languages[index]).ok()?;
+                        let tree = parser.parse(reduced.text.as_bytes(), None)?;
+                        (!tree.root_node().has_error()).then(|| f.path.clone())
+                    })
+                    .collect();
+                if !hits.is_empty() {
+                    eprintln!(
+                        "preprocessing: {} valid file(s) parse cleanly once dead branches are \
                      removed — counted as configuration-inherent, not grammar gaps",
-                    hits.len()
-                );
+                        hits.len()
+                    );
+                }
+                hits.into_iter().collect()
             }
-            hits.into_iter().collect()
-        }
-    };
+        };
 
     // Conditionals whose symbols nobody declared can split a construct just
     // as `#ifdef __cplusplus` does — `#ifdef F_DUPFD_CLOEXEC` around one of
@@ -479,7 +515,9 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
             .filter_map(|f| {
                 let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
                 let mut parser = Parser::new();
-                parser.set_language(&languages[crate::routing::route(lang, &None, &f.path)]).ok()?;
+                parser
+                    .set_language(&languages[crate::routing::route(lang, &None, &f.path)])
+                    .ok()?;
                 let (remaining, resolved) = resolve_splits(&mut parser, f, &src);
                 (resolved > 0).then(|| (f.path.clone(), remaining, resolved))
             })
@@ -516,16 +554,19 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         for f in &files {
             by_pkg.entry(f.pkgdir.clone()).or_default().push(f);
         }
-        let gap_by_pkg: BTreeMap<String, Vec<&Failure>> =
-            failures.iter().filter(|f| validity.get(&f.path).copied().unwrap_or(false))
-                .filter(|f| !config_inherent.contains(&f.path))
-                .fold(BTreeMap::new(), |mut acc, f| {
-                    let pkg = f.path.split('/').next().unwrap_or("").to_string();
-                    acc.entry(pkg).or_default().push(f);
-                    acc
-                });
+        let gap_by_pkg: BTreeMap<String, Vec<&Failure>> = failures
+            .iter()
+            .filter(|f| validity.get(&f.path).copied().unwrap_or(false))
+            .filter(|f| !config_inherent.contains(&f.path))
+            .fold(BTreeMap::new(), |mut acc, f| {
+                let pkg = f.path.split('/').next().unwrap_or("").to_string();
+                acc.entry(pkg).or_default().push(f);
+                acc
+            });
         for (pkg, gaps) in &gap_by_pkg {
-            let Some(entries) = by_pkg.get(pkg) else { continue };
+            let Some(entries) = by_pkg.get(pkg) else {
+                continue;
+            };
             let mut macros = treebank_preprocessing::Macros::new();
             for e in entries {
                 if let Ok(src) = std::fs::read_to_string(corpus_src.join(&e.pkgdir).join(&e.rel)) {
@@ -541,7 +582,9 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
                         return None;
                     }
                     let mut parser = Parser::new();
-                    parser.set_language(&languages[crate::routing::route(lang, &None, &f.path)]).ok()?;
+                    parser
+                        .set_language(&languages[crate::routing::route(lang, &None, &f.path)])
+                        .ok()?;
                     let tree = parser.parse(e.text.as_bytes(), None)?;
                     if tree.root_node().has_error() {
                         return None;
@@ -574,7 +617,10 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
             Some(None) => f.clone(), // fully explained; stays for the config bucket
             None => f.clone(),
         };
-        by_sig.entry(effective.signature.clone()).or_default().push(effective);
+        by_sig
+            .entry(effective.signature.clone())
+            .or_default()
+            .push(effective);
     }
     let mut clusters: Vec<Cluster> = by_sig
         .into_iter()
@@ -648,7 +694,9 @@ pub fn run(lang: treebank_lang::LangName, grammar_dir: &Path, manifest_path: &Pa
         .collect();
     let mut hidden_gaps: Vec<String> = Vec::new();
     if !noise_paths.is_empty() {
-        if let Some(syntax) = treebank_oracle::get(lang).validate_syntax_only(&corpus_src, &noise_paths)? {
+        if let Some(syntax) =
+            treebank_oracle::get(lang).validate_syntax_only(&corpus_src, &noise_paths)?
+        {
             for p in &noise_paths {
                 if syntax.get(p).copied() == Some(true) {
                     hidden_gaps.push(p.clone());
@@ -769,8 +817,11 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
             String::new()
         },
     );
-    let mut config: Vec<&Cluster> =
-        report.clusters.iter().filter(|c| c.verdict == "config").collect();
+    let mut config: Vec<&Cluster> = report
+        .clusters
+        .iter()
+        .filter(|c| c.verdict == "config")
+        .collect();
     // Report order is by gap size; these have none, so order them by the
     // count this section actually prints.
     config.sort_by_key(|c| std::cmp::Reverse(c.config_paths.len()));
@@ -793,16 +844,23 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
              mean accepting unbalanced braces generally, which is how a parser \
              starts accepting broken code.\n\n\
              Clusters, largest first:\n\n",
-            report.config_files,
-            report.lang,
+            report.config_files, report.lang,
         );
         for c in &config {
-            let _ = write!(md, "- `{}` — {} file(s)\n", c.signature, c.config_paths.len());
+            let _ = write!(
+                md,
+                "- `{}` — {} file(s)\n",
+                c.signature,
+                c.config_paths.len()
+            );
         }
     };
 
-    let mut versions: Vec<&Cluster> =
-        report.clusters.iter().filter(|c| c.verdict == "version").collect();
+    let mut versions: Vec<&Cluster> = report
+        .clusters
+        .iter()
+        .filter(|c| c.verdict == "version")
+        .collect();
     versions.sort_by_key(|c| std::cmp::Reverse(c.version_paths.len()));
     let version_note = |md: &mut String| {
         if versions.is_empty() {
@@ -825,15 +883,23 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
              A declaration alone cannot suppress a failure on code that is \
              still valid today.\n\n\
              Clusters, largest first:\n\n",
-            report.version_files,
-            report.lang,
+            report.version_files, report.lang,
         );
         for c in &versions {
-            let _ = write!(md, "- `{}` — {} file(s)\n", c.signature, c.version_paths.len());
+            let _ = write!(
+                md,
+                "- `{}` — {} file(s)\n",
+                c.signature,
+                c.version_paths.len()
+            );
         }
     };
 
-    let gaps: Vec<&Cluster> = report.clusters.iter().filter(|c| c.verdict == "gap").collect();
+    let gaps: Vec<&Cluster> = report
+        .clusters
+        .iter()
+        .filter(|c| c.verdict == "gap")
+        .collect();
     if gaps.is_empty() {
         md.push_str("No grammar gaps — nothing to fix.\n");
         config_note(&mut md);
@@ -862,7 +928,12 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
                 )
             }
         );
-        for e in c.examples.iter().filter(|e| c.valid_paths.contains(&e.path)).take(3) {
+        for e in c
+            .examples
+            .iter()
+            .filter(|e| c.valid_paths.contains(&e.path))
+            .take(3)
+        {
             let _ = write!(md, "- `{}:{}`  `{}`\n", e.path, e.line, e.snippet);
         }
         md.push_str("\nFiles that must pass after the fix:\n");
@@ -911,7 +982,11 @@ fn negative_inner(grammar_dir: &Path, dir: &Path, quiet: bool) -> Result<()> {
     let mut total = 0;
     for entry in std::fs::read_dir(dir)? {
         let path = entry?.path();
-        if !path.is_file() || path.file_name().is_some_and(|n| n.to_string_lossy().starts_with('.')) {
+        if !path.is_file()
+            || path
+                .file_name()
+                .is_some_and(|n| n.to_string_lossy().starts_with('.'))
+        {
             continue;
         }
         total += 1;
@@ -926,7 +1001,11 @@ fn negative_inner(grammar_dir: &Path, dir: &Path, quiet: bool) -> Result<()> {
         for p in &wrongly_accepted {
             eprintln!("negative: ACCEPTED (should reject): {}", p.display());
         }
-        bail!("{} of {} negative files were accepted", wrongly_accepted.len(), total);
+        bail!(
+            "{} of {} negative files were accepted",
+            wrongly_accepted.len(),
+            total
+        );
     }
     if !quiet {
         println!("negative: all {total} files correctly rejected");

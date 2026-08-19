@@ -114,10 +114,16 @@ pub fn run_lines(
     let output = child.wait_with_output()?;
     // A closed pipe here just means the oracle exited early; the status
     // check below is the real error report.
-    let _ = writer.join().map_err(|_| anyhow::anyhow!("oracle stdin thread panicked"))?;
+    let _ = writer
+        .join()
+        .map_err(|_| anyhow::anyhow!("oracle stdin thread panicked"))?;
     // stderr is inherited rather than piped, so the oracle's own diagnostics
     // have already reached the terminal; only the status is news here.
-    anyhow::ensure!(output.status.success(), "{program} oracle exited with {}", output.status);
+    anyhow::ensure!(
+        output.status.success(),
+        "{program} oracle exited with {}",
+        output.status
+    );
 
     Ok(String::from_utf8_lossy(&output.stdout)
         .lines()
@@ -175,9 +181,12 @@ impl Persistent {
             .spawn()
             .with_context(|| hint.to_string())?;
         let stdin = child.stdin.take().context("oracle stdin")?;
-        let stdout =
-            std::io::BufReader::new(child.stdout.take().context("oracle stdout")?);
-        Ok(Persistent { child, stdin: Some(stdin), stdout })
+        let stdout = std::io::BufReader::new(child.stdout.take().context("oracle stdout")?);
+        Ok(Persistent {
+            child,
+            stdin: Some(stdin),
+            stdout,
+        })
     }
 
     pub fn ask(&mut self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
@@ -243,9 +252,13 @@ pub fn persistent(
     use std::sync::{Mutex, OnceLock};
     static POOL: OnceLock<Mutex<HashMap<&'static str, Persistent>>> = OnceLock::new();
     let pool = POOL.get_or_init(|| Mutex::new(HashMap::new()));
-    let mut pool = pool.lock().map_err(|_| anyhow::anyhow!("oracle pool poisoned"))?;
+    let mut pool = pool
+        .lock()
+        .map_err(|_| anyhow::anyhow!("oracle pool poisoned"))?;
     if !pool.contains_key(key) {
         pool.insert(key, Persistent::spawn(program, args, hint)?);
     }
-    pool.get_mut(key).expect("just inserted").ask(srcroot, paths)
+    pool.get_mut(key)
+        .expect("just inserted")
+        .ask(srcroot, paths)
 }

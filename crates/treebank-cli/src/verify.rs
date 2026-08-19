@@ -78,7 +78,11 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
     }
 
     if !failed.is_empty() {
-        bail!("{name}: {} gate(s) failed: {}", failed.len(), failed.join(", "));
+        bail!(
+            "{name}: {} gate(s) failed: {}",
+            failed.len(),
+            failed.join(", ")
+        );
     }
     println!("verify OK: {name}");
     Ok(())

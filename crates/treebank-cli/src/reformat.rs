@@ -42,8 +42,8 @@ use tree_sitter::{Node, Parser};
 
 use treebank_lang::LangName;
 
-use treebank_corpus::fetch::Manifest;
 use crate::grammar;
+use treebank_corpus::fetch::Manifest;
 
 /// Kinds and field names in pre-order. Positions are excluded on purpose.
 fn shape(root: Node) -> Vec<String> {
@@ -92,7 +92,11 @@ fn first_divergence(before: &[String], after: &[String]) -> String {
                 after.get(i).map(String::as_str).unwrap_or("<end>"),
             )
         }
-        None => format!("same prefix, different length: {} before, {} after", before.len(), after.len()),
+        None => format!(
+            "same prefix, different length: {} before, {} after",
+            before.len(),
+            after.len()
+        ),
     }
 }
 
@@ -164,8 +168,10 @@ pub fn run(
     let mut examples: Vec<Divergence> = Vec::new();
 
     for chunk in entries.chunks(200) {
-        let paths: Vec<String> =
-            chunk.iter().map(|f| format!("{}/{}", f.pkgdir, f.rel)).collect();
+        let paths: Vec<String> = chunk
+            .iter()
+            .map(|f| format!("{}/{}", f.pkgdir, f.rel))
+            .collect();
         let formatted = fmt.reformat(&corpus_src, &paths)?;
 
         let results: Vec<(bool, bool, bool, Option<String>, Option<Divergence>)> = chunk
@@ -187,10 +193,19 @@ pub fn run(
                 // Did the formatter change anything but layout? If so this
                 // file cannot answer the question being asked.
                 let squash = |b: &[u8]| -> Vec<u8> {
-                    b.iter().copied().filter(|c| !c.is_ascii_whitespace()).collect()
+                    b.iter()
+                        .copied()
+                        .filter(|c| !c.is_ascii_whitespace())
+                        .collect()
                 };
                 if squash(&before_src) != squash(after_src.as_bytes()) {
-                    return Ok((false, false, false, Some("formatter rewrote tokens, not only layout".into()), None));
+                    return Ok((
+                        false,
+                        false,
+                        false,
+                        Some("formatter rewrote tokens, not only layout".into()),
+                        None,
+                    ));
                 }
                 let idx = crate::routing::route(lang, &f.dialect, &f.rel);
                 let mut parser = Parser::new();
@@ -215,7 +230,10 @@ pub fn run(
                     false,
                     true,
                     None,
-                    Some(Divergence { path: rel.clone(), detail: first_divergence(&a, &b) }),
+                    Some(Divergence {
+                        path: rel.clone(),
+                        detail: first_divergence(&a, &b),
+                    }),
                 ))
             })
             .collect::<Result<_>>()?;
@@ -232,7 +250,9 @@ pub fn run(
             }
             if let Some(w) = why {
                 skipped += 1;
-                *skip_reasons.entry(w.chars().take(80).collect()).or_insert(0) += 1;
+                *skip_reasons
+                    .entry(w.chars().take(80).collect())
+                    .or_insert(0) += 1;
             }
             if let Some(e) = ex {
                 if examples.len() < 20 {
@@ -278,7 +298,10 @@ pub fn run(
     println!("reformat: report at {}", out_path.display());
 
     if report.diverged > 0 {
-        anyhow::bail!("{} file(s) parse differently after reformatting", report.diverged);
+        anyhow::bail!(
+            "{} file(s) parse differently after reformatting",
+            report.diverged
+        );
     }
     Ok(())
 }

@@ -35,5 +35,4 @@ impl Ecosystem for JavaScript {
             _ => None,
         }
     }
-
 }

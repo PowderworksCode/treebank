@@ -3,9 +3,9 @@ use std::path::Path;
 
 use anyhow::{bail, Result};
 
+use crate::rank::RankedCrate;
 use crate::{debian, github, Ecosystem};
 use treebank_lang::LangName;
-use crate::rank::RankedCrate;
 
 pub struct Bash;
 
@@ -74,10 +74,31 @@ const SHELL_SHEBANGS: [&str; 3] = ["sh", "bash", "dash"];
 /// that *emits a Jekyll post* containing `{% comment %}`, and that file is
 /// shell.
 const JINJA_KEYWORDS: [&str; 25] = [
-    "if", "elif", "else", "endif", "for", "endfor", "set", "endset", "from",
-    "import", "include", "extends", "macro", "endmacro", "call", "endcall",
-    "block", "endblock", "filter", "endfilter", "raw", "endraw", "with",
-    "endwith", "autoescape",
+    "if",
+    "elif",
+    "else",
+    "endif",
+    "for",
+    "endfor",
+    "set",
+    "endset",
+    "from",
+    "import",
+    "include",
+    "extends",
+    "macro",
+    "endmacro",
+    "call",
+    "endcall",
+    "block",
+    "endblock",
+    "filter",
+    "endfilter",
+    "raw",
+    "endraw",
+    "with",
+    "endwith",
+    "autoescape",
 ];
 
 /// Bash is the first language with no registry *and* a choice of artifact
@@ -232,8 +253,6 @@ impl Ecosystem for Bash {
     fn max_artifact_bytes(&self) -> Option<u64> {
         Some(250_000_000)
     }
-
-
 }
 
 /// Does this file carry a Jinja/Django **statement** tag — `{% if … %}`,
@@ -296,8 +315,14 @@ mod tests {
     fn shebang_names_the_interpreter() {
         assert_eq!(shebang_shell(b"#!/bin/bash\n").as_deref(), Some("bash"));
         assert_eq!(shebang_shell(b"#! /bin/sh\n").as_deref(), Some("sh"));
-        assert_eq!(shebang_shell(b"#!/usr/bin/env bash\n").as_deref(), Some("bash"));
-        assert_eq!(shebang_shell(b"#!/usr/bin/env -S bash -e\n").as_deref(), Some("bash"));
+        assert_eq!(
+            shebang_shell(b"#!/usr/bin/env bash\n").as_deref(),
+            Some("bash")
+        );
+        assert_eq!(
+            shebang_shell(b"#!/usr/bin/env -S bash -e\n").as_deref(),
+            Some("bash")
+        );
         assert_eq!(shebang_shell(b"#!/bin/zsh -f\n").as_deref(), Some("zsh"));
         assert_eq!(shebang_shell(b"#!/bin/bash\r\n").as_deref(), Some("bash"));
         assert_eq!(shebang_shell(b"echo hi\n"), None);
@@ -327,16 +352,28 @@ mod tests {
     fn templates_that_render_to_shell_are_not_shell() {
         let b = Bash;
         // The tags ComplianceAsCode actually ships, and the plain Jinja ones.
-        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n{{% if product == \"x\" %}}\n"));
+        assert!(!b.admit(
+            Path::new("t.sh"),
+            b"#!/bin/bash\n{{% if product == \"x\" %}}\n"
+        ));
         assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n{% for x in y %}\n"));
-        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n{%- from 'a.jinja' import G %}\n"));
-        assert!(!b.admit(Path::new("t.sh"), b"#!/bin/bash\n# {% if expanded is not defined %}\n"));
+        assert!(!b.admit(
+            Path::new("t.sh"),
+            b"#!/bin/bash\n{%- from 'a.jinja' import G %}\n"
+        ));
+        assert!(!b.admit(
+            Path::new("t.sh"),
+            b"#!/bin/bash\n# {% if expanded is not defined %}\n"
+        ));
         // Real shell that merely contains the characters. Every one of these
         // is a file from the Debian corpus.
         assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\nprintf '{%s%}' \"$x\"\n"));
         assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\nsed 's/{%%k1%}/x/'\n"));
         assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\necho '{% %%}'\n"));
-        assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\necho '{% comment %}' >> post.md\n"));
+        assert!(b.admit(
+            Path::new("t.sh"),
+            b"#!/bin/sh\necho '{% comment %}' >> post.md\n"
+        ));
         // A keyword must be a whole word.
         assert!(b.admit(Path::new("t.sh"), b"#!/bin/sh\necho '{%setopt%}'\n"));
     }

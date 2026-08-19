@@ -240,7 +240,11 @@ pub fn reduce(source: &str, symbols: &Symbols) -> Reduced {
                 });
                 // A decided conditional's own directives are removed with it;
                 // an undecided one keeps them so the file still reads the same.
-                out.push(if is_decided || !live_below(&stack) { "" } else { line });
+                out.push(if is_decided || !live_below(&stack) {
+                    ""
+                } else {
+                    line
+                });
             }
             "elif" => {
                 if let Some(frame) = stack.last_mut() {
@@ -269,11 +273,17 @@ pub fn reduce(source: &str, symbols: &Symbols) -> Reduced {
             }
             "endif" => {
                 let was_decided = stack.pop().map(|f| f.decided).unwrap_or(false);
-                out.push(if was_decided || !live(&stack) { "" } else { line });
+                out.push(if was_decided || !live(&stack) {
+                    ""
+                } else {
+                    line
+                });
             }
             "define" => {
                 if live(&stack) {
-                    let mut parts = rest.trim().splitn(2, |c: char| c.is_whitespace() || c == '(');
+                    let mut parts = rest
+                        .trim()
+                        .splitn(2, |c: char| c.is_whitespace() || c == '(');
                     if let Some(name) = parts.next().filter(|n| !n.is_empty()) {
                         let value = parts.next().and_then(|v| v.trim().parse::<i64>().ok());
                         local.insert(name.to_string(), value);
@@ -309,7 +319,9 @@ fn split_directive(line: &str) -> Option<(&str, &str)> {
     let t = line.trim_start();
     let t = t.strip_prefix('#')?;
     let t = t.trim_start();
-    let end = t.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(t.len());
+    let end = t
+        .find(|c: char| !c.is_alphanumeric() && c != '_')
+        .unwrap_or(t.len());
     let (word, rest) = t.split_at(end);
     if word.is_empty() {
         return None;
@@ -388,7 +400,12 @@ fn parse_and(t: &[String], pos: &mut usize, s: &Symbols, l: &HashMap<String, Opt
     value
 }
 
-fn parse_unary(t: &[String], pos: &mut usize, s: &Symbols, l: &HashMap<String, Option<i64>>) -> Tri {
+fn parse_unary(
+    t: &[String],
+    pos: &mut usize,
+    s: &Symbols,
+    l: &HashMap<String, Option<i64>>,
+) -> Tri {
     match t.get(*pos).map(String::as_str) {
         Some("!") => {
             *pos += 1;
@@ -410,7 +427,9 @@ fn parse_unary(t: &[String], pos: &mut usize, s: &Symbols, l: &HashMap<String, O
             if parenthesised {
                 *pos += 1;
             }
-            let Some(name) = t.get(*pos).cloned() else { return Tri::Unknown };
+            let Some(name) = t.get(*pos).cloned() else {
+                return Tri::Unknown;
+            };
             *pos += 1;
             if parenthesised {
                 if t.get(*pos).map(String::as_str) != Some(")") {
@@ -459,7 +478,11 @@ mod tests {
         assert!(!r.text.contains("extern"), "the C++ opener must be gone");
         assert!(!r.text.contains('{'), "the unbalanced brace must be gone");
         assert!(r.text.contains("int f(void);"));
-        assert_eq!(lines(&r.text).len(), lines(src).len(), "line count preserved");
+        assert_eq!(
+            lines(&r.text).len(),
+            lines(src).len(),
+            "line count preserved"
+        );
         assert_eq!(lines(&r.text)[3], "int f(void);", "and line positions too");
     }
 
@@ -484,7 +507,10 @@ mod tests {
         let src = "#ifdef HAVE_SOMETHING\nint a;\n#else\nint b;\n#endif\n";
         let r = reduce(src, &c());
         assert!(!r.changed());
-        assert_eq!(r.text, src, "an undecidable file must come back byte-for-byte");
+        assert_eq!(
+            r.text, src,
+            "an undecidable file must come back byte-for-byte"
+        );
         assert_eq!(r.undecided, 1);
     }
 
@@ -528,6 +554,9 @@ mod tests {
         let r = reduce(src, &Symbols::new());
         assert!(!r.text.contains("int a;"));
         assert!(r.text.contains("int b;"));
-        assert!(!r.text.contains("int c;"), "a later true branch is still dead");
+        assert!(
+            !r.text.contains("int c;"),
+            "a later true branch is still dead"
+        );
     }
 }

@@ -5,8 +5,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
-use crate::Ecosystem;
 use crate::rank::RankedCrate;
+use crate::Ecosystem;
 
 #[derive(Serialize, Deserialize)]
 pub struct ManifestFile {
@@ -69,11 +69,7 @@ pub fn pkg_dir(name: &str, version: &str) -> String {
 
 /// Reject empty paths and anything that is not a plain relative path.
 fn safe_path(rel: &Path) -> Option<PathBuf> {
-    if rel.as_os_str().is_empty()
-        || rel
-            .components()
-            .any(|c| !matches!(c, Component::Normal(_)))
-    {
+    if rel.as_os_str().is_empty() || rel.components().any(|c| !matches!(c, Component::Normal(_))) {
         return None;
     }
     Some(rel.to_path_buf())
@@ -108,7 +104,8 @@ fn download(url: &str, max_bytes: Option<u64>) -> Result<Vec<u8>> {
     // out.
     if let (Some(cap), Some(len)) = (
         max_bytes,
-        resp.header("Content-Length").and_then(|v| v.parse::<u64>().ok()),
+        resp.header("Content-Length")
+            .and_then(|v| v.parse::<u64>().ok()),
     ) {
         anyhow::ensure!(
             len <= cap,
@@ -141,7 +138,9 @@ fn record(
     rel: &Path,
     buf: &[u8],
 ) -> Result<Option<ManifestFile>> {
-    let Some(dialect) = lang.classify(rel) else { return Ok(None) };
+    let Some(dialect) = lang.classify(rel) else {
+        return Ok(None);
+    };
     if !lang.admit(rel, buf) {
         return Ok(None);
     }
@@ -258,8 +257,8 @@ fn extract(lang: &dyn Ecosystem, archive: &Path, pkgdir: &Path) -> Result<Vec<Ma
     // in-memory path.
     let mut magic = [0u8; 6];
     {
-        let mut f = std::fs::File::open(archive)
-            .with_context(|| format!("open {}", archive.display()))?;
+        let mut f =
+            std::fs::File::open(archive).with_context(|| format!("open {}", archive.display()))?;
         let _ = f.read(&mut magic)?;
     }
     let ctx = || format!("extract {}", archive.display());
@@ -272,8 +271,12 @@ fn extract(lang: &dyn Ecosystem, archive: &Path, pkgdir: &Path) -> Result<Vec<Ma
                 if !entry.is_file() {
                     continue;
                 }
-                let Some(rel) = entry.enclosed_name() else { continue };
-                let Some(rel) = strip_root(lang, &rel, true) else { continue };
+                let Some(rel) = entry.enclosed_name() else {
+                    continue;
+                };
+                let Some(rel) = strip_root(lang, &rel, true) else {
+                    continue;
+                };
                 let mut buf = Vec::new();
                 entry.read_to_end(&mut buf).with_context(ctx)?;
                 take(lang, buf, pkgdir, Path::new(""), &rel, true, &mut files).with_context(ctx)?;
@@ -306,7 +309,9 @@ fn extract(lang: &dyn Ecosystem, archive: &Path, pkgdir: &Path) -> Result<Vec<Ma
                     continue;
                 }
                 let entry_path = entry.path().with_context(ctx)?.to_path_buf();
-                let Some(rel) = strip_root(lang, &entry_path, false) else { continue };
+                let Some(rel) = strip_root(lang, &entry_path, false) else {
+                    continue;
+                };
                 let mut buf = Vec::new();
                 entry.read_to_end(&mut buf).with_context(ctx)?;
                 take(lang, buf, pkgdir, Path::new(""), &rel, true, &mut files).with_context(ctx)?;
@@ -338,7 +343,9 @@ fn walk(
                 if !entry.is_file() {
                     continue;
                 }
-                let Some(rel) = entry.enclosed_name() else { continue };
+                let Some(rel) = entry.enclosed_name() else {
+                    continue;
+                };
                 let Some(rel) = safe_path(&rel) else { continue };
                 let mut inner = Vec::new();
                 entry.read_to_end(&mut inner)?;
@@ -359,7 +366,9 @@ fn walk(
                 }
                 let entry_path = entry.path()?.to_path_buf();
                 // A nested archive keeps its own root.
-                let Some(rel) = safe_path(&entry_path) else { continue };
+                let Some(rel) = safe_path(&entry_path) else {
+                    continue;
+                };
                 let mut inner = Vec::new();
                 entry.read_to_end(&mut inner)?;
                 take(lang, inner, pkgdir, prefix, &rel, false, files)?;
@@ -396,7 +405,10 @@ fn take(
         // by garbage. Those must skip the member, not abort the package and
         // take the rest of the fetch down with it.
         if let Err(e) = walk(lang, buf, pkgdir, &nested_prefix, files) {
-            eprintln!("fetch: skipping unreadable nested archive {}: {e:#}", nested_prefix.display());
+            eprintln!(
+                "fetch: skipping unreadable nested archive {}: {e:#}",
+                nested_prefix.display()
+            );
         }
         return Ok(());
     }
@@ -429,11 +441,13 @@ pub fn run(lang: &dyn Ecosystem, list: &Path, limit: usize, corpus: &Path) -> Re
             .into_iter()
             .find(|e| tarball_url.ends_with(&format!(".{e}")))
             .unwrap_or("tar.gz");
-        let tarball = ["tar.gz", "tar.xz", "tar.bz2", "crate", "tgz", "jar", "src.rock", "zip", "nupkg"]
-            .iter()
-            .map(|e| cache.join(format!("{stem}.{e}")))
-            .find(|p| p.exists())
-            .unwrap_or_else(|| cache.join(format!("{stem}.{ext}")));
+        let tarball = [
+            "tar.gz", "tar.xz", "tar.bz2", "crate", "tgz", "jar", "src.rock", "zip", "nupkg",
+        ]
+        .iter()
+        .map(|e| cache.join(format!("{stem}.{e}")))
+        .find(|p| p.exists())
+        .unwrap_or_else(|| cache.join(format!("{stem}.{ext}")));
         if !tarball.exists() {
             match download(&tarball_url, lang.max_artifact_bytes()) {
                 Ok(buf) => {

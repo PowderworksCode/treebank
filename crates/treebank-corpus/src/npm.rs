@@ -23,7 +23,10 @@ pub fn rank(k: usize) -> Result<Vec<RankedCrate>> {
         .context("npm-high-impact has no tarball url")?;
     eprintln!("rank: npm-high-impact {latest}");
     let mut buf = Vec::new();
-    ureq::get(tarball_url).call()?.into_reader().read_to_end(&mut buf)?;
+    ureq::get(tarball_url)
+        .call()?
+        .into_reader()
+        .read_to_end(&mut buf)?;
 
     // The download-ranked list is `export const top = [...]` in lib/top.js.
     const MARKER: &str = "const top = [";
