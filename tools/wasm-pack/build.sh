@@ -160,7 +160,7 @@ PY
   -mexec-model=reactor \
   -I "$RUNTIME/lib/include" \
   -I "$RUNTIME/lib/src" \
-  -I "$CRATE/src" \
+  -I "$VARIANT/src" \
   -DTREEBANK_LANGUAGE_FN="tree_sitter_$GRAMMAR_NAME" \
   -Wl,--no-entry \
   -Wl,--export-dynamic \
