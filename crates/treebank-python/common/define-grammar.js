@@ -1,7 +1,28 @@
 /**
- * treebank-python: a from-scratch grammar for the union of Python 2.7 and
- * every Python 3, carrying the treebank vocabulary (DESIGN.md §3) in its
- * parse table.
+ * treebank-python: the shared source for every Python variant, carrying
+ * the treebank vocabulary (DESIGN.md §3) in its parse table.
+ *
+ * This file is the whole grammar. It is not generated on its own — a
+ * variant directory (`python3/`, `python2/`) calls it with a descriptor,
+ * and each call produces one parse table. Per VARIANTS.md §3 a variant may
+ * add members to a DECLARED extension point and may remove them; it may
+ * not rewrite the internals of a shared rule. The extension points are the
+ * `v.*` lists read below, and they are the complete list:
+ *
+ *   v.statements           extra `_simple_statement` members
+ *   v.primaryExpressions   extra `_primary_expression` members
+ *   v.comparisonOperators  extra comparison operators
+ *   v.plainParameters      extra plain-parameter forms (`def` and `lambda`)
+ *   v.exceptAliases        how `except E <alias>` may bind
+ *   v.raiseTails           what may follow `raise E`
+ *   v.softKeywords         words that are keywords in one construct only
+ *   v.integers             the integer token family (see lexicon.js)
+ *   v.ruleGroups           rule definitions this variant includes
+ *   v.conflicts            GLR conflicts only this variant needs
+ *
+ * Adding an extension point is a deliberate change to this file, reviewed
+ * as one. That is what stops the parameterization from turning into a
+ * second grammar language.
  *
  * Threaded table-tier roles (18): _statement _expression _declaration
  * _pattern _name _literal _parameter _argument _member _clause? no — see
@@ -13,6 +34,32 @@
 // @ts-check
 
 const tb = require('../../treebank-core/vocabulary/supertypes.js');
+const lexicon = require('./lexicon.js');
+
+/**
+ * A name position: a plain identifier, plus this variant's soft keywords —
+ * words that are keywords inside one construct and ordinary names
+ * everywhere else. A variant with none (python 2, where `print` and `exec`
+ * are hard keywords and `match`/`case`/`type` are just names) omits the
+ * `_soft_keyword` rule entirely rather than carrying an empty choice.
+ *
+ * @param {any} v
+ * @param {any} $
+ */
+function nameChoices(v, $) {
+  return v.softKeywords.length
+    ? [$.identifier, alias($._soft_keyword, $.identifier)]
+    : [$.identifier];
+}
+
+/**
+ * What may follow `raise E`. Two shapes rather than two keywords, so the
+ * variant selects by name instead of the grammar branching on a flag.
+ */
+const RAISE_TAILS = {
+  from: $ => seq('from', field('cause', $._expression)),
+  py2Comma: $ => seq(',', $._expression, optional(seq(',', $._expression))),
+};
 
 const PREC = {
   walrus: 1,
@@ -116,16 +163,8 @@ module.exports = (v) => grammar({
     [$.parameter],
     [$.star_parameter],
     [$.double_star_parameter],
-    // The py2 statement keywords double as py3 names: `print(x)` is a call,
-    // `print x` a statement; GLR keeps both, and the statements' negative
-    // dynamic precedence yields to the expression reading when both parse.
-    [$.print_statement, $._soft_keyword],
-    [$.exec_statement, $._soft_keyword],
     [$.match_statement, $._soft_keyword],
     [$.type_alias_statement, $._soft_keyword],
-    [$.exec_statement, $.comparison_expression],
-    [$.exec_statement, $.conditional_expression, $.comparison_expression],
-    [$.exec_statement, $.conditional_expression],
     // A conditional's consequence and a completed construct are
     // indistinguishable until the `if`/`else` arrives; GLR forks and the
     // reading without an `else` dies. Generate marks some of these
@@ -134,12 +173,12 @@ module.exports = (v) => grammar({
     [$.conditional_expression, $.expression_statement],
     [$.delete_statement, $.conditional_expression],
     [$.assert_statement, $.conditional_expression],
-    [$.print_statement, $.conditional_expression],
     [$._right_hand_side, $.conditional_expression],
     [$.assignment, $.conditional_expression],
     [$.conditional_expression, $._comma_expressions],
     [$.type_alias_statement, $.conditional_expression],
     [$._case_patterns, $.conditional_expression],
+    ...v.conflicts($),
   ],
 
   rules: {
@@ -179,8 +218,7 @@ module.exports = (v) => grammar({
       $.assert_statement,
       $.global_statement,
       $.nonlocal_statement,
-      $.print_statement,
-      $.exec_statement,
+      ...v.statements.map((name) => $[name]),
       $.type_alias_statement,
     ),
 
@@ -240,8 +278,7 @@ module.exports = (v) => grammar({
     // CPython calls `'BinOp' is an illegal expression`; `a, b += 1` and
     // `[a] += 1` are now rejected, which is what was reported.
     _augmented_target: $ => choice(
-      $.identifier,
-      alias($._soft_keyword, $.identifier),
+      ...nameChoices(v, $),
       $.member_expression,
       $.subscript_expression,
       // Parens recurse through the TARGET, not through expression:
@@ -263,8 +300,7 @@ module.exports = (v) => grammar({
 
     // ── patterns (destructuring positions) ───────────────────────────
     _pattern: $ => choice(
-      $.identifier,
-      alias($._soft_keyword, $.identifier),
+      ...nameChoices(v, $),
       $.member_expression,
       $.subscript_expression,
       $.star_pattern,
@@ -324,10 +360,7 @@ module.exports = (v) => grammar({
       'raise',
       optional(seq(
         $._expression,
-        optional(choice(
-          seq('from', field('cause', $._expression)),        // py3
-          seq(',', $._expression, optional(seq(',', $._expression))), // py2
-        )),
+        optional(choice(...v.raiseTails.map((name) => RAISE_TAILS[name]($)))),
       )),
     )),
 
@@ -342,8 +375,7 @@ module.exports = (v) => grammar({
     )),
 
     _del_target: $ => choice(
-      $.identifier,
-      alias($._soft_keyword, $.identifier),
+      ...nameChoices(v, $),
       $.member_expression,
       $.subscript_expression,
       $.tuple_pattern,
@@ -359,15 +391,9 @@ module.exports = (v) => grammar({
     global_statement: $ => seq('global', commaSep1($._name)),
     nonlocal_statement: $ => seq('nonlocal', commaSep1($._name)),
 
-    // Python 2. `print(x)` parses as a call (dynamic precedence below), so
-    // this fires only for the forms py3 cannot read.
-    print_statement: $ => prec.dynamic(-1, seq(
-      'print',
-      choice(
-        seq('>>', $._expression, optional(seq(',', choice($._expression, $._expression_list_tuple)))),
-        choice($._expression, $._expression_list_tuple),
-      ),
-    )),
+    // The variant's own rules land here, where the py2 statement forms
+    // used to be, so a variant grammar.json keeps a readable ordering.
+    ...v.ruleGroups,
 
     // PEP 695 `type X = int`; `type` stays a plain name everywhere else.
     type_alias_statement: $ => prec.dynamic(-1, seq(
@@ -376,15 +402,6 @@ module.exports = (v) => grammar({
       field('type_parameters', optional($.type_parameters)),
       '=',
       field('value', $._expression),
-    )),
-
-    // The code operand is primary-tier so `exec code in g` needs no
-    // reduce before the `in` — which would otherwise lose to the
-    // comparison reading statically.
-    exec_statement: $ => prec.dynamic(-1, seq(
-      'exec',
-      $._primary_expression,
-      optional(seq('in', $._expression, optional(seq(',', $._expression)))),
     )),
 
     // ── directives ───────────────────────────────────────────────────
@@ -452,7 +469,7 @@ module.exports = (v) => grammar({
 
     // `def f(...)`: annotations allowed.
     ...parameterRules('_params', {
-      plain: $ => choice($.parameter, $.tuple_parameter),  // tuple: py2 `def f((a, b)):`
+      plain: $ => choice($.parameter, ...v.plainParameters.map((name) => $[name])),
       withDefault: $ => alias($._parameter_with_default, $.parameter),
       star: $ => $.star_parameter,
       doubleStar: $ => $.double_star_parameter,
@@ -463,7 +480,7 @@ module.exports = (v) => grammar({
     ...parameterRules('_lambda_params', {
       plain: $ => choice(
         alias($._lambda_plain_parameter, $.parameter),
-        $.tuple_parameter,                               // py2 `lambda (a, b): ...`
+        ...v.plainParameters.map((name) => $[name]),
       ),
       withDefault: $ => alias($._lambda_parameter_with_default, $.parameter),
       star: $ => alias($._lambda_star_parameter, $.star_parameter),
@@ -509,7 +526,6 @@ module.exports = (v) => grammar({
     double_star_parameter: $ => seq('**', field('name', $._name), optional(seq(':', field('type', $._expression)))),
     keyword_separator: _ => '*',
     positional_separator: _ => '/',
-    tuple_parameter: $ => seq('(', commaSep1(choice($._name, $.tuple_parameter)), optional(','), ')'),
 
     class_definition: $ => seq(
       repeat($._attribute),
@@ -736,10 +752,7 @@ module.exports = (v) => grammar({
       optional('*'),                      // py3.11 except*
       optional(seq(
         $._expression,
-        optional(choice(
-          seq('as', field('alias', $._name)),   // both
-          seq(',', field('alias', $._name)),    // py2
-        )),
+        optional(choice(...v.exceptAliases.map((kw) => seq(kw, field('alias', $._name))))),
       )),
       ':',
       field('body', $._body),
@@ -847,14 +860,13 @@ module.exports = (v) => grammar({
       $.dictionary_comprehension,
       $.generator_expression,
       $.parenthesized_expression,
-      $.repr_expression,
+      ...v.primaryExpressions.map((name) => $[name]),
     ),
 
-    _name: $ => choice(
-      $.identifier,
-      alias($._soft_keyword, $.identifier),
-    ),
-    _soft_keyword: _ => choice('print', 'exec', 'match', 'case', 'type'),
+    _name: $ => choice(...nameChoices(v, $)),
+    ...(v.softKeywords.length
+      ? { _soft_keyword: /** @type {any} */ (_ => choice(...v.softKeywords)) }
+      : {}),
 
     conditional_expression: $ => prec.right(PREC.conditional, seq(
       field('consequence', $._or_test),
@@ -938,7 +950,8 @@ module.exports = (v) => grammar({
       $._primary_expression,
       repeat1(seq(
         field('operator', choice(
-          '<', '<=', '>', '>=', '==', '!=', '<>',   // <> is py2
+          '<', '<=', '>', '>=', '==', '!=',
+          ...v.comparisonOperators,
           'in', seq('not', 'in'), 'is', seq('is', 'not'),
         )),
         $._primary_expression,
@@ -1022,8 +1035,6 @@ module.exports = (v) => grammar({
       choice($._expression, $.yield_expression),
       ')',
     )),
-
-    repr_expression: $ => seq('`', choice($._expression, $._expression_list_tuple), '`'),  // py2
 
     // A bare comma-joined expression list is a tuple in all but name.
     _expression_list_tuple: $ => alias($._comma_expressions, $.tuple),
@@ -1170,12 +1181,7 @@ module.exports = (v) => grammar({
       $.ellipsis,
     ),
 
-    integer: _ => token(choice(
-      /0[xX][0-9a-fA-F](_?[0-9a-fA-F])*[lL]?/,
-      /0[oO][0-7](_?[0-7])*[lL]?/,
-      /0[bB][01](_?[01])*[lL]?/,
-      /[0-9](_?[0-9])*[lLjJ]?/,
-    )),
+    integer: _ => token(choice(...v.integers)),
 
     float: _ => token(choice(
       /[0-9](_?[0-9])*\.([0-9](_?[0-9])*)?([eE][+-]?[0-9](_?[0-9])*)?[jJ]?/,

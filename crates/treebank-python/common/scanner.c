@@ -67,9 +67,10 @@ static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 
 static bool scan_string_start(TSLexer *lexer, Scanner *s) {
   uint8_t flags = 0;
-  // Up to two prefix letters. Validated: r b u f br rb fr rf ur (py2),
-  // case-insensitive. Anything else is not a string prefix and we decline
-  // (the internal lexer will read an identifier instead).
+  // Up to two prefix letters, case-insensitive. Anything else is not a
+  // string prefix and we decline (the internal lexer will read an
+  // identifier instead). Which combinations are legal is per variant:
+  // py3 takes r b u f br rb fr rf, py2 takes r b u br rb ur and no f.
   int letters = 0;
   bool seen[4] = {false, false, false, false}; // r b u f
   while (letters < 2) {
@@ -85,7 +86,15 @@ static bool scan_string_start(TSLexer *lexer, Scanner *s) {
     letters++;
     advance(lexer);
   }
+#ifdef TREEBANK_PYTHON2
   if (seen[2] && (seen[1] || seen[3])) return false; // u mixes with nothing but r
+#else
+  // Python 3.3 restored the `u` prefix but NOT `ur`: in py3 a `u` stands
+  // alone. The union grammar had to take the py2 rule, so `ur"x"` lexed as
+  // a string in py3 code -- the one py2 form the parse table could not
+  // reject on its own, because a string prefix is decided down here.
+  if (seen[2] && (seen[0] || seen[1] || seen[3])) return false;
+#endif
   if (seen[1] && seen[3]) return false;              // no fb
   if (seen[0]) flags |= RAW;
   if (seen[1]) flags |= BYTES;

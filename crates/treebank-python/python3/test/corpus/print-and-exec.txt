@@ -1,0 +1,50 @@
+================================================================================
+`print` and `exec` are ordinary identifiers — a call is a call
+================================================================================
+
+print("hello", file=f)
+exec(code)
+
+--------------------------------------------------------------------------------
+
+(module
+  (expression_statement
+    (call_expression
+      function: (identifier)
+      arguments: (arguments
+        (string
+          (string_start)
+          (string_content)
+          (string_end))
+        (keyword_argument
+          name: (identifier)
+          value: (identifier)))))
+  (expression_statement
+    (call_expression
+      function: (identifier)
+      arguments: (arguments
+        (identifier)))))
+
+================================================================================
+`print >> f, x` is a tuple whose head is a right-shift. It used to be the
+case that decided the union's dynamic precedence against the py2 print
+statement; with the variants split it is simply what the text means in
+python 3, and the reading needs no weighting to win
+================================================================================
+
+print >> sys.stderr, "err"
+
+--------------------------------------------------------------------------------
+
+(module
+  (expression_statement
+    (tuple
+      (binary_expression
+        left: (identifier)
+        right: (member_expression
+          object: (identifier)
+          property: (identifier)))
+      (string
+        (string_start)
+        (string_content)
+        (string_end)))))

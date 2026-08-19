@@ -24,7 +24,6 @@
       "parameter",
       "star_parameter",
       "star_pattern",
-      "tuple_parameter",
       "type_alias_statement",
       "type_parameter",
       "with_item"
@@ -55,8 +54,7 @@
       "keyword_separator",
       "parameter",
       "positional_separator",
-      "star_parameter",
-      "tuple_parameter"
+      "star_parameter"
     ],
     "_scope": [
       "module",

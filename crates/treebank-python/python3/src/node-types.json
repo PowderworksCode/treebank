@@ -188,10 +188,6 @@
         "named": true
       },
       {
-        "type": "repr_expression",
-        "named": true
-      },
-      {
         "type": "set",
         "named": true
       },
@@ -386,10 +382,6 @@
         "named": true
       },
       {
-        "type": "exec_statement",
-        "named": true
-      },
-      {
         "type": "expression_statement",
         "named": true
       },
@@ -403,10 +395,6 @@
       },
       {
         "type": "pass_statement",
-        "named": true
-      },
-      {
-        "type": "print_statement",
         "named": true
       },
       {
@@ -766,10 +754,6 @@
           "named": true
         },
         {
-          "type": "repr_expression",
-          "named": true
-        },
-        {
           "type": "set",
           "named": true
         },
@@ -858,10 +842,6 @@
           },
           {
             "type": "parenthesized_expression",
-            "named": true
-          },
-          {
-            "type": "repr_expression",
             "named": true
           },
           {
@@ -1017,10 +997,6 @@
             "named": true
           },
           {
-            "type": "repr_expression",
-            "named": true
-          },
-          {
             "type": "set",
             "named": true
           },
@@ -1131,10 +1107,6 @@
           },
           {
             "type": "parenthesized_expression",
-            "named": true
-          },
-          {
-            "type": "repr_expression",
             "named": true
           },
           {
@@ -1416,10 +1388,6 @@
             "named": false
           },
           {
-            "type": "<>",
-            "named": false
-          },
-          {
             "type": "==",
             "named": false
           },
@@ -1500,10 +1468,6 @@
         },
         {
           "type": "parenthesized_expression",
-          "named": true
-        },
-        {
-          "type": "repr_expression",
           "named": true
         },
         {
@@ -1623,10 +1587,6 @@
             "named": true
           },
           {
-            "type": "repr_expression",
-            "named": true
-          },
-          {
             "type": "set",
             "named": true
           },
@@ -1710,10 +1670,6 @@
           },
           {
             "type": "parenthesized_expression",
-            "named": true
-          },
-          {
-            "type": "repr_expression",
             "named": true
           },
           {
@@ -2091,21 +2047,6 @@
     }
   },
   {
-    "type": "exec_statement",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "_expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "expression_statement",
     "named": true,
     "fields": {},
@@ -2224,10 +2165,6 @@
           },
           {
             "type": "parenthesized_expression",
-            "named": true
-          },
-          {
-            "type": "repr_expression",
             "named": true
           },
           {
@@ -2505,10 +2442,6 @@
         },
         {
           "type": "parenthesized_expression",
-          "named": true
-        },
-        {
-          "type": "repr_expression",
           "named": true
         },
         {
@@ -3005,10 +2938,6 @@
             "named": true
           },
           {
-            "type": "repr_expression",
-            "named": true
-          },
-          {
             "type": "set",
             "named": true
           },
@@ -3247,10 +3176,6 @@
         {
           "type": "star_parameter",
           "named": true
-        },
-        {
-          "type": "tuple_parameter",
-          "named": true
         }
       ]
     }
@@ -3327,21 +3252,6 @@
     "fields": {}
   },
   {
-    "type": "print_statement",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "_expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
     "type": "raise_statement",
     "named": true,
     "fields": {
@@ -3357,7 +3267,7 @@
       }
     },
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": false,
       "types": [
         {
@@ -3377,21 +3287,6 @@
       "types": [
         {
           "type": "dotted_name",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "repr_expression",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": false,
-      "required": true,
-      "types": [
-        {
-          "type": "_expression",
           "named": true
         }
       ]
@@ -3655,10 +3550,6 @@
             "named": true
           },
           {
-            "type": "repr_expression",
-            "named": true
-          },
-          {
             "type": "set",
             "named": true
           },
@@ -3752,25 +3643,6 @@
         },
         {
           "type": "yield_expression",
-          "named": true
-        }
-      ]
-    }
-  },
-  {
-    "type": "tuple_parameter",
-    "named": true,
-    "fields": {},
-    "children": {
-      "multiple": true,
-      "required": true,
-      "types": [
-        {
-          "type": "_name",
-          "named": true
-        },
-        {
-          "type": "tuple_parameter",
           "named": true
         }
       ]
@@ -3988,10 +3860,6 @@
           },
           {
             "type": "parenthesized_expression",
-            "named": true
-          },
-          {
-            "type": "repr_expression",
             "named": true
           },
           {
@@ -4265,10 +4133,6 @@
     "named": false
   },
   {
-    "type": "<>",
-    "named": false
-  },
-  {
     "type": "=",
     "named": false
   },
@@ -4314,10 +4178,6 @@
   },
   {
     "type": "^=",
-    "named": false
-  },
-  {
-    "type": "`",
     "named": false
   },
   {
@@ -4387,10 +4247,6 @@
   },
   {
     "type": "except",
-    "named": false
-  },
-  {
-    "type": "exec",
     "named": false
   },
   {
@@ -4464,10 +4320,6 @@
   {
     "type": "pass_statement",
     "named": true
-  },
-  {
-    "type": "print",
-    "named": false
   },
   {
     "type": "raise",
