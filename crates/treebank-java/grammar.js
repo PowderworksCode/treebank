@@ -77,14 +77,12 @@ module.exports = grammar({
     // `case A -> …`: at `A` the parser cannot tell a case constant from a
     // lambda's parameter, and only the `->` settles it — by which time the
     // reduce toward the label is gone unless both readings stay alive.
-    [$.case_label, $.lambda],
-    [$.switch_rule, $.lambda],
     [$.modifiers, $.annotation],
     [$.yield_statement, $._soft_keyword],
     [$.annotation_type_element, $.field_declaration, $._type],
     [$.field_declaration, $._type],
     [$.modifiers, $.annotated_type],
-    [$._case_constant, $.null_literal],
+    [$.lambda, $._name],
     [$.annotation_type_element, $.parameters],
     [$.switch_label_group],
     [$.switch_statement, $.switch_expression],
@@ -507,44 +505,41 @@ module.exports = grammar({
       field('body', $.switch_block),
     ),
 
-    switch_block: $ => seq('{', repeat(choice($.switch_rule, $.switch_label_group)), '}'),
+    // A switch is all-arrow or all-colon; java forbids mixing them, and
+    // writing it as one choice keeps the two forms out of each other's
+    // parser states.
+    switch_block: $ => seq('{', choice(repeat($.switch_rule), repeat($.switch_label_group)), '}'),
 
     // Java 14 arrow form: `case A -> expr;`
-    // The label is written out here rather than shared with the colon form.
-    // Sharing it puts a reduction between `case A` and the `->` that
-    // settles what `A` was, and that reduction is where the reading loses
-    // to a lambda -- the same shape as python's starred expressions and
-    // typescript's for-await head.
-    switch_rule: $ => prec.dynamic(1, seq(
-      choice(
-        seq('case', $._case_constant, repeat(seq(',', $._case_constant)), '->'),
-        seq('case', $._pattern, optional($.guard), '->'),
-        seq('default', '->'),
-      ),
+    switch_rule: $ => seq(
+      $._switch_label,
+      '->',
       choice(field('body', $.block), $.throw_statement, seq($._expression, ';')),
-    )),
+    ),
 
     // The colon form, whose statements belong to the label until the next.
     switch_label_group: $ => seq(repeat1(seq($._switch_label, ':')), repeat($._statement)),
 
     _switch_label: $ => choice($.case_label, $.default_label),
 
-    case_label: $ => prec.dynamic(3, seq(
+    // The label admits a FULL expression, lambda included, which reads
+    // backwards: `case A -> 1` is exactly the lambda we do not want. It is
+    // the fix rather than the bug. Excluding lambda -- five attempts, via
+    // a `_no_lambda` tier, static precedence, dynamic precedence and
+    // conflicts declared at four different levels -- never worked, because
+    // with no ambiguity DECLARED the parser commits to the lambda shift
+    // and the constant reading is never explored. Admitting it and
+    // declaring `[$.lambda, $._primary]` makes GLR carry both; the lambda
+    // branch then needs a second `->` that is not there and dies, and the
+    // label reading is what survives. This is upstream's resolution too,
+    // whose grammar.js marks the conflict "only conflicts in switch
+    // expressions".
+    case_label: $ => seq(
       'case',
-      choice(
-        seq($._case_constant, repeat(seq(',', $._case_constant))),
-        seq($._pattern, optional($.guard)),
-      ),
-    )),
+      choice(seq($._expression, repeat(seq(',', $._expression))), $._pattern),
+      optional($.guard),
+    ),
 
-    // Everything an expression may be EXCEPT a lambda. `case PROXY -> g()`
-    // is otherwise a lambda from `PROXY` to `g()`, and the arrow the switch
-    // rule needed has already been eaten — 539 corpus files came out as a
-    // colon-form label group missing its colon. A java case constant is a
-    // ConstantExpression, which has no lambda in it at any version, so this
-    // narrows the grammar to the language rather than papering over the
-    // ambiguity with precedence.
-    _case_constant: $ => choice($._name, $._literal, $.field_access, $.unary_expression, $.binary_expression, $.parenthesized_expression, $.cast_expression),
     guard: $ => seq('when', $._expression),
     default_label: _ => 'default',
 
@@ -749,11 +744,11 @@ module.exports = grammar({
       field('body', $.switch_block),
     ),
 
-    lambda: $ => prec(PREC.lambda, seq(
+    lambda: $ => seq(
       field('parameters', choice($.identifier, $.parameters, $.inferred_parameters)),
       '->',
       field('body', choice($._expression, $.block)),
-    )),
+    ),
 
     inferred_parameters: $ => seq(
       '(',
