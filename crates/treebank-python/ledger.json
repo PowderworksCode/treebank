@@ -136,6 +136,36 @@
       "found_by": "mutate (replace `=` with `.`)",
       "why_accepted": "at the property position only `identifier` is valid, so tree-sitter's keyword extraction does not apply and `None` lexes as an ordinary identifier.",
       "why_not_fixed": "excluding three specific words from a token needs negative lookahead, which tree-sitter's regex engine does not have. The alternatives are an external-scanner identifier token or a per-position exclusion list, both disproportionate. `a.True` is also valid python2, so \u00a74.2 applies to it as well."
+    },
+    {
+      "construct": "starred expression where only a plain expression belongs \u2014 `assert * XX`, `if * XX : XX`, `while * XX : XX`, `* XX if XX else XX`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)",
+      "why_accepted": "`*x` is reachable from the general expression position rather than only from the contexts that unpack (call arguments, assignment targets, sequence displays).",
+      "why_not_fixed": "queued. Largest python family; wants the starred form confined to the positions that take it."
+    },
+    {
+      "construct": "conditional expression where a target belongs \u2014 `del XX if XX else XX`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)",
+      "why_accepted": "the `del` target list admits a full expression. CPython: `cannot delete conditional expression`.",
+      "why_not_fixed": "queued."
+    },
+    {
+      "construct": "augmented assignment to a tuple \u2014 `XX , += XX`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)",
+      "why_accepted": "the augmented-assignment target admits an expression list. CPython: `'tuple' is an illegal expression for augmented assignment`.",
+      "why_not_fixed": "queued."
+    },
+    {
+      "construct": "`return yield`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)",
+      "why_accepted": "a bare `yield` is reachable as the returned expression.",
+      "why_not_fixed": "queued."
+    },
+    {
+      "construct": "walrus with a conditional right-hand side at statement level \u2014 `XX := XX if XX else XX`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)",
+      "why_accepted": "named_expression's value is the full expression tier rather than the tier below the conditional.",
+      "why_not_fixed": "queued."
     }
   ],
   "mutation_check": "`treebank mutate` \u2014 4,508 mutants over 594 corpus files, 102 widenings in 83 clusters. The sweep measures rejects-valid over 139,205 files; this measures the other direction, which test/negative/ had been measuring with eighteen hand-written ones.",
@@ -143,5 +173,6 @@
   "lexical_check": "`treebank shape` also compares TOKEN boundaries against CPython's `tokenize`, the only oracle we have below the tree. Zero disagreements once three f-string granularity differences are declared in shape_policy.json. Two bugs were found building it, both in the checker: `tokenize` reports CHARACTER columns where `ast` reports UTF-8 BYTE columns, and `splitlines()` breaks on \\r\\n, \\x0c and \\u2028 where the line table counts \\n. One bug was found in the grammar: `comment` was `token(seq('#', /.*/))`, and tree-sitter's `.` excludes \\n but MATCHES \\r, so every comment in a CRLF file ended one byte late.",
   "roundtrip_check": "`treebank roundtrip` \u2014 139,205 files re-rendered through `ast.unparse` and reparsed: 137,968 rendered (1,237 declined by the printer, mostly python2-only sources), 3 failures. All three are the same ruff fixture vendored three times, and what it exposed is not a round-trip problem at all: `case y if a if True else b:` is a real gap, and the sweep had filed it as NOISE because the validity oracle uses `compile()`, which ALSO rejects the file for `'yield' outside function` -- a semantic check, not a syntactic one. `ast.parse` accepts the file. The oracle is stricter than a parser and has been understating gaps; correcting that is its own change.",
   "oracle_blind_spot": "check.py judges with `compile()` deliberately -- its header sets out why, and states the cost: a file invalid for a POST-PARSE reason and holding a real grammar gap is recorded as noise rather than a gap. The sweep now measures that cost instead of assuming it small, by asking `ast.parse` about every noise file: the ones it accepts are syntactically valid, so our rejection of them is a gap the oracle cannot see. Measured at THREE files, one distinct construct -- a conditional expression as a match guard -- which is now fixed. The count is zero and is reported on every sweep, so it cannot grow unnoticed.",
-  "argument_ordering_analysis": "Enforcing `f(a=1, b)` as an error needs the argument list split into a positional group and a keyword group with DIFFERENT element sets -- that is what makes a positional after a keyword unreachable, and no precedence or dynamic precedence substitutes for it, because both readings are complete parses. Two element sets means two hidden rules. `_argument` is a TABLE-tier supertype and DESIGN.md \u00a72 fact 4 records that supertype queries are derivation-based, so a rule can carry the role only where the parse flowed through it: whichever group is not `_argument` stops answering `(_argument)`. Verified by building it -- the grammar rejected `f(a=1, b)` correctly and the roles gate then failed on `keyword_argument` and `splat_argument`. The facet tier does not help either: facets are type-level, and a positional argument is a bare expression with no distinguishing node type, so no list of types can name it. The only shape that works is to give positional arguments a node of their own -- an `argument` wrapper -- and move `_argument` from the table tier to the facet tier over {argument, keyword_argument, splat_argument}, which are types that occur nowhere else. That is coherent and it is a cross-language vocabulary change: TypeScript and Rust have no keyword arguments and so need none of the ordering, but they would carry the wrapper and the tier move anyway. Recorded rather than taken."
+  "argument_ordering_analysis": "Enforcing `f(a=1, b)` as an error needs the argument list split into a positional group and a keyword group with DIFFERENT element sets -- that is what makes a positional after a keyword unreachable, and no precedence or dynamic precedence substitutes for it, because both readings are complete parses. Two element sets means two hidden rules. `_argument` is a TABLE-tier supertype and DESIGN.md \u00a72 fact 4 records that supertype queries are derivation-based, so a rule can carry the role only where the parse flowed through it: whichever group is not `_argument` stops answering `(_argument)`. Verified by building it -- the grammar rejected `f(a=1, b)` correctly and the roles gate then failed on `keyword_argument` and `splat_argument`. The facet tier does not help either: facets are type-level, and a positional argument is a bare expression with no distinguishing node type, so no list of types can name it. The only shape that works is to give positional arguments a node of their own -- an `argument` wrapper -- and move `_argument` from the table tier to the facet tier over {argument, keyword_argument, splat_argument}, which are types that occur nowhere else. That is coherent and it is a cross-language vocabulary change: TypeScript and Rust have no keyword arguments and so need none of the ordering, but they would carry the wrapper and the tier move anyway. Recorded rather than taken.",
+  "fuzz_check": "`treebank fuzz` \u2014 programs derived from grammar.json and judged by CPython's PARSER (`ast.parse`, via validate_syntax_only) rather than by `compile()`. That distinction is the whole result: judged by `compile()` the run was dominated by `break`, `yield` and `* x` at module level, which CPython's parser accepts and its compiler rejects \u2014 no tree-sitter grammar should track loop nesting to reproduce those. Judged by the parser, 400 derivations gave 21 distinct shrunk programs, 4 of them the declared py2 union (fuzz_policy.json) and the rest the five causes in known_widenings. All were confirmed against ast.parse."
 }
