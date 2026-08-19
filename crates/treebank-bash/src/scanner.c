@@ -25,6 +25,8 @@ enum TokenType {
   CONCAT,
   ASSIGNMENT_NAME,
   FILE_DESCRIPTOR,
+  BACKTICK_OPEN,
+  BACKTICK_CLOSE,
   ERROR_SENTINEL,
 };
 
@@ -35,6 +37,7 @@ typedef struct {
   unsigned length;
   bool allows_indent;   // `<<-` strips leading tabs from the terminator
   bool started;         // the body has been consumed; the end is next
+  bool in_backtick;     // between the opening backtick and its close
 } Scanner;
 
 void *tree_sitter_bash_external_scanner_create(void) {
@@ -50,6 +53,7 @@ unsigned tree_sitter_bash_external_scanner_serialize(void *payload, char *buffer
   buffer[n++] = (char)s->length;
   buffer[n++] = (char)s->allows_indent;
   buffer[n++] = (char)s->started;
+  buffer[n++] = (char)s->in_backtick;
   memcpy(buffer + n, s->delimiter, s->length);
   n += s->length;
   return n;
@@ -64,6 +68,7 @@ void tree_sitter_bash_external_scanner_deserialize(void *payload, const char *bu
   s->length = (unsigned char)buffer[n++];
   s->allows_indent = buffer[n++];
   s->started = buffer[n++];
+  s->in_backtick = buffer[n++];
   if (s->length > MAX_DELIM) s->length = MAX_DELIM;
   memcpy(s->delimiter, buffer + n, s->length);
 }
@@ -219,7 +224,11 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
     // lookahead is the continuation itself.
     bool joins = c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != 0 &&
                  c != ';' && c != '&' && c != '|' && c != ')' && c != '(' &&
-                 c != '<' && c != '>' && c != '}';
+                 c != '<' && c != '>' && c != '}' &&
+                 // A backtick joins a concatenation OUTSIDE a substitution
+                 // (`a\`date\`b` is one word) and CLOSES one inside --
+                 // the parity bit is the difference.
+                 (c != '`' || !s->in_backtick);
     if (joins) {
       lexer->result_symbol = CONCAT;
       lexer->mark_end(lexer);
@@ -236,6 +245,33 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   // gone -- the same shape as ASSIGNMENT_NAME below, resolved the same
   // way: look past the digits, emit only when the operator is really
   // there.
+  // Backticks close on the FIRST unescaped backtick -- bash's own rule,
+  // and the reason the old-style substitution cannot nest. A parity bit is
+  // all it takes, and it is lexer state, which is exactly what the grammar
+  // cannot express: at the closing backtick the parser would otherwise
+  // happily open a nested substitution and run to EOF.
+  if ((valid[BACKTICK_OPEN] || valid[BACKTICK_CLOSE])) {
+    int32_t c = lexer->lookahead;
+    while (c == ' ' || c == '\t') { skip(lexer); c = lexer->lookahead; }
+    if (c == '`') {
+      if (!s->in_backtick && valid[BACKTICK_OPEN]) {
+        advance(lexer);
+        lexer->mark_end(lexer);
+        s->in_backtick = true;
+        lexer->result_symbol = BACKTICK_OPEN;
+        return true;
+      }
+      if (s->in_backtick && valid[BACKTICK_CLOSE]) {
+        advance(lexer);
+        lexer->mark_end(lexer);
+        s->in_backtick = false;
+        lexer->result_symbol = BACKTICK_CLOSE;
+        return true;
+      }
+      return false;
+    }
+  }
+
   if (valid[FILE_DESCRIPTOR] && !valid[HEREDOC_BODY]) {
     while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
     if (lexer->lookahead >= '0' && lexer->lookahead <= '9') {

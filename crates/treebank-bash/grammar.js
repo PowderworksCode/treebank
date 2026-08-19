@@ -39,6 +39,8 @@ module.exports = grammar({
     $._concat,
     $._assignment_name,
     $._file_descriptor,
+    $._backtick_open,
+    $._backtick_close,
     $._error_sentinel,
   ],
 
@@ -499,9 +501,18 @@ module.exports = grammar({
       ':', '-', '=', '?', '+', '#', '%', '/', '^', ',', '@', '*',
     )),
 
+    // The backtick form's delimiters are EXTERNAL: the first unescaped
+    // backtick closes (so the form cannot nest), which is a statement
+    // about lexer state -- see the scanner's parity bit. As grammar-level
+    // tokens, the closing backtick was indistinguishable from an opener
+    // and started a phantom nested substitution that ran to EOF.
     command_substitution: $ => choice(
       seq('$(', $._statements, ')'),
-      seq('`', $._statements, '`'),
+      seq(
+        alias($._backtick_open, '`'),
+        $._statements,
+        alias($._backtick_close, '`'),
+      ),
     ),
 
     arithmetic_expansion: $ => seq('$((', optional($._arithmetic), '))'),

@@ -2532,7 +2532,12 @@
           "type": "SEQ",
           "members": [
             {
-              "type": "STRING",
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_backtick_open"
+              },
+              "named": false,
               "value": "`"
             },
             {
@@ -2540,7 +2545,12 @@
               "name": "_statements"
             },
             {
-              "type": "STRING",
+              "type": "ALIAS",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_backtick_close"
+              },
+              "named": false,
               "value": "`"
             }
           ]
@@ -2693,6 +2703,14 @@
     {
       "type": "SYMBOL",
       "name": "_file_descriptor"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_backtick_open"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_backtick_close"
     },
     {
       "type": "SYMBOL",
