@@ -91,8 +91,12 @@
       "reason": "container node; its elements carry the role (_argument)"
     },
     {
-      "node": "parameters",
-      "reason": "container node; its elements carry the role (_parameter)"
+      "node": "attribute",
+      "reason": "the path-and-arguments interior of an attribute; the attribute_item carries _attribute"
+    },
+    {
+      "node": "base_field_initializer",
+      "reason": "the ..base spread inside a struct expression"
     },
     {
       "node": "closure_parameters",
@@ -103,44 +107,28 @@
       "reason": "container node; its elements carry the role (_member)"
     },
     {
-      "node": "field_declaration_list",
-      "reason": "container node; its elements carry the role (field_declaration, a _binding facet member)"
-    },
-    {
-      "node": "ordered_field_declaration_list",
-      "reason": "container node; its elements carry the role (tuple-struct fields)"
-    },
-    {
       "node": "enum_variant_list",
       "reason": "container node; its elements carry the role (enum_variant, a _binding facet member)"
     },
     {
-      "node": "field_initializer_list",
-      "reason": "container node; its elements carry the role (field initializers)"
-    },
-    {
-      "node": "match_block",
-      "reason": "container node; its elements carry the role (match_arm, a _scope facet member)"
+      "node": "field_declaration_list",
+      "reason": "container node; its elements carry the role (field_declaration, a _binding facet member)"
     },
     {
       "node": "field_initializer",
       "reason": "key: value inside a struct expression; the value carries _expression"
     },
     {
-      "node": "shorthand_field_initializer",
-      "reason": "field-name shorthand inside a struct expression"
+      "node": "field_initializer_list",
+      "reason": "container node; its elements carry the role (field initializers)"
     },
     {
-      "node": "base_field_initializer",
-      "reason": "the ..base spread inside a struct expression"
+      "node": "higher_ranked_bound",
+      "reason": "generics machinery below the role layer (for<'a> bound)"
     },
     {
-      "node": "attribute",
-      "reason": "the path-and-arguments interior of an attribute; the attribute_item carries _attribute"
-    },
-    {
-      "node": "or_pattern",
-      "reason": "top-of-pattern alternation; deliberately NOT under _pattern because rust only allows `|` at the top level of a pattern position, and threading it through _pattern would accept nested bare alternations everywhere"
+      "node": "higher_ranked_prefix",
+      "reason": "generics machinery below the role layer (for<'a> prefix of fn types)"
     },
     {
       "node": "let_chain",
@@ -151,11 +139,39 @@
       "reason": "the 'label: prefix of a loop; names a loop, not a value"
     },
     {
-      "node": "trait_bounds",
-      "reason": "generics machinery below the role layer"
+      "node": "match_block",
+      "reason": "container node; its elements carry the role (match_arm, a _scope facet member)"
     },
     {
-      "node": "type_parameters",
+      "node": "or_pattern",
+      "reason": "top-of-pattern alternation; deliberately NOT under _pattern because rust only allows `|` at the top level of a pattern position, and threading it through _pattern would accept nested bare alternations everywhere"
+    },
+    {
+      "node": "ordered_field_declaration_list",
+      "reason": "container node; its elements carry the role (tuple-struct fields)"
+    },
+    {
+      "node": "parameters",
+      "reason": "container node; its elements carry the role (_parameter)"
+    },
+    {
+      "node": "scoped_use_list",
+      "reason": "prefix::{...} inside a use tree"
+    },
+    {
+      "node": "shebang",
+      "reason": "the #! line; a directive to the OS, not the language \u2014 same call as typescript's hash_bang_line"
+    },
+    {
+      "node": "shorthand_field_initializer",
+      "reason": "field-name shorthand inside a struct expression"
+    },
+    {
+      "node": "token_tree",
+      "reason": "macro content is token soup by design; no roles inside"
+    },
+    {
+      "node": "trait_bounds",
       "reason": "generics machinery below the role layer"
     },
     {
@@ -167,36 +183,24 @@
       "reason": "generics machinery below the role layer (Item = T inside type arguments)"
     },
     {
-      "node": "use_bound",
-      "reason": "generics machinery below the role layer (use<'a> precise capture)"
-    },
-    {
-      "node": "where_predicate",
+      "node": "type_parameters",
       "reason": "generics machinery below the role layer"
     },
     {
-      "node": "higher_ranked_bound",
-      "reason": "generics machinery below the role layer (for<'a> bound)"
-    },
-    {
-      "node": "higher_ranked_prefix",
-      "reason": "generics machinery below the role layer (for<'a> prefix of fn types)"
+      "node": "use_bound",
+      "reason": "generics machinery below the role layer (use<'a> precise capture)"
     },
     {
       "node": "use_list",
       "reason": "grouping inside a use tree; the use_declaration carries _directive"
     },
     {
-      "node": "scoped_use_list",
-      "reason": "prefix::{...} inside a use tree"
-    },
-    {
       "node": "use_wildcard",
       "reason": "the * leaf of a use tree"
     },
     {
-      "node": "token_tree",
-      "reason": "macro content is token soup by design; no roles inside"
+      "node": "where_predicate",
+      "reason": "generics machinery below the role layer"
     }
   ]
 }

@@ -447,21 +447,37 @@ module.exports = grammar({
       ';',
     ),
 
-    for_in_statement: $ => seq(
-      'for',
-      optional('await'),
-      '(',
-      choice(
-        seq(
-          field('kind', choice('var', 'let', 'const')),
-          field('left', $._pattern),
+    // `for await` iterates an async iterable and therefore only takes
+    // `of`; `for await (x in y)` is `'for await' loops cannot be used with
+    // 'in'`. The two forms are separate alternatives, with the shared
+    // middle factored out.
+    // The head is spelled out in both alternatives rather than factored
+    // into a rule. Factoring it makes a unit reduction, and the parser then
+    // has to commit before it has seen `in` or `of` -- which it cannot do,
+    // because `for (x` is still an ordinary `for_statement` at that point.
+    for_in_statement: $ => choice(
+      seq(
+        'for', '(',
+        choice(
+          seq(field('kind', choice('var', 'let', 'const')), field('left', $._pattern)),
+          field('left', choice($._name, $.member_expression, $.subscript_expression, $.object_pattern, $.array_pattern, $.parenthesized_expression)),
         ),
-        field('left', choice($._name, $.member_expression, $.subscript_expression, $.object_pattern, $.array_pattern, $.parenthesized_expression)),
+        field('operator', choice('in', 'of')),
+        field('right', $._expressions),
+        ')',
+        field('body', $._statement),
       ),
-      field('operator', choice('in', 'of')),
-      field('right', $._expressions),
-      ')',
-      field('body', $._statement),
+      seq(
+        'for', 'await', '(',
+        choice(
+          seq(field('kind', choice('var', 'let', 'const')), field('left', $._pattern)),
+          field('left', choice($._name, $.member_expression, $.subscript_expression, $.object_pattern, $.array_pattern, $.parenthesized_expression)),
+        ),
+        field('operator', 'of'),
+        field('right', $._expressions),
+        ')',
+        field('body', $._statement),
+      ),
     ),
 
     while_statement: $ => seq(
@@ -490,11 +506,15 @@ module.exports = grammar({
     continue_statement: $ => seq('continue', optional(field('label', $._name)), $._semicolon),
     throw_statement: $ => seq('throw', $._expressions, $._semicolon),
 
+    // A `try` needs a `catch` or a `finally`; `try {}` alone is
+    // `Try statement must have a catch or finally clause`.
     try_statement: $ => seq(
       'try',
       field('body', $.block),
-      optional($.catch_clause),
-      optional($.finally_clause),
+      choice(
+        seq($.catch_clause, optional($.finally_clause)),
+        $.finally_clause,
+      ),
     ),
 
     // `prec.dynamic(2)`, above `function_definition`'s 1. Its method form

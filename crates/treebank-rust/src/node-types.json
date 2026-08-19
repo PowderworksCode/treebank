@@ -2377,6 +2377,10 @@
           "named": true
         },
         {
+          "type": "visibility_modifier",
+          "named": true
+        },
+        {
           "type": "where_clause",
           "named": true
         }
@@ -3991,6 +3995,10 @@
         {
           "type": "inner_attribute_item",
           "named": true
+        },
+        {
+          "type": "shebang",
+          "named": true
         }
       ]
     }
@@ -4561,6 +4569,11 @@
         }
       ]
     }
+  },
+  {
+    "type": "type_identifier",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "type_parameter",
@@ -5490,6 +5503,10 @@
     "named": false
   },
   {
+    "type": "shebang",
+    "named": true
+  },
+  {
     "type": "static",
     "named": false
   },
@@ -5516,10 +5533,6 @@
   {
     "type": "type",
     "named": false
-  },
-  {
-    "type": "type_identifier",
-    "named": true
   },
   {
     "type": "union",
