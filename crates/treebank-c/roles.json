@@ -74,76 +74,16 @@
       "reason": "the same, for the `*`"
     },
     {
-      "node": "pointer_declarator",
-      "reason": "the concrete declarator spine: what a name is wrapped in to say it is a pointer. The name inside it is the `_name`; the wrapper declares nothing on its own"
+      "node": "argument_list",
+      "reason": "the parenthesised argument list of a call; its elements are `_argument`"
     },
     {
       "node": "array_declarator",
       "reason": "the same, for `[n]`"
     },
     {
-      "node": "parenthesized_declarator",
-      "reason": "the same, for the parentheses that decide whether `*` or `[]` binds first"
-    },
-    {
-      "node": "attributed_declarator",
-      "reason": "a declarator carrying a GNU attribute; the attribute is the `_attribute` and the declarator is inside it"
-    },
-    {
-      "node": "argument_list",
-      "reason": "the parenthesised argument list of a call; its elements are `_argument`"
-    },
-    {
-      "node": "parameter_list",
-      "reason": "the parenthesised parameter list of a declarator; its elements are `_parameter`"
-    },
-    {
-      "node": "identifier_list",
-      "reason": "the K&R parameter-name list, `f(a, b)` before the declarations that type them \u2014 names in a list, not parameters yet"
-    },
-    {
-      "node": "preproc_params",
-      "reason": "a function-like macro's parameter list, which is not a `_parameter` position of the language \u2014 the names it binds are text, not values"
-    },
-    {
-      "node": "field_declaration_list",
-      "reason": "the braced member list of a struct or union. Deliberately not `_body`: rust and typescript both keep `_body` to the EXECUTABLE body of a definition, and this list's contents are answered for by `_member`"
-    },
-    {
-      "node": "enumerator_list",
-      "reason": "the braced enumerator list, for the same reason"
-    },
-    {
-      "node": "initializer_list",
-      "reason": "a braced initializer; it is a value rather than a body, and its elements are ordinary `_expression`s"
-    },
-    {
-      "node": "initializer_pair",
-      "reason": "`.field = v` \u2014 a designator and a value. It binds a POSITION, not a name, so it is not a `_binding`"
-    },
-    {
-      "node": "field_designator",
-      "reason": "the `.field` of a designated initializer"
-    },
-    {
-      "node": "subscript_designator",
-      "reason": "the `[3]` or `[0 ... 7]` of one"
-    },
-    {
-      "node": "comma_expression",
-      "reason": "the comma operator. Not a member of `_expression`, and C's own grammar draws the same line \u2014 it splits `expression` from `assignment-expression` because a comma inside an argument list separates arguments. Admitting it into `_expression` would make `f(a, b)` ambiguous with `f((a, b))` at every call in the corpus"
-    },
-    {
-      "node": "empty_declaration",
-      "reason": "a stray `;` at file scope, which C23 allows and every compiler accepted long before it. It declares nothing"
-    },
-    {
-      "node": "unexpanded_macro",
-      "reason": "a macro standing alone at file scope \u2014 `__BEGIN_DECLS`, `BEGIN_EXTERN_C()`. It is not a declaration, not a statement, and not a directive: it is the hole the preprocessor would have filled. See the declared deviation in ledger.toml"
-    },
-    {
-      "node": "extension_specifier",
-      "reason": "`__extension__`, which suppresses a pedantic diagnostic. It alters no meaning, so it is not a `_modifier`, and it annotates nothing, so it is not an `_attribute`"
+      "node": "asm_label",
+      "reason": "GCC's assembler name on a declarator \u2014 `extern int errno __asm__(\"__errno_location\");`. It is not an `_attribute`: an attribute is valid in half a dozen positions, one of which starts a statement, and admitting this there would give `__asm__(\"nop\");` a second reading as an attribute plus an empty statement"
     },
     {
       "node": "asm_qualifier",
@@ -154,24 +94,88 @@
       "reason": "one entry inside an attribute specifier's list; the specifier around it is the `_attribute`"
     },
     {
+      "node": "attributed_declarator",
+      "reason": "a declarator carrying a GNU attribute; the attribute is the `_attribute` and the declarator is inside it"
+    },
+    {
+      "node": "comma_expression",
+      "reason": "the comma operator. Not a member of `_expression`, and C's own grammar draws the same line \u2014 it splits `expression` from `assignment-expression` because a comma inside an argument list separates arguments. Admitting it into `_expression` would make `f(a, b)` ambiguous with `f((a, b))` at every call in the corpus"
+    },
+    {
+      "node": "empty_declaration",
+      "reason": "a stray `;` at file scope, which C23 allows and every compiler accepted long before it. It declares nothing"
+    },
+    {
+      "node": "enumerator_list",
+      "reason": "the braced enumerator list, for the same reason"
+    },
+    {
       "node": "escape_sequence",
       "reason": "one backslash escape inside a string or character literal"
+    },
+    {
+      "node": "extension_specifier",
+      "reason": "`__extension__`, which suppresses a pedantic diagnostic. It alters no meaning, so it is not a `_modifier`, and it annotates nothing, so it is not an `_attribute`"
+    },
+    {
+      "node": "field_declaration_list",
+      "reason": "the braced member list of a struct or union. Deliberately not `_body`: rust and typescript both keep `_body` to the EXECUTABLE body of a definition, and this list's contents are answered for by `_member`"
+    },
+    {
+      "node": "field_designator",
+      "reason": "the `.field` of a designated initializer"
+    },
+    {
+      "node": "identifier_list",
+      "reason": "the K&R parameter-name list, `f(a, b)` before the declarations that type them \u2014 names in a list, not parameters yet"
+    },
+    {
+      "node": "initializer_list",
+      "reason": "a braced initializer; it is a value rather than a body, and its elements are ordinary `_expression`s"
+    },
+    {
+      "node": "initializer_pair",
+      "reason": "`.field = v` \u2014 a designator and a value. It binds a POSITION, not a name, so it is not a `_binding`"
+    },
+    {
+      "node": "parameter_list",
+      "reason": "the parenthesised parameter list of a declarator; its elements are `_parameter`"
+    },
+    {
+      "node": "parenthesized_declarator",
+      "reason": "the same, for the parentheses that decide whether `*` or `[]` binds first"
+    },
+    {
+      "node": "pointer_declarator",
+      "reason": "the concrete declarator spine: what a name is wrapped in to say it is a pointer. The name inside it is the `_name`; the wrapper declares nothing on its own"
     },
     {
       "node": "preproc_arg",
       "reason": "the raw tail of a directive, taken as one token because its content is not C \u2014 a macro body is text until it is expanded"
     },
     {
-      "node": "preproc_directive",
-      "reason": "the `#word` of a directive this grammar has no rule for: `#pragma`, `#error`, `#line`"
-    },
-    {
       "node": "preproc_defined",
       "reason": "the `defined X` operator, which exists only in a conditional's condition and is not an expression of the language \u2014 its operand is a macro name, and an undefined one is legal here and nowhere else"
     },
     {
+      "node": "preproc_directive",
+      "reason": "the `#word` of a directive this grammar has no rule for: `#pragma`, `#error`, `#line`"
+    },
+    {
       "node": "preproc_has_include",
       "reason": "`__has_include(<x.h>)`, for the same reason: its operand is a header name, not an expression"
+    },
+    {
+      "node": "preproc_params",
+      "reason": "a function-like macro's parameter list, which is not a `_parameter` position of the language \u2014 the names it binds are text, not values"
+    },
+    {
+      "node": "subscript_designator",
+      "reason": "the `[3]` or `[0 ... 7]` of one"
+    },
+    {
+      "node": "unexpanded_macro",
+      "reason": "a macro standing alone at file scope \u2014 `__BEGIN_DECLS`, `BEGIN_EXTERN_C()`. It is not a declaration, not a statement, and not a directive: it is the hole the preprocessor would have filled. See the declared deviation in ledger.toml"
     }
   ]
 }

@@ -110,7 +110,6 @@ module.exports = grammar({
     [$.macro_type_specifier, $._type_argument],
     [$.unexpanded_macro, $._type, $.macro_type_specifier],
     [$.unexpanded_macro, $._type],
-    [$.declaration, $._type],
     [$.case_clause],
     [$.default_clause],
     [$._literal, $.concatenated_string],
@@ -120,7 +119,6 @@ module.exports = grammar({
     [$._type, $.identifier_list],
     [$.union_specifier],
     [$.struct_specifier],
-    [$._field_declarator],
     [$.enum_specifier],
     [$._expression, $._assignment_target],
     [$._declaration_modifiers, $.attributed_declarator],
@@ -129,31 +127,13 @@ module.exports = grammar({
     // and the negative PAREN_DECLARATOR precedence picks the call unless a
     // declaration context is already committed.
     [$._type, $._expression],
-    [$._type, $._expression, $._declaration_specifiers],
-    [$._declaration_specifiers],
-    [$._declaration_specifiers, $._type],
     // `f(a)` in a parameter list: a K&R identifier list or one unnamed
     // parameter whose type is the typedef `a`. Only the body that follows
     // settles it.
-    [$.parameter_list, $.identifier_list],
-    [$._declarator, $._abstract_declarator],
     [$._declarator, $._type],
-    [$._abstract_declarator, $._type],
-    [$._abstract_declarator, $._expression],
-    [$._declarator, $._expression],
-    [$.parenthesized_declarator, $.parenthesized_expression],
-    [$.array_declarator, $.abstract_array_declarator],
-    [$.function_declarator, $.abstract_function_declarator],
-    [$.pointer_declarator, $.abstract_pointer_declarator],
     [$.sized_type_specifier],
-    [$.attributed_declarator, $.attributed_statement],
-    [$._expression, $.macro_type_specifier],
-    [$.type_descriptor, $._expression],
     [$._type, $._expression, $.macro_type_specifier],
     [$._type, $.macro_type_specifier],
-    [$.initializer_pair],
-    [$.compound_literal_expression, $.cast_expression],
-    [$._expression, $._type_qualifier_or_attribute],
   ],
 
   inline: $ => [
@@ -812,8 +792,21 @@ module.exports = grammar({
     // a member.
     attributed_declarator: $ => prec.right(seq(
       $._declarator,
-      repeat1($._attribute),
+      repeat1(choice($._attribute, $.asm_label)),
     )),
+
+    // `extern int errno __asm__("__errno_location");` — GCC's assembler
+    // name, which glibc puts on a great many declarations. Admitted only
+    // here, after a declarator, and not through `_attribute`: an
+    // `_attribute` is valid in half a dozen positions, and one of them is
+    // the start of a statement, where `__asm__("nop");` would then have a
+    // second reading as an attribute plus an empty statement.
+    asm_label: $ => seq(
+      choice('asm', '__asm__', '__asm'),
+      '(',
+      choice($.string_literal, $.concatenated_string),
+      ')',
+    ),
 
     // ── parameters ───────────────────────────────────────────────────
     parameter_list: $ => seq(
@@ -830,9 +823,10 @@ module.exports = grammar({
     variadic_parameter: _ => '...',
 
     // K&R: `int f(a, b) int a; char *b; { … }`. Still the definition style
-    // of a great deal of the C a distribution ships, and the reason
-    // `parameter_list` and this one are a declared conflict — at `f(a)`
-    // nothing has yet decided whether `a` is a type or a parameter name.
+    // of a great deal of the C a distribution ships. At `f(a)` nothing has
+    // yet decided whether `a` is a type or a parameter name, and the two
+    // readings are carried side by side until the body or the `;` settles
+    // it — `[$._type, $.identifier_list]` is where that is declared.
     identifier_list: $ => seq(
       '(',
       commaSep1($.identifier),
@@ -1401,9 +1395,14 @@ module.exports = grammar({
       ),
     )),
 
-    true: _ => choice('true', 'TRUE'),
-    false: _ => choice('false', 'FALSE'),
-    null: _ => choice('NULL', 'nullptr'),
+    // Only the keywords. `TRUE`, `FALSE` and `NULL` are MACROS, and
+    // `_literal` is defined as a value fully determined by its own text —
+    // theirs is determined by a `#define` the parser cannot see, and a
+    // grammar that called them literals would be claiming to know what
+    // `#define TRUE 2` says. They parse as the identifiers they are.
+    true: _ => 'true',
+    false: _ => 'false',
+    null: _ => 'nullptr',
 
     // ── comments ─────────────────────────────────────────────────────
     // One node for both spellings. `//` is C99 and universal long before

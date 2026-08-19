@@ -6769,12 +6769,64 @@
           {
             "type": "REPEAT1",
             "content": {
-              "type": "SYMBOL",
-              "name": "_attribute"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_attribute"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "asm_label"
+                }
+              ]
             }
           }
         ]
       }
+    },
+    "asm_label": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "asm"
+            },
+            {
+              "type": "STRING",
+              "value": "__asm__"
+            },
+            {
+              "type": "STRING",
+              "value": "__asm"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "SYMBOL",
+              "name": "string_literal"
+            },
+            {
+              "type": "SYMBOL",
+              "name": "concatenated_string"
+            }
+          ]
+        },
+        {
+          "type": "STRING",
+          "value": ")"
+        }
+      ]
     },
     "parameter_list": {
       "type": "SEQ",
@@ -10341,43 +10393,16 @@
       }
     },
     "true": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "true"
-        },
-        {
-          "type": "STRING",
-          "value": "TRUE"
-        }
-      ]
+      "type": "STRING",
+      "value": "true"
     },
     "false": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "false"
-        },
-        {
-          "type": "STRING",
-          "value": "FALSE"
-        }
-      ]
+      "type": "STRING",
+      "value": "false"
     },
     "null": {
-      "type": "CHOICE",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "NULL"
-        },
-        {
-          "type": "STRING",
-          "value": "nullptr"
-        }
-      ]
+      "type": "STRING",
+      "value": "nullptr"
     },
     "comment": {
       "type": "TOKEN",
@@ -10447,10 +10472,6 @@
       "_type"
     ],
     [
-      "declaration",
-      "_type"
-    ],
-    [
       "case_clause"
     ],
     [
@@ -10483,9 +10504,6 @@
       "struct_specifier"
     ],
     [
-      "_field_declarator"
-    ],
-    [
       "enum_specifier"
     ],
     [
@@ -10501,73 +10519,13 @@
       "_expression"
     ],
     [
-      "_type",
-      "_expression",
-      "_declaration_specifiers"
-    ],
-    [
-      "_declaration_specifiers"
-    ],
-    [
-      "_declaration_specifiers",
-      "_type"
-    ],
-    [
-      "parameter_list",
-      "identifier_list"
-    ],
-    [
-      "_declarator",
-      "_abstract_declarator"
-    ],
-    [
       "_declarator",
       "_type"
-    ],
-    [
-      "_abstract_declarator",
-      "_type"
-    ],
-    [
-      "_abstract_declarator",
-      "_expression"
-    ],
-    [
-      "_declarator",
-      "_expression"
-    ],
-    [
-      "parenthesized_declarator",
-      "parenthesized_expression"
-    ],
-    [
-      "array_declarator",
-      "abstract_array_declarator"
-    ],
-    [
-      "function_declarator",
-      "abstract_function_declarator"
-    ],
-    [
-      "pointer_declarator",
-      "abstract_pointer_declarator"
     ],
     [
       "sized_type_specifier"
     ],
     [
-      "attributed_declarator",
-      "attributed_statement"
-    ],
-    [
-      "_expression",
-      "macro_type_specifier"
-    ],
-    [
-      "type_descriptor",
-      "_expression"
-    ],
-    [
       "_type",
       "_expression",
       "macro_type_specifier"
@@ -10575,17 +10533,6 @@
     [
       "_type",
       "macro_type_specifier"
-    ],
-    [
-      "initializer_pair"
-    ],
-    [
-      "compound_literal_expression",
-      "cast_expression"
-    ],
-    [
-      "_expression",
-      "_type_qualifier_or_attribute"
     ]
   ],
   "precedences": [],
