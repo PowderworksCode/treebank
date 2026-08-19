@@ -97,6 +97,29 @@ pub(crate) fn get(name: LangName) -> Capabilities {
             unparse: None,
         },
 
+        // Both C-family languages answer the same way, and each `None`
+        // is a real answer rather than a gap in the table.
+        LangName::C | LangName::Cpp => Capabilities {
+            // libclang gives one — `clang_getCursorExtent` yields start and
+            // end offsets for every cursor — so a span oracle is reachable
+            // through the same program `c.rs` already builds. Not built
+            // yet, and saying so beats a `shape` run that compares against
+            // nothing.
+            spans: None,
+            // clang-format is the obvious candidate and is a FORMATTER
+            // rather than a printer driven from the parse tree: it
+            // reformats text it did not fully parse, which is exactly the
+            // property a reformat-invariance check must not have. A tree
+            // the grammar got wrong would be reformatted around rather
+            // than reported.
+            reformat: None,
+            // C has no round-trippable printer, and the reason is the
+            // preprocessor: a macro's expansion is not in the tree at all,
+            // so anything printing a C tree back would be printing the
+            // source it was handed.
+            unparse: None,
+        },
+
         LangName::Ruby => Capabilities {
             // CRuby's own AST, the same parser `validate` asks:
             // RubyVM::AbstractSyntaxTree nodes carry first/last line and
