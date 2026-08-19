@@ -2943,6 +2943,103 @@
     }
   },
   {
+    "type": "module_body",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "module_directive",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "module_declaration",
+    "named": true,
+    "fields": {
+      "body": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "module_body",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_attribute",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "module_directive",
+    "named": true,
+    "fields": {
+      "module": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      },
+      "package": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      },
+      "type": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_name",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "object_creation_expression",
     "named": true,
     "fields": {
@@ -3224,6 +3321,10 @@
         },
         {
           "type": "interface_declaration",
+          "named": true
+        },
+        {
+          "type": "module_declaration",
           "named": true
         },
         {
@@ -4578,6 +4679,10 @@
     "named": false
   },
   {
+    "type": "exports",
+    "named": false
+  },
+  {
     "type": "extends",
     "named": false
   },
@@ -4643,6 +4748,10 @@
     "named": false
   },
   {
+    "type": "module",
+    "named": false
+  },
+  {
     "type": "native",
     "named": false
   },
@@ -4657,6 +4766,14 @@
   {
     "type": "null_literal",
     "named": true
+  },
+  {
+    "type": "open",
+    "named": false
+  },
+  {
+    "type": "opens",
+    "named": false
   },
   {
     "type": "package",
@@ -4675,11 +4792,19 @@
     "named": false
   },
   {
+    "type": "provides",
+    "named": false
+  },
+  {
     "type": "public",
     "named": false
   },
   {
     "type": "record",
+    "named": false
+  },
+  {
+    "type": "requires",
     "named": false
   },
   {
@@ -4735,7 +4860,15 @@
     "named": false
   },
   {
+    "type": "to",
+    "named": false
+  },
+  {
     "type": "transient",
+    "named": false
+  },
+  {
+    "type": "transitive",
     "named": false
   },
   {
@@ -4755,6 +4888,10 @@
     "named": true
   },
   {
+    "type": "uses",
+    "named": false
+  },
+  {
     "type": "void_type",
     "named": true
   },
@@ -4768,6 +4905,10 @@
   },
   {
     "type": "while",
+    "named": false
+  },
+  {
+    "type": "with",
     "named": false
   },
   {

@@ -83,6 +83,8 @@ module.exports = grammar({
     [$.field_declaration, $._type],
     [$.modifiers, $.annotated_type],
     [$.lambda, $._name],
+    [$.module_declaration, $.package_declaration, $.modifiers],
+    [$.module_declaration, $.modifiers],
     [$.annotation_type_element, $.parameters],
     [$.switch_label_group],
     [$.switch_statement, $.switch_expression],
@@ -108,7 +110,34 @@ module.exports = grammar({
       repeat($._top_level),
     ),
 
-    _top_level: $ => choice($._type_declaration, ';'),
+    _top_level: $ => choice($._type_declaration, $.module_declaration, ';'),
+
+    // module-info.java (JLS 7.7). Every word here is CONTEXTUAL -- `module`,
+    // `requires`, `exports`, `opens`, `uses`, `provides`, `to`, `with`,
+    // `open` and `transitive` are all ordinary identifiers everywhere else,
+    // so none of them may join the reserved set. They are spelled inline
+    // rather than added to `_soft_keyword` because each is legal in exactly
+    // one slot of one rule, and the file itself is the context: nothing
+    // below is reachable outside a module declaration.
+    module_declaration: $ => seq(
+      repeat($._attribute),
+      optional('open'),
+      'module',
+      field('name', $._name),
+      field('body', $.module_body),
+    ),
+
+    module_body: $ => seq('{', repeat($.module_directive), '}'),
+
+    module_directive: $ => choice(
+      seq('requires', repeat(choice('transitive', 'static')), field('module', $._name), ';'),
+      seq('exports', field('package', $._name), optional($._module_targets), ';'),
+      seq('opens', field('package', $._name), optional($._module_targets), ';'),
+      seq('uses', field('type', $._name), ';'),
+      seq('provides', field('type', $._name), 'with', $._name, repeat(seq(',', $._name)), ';'),
+    ),
+
+    _module_targets: $ => seq('to', $._name, repeat(seq(',', $._name))),
 
     // What may be declared at a file's top level or inside a class body.
     _type_declaration: $ => choice(
