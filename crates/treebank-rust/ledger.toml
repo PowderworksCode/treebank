@@ -118,7 +118,7 @@ seeds = 310
 why_accepted = '''
 `metavariable` is reachable from ordinary path and attribute positions, not only from inside a macro_rules transcriber where `$` has meaning.'''
 why_not_fixed = '''
-queued. Largest single family; wants metavariable confined to the macro body rules.'''
+FIXED. `metavariable` was reachable from two expression tiers and from `_path_ref`, and from none of them was it ever valid — a metavariable only exists inside a macro_rules body, which is a token tree, where `_token_soup` already matches it. The rule is gone and macro bodies are unaffected.'''
 
 [[known_widenings]]
 construct = '''
@@ -157,7 +157,7 @@ seeds = 12
 why_accepted = '''
 a braced invocation is already a complete item; the `;` is then accepted as a second, empty one. rustc: `expected item, found ;`.'''
 why_not_fixed = '''
-FIXED, together with the `;`-as-item entry: the delimiter decides, so `m!{…}` is complete and `m!(…)`/`m![…]` take the semicolon.'''
+FIXED at item level too. `_macro_item` had the same shape the member rule did: `seq($.macro_invocation, ';')` covers the brace form, so `m! { } ;` parsed. It now names a non-brace token tree.'''
 
 [[known_widenings]]
 construct = "token tree accepts a malformed char literal \u2014 `r#XX ! { b ' a ' }`"

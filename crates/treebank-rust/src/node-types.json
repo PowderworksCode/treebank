@@ -222,10 +222,6 @@
         "named": true
       },
       {
-        "type": "metavariable",
-        "named": true
-      },
-      {
         "type": "negative_literal",
         "named": true
       },
@@ -1007,10 +1003,6 @@
           },
           {
             "type": "generic_function",
-            "named": true
-          },
-          {
-            "type": "metavariable",
             "named": true
           },
           {
@@ -1887,10 +1879,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "negative_literal",
             "named": true
           },
@@ -2266,10 +2254,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "negative_literal",
             "named": true
           },
@@ -2517,10 +2501,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "negative_literal",
             "named": true
           },
@@ -2632,10 +2612,6 @@
           },
           {
             "type": "let_condition",
-            "named": true
-          },
-          {
-            "type": "metavariable",
             "named": true
           },
           {
@@ -2766,10 +2742,6 @@
           },
           {
             "type": "labeled_block",
-            "named": true
-          },
-          {
-            "type": "metavariable",
             "named": true
           },
           {
@@ -2990,10 +2962,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "scoped_identifier",
             "named": true
           },
@@ -3180,10 +3148,6 @@
           },
           {
             "type": "labeled_block",
-            "named": true
-          },
-          {
-            "type": "metavariable",
             "named": true
           },
           {
@@ -3783,10 +3747,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "qualified_type",
             "named": true
           },
@@ -3829,10 +3789,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "qualified_type",
             "named": true
           },
@@ -3858,10 +3814,6 @@
         "types": [
           {
             "type": "identifier",
-            "named": true
-          },
-          {
-            "type": "metavariable",
             "named": true
           },
           {
@@ -4764,10 +4716,6 @@
             "named": true
           },
           {
-            "type": "metavariable",
-            "named": true
-          },
-          {
             "type": "scoped_identifier",
             "named": true
           },
@@ -4819,10 +4767,6 @@
           "named": true
         },
         {
-          "type": "metavariable",
-          "named": true
-        },
-        {
           "type": "scoped_identifier",
           "named": true
         },
@@ -4866,10 +4810,6 @@
           "named": true
         },
         {
-          "type": "metavariable",
-          "named": true
-        },
-        {
           "type": "scoped_identifier",
           "named": true
         },
@@ -4909,10 +4849,6 @@
           "named": true
         },
         {
-          "type": "metavariable",
-          "named": true
-        },
-        {
           "type": "scoped_identifier",
           "named": true
         },
@@ -4938,10 +4874,6 @@
       "types": [
         {
           "type": "identifier",
-          "named": true
-        },
-        {
-          "type": "metavariable",
           "named": true
         },
         {
@@ -5085,10 +5017,6 @@
           },
           {
             "type": "let_condition",
-            "named": true
-          },
-          {
-            "type": "metavariable",
             "named": true
           },
           {
@@ -5457,10 +5385,6 @@
   {
     "type": "match",
     "named": false
-  },
-  {
-    "type": "metavariable",
-    "named": true
   },
   {
     "type": "mod",
