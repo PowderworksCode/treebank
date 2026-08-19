@@ -114,9 +114,21 @@ fn edits_for(src: &[u8], seed: u64) -> Vec<Edit> {
         let len = ((next() as usize) % 12).min(src.len() - at);
         let end = floor_boundary(src, at + len);
         out.push(match k {
-            0 => Edit { start: at, old_end: end, inserted: "" },       // delete
-            1 => Edit { start: at, old_end: at, inserted: "x = 1\n" }, // insert
-            _ => Edit { start: at, old_end: end, inserted: ")" },      // replace
+            0 => Edit {
+                start: at,
+                old_end: end,
+                inserted: "",
+            }, // delete
+            1 => Edit {
+                start: at,
+                old_end: at,
+                inserted: "x = 1\n",
+            }, // insert
+            _ => Edit {
+                start: at,
+                old_end: end,
+                inserted: ")",
+            }, // replace
         });
     }
     out
@@ -169,7 +181,12 @@ pub struct IncReport {
     pub examples: Vec<Divergence>,
 }
 
-fn describe(a: &[(u16, usize, usize)], b: &[(u16, usize, usize)], tree: &Tree, fresh: &Tree) -> String {
+fn describe(
+    a: &[(u16, usize, usize)],
+    b: &[(u16, usize, usize)],
+    tree: &Tree,
+    fresh: &Tree,
+) -> String {
     match a.iter().zip(b).position(|(x, y)| x != y) {
         Some(i) => format!(
             "node {i} of {}: incremental {:?} at {}..{}, fresh {:?} at {}..{}",
@@ -181,7 +198,11 @@ fn describe(a: &[(u16, usize, usize)], b: &[(u16, usize, usize)], tree: &Tree, f
             b[i].1,
             b[i].2,
         ),
-        None => format!("same prefix, {} nodes incremental vs {} fresh", a.len(), b.len()),
+        None => format!(
+            "same prefix, {} nodes incremental vs {} fresh",
+            a.len(),
+            b.len()
+        ),
     }
 }
 
@@ -225,7 +246,9 @@ pub fn run(
             let mut applied = 0;
             let mut found = Vec::new();
             for e in edits_for(&src, seed ^ (rel.len() as u64)) {
-                let Some(mut tree) = parser.parse(&src, None) else { continue };
+                let Some(mut tree) = parser.parse(&src, None) else {
+                    continue;
+                };
                 let new_src = apply(&src, &e);
                 tree.edit(&input_edit(&src, &new_src, &e));
                 let (Some(inc), Some(fresh)) = (

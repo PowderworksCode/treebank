@@ -47,7 +47,9 @@ impl Oracle for Python {
         let py2 = stdin_oracle::persistent(
             "py2",
             "python2",
-            &[crate::tool("py-oracle/check2.py").to_string_lossy().as_ref()],
+            &[crate::tool("py-oracle/check2.py")
+                .to_string_lossy()
+                .as_ref()],
             "python2 tools/py-oracle/check2.py — python2 (2.7) is REQUIRED \
              for the union oracle; a py3-only sweep would book every \
              py2-only file as noise",
@@ -74,7 +76,9 @@ impl Oracle for Python {
         Ok(Some(stdin_oracle::persistent(
             "py3-syntax",
             "python3",
-            &[crate::tool("py-oracle/syntax.py").to_string_lossy().as_ref()],
+            &[crate::tool("py-oracle/syntax.py")
+                .to_string_lossy()
+                .as_ref()],
             "python3 tools/py-oracle/syntax.py — is python3 installed?",
             srcroot,
             paths,

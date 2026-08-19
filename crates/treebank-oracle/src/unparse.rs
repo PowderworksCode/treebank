@@ -96,7 +96,10 @@ fn decode(lines: &[String], srcroot: &Path) -> Result<HashMap<String, Rendered>>
             .with_context(|| format!("parse unparse output: {line:.200}"))?;
         out.insert(
             stdin_oracle::relativize(&raw.path, srcroot),
-            Rendered { source: raw.source, skipped: raw.skipped },
+            Rendered {
+                source: raw.source,
+                skipped: raw.skipped,
+            },
         );
     }
     Ok(out)
@@ -169,11 +172,15 @@ impl Unparser for RustUnparser {
                 let rendered = match std::fs::read_to_string(srcroot.join(rel)) {
                     Ok(src) => match syn::parse_file(&src) {
                         Ok(ast) => {
-                            let printed = std::panic::catch_unwind(
-                                std::panic::AssertUnwindSafe(|| prettyplease::unparse(&ast)),
-                            );
+                            let printed =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    prettyplease::unparse(&ast)
+                                }));
                             match printed {
-                                Ok(text) => Rendered { source: Some(text), skipped: None },
+                                Ok(text) => Rendered {
+                                    source: Some(text),
+                                    skipped: None,
+                                },
                                 Err(p) => Rendered {
                                     source: None,
                                     skipped: Some(format!("prettyplease: {}", panic_message(&p))),
@@ -185,7 +192,10 @@ impl Unparser for RustUnparser {
                             skipped: Some(format!("syn: {e}")),
                         },
                     },
-                    Err(e) => Rendered { source: None, skipped: Some(format!("read: {e}")) },
+                    Err(e) => Rendered {
+                        source: None,
+                        skipped: Some(format!("read: {e}")),
+                    },
                 };
                 (rel.clone(), rendered)
             })

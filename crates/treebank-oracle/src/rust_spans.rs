@@ -49,7 +49,10 @@ impl SpanOracle for RustSpans {
                     Ok(src) => match syn::parse_file(&src) {
                         Ok(ast) => {
                             let offset = ast.shebang.as_ref().map_or(0, |s| s.len());
-                            let mut v = SpanVisitor { spans: Vec::new(), offset };
+                            let mut v = SpanVisitor {
+                                spans: Vec::new(),
+                                offset,
+                            };
                             v.visit_file(&ast);
                             // `has_edges: false`: syn has no generic field
                             // reflection, so there is no honest way to name
@@ -138,11 +141,21 @@ impl SpanVisitor {
 fn item_kind(i: &syn::Item) -> &'static str {
     use syn::Item::*;
     match i {
-        Const(_) => "Item::Const", Enum(_) => "Item::Enum", ExternCrate(_) => "Item::ExternCrate",
-        Fn(_) => "Item::Fn", ForeignMod(_) => "Item::ForeignMod", Impl(_) => "Item::Impl",
-        Macro(_) => "Item::Macro", Mod(_) => "Item::Mod", Static(_) => "Item::Static",
-        Struct(_) => "Item::Struct", Trait(_) => "Item::Trait", TraitAlias(_) => "Item::TraitAlias",
-        Type(_) => "Item::Type", Union(_) => "Item::Union", Use(_) => "Item::Use",
+        Const(_) => "Item::Const",
+        Enum(_) => "Item::Enum",
+        ExternCrate(_) => "Item::ExternCrate",
+        Fn(_) => "Item::Fn",
+        ForeignMod(_) => "Item::ForeignMod",
+        Impl(_) => "Item::Impl",
+        Macro(_) => "Item::Macro",
+        Mod(_) => "Item::Mod",
+        Static(_) => "Item::Static",
+        Struct(_) => "Item::Struct",
+        Trait(_) => "Item::Trait",
+        TraitAlias(_) => "Item::TraitAlias",
+        Type(_) => "Item::Type",
+        Union(_) => "Item::Union",
+        Use(_) => "Item::Use",
         _ => "Item::Other",
     }
 }
@@ -150,19 +163,44 @@ fn item_kind(i: &syn::Item) -> &'static str {
 fn expr_kind(e: &syn::Expr) -> &'static str {
     use syn::Expr::*;
     match e {
-        Array(_) => "Expr::Array", Assign(_) => "Expr::Assign", Async(_) => "Expr::Async",
-        Await(_) => "Expr::Await", Binary(_) => "Expr::Binary", Block(_) => "Expr::Block",
-        Break(_) => "Expr::Break", Call(_) => "Expr::Call", Cast(_) => "Expr::Cast",
-        Closure(_) => "Expr::Closure", Const(_) => "Expr::Const", Continue(_) => "Expr::Continue",
-        Field(_) => "Expr::Field", ForLoop(_) => "Expr::ForLoop", Group(_) => "Expr::Group",
-        If(_) => "Expr::If", Index(_) => "Expr::Index", Infer(_) => "Expr::Infer",
-        Let(_) => "Expr::Let", Lit(_) => "Expr::Lit", Loop(_) => "Expr::Loop",
-        Macro(_) => "Expr::Macro", Match(_) => "Expr::Match", MethodCall(_) => "Expr::MethodCall",
-        Paren(_) => "Expr::Paren", Path(_) => "Expr::Path", Range(_) => "Expr::Range",
-        Reference(_) => "Expr::Reference", Repeat(_) => "Expr::Repeat", Return(_) => "Expr::Return",
-        Struct(_) => "Expr::Struct", Try(_) => "Expr::Try", TryBlock(_) => "Expr::TryBlock",
-        Tuple(_) => "Expr::Tuple", Unary(_) => "Expr::Unary", Unsafe(_) => "Expr::Unsafe",
-        While(_) => "Expr::While", Yield(_) => "Expr::Yield",
+        Array(_) => "Expr::Array",
+        Assign(_) => "Expr::Assign",
+        Async(_) => "Expr::Async",
+        Await(_) => "Expr::Await",
+        Binary(_) => "Expr::Binary",
+        Block(_) => "Expr::Block",
+        Break(_) => "Expr::Break",
+        Call(_) => "Expr::Call",
+        Cast(_) => "Expr::Cast",
+        Closure(_) => "Expr::Closure",
+        Const(_) => "Expr::Const",
+        Continue(_) => "Expr::Continue",
+        Field(_) => "Expr::Field",
+        ForLoop(_) => "Expr::ForLoop",
+        Group(_) => "Expr::Group",
+        If(_) => "Expr::If",
+        Index(_) => "Expr::Index",
+        Infer(_) => "Expr::Infer",
+        Let(_) => "Expr::Let",
+        Lit(_) => "Expr::Lit",
+        Loop(_) => "Expr::Loop",
+        Macro(_) => "Expr::Macro",
+        Match(_) => "Expr::Match",
+        MethodCall(_) => "Expr::MethodCall",
+        Paren(_) => "Expr::Paren",
+        Path(_) => "Expr::Path",
+        Range(_) => "Expr::Range",
+        Reference(_) => "Expr::Reference",
+        Repeat(_) => "Expr::Repeat",
+        Return(_) => "Expr::Return",
+        Struct(_) => "Expr::Struct",
+        Try(_) => "Expr::Try",
+        TryBlock(_) => "Expr::TryBlock",
+        Tuple(_) => "Expr::Tuple",
+        Unary(_) => "Expr::Unary",
+        Unsafe(_) => "Expr::Unsafe",
+        While(_) => "Expr::While",
+        Yield(_) => "Expr::Yield",
         _ => "Expr::Other",
     }
 }
@@ -170,11 +208,21 @@ fn expr_kind(e: &syn::Expr) -> &'static str {
 fn pat_kind(p: &syn::Pat) -> &'static str {
     use syn::Pat::*;
     match p {
-        Const(_) => "Pat::Const", Ident(_) => "Pat::Ident", Lit(_) => "Pat::Lit",
-        Macro(_) => "Pat::Macro", Or(_) => "Pat::Or", Paren(_) => "Pat::Paren",
-        Path(_) => "Pat::Path", Range(_) => "Pat::Range", Reference(_) => "Pat::Reference",
-        Rest(_) => "Pat::Rest", Slice(_) => "Pat::Slice", Struct(_) => "Pat::Struct",
-        Tuple(_) => "Pat::Tuple", TupleStruct(_) => "Pat::TupleStruct", Type(_) => "Pat::Type",
+        Const(_) => "Pat::Const",
+        Ident(_) => "Pat::Ident",
+        Lit(_) => "Pat::Lit",
+        Macro(_) => "Pat::Macro",
+        Or(_) => "Pat::Or",
+        Paren(_) => "Pat::Paren",
+        Path(_) => "Pat::Path",
+        Range(_) => "Pat::Range",
+        Reference(_) => "Pat::Reference",
+        Rest(_) => "Pat::Rest",
+        Slice(_) => "Pat::Slice",
+        Struct(_) => "Pat::Struct",
+        Tuple(_) => "Pat::Tuple",
+        TupleStruct(_) => "Pat::TupleStruct",
+        Type(_) => "Pat::Type",
         Wild(_) => "Pat::Wild",
         _ => "Pat::Other",
     }
@@ -183,11 +231,20 @@ fn pat_kind(p: &syn::Pat) -> &'static str {
 fn type_kind(t: &syn::Type) -> &'static str {
     use syn::Type::*;
     match t {
-        Array(_) => "Type::Array", BareFn(_) => "Type::BareFn", Group(_) => "Type::Group",
-        ImplTrait(_) => "Type::ImplTrait", Infer(_) => "Type::Infer", Macro(_) => "Type::Macro",
-        Never(_) => "Type::Never", Paren(_) => "Type::Paren", Path(_) => "Type::Path",
-        Ptr(_) => "Type::Ptr", Reference(_) => "Type::Reference", Slice(_) => "Type::Slice",
-        TraitObject(_) => "Type::TraitObject", Tuple(_) => "Type::Tuple",
+        Array(_) => "Type::Array",
+        BareFn(_) => "Type::BareFn",
+        Group(_) => "Type::Group",
+        ImplTrait(_) => "Type::ImplTrait",
+        Infer(_) => "Type::Infer",
+        Macro(_) => "Type::Macro",
+        Never(_) => "Type::Never",
+        Paren(_) => "Type::Paren",
+        Path(_) => "Type::Path",
+        Ptr(_) => "Type::Ptr",
+        Reference(_) => "Type::Reference",
+        Slice(_) => "Type::Slice",
+        TraitObject(_) => "Type::TraitObject",
+        Tuple(_) => "Type::Tuple",
         _ => "Type::Other",
     }
 }

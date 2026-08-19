@@ -34,8 +34,8 @@ use std::sync::{LazyLock, Mutex};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use treebank_lang::LangName;
 use crate::rank::RankedCrate;
+use treebank_lang::LangName;
 
 const API: &str = "https://api.github.com";
 const PER_PAGE: usize = 100;
@@ -108,7 +108,10 @@ fn get(url: &str) -> Result<serde_json::Value> {
     if let Some(t) = token() {
         req = req.set("Authorization", &format!("Bearer {t}"));
     }
-    Ok(req.call().with_context(|| format!("GET {url}"))?.into_json()?)
+    Ok(req
+        .call()
+        .with_context(|| format!("GET {url}"))?
+        .into_json()?)
 }
 
 /// The top `k` non-fork, non-archived repositories GitHub classifies as
@@ -149,10 +152,9 @@ pub fn rank(lang: LangName, gh_language: &str, k: usize) -> Result<Vec<RankedCra
                 break 'outer;
             }
             for item in &items {
-                let (Some(full_name), Some(branch)) = (
-                    item["full_name"].as_str(),
-                    item["default_branch"].as_str(),
-                ) else {
+                let (Some(full_name), Some(branch)) =
+                    (item["full_name"].as_str(), item["default_branch"].as_str())
+                else {
                     continue;
                 };
                 let star_count = item["stargazers_count"].as_u64().unwrap_or(0);
@@ -196,7 +198,11 @@ pub fn rank(lang: LangName, gh_language: &str, k: usize) -> Result<Vec<RankedCra
     let index_out = std::path::PathBuf::from(index_path(lang));
     std::fs::create_dir_all(index_out.parent().unwrap())?;
     std::fs::write(&index_out, serde_json::to_string_pretty(&repos)?)?;
-    eprintln!("rank: kept {} {gh_language} repositories (>= {} stars)", out.len(), out.last().map(|r| r.downloads).unwrap_or(0));
+    eprintln!(
+        "rank: kept {} {gh_language} repositories (>= {} stars)",
+        out.len(),
+        out.last().map(|r| r.downloads).unwrap_or(0)
+    );
     Ok(out)
 }
 
@@ -223,7 +229,10 @@ pub fn resolve(lang: LangName, pkg: &RankedCrate) -> Result<(String, String)> {
         .with_context(|| format!("{}: no head sha", repo.full_name))?;
     Ok((
         sha[..12.min(sha.len())].to_string(),
-        format!("https://codeload.github.com/{}/tar.gz/{sha}", repo.full_name),
+        format!(
+            "https://codeload.github.com/{}/tar.gz/{sha}",
+            repo.full_name
+        ),
     ))
 }
 

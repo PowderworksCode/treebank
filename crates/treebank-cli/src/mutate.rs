@@ -87,7 +87,11 @@ impl Rng {
         x.wrapping_mul(0x2545_F491_4F6C_DD1D)
     }
     fn below(&mut self, n: usize) -> usize {
-        if n == 0 { 0 } else { (self.next() % n as u64) as usize }
+        if n == 0 {
+            0
+        } else {
+            (self.next() % n as u64) as usize
+        }
     }
 }
 
@@ -306,7 +310,9 @@ pub fn run(
                 if std::str::from_utf8(&bytes).is_err() {
                     continue;
                 }
-                let Some(t) = parser.parse(&bytes, None) else { continue };
+                let Some(t) = parser.parse(&bytes, None) else {
+                    continue;
+                };
                 if t.root_node().has_error() {
                     rejected += 1;
                     continue;
@@ -413,7 +419,11 @@ pub fn run(
 
     println!(
         "mutate: {} mutants — {} rejected, {} agreed, {} WIDENINGS in {} cluster(s)",
-        report.mutants, report.rejected, report.agreed, report.widenings, report.clusters.len()
+        report.mutants,
+        report.rejected,
+        report.agreed,
+        report.widenings,
+        report.clusters.len()
     );
     for c in report.clusters.iter().take(15) {
         println!("  {:>5}x {:>4} files  {}", c.count, c.files, c.signature);

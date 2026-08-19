@@ -43,8 +43,8 @@ impl RolesManifest {
     }
 
     pub fn load(path: &Path) -> Result<RolesManifest> {
-        let text = std::fs::read_to_string(path)
-            .with_context(|| format!("read {}", path.display()))?;
+        let text =
+            std::fs::read_to_string(path).with_context(|| format!("read {}", path.display()))?;
         Self::parse(&text)
     }
 }

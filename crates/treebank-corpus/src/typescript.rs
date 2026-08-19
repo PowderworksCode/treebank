@@ -28,5 +28,4 @@ impl Ecosystem for TypeScript {
             _ => None,
         }
     }
-
 }

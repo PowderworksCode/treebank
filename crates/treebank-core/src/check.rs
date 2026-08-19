@@ -94,8 +94,11 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
         .filter(|(f, _)| vocab.is_facet_term(f) || roles.demoted.contains_key(*f))
         .flat_map(|(_, ms)| ms.iter().map(String::as_str))
         .collect();
-    let uncategorised: BTreeSet<&str> =
-        roles.uncategorised.iter().map(|u| u.node.as_str()).collect();
+    let uncategorised: BTreeSet<&str> = roles
+        .uncategorised
+        .iter()
+        .map(|u| u.node.as_str())
+        .collect();
 
     for node in &nt.named {
         if nt.supertypes.contains_key(node) {

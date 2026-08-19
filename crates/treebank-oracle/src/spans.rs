@@ -136,13 +136,8 @@ struct RawFile {
 
 impl SpanOracle for TypeScriptSpans {
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
-        let lines = stdin_oracle::node_lines(
-            &crate::tool("ts-oracle"),
-            "spans.mjs",
-            &[],
-            srcroot,
-            paths,
-        )?;
+        let lines =
+            stdin_oracle::node_lines(&crate::tool("ts-oracle"), "spans.mjs", &[], srcroot, paths)?;
         parse_jsonl(&lines, srcroot)
     }
 }

@@ -1,17 +1,17 @@
-mod grammar;
-mod rosetta;
-mod routing;
-mod verify;
 mod errpos;
-mod roundtrip;
 mod fuzz;
+mod grammar;
 mod incremental;
 mod kinds;
+mod mutate;
 mod recovery;
 mod reformat;
-mod mutate;
+mod rosetta;
+mod roundtrip;
+mod routing;
 mod shape;
 mod sweep;
+mod verify;
 
 use std::path::PathBuf;
 
@@ -444,13 +444,25 @@ fn main() -> anyhow::Result<()> {
             k,
             &lang_path(lang, out, "top-k.json"),
         ),
-        Cmd::Fetch { lang, list, limit, corpus } => treebank_corpus::fetch::run(
+        Cmd::Fetch {
+            lang,
+            list,
+            limit,
+            corpus,
+        } => treebank_corpus::fetch::run(
             treebank_corpus::get(lang),
             &lang_path(lang, list, "top-k.json"),
             limit,
             &lang_path(lang, corpus, ""),
         ),
-        Cmd::Shape { lang, grammar, manifest, out, limit, dir } => shape::run(
+        Cmd::Shape {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+            dir,
+        } => shape::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
@@ -458,21 +470,40 @@ fn main() -> anyhow::Result<()> {
             limit,
             dir.as_deref(),
         ),
-        Cmd::Errors { lang, grammar, manifest, out, limit } => errpos::run(
+        Cmd::Errors {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+        } => errpos::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/errors.json"),
             limit,
         ),
-        Cmd::Reformat { lang, grammar, manifest, out, limit } => reformat::run(
+        Cmd::Reformat {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+        } => reformat::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             limit,
             &out.unwrap_or_else(|| reformat::default_out(lang)),
         ),
-        Cmd::Incremental { lang, grammar, manifest, out, limit, seed } => incremental::run(
+        Cmd::Incremental {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+            seed,
+        } => incremental::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
@@ -480,21 +511,41 @@ fn main() -> anyhow::Result<()> {
             seed,
             &out.unwrap_or_else(|| incremental::default_out(lang)),
         ),
-        Cmd::Recovery { lang, grammar, manifest, out, limit } => recovery::run(
+        Cmd::Recovery {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+        } => recovery::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             limit,
             &out.unwrap_or_else(|| recovery::default_out(lang)),
         ),
-        Cmd::Kinds { lang, grammar, manifest, out, limit } => kinds::run(
+        Cmd::Kinds {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+        } => kinds::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             limit,
             &out.unwrap_or_else(|| kinds::default_out(lang)),
         ),
-        Cmd::Fuzz { lang, grammar, out, iterations, seed, unguided, rare } => fuzz::run(
+        Cmd::Fuzz {
+            lang,
+            grammar,
+            out,
+            iterations,
+            seed,
+            unguided,
+            rare,
+        } => fuzz::run(
             lang,
             &grammar,
             iterations,
@@ -503,7 +554,15 @@ fn main() -> anyhow::Result<()> {
             rare,
             &out.unwrap_or_else(|| fuzz::default_out(lang)),
         ),
-        Cmd::Mutate { lang, grammar, manifest, out, files, per_file, seed } => mutate::run(
+        Cmd::Mutate {
+            lang,
+            grammar,
+            manifest,
+            out,
+            files,
+            per_file,
+            seed,
+        } => mutate::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
@@ -512,14 +571,25 @@ fn main() -> anyhow::Result<()> {
             per_file,
             seed,
         ),
-        Cmd::Roundtrip { lang, grammar, manifest, out, limit } => roundtrip::run(
+        Cmd::Roundtrip {
+            lang,
+            grammar,
+            manifest,
+            out,
+            limit,
+        } => roundtrip::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/roundtrip.json"),
             limit,
         ),
-        Cmd::Sweep { lang, grammar, manifest, out } => sweep::run(
+        Cmd::Sweep {
+            lang,
+            grammar,
+            manifest,
+            out,
+        } => sweep::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
@@ -527,7 +597,11 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
         Cmd::Rosetta { dir, crates } => rosetta::run(&dir, &crates),
-        Cmd::Verify { grammar, crates, rosetta } => verify::run(&grammar, &crates, &rosetta),
+        Cmd::Verify {
+            grammar,
+            crates,
+            rosetta,
+        } => verify::run(&grammar, &crates, &rosetta),
         Cmd::Negative { grammar, dir } => sweep::negative(&grammar, &dir),
         Cmd::Oracle { lang, srcroot } => oracle_cmd(lang, &srcroot),
     }

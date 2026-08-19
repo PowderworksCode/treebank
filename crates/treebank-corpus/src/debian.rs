@@ -36,8 +36,8 @@ use std::sync::{LazyLock, Mutex};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 
-use treebank_lang::LangName;
 use crate::rank::RankedCrate;
+use treebank_lang::LangName;
 
 const POPCON: &str = "https://popcon.debian.org/source/by_inst";
 const MIRROR: &str = "https://deb.debian.org/debian";
@@ -149,14 +149,19 @@ pub fn rank(
         if f.len() < 3 || f[0].parse::<u64>().is_err() || f[1] == "Total" {
             continue;
         }
-        let Ok(inst) = f[2].parse::<u64>() else { continue };
+        let Ok(inst) = f[2].parse::<u64>() else {
+            continue;
+        };
         ranked.push((f[1].to_string(), inst));
     }
     eprintln!("rank: popcon lists {} source packages", ranked.len());
 
     // 2. the Sources index, for versions and pool paths.
     let pool = load_sources(db)?;
-    eprintln!("rank: {SUITE} index has {} sources with an orig tarball", pool.len());
+    eprintln!(
+        "rank: {SUITE} index has {} sources with an orig tarball",
+        pool.len()
+    );
 
     // 3. Walk popcon top-down, keeping the ones that carry the language.
     //
@@ -235,7 +240,11 @@ pub fn rank(
                 break 'outer;
             }
         }
-        eprintln!("rank: {} of {k} {what} sources kept ({} looked up so far)", out.len(), queried);
+        eprintln!(
+            "rank: {} of {k} {what} sources kept ({} looked up so far)",
+            out.len(),
+            queried
+        );
     }
     // The cache is written even on a short or failed run: lookups already paid
     // for should not be paid for twice.
@@ -309,7 +318,14 @@ fn load_sources(db: &Path) -> Result<HashMap<String, Pool>> {
                     .get(&n)
                     .is_none_or(|old: &Pool| deb_version_lt(&old.version, &v));
                 if newer {
-                    pool.insert(n, Pool { version: v, directory: d, file });
+                    pool.insert(
+                        n,
+                        Pool {
+                            version: v,
+                            directory: d,
+                            file,
+                        },
+                    );
                 }
             }
         }
@@ -330,10 +346,22 @@ fn load_sources(db: &Path) -> Result<HashMap<String, Pool>> {
                 }
             }
         } else if line.is_empty() {
-            finish(&mut pkg, &mut version, &mut directory, &mut origs, &mut pool);
+            finish(
+                &mut pkg,
+                &mut version,
+                &mut directory,
+                &mut origs,
+                &mut pool,
+            );
         }
     }
-    finish(&mut pkg, &mut version, &mut directory, &mut origs, &mut pool);
+    finish(
+        &mut pkg,
+        &mut version,
+        &mut directory,
+        &mut origs,
+        &mut pool,
+    );
     if pool.is_empty() {
         bail!("parsed no sources out of {}", cached.display());
     }
@@ -475,5 +503,8 @@ fn sloc_at(name: &str, version: &str) -> Result<Sloc> {
             langs.insert(lang.to_string(), n);
         }
     }
-    Ok(Sloc { version: version.to_string(), langs })
+    Ok(Sloc {
+        version: version.to_string(),
+        langs,
+    })
 }

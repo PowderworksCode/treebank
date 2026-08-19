@@ -26,10 +26,15 @@ fn the_good_fixture_is_conformant() {
 #[test]
 fn invented_supertype_is_a_finding() {
     let mut nt = good_nt();
-    nt.supertypes.insert("_composite".into(), vec!["number".into()]);
+    nt.supertypes
+        .insert("_composite".into(), vec!["number".into()]);
     nt.named.insert("_composite".into());
     let f = check(&nt, &good_roles(), vocabulary());
-    assert!(f.iter().any(|m| m.contains("`_composite`") && m.contains("not a table-tier")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("`_composite`") && m.contains("not a table-tier")),
+        "{f:#?}"
+    );
 }
 
 #[test]
@@ -37,15 +42,27 @@ fn uncovered_node_is_a_finding() {
     let mut nt = good_nt();
     nt.named.insert("mystery_node".into());
     let f = check(&nt, &good_roles(), vocabulary());
-    assert!(f.iter().any(|m| m.contains("`mystery_node`") && m.contains("outside the vocabulary")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("`mystery_node`") && m.contains("outside the vocabulary")),
+        "{f:#?}"
+    );
 }
 
 #[test]
 fn facet_naming_nonexistent_node_is_a_finding() {
     let mut roles = good_roles();
-    roles.facets.get_mut("_callable").unwrap().push("ghost".into());
+    roles
+        .facets
+        .get_mut("_callable")
+        .unwrap()
+        .push("ghost".into());
     let f = check(&good_nt(), &roles, vocabulary());
-    assert!(f.iter().any(|m| m.contains("`ghost`") && m.contains("not a named node")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("`ghost`") && m.contains("not a named node")),
+        "{f:#?}"
+    );
 }
 
 #[test]
@@ -53,7 +70,11 @@ fn unknown_facet_key_is_a_finding() {
     let mut roles = good_roles();
     roles.facets.insert("_slop".into(), vec!["lambda".into()]);
     let f = check(&good_nt(), &roles, vocabulary());
-    assert!(f.iter().any(|m| m.contains("`_slop`") && m.contains("neither a facet-tier")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("`_slop`") && m.contains("neither a facet-tier")),
+        "{f:#?}"
+    );
 }
 
 // Tier demotion (§3.1.1): a table-tier term a grammar delivers as a facet
@@ -64,9 +85,10 @@ fn unknown_facet_key_is_a_finding() {
 /// supertypes, present as a facet, declared with a reason.
 fn demoting_roles() -> RolesManifest {
     let mut roles = good_roles();
-    roles
-        .demoted
-        .insert("_parameter".into(), "the language orders its parameter list".into());
+    roles.demoted.insert(
+        "_parameter".into(),
+        "the language orders its parameter list".into(),
+    );
     roles
         .facets
         .insert("_parameter".into(), vec!["parameter".into()]);
@@ -85,7 +107,11 @@ fn nt_without_parameter_supertype() -> NodeTypes {
 
 #[test]
 fn a_declared_demotion_is_conformant() {
-    let f = check(&nt_without_parameter_supertype(), &demoting_roles(), vocabulary());
+    let f = check(
+        &nt_without_parameter_supertype(),
+        &demoting_roles(),
+        vocabulary(),
+    );
     assert!(f.is_empty(), "unexpected findings: {f:#?}");
 }
 
@@ -95,7 +121,8 @@ fn demoting_a_term_the_vocabulary_pins_is_a_finding() {
     roles.demoted.insert("_member".into(), "because".into());
     let f = check(&good_nt(), &roles, vocabulary());
     assert!(
-        f.iter().any(|m| m.contains("`_member`") && m.contains("does not allow")),
+        f.iter()
+            .any(|m| m.contains("`_member`") && m.contains("does not allow")),
         "{f:#?}"
     );
 }
@@ -105,7 +132,11 @@ fn demotion_without_a_reason_is_a_finding() {
     let mut roles = demoting_roles();
     roles.demoted.insert("_parameter".into(), "   ".into());
     let f = check(&nt_without_parameter_supertype(), &roles, vocabulary());
-    assert!(f.iter().any(|m| m.contains("`_parameter`") && m.contains("no reason")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("`_parameter`") && m.contains("no reason")),
+        "{f:#?}"
+    );
 }
 
 #[test]
@@ -114,7 +145,8 @@ fn a_term_in_both_tiers_is_a_finding() {
     // `(_parameter)` two ways at once.
     let f = check(&good_nt(), &demoting_roles(), vocabulary());
     assert!(
-        f.iter().any(|m| m.contains("`_parameter`") && m.contains("exactly one tier")),
+        f.iter()
+            .any(|m| m.contains("`_parameter`") && m.contains("exactly one tier")),
         "{f:#?}"
     );
 }
@@ -125,7 +157,8 @@ fn demotion_without_facet_members_is_a_finding() {
     roles.facets.remove("_parameter");
     let f = check(&nt_without_parameter_supertype(), &roles, vocabulary());
     assert!(
-        f.iter().any(|m| m.contains("`_parameter`") && m.contains("no facet members")),
+        f.iter()
+            .any(|m| m.contains("`_parameter`") && m.contains("no facet members")),
         "{f:#?}"
     );
 }
@@ -135,17 +168,32 @@ fn broken_containment_is_a_finding() {
     let mut nt = good_nt();
     // Pull `_literal` out of `_expression`: literal members no longer
     // reachable from the outer term.
-    nt.supertypes.get_mut("_expression").unwrap().retain(|s| s != "_literal");
+    nt.supertypes
+        .get_mut("_expression")
+        .unwrap()
+        .retain(|s| s != "_literal");
     let f = check(&nt, &good_roles(), vocabulary());
-    assert!(f.iter().any(|m| m.contains("containment violated") && m.contains("`_literal`")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("containment violated") && m.contains("`_literal`")),
+        "{f:#?}"
+    );
 }
 
 #[test]
 fn stale_uncategorised_entry_is_a_finding() {
     let mut roles = good_roles();
-    roles.facets.get_mut("_callable").unwrap().push("comment".into());
+    roles
+        .facets
+        .get_mut("_callable")
+        .unwrap()
+        .push("comment".into());
     let f = check(&good_nt(), &roles, vocabulary());
-    assert!(f.iter().any(|m| m.contains("`comment`") && m.contains("stale")), "{f:#?}");
+    assert!(
+        f.iter()
+            .any(|m| m.contains("`comment`") && m.contains("stale")),
+        "{f:#?}"
+    );
 }
 
 #[test]

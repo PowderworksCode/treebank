@@ -197,7 +197,9 @@ pub fn run(
             let idx = crate::routing::route(lang, &f.dialect, &f.rel);
             let mut parser = Parser::new();
             parser.set_language(&langs[idx])?;
-            let Some(tree) = parser.parse(&src, None) else { return Ok((0, Vec::new())) };
+            let Some(tree) = parser.parse(&src, None) else {
+                return Ok((0, Vec::new()));
+            };
             // Only files we already handle can say anything about recovery.
             if tree.root_node().has_error() {
                 return Ok((0, Vec::new()));
@@ -212,7 +214,9 @@ pub fn run(
                 let mut damaged = Vec::with_capacity(src.len());
                 damaged.extend_from_slice(&src[..*start]);
                 damaged.extend_from_slice(&src[*end..]);
-                let Some(dt) = parser.parse(&damaged, None) else { continue };
+                let Some(dt) = parser.parse(&damaged, None) else {
+                    continue;
+                };
                 if !dt.root_node().has_error() {
                     continue; // still valid; not a recovery question
                 }
@@ -269,11 +273,12 @@ pub fn run(
         .filter(|(_, n, _)| *n >= MIN_BYTES)
         .take(10)
         .map(|(_, _, w)| Worst {
-        path: w.path.clone(),
-        deleted: w.deleted.clone(),
-        at: w.at,
-        radius_pct: w.radius_pct,
-    }).collect();
+            path: w.path.clone(),
+            deleted: w.deleted.clone(),
+            at: w.at,
+            radius_pct: w.radius_pct,
+        })
+        .collect();
 
     let report = RecReport {
         lang: lang.to_string(),
@@ -302,7 +307,10 @@ pub fn run(
         println!("  shreds {n:>5}x  deleting {tok:?}");
     }
     for w in report.worst.iter().take(3) {
-        println!("  {:>5}%  {}  deleting {:?} at {}", w.radius_pct, w.path, w.deleted, w.at);
+        println!(
+            "  {:>5}%  {}  deleting {:?} at {}",
+            w.radius_pct, w.path, w.deleted, w.at
+        );
     }
 
     if let Some(parent) = out_path.parent() {

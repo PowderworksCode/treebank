@@ -64,7 +64,9 @@ pub struct Region {
 
 fn directive(line: &str) -> Option<&str> {
     let t = line.trim_start().strip_prefix('#')?.trim_start();
-    let end = t.find(|c: char| !c.is_alphanumeric() && c != '_').unwrap_or(t.len());
+    let end = t
+        .find(|c: char| !c.is_alphanumeric() && c != '_')
+        .unwrap_or(t.len());
     Some(&t[..end])
 }
 
@@ -169,7 +171,14 @@ int f(int a, int b __attribute__((unused)))
     #[test]
     fn a_split_signature_is_found_as_one_region() {
         let rs = regions(SPLIT);
-        assert_eq!(rs, vec![Region { start: 1, mid: Some(3), end: 5 }]);
+        assert_eq!(
+            rs,
+            vec![Region {
+                start: 1,
+                mid: Some(3),
+                end: 5
+            }]
+        );
     }
 
     #[test]
@@ -188,8 +197,14 @@ int f(int a, int b __attribute__((unused)))
         let r = innermost_containing(SPLIT, 2).unwrap();
         let yes = force_branch(SPLIT, &r, true);
         assert_eq!(yes.split('\n').count(), SPLIT.split('\n').count());
-        assert!(line_survives(&yes, 2), "the kept signature is still on line 2");
-        assert!(!line_survives(&yes, 4), "the dropped one is blank, not gone");
+        assert!(
+            line_survives(&yes, 2),
+            "the kept signature is still on line 2"
+        );
+        assert!(
+            !line_survives(&yes, 4),
+            "the dropped one is blank, not gone"
+        );
     }
 
     #[test]
@@ -199,7 +214,10 @@ int f(int a, int b __attribute__((unused)))
         let src = "#ifndef FOO_H\n#define FOO_H\nint x = ;\n#endif\n";
         let r = innermost_containing(src, 3).unwrap();
         let emptied = force_branch(src, &r, false);
-        assert!(!line_survives(&emptied, 3), "the error line is gone, not fixed");
+        assert!(
+            !line_survives(&emptied, 3),
+            "the error line is gone, not fixed"
+        );
         let kept = force_branch(src, &r, true);
         assert!(line_survives(&kept, 3), "the other choice changes nothing");
     }
@@ -209,14 +227,21 @@ int f(int a, int b __attribute__((unused)))
         let src = "#ifndef H\n#ifdef A\nint a;\n#endif\n#endif\n";
         assert_eq!(
             innermost_containing(src, 3).unwrap(),
-            Region { start: 2, mid: None, end: 4 }
+            Region {
+                start: 2,
+                mid: None,
+                end: 4
+            }
         );
     }
 
     #[test]
     fn elif_chains_are_refused_rather_than_merged() {
         let src = "#if A\nint a;\n#elif B\nint b;\n#else\nint c;\n#endif\n";
-        assert!(regions(src).is_empty(), "an #elif chain has no safe two-way split");
+        assert!(
+            regions(src).is_empty(),
+            "an #elif chain has no safe two-way split"
+        );
         assert!(innermost_containing(src, 2).is_none());
     }
 

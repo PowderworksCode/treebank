@@ -24,27 +24,29 @@ mod bash;
 mod java;
 mod javascript;
 mod python;
+mod reformat;
 mod rust;
 mod rust_spans;
 mod spans;
-mod reformat;
-mod unparse;
 mod stdin_oracle;
 mod typescript;
+mod unparse;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
-pub use spans::{get as spans_for, Edge, FileSpans, Span, SpanOracle};
 pub use reformat::{get as reformatter_for, Reformatted, Reformatter};
-pub use unparse::{get as unparser_for, Rendered, Unparser};
+pub use spans::{get as spans_for, Edge, FileSpans, Span, SpanOracle};
 pub use treebank_lang::LangName;
+pub use unparse::{get as unparser_for, Rendered, Unparser};
 
 /// The oracle programs shipped inside this crate.
 fn tool(name: &str) -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("tools").join(name)
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tools")
+        .join(name)
 }
 
 pub trait Oracle: Sync {

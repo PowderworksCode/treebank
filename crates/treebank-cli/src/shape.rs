@@ -158,15 +158,23 @@ fn load_policy(grammar_dir: &Path) -> Result<Policy> {
             Default::default(),
         ));
     }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let policy: ShapePolicy = toml::from_str(&text)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let policy: ShapePolicy =
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     Ok((
         policy.ignore.into_iter().map(|i| i.signature).collect(),
         policy.baseline_missed,
-        policy.mismatch_ignore.into_iter().map(|i| i.signature).collect(),
-        policy.field_mismatch_ignore.into_iter().map(|i| i.signature).collect(),
+        policy
+            .mismatch_ignore
+            .into_iter()
+            .map(|i| i.signature)
+            .collect(),
+        policy
+            .field_mismatch_ignore
+            .into_iter()
+            .map(|i| i.signature)
+            .collect(),
         policy.baseline_field_mismatched,
         policy.lex_ignore.into_iter().map(|i| i.signature).collect(),
     ))
@@ -220,15 +228,18 @@ fn load_node_map(grammar_dir: &Path) -> Result<(HashMap<String, HashSet<String>>
     if !path.exists() {
         return Ok((Default::default(), false));
     }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let m: NodeMap = serde_json::from_str(&text)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let m: NodeMap =
+        serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     // Present-but-empty is how the table is BOOTSTRAPPED: every oracle kind
     // then reports as unmapped, together with the kinds of ours actually
     // found at its span, which is the raw material for writing the entries.
     Ok((
-        m.map.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect(),
+        m.map
+            .into_iter()
+            .map(|(k, v)| (k, v.into_iter().collect()))
+            .collect(),
         true,
     ))
 }
@@ -254,10 +265,7 @@ fn our_edges(
         // reported, and it was the checker's fault rather than the grammar's.
         let (pa, pb) = (node.start_byte(), node.end_byte());
         let pc = content_end(node);
-        let mut parents = vec![
-            (pa, pb),
-            (pa, trim_end(src, pa, pb.min(src.len()))),
-        ];
+        let mut parents = vec![(pa, pb), (pa, trim_end(src, pa, pb.min(src.len())))];
         if pc > pa && pc < pb {
             parents.push((pa, pc));
             parents.push((pa, trim_end(src, pa, pc.min(src.len()))));
@@ -363,12 +371,15 @@ fn load_field_map(grammar_dir: &Path) -> Result<(HashMap<String, HashSet<String>
     if !path.exists() {
         return Ok((Default::default(), false));
     }
-    let text = std::fs::read_to_string(&path)
-        .with_context(|| format!("read {}", path.display()))?;
-    let m: FieldMap = serde_json::from_str(&text)
-        .with_context(|| format!("parse {}", path.display()))?;
+    let text =
+        std::fs::read_to_string(&path).with_context(|| format!("read {}", path.display()))?;
+    let m: FieldMap =
+        serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
     Ok((
-        m.map.into_iter().map(|(k, v)| (k, v.into_iter().collect())).collect(),
+        m.map
+            .into_iter()
+            .map(|(k, v)| (k, v.into_iter().collect()))
+            .collect(),
         true,
     ))
 }
@@ -597,10 +608,7 @@ pub fn run(
                 &std::fs::read_to_string(manifest_path)
                     .with_context(|| format!("read {}", manifest_path.display()))?,
             )?;
-            let corpus_src = manifest_path
-                .parent()
-                .unwrap_or(Path::new("."))
-                .join("src");
+            let corpus_src = manifest_path.parent().unwrap_or(Path::new(".")).join("src");
             let mut entries = manifest.files();
             entries.sort_by(|a, b| (&a.pkgdir, &a.rel).cmp(&(&b.pkgdir, &b.rel)));
             if let Some(n) = limit {
@@ -794,9 +802,8 @@ pub fn run(
                     if ignore.contains(&signature) {
                         continue;
                     }
-                    let text = String::from_utf8_lossy(
-                        &src[s.start.min(src.len())..s.end.min(src.len())],
-                    );
+                    let text =
+                        String::from_utf8_lossy(&src[s.start.min(src.len())..s.end.min(src.len())]);
                     let text: String = text.chars().take(60).collect();
                     misses.push(Miss {
                         path: rel.to_string(),
@@ -824,7 +831,10 @@ pub fn run(
                         let key = format!("{}.{}", e.parent_kind, e.field);
                         let parents_probe = [
                             e.parent,
-                            (e.parent.0, trim_end(&src, e.parent.0, e.parent.1.min(src.len()))),
+                            (
+                                e.parent.0,
+                                trim_end(&src, e.parent.0, e.parent.1.min(src.len())),
+                            ),
                         ];
                         // Reverse index, not a scan. Answering "what field
                         // did we actually put this child under" by walking
@@ -832,18 +842,23 @@ pub fn run(
                         // BOOTSTRAP mode -- where every edge is unmapped and
                         // so every edge asks -- it took a 25-second corpus
                         // run past ten minutes on a thousand files.
-                        let observed = |by_child: &HashMap<(usize, usize), Vec<((usize, usize), String)>>| {
-                            let mut got: Vec<String> = by_child
-                                .get(&e.child)
-                                .into_iter()
-                                .flatten()
-                                .filter(|(p, _)| parents_probe.contains(p))
-                                .map(|(_, f)| f.clone())
-                                .collect();
-                            got.sort();
-                            got.dedup();
-                            if got.is_empty() { "(no field)".to_string() } else { got.join("|") }
-                        };
+                        let observed =
+                            |by_child: &HashMap<(usize, usize), Vec<((usize, usize), String)>>| {
+                                let mut got: Vec<String> = by_child
+                                    .get(&e.child)
+                                    .into_iter()
+                                    .flatten()
+                                    .filter(|(p, _)| parents_probe.contains(p))
+                                    .map(|(_, f)| f.clone())
+                                    .collect();
+                                got.sort();
+                                got.dedup();
+                                if got.is_empty() {
+                                    "(no field)".to_string()
+                                } else {
+                                    got.join("|")
+                                }
+                            };
                         let Some(expected) = field_map.get(&key) else {
                             let text = String::from_utf8_lossy(
                                 &src[e.child.0.min(src.len())..e.child.1.min(src.len())],
@@ -866,7 +881,13 @@ pub fn run(
                         // The oracle's parent may correspond to any of our
                         // nodes at that span; the edge holds if ANY of them
                         // carries the child under a mapped field.
-                        let parents = [e.parent, (e.parent.0, trim_end(&src, e.parent.0, e.parent.1.min(src.len())))];
+                        let parents = [
+                            e.parent,
+                            (
+                                e.parent.0,
+                                trim_end(&src, e.parent.0, e.parent.1.min(src.len())),
+                            ),
+                        ];
                         // Two shapes of correspondence, and the difference
                         // is real. `"right"` says the oracle's child IS the
                         // child under our `right` field. `"body>"` says it
@@ -888,13 +909,11 @@ pub fn run(
                                     // we left it unnamed.
                                     p.0 == e.child.0 && p.1 == e.child.1
                                 }
-                                Some(base) => mine
-                                    .get(&(*p, base.to_string()))
-                                    .is_some_and(|kids| {
-                                        kids.iter().any(|k| {
-                                            k.0 <= e.child.0 && k.1 >= e.child.1
-                                        })
-                                    }),
+                                Some(base) => {
+                                    mine.get(&(*p, base.to_string())).is_some_and(|kids| {
+                                        kids.iter().any(|k| k.0 <= e.child.0 && k.1 >= e.child.1)
+                                    })
+                                }
                                 None => mine
                                     .get(&(*p, f.clone()))
                                     .is_some_and(|kids| kids.contains(&e.child)),
@@ -1047,19 +1066,29 @@ pub fn run(
     };
     report.lex_disagreements = by_lex.values().map(|v| v.len()).sum();
     report.lex = by_lex.into_iter().map(cluster_of).collect();
-    report.lex.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report
+        .lex
+        .sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
     report.field_mismatched = by_field.values().map(|v| v.len()).sum();
     report.field_unmapped_count = by_field_unmapped.values().map(|v| v.len()).sum();
     report.field_mismatches = by_field.into_iter().map(cluster_of).collect();
-    report.field_mismatches.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report
+        .field_mismatches
+        .sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
     report.field_unmapped = by_field_unmapped.into_iter().map(cluster_of).collect();
-    report.field_unmapped.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report
+        .field_unmapped
+        .sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
     report.mismatched_nodes = by_mismatch.values().map(|v| v.len()).sum();
     report.unmapped_nodes = by_unmapped.values().map(|v| v.len()).sum();
     report.mismatches = by_mismatch.into_iter().map(cluster_of).collect();
-    report.mismatches.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report
+        .mismatches
+        .sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
     report.unmapped = by_unmapped.into_iter().map(cluster_of).collect();
-    report.unmapped.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report
+        .unmapped
+        .sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
 
     report.clusters = by_sig
         .into_iter()
@@ -1073,7 +1102,9 @@ pub fn run(
             }
         })
         .collect();
-    report.clusters.sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
+    report
+        .clusters
+        .sort_by(|a, b| (b.files, b.count).cmp(&(a.files, a.count)));
 
     println!(
         "shape: {} files checked ({} skipped), {} oracle node(s), {} missed in {} file(s), {} cluster(s)",
@@ -1093,13 +1124,19 @@ pub fn run(
             report.unmapped.len(),
         );
         for c in report.mismatches.iter().take(12) {
-            println!("  MISMATCH {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            println!(
+                "  MISMATCH {:>5} files {:>7}x  {}",
+                c.files, c.count, c.signature
+            );
             if let Some(e) = c.examples.first() {
                 println!("            e.g. {}  {:?}", e.path, e.text);
             }
         }
         for c in report.unmapped.iter().take(12) {
-            println!("  UNMAPPED {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            println!(
+                "  UNMAPPED {:>5} files {:>7}x  {}",
+                c.files, c.count, c.signature
+            );
             if let Some(e) = c.examples.first() {
                 println!("            e.g. {}  {:?}", e.path, e.text);
             }
@@ -1112,7 +1149,10 @@ pub fn run(
             report.lex.len(),
         );
         for c in report.lex.iter().take(8) {
-            println!("  LEX      {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            println!(
+                "  LEX      {:>5} files {:>7}x  {}",
+                c.files, c.count, c.signature
+            );
             if let Some(e) = c.examples.first() {
                 println!("            e.g. {}  {:?}", e.path, e.text);
             }
@@ -1127,13 +1167,19 @@ pub fn run(
             report.field_unmapped.len(),
         );
         for c in report.field_mismatches.iter().take(14) {
-            println!("  FIELD    {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            println!(
+                "  FIELD    {:>5} files {:>7}x  {}",
+                c.files, c.count, c.signature
+            );
             if let Some(e) = c.examples.first() {
                 println!("            e.g. {}  {:?}", e.path, e.text);
             }
         }
         for c in report.field_unmapped.iter().take(14) {
-            println!("  FIELD-U  {:>5} files {:>7}x  {}", c.files, c.count, c.signature);
+            println!(
+                "  FIELD-U  {:>5} files {:>7}x  {}",
+                c.files, c.count, c.signature
+            );
             if let Some(e) = c.examples.first() {
                 println!("            e.g. {}  {:?}", e.path, e.text);
             }

@@ -32,7 +32,6 @@ impl Ecosystem for Rust {
     fn classify(&self, rel: &Path) -> Option<Option<String>> {
         (rel.extension()?.to_str()? == "rs").then_some(None)
     }
-
 }
 
 fn column(headers: &csv::StringRecord, name: &str) -> Result<usize> {
