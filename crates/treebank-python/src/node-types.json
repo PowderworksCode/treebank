@@ -1764,11 +1764,27 @@
       "required": true,
       "types": [
         {
-          "type": "_pattern",
+          "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "list_pattern",
+          "named": true
+        },
+        {
+          "type": "member_expression",
           "named": true
         },
         {
           "type": "pattern_list",
+          "named": true
+        },
+        {
+          "type": "subscript_expression",
+          "named": true
+        },
+        {
+          "type": "tuple_pattern",
           "named": true
         }
       ]
