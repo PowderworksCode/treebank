@@ -418,7 +418,9 @@ module.exports = grammar({
     ),
 
     type_qualifier: _ => choice(
-      'const', 'volatile', 'restrict', '__restrict__', '__restrict',
+      'const', '__const', '__const__',
+      'volatile', '__volatile', '__volatile__',
+      'restrict', '__restrict__', '__restrict',
       '_Atomic',
       // Clang's nullability qualifiers, which Apple's headers use and which
       // reach a distribution through vendored copies of them.
@@ -517,8 +519,15 @@ module.exports = grammar({
       seq(field('type', $._sizeable_type), repeat1($._size_or_sign)),
     ),
 
+    // GCC's alternate spellings are here rather than in a tolerance list:
+    // `typedef __signed__ char __s8;` is how every kernel UAPI header
+    // spells it, and the double-underscore forms exist precisely so a
+    // header can use the keyword in a translation unit that has `#define
+    // signed` in it.
     _size_or_sign: _ => choice(
-      'signed', 'unsigned', 'long', 'short',
+      'signed', '__signed', '__signed__',
+      'unsigned',
+      'long', 'short',
       '_Complex', '__complex__', '_Imaginary',
     ),
 

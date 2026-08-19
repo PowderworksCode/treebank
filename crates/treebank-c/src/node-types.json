@@ -4311,6 +4311,14 @@
     "named": false
   },
   {
+    "type": "__const",
+    "named": false
+  },
+  {
+    "type": "__const__",
+    "named": false
+  },
+  {
     "type": "__declspec",
     "named": false
   },
@@ -4340,6 +4348,14 @@
   },
   {
     "type": "__restrict__",
+    "named": false
+  },
+  {
+    "type": "__signed",
+    "named": false
+  },
+  {
+    "type": "__signed__",
     "named": false
   },
   {

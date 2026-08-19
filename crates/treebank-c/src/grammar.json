@@ -5131,7 +5131,23 @@
         },
         {
           "type": "STRING",
+          "value": "__const"
+        },
+        {
+          "type": "STRING",
+          "value": "__const__"
+        },
+        {
+          "type": "STRING",
           "value": "volatile"
+        },
+        {
+          "type": "STRING",
+          "value": "__volatile"
+        },
+        {
+          "type": "STRING",
+          "value": "__volatile__"
         },
         {
           "type": "STRING",
@@ -5580,6 +5596,14 @@
         {
           "type": "STRING",
           "value": "signed"
+        },
+        {
+          "type": "STRING",
+          "value": "__signed"
+        },
+        {
+          "type": "STRING",
+          "value": "__signed__"
         },
         {
           "type": "STRING",

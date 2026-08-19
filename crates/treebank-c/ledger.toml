@@ -15,31 +15,43 @@ Two placements are worth stating because they are choices and not oversights. `c
 `_name` has exactly one member, and that is a fact about C. C has a single lexical class of names: `foo` in `foo bar;` is a type only because a typedef the parser cannot see says so. `type_identifier` exists as an alias in type POSITION, where the position and not the token is what decides.'''
 
 [corpus]
-source = 'Debian sid source packages ranked by popcon installs, filtered to packages with >=2000 SLOC of C and more C than C++; upstream .orig.tar.* only; .c and .h, with C++ headers excluded by content'
-files = 0
-packages = 0
-ranking_note = '''
-C has no registry, so popularity is borrowed, and Debian is the only source that supplies a popularity signal and a source tarball for the same name — which is why it beats vcpkg and Conan (no download counts) and a GitHub star scrape (no version identity). popcon counts machines, which is the same kind of metric as crates.io downloads rather than java's dependent-repos proxy. The bias is explicit and it is the point: this corpus is the C a distribution SHIPS — system libraries, daemons, autotools trees, decades-old code that still runs everything — and not trending C on GitHub, which would give different numbers. The SLOC filter exists because popcon ranks everything Debian ships: without one the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc (no C at all).'''
-blind_to = '''
-`.h` is shared by C and C++ and the extension cannot tell them apart, so the corpus filter reads the file: a header with unguarded `namespace`, `template<`, `class` or `public:` is dropped, with comments, string literals and every `__cplusplus`-guarded region excluded from that scan. The filter is blunt on purpose — it is a corpus boundary, not a language detector — and it drops real C headers that talk ABOUT C++ in the wrong place.
+source = '''
+**A stand-in, and it is named rather than dressed up.** The corpus swept here is the 3,662 `.c` and `.h` files present on the build machine — glibc, X11, php, openssl, glib and the linux UAPI headers under `/usr/include`, plus mypyc's vendored C. It is header-heavy where a real C corpus is source-heavy, it is one distribution's installed set rather than a ranked sample of what a distribution ships, and gap numbers from it are not gap numbers from Debian.
 
-No build system is run, so a generated `config.h` is simply absent. That shows up as an indeterminate oracle verdict rather than a fabricated one; resolving more would mean executing arbitrary upstream build scripts.'''
+The Debian path is BUILT and unrun: `treebank rank --lang c` and `treebank fetch --lang c` work today, ranking sid source packages by popcon installs and filtering to packages with >=2000 SLOC of C and more C than C++, taking upstream `.orig.tar.*` only. What has not happened is the fetch, which is tens of gigabytes. When it does, these numbers are replaced rather than added to.'''
+files = 3662
+packages = 2
+ranking_note = '''
+C has no registry, so popularity has to be borrowed, and Debian is the only source that supplies a popularity signal and a source tarball for the same name — which is why it beats vcpkg and Conan (no download counts) and a GitHub star scrape (no version identity). popcon counts machines, which is the same kind of metric as crates.io downloads rather than java's dependent-repos proxy. The bias is explicit and it is the point: that corpus is the C a distribution SHIPS — system libraries, daemons, autotools trees, decades-old code that still runs everything — and not trending C on GitHub, which would give different numbers. The SLOC filter exists because popcon ranks everything Debian ships: without one the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc (no C at all).
+
+The C and C++ filters are written as a PARTITION and tested as one — C wants `ansic >= cpp`, C++ wants `cpp > ansic` — so glibc cannot enter the C++ corpus on its fringe and LibreOffice cannot enter the C one on its.'''
+blind_to = '''
+`.h` is shared by C and C++ and the extension cannot tell them apart, so the corpus filter reads the file: a header with unguarded `namespace`, `template<`, `class` or `public:` is dropped, with comments, string literals and every `__cplusplus`-guarded region excluded from that scan. The filter is blunt on purpose — a corpus boundary, not a language detector — and it drops real C headers that talk ABOUT C++ in the wrong place.
+
+No build system is run, so a generated `config.h` is simply absent. That is the largest single reason the oracle answers `indeterminate` as often as it does, and it shows up as an unadjudicable file rather than a fabricated verdict. Resolving more would mean executing arbitrary upstream build scripts.
+
+The stand-in corpus above is blind to something else again, and it matters more: it is almost all HEADERS. Declaration syntax is over-represented and statement syntax is under-represented, so the gap clusters below are a fair picture of what breaks in a header and a poor one of what breaks in a `.c`.'''
 
 [corpus.sweep]
-files = 0
-passed = 0
-failed = 0
-gap_files = 0
-noise_files = 0
-pass_rate = 'not yet run'
+files = 3662
+passed = 2184
+failed = 1478
+gap_files = 422
+config_files = 334
+noise_files = 722
+indeterminate_files = 681
+clusters = 157
+pass_rate = '59.6%'
 note = '''
-NO CORPUS SWEEP HAS BEEN RUN. The acquisition path, the filter and the oracle are all in place and the sweep is one `treebank fetch` away, but a Debian sid fetch is measured in tens of gigabytes and this grammar has not had one. Quoting a pass rate from anything smaller would be quoting a number about a different population, so the fields above are zero rather than filled in from the local measurement below.
+Adjudicated by the libclang oracle, not raw parse success, and the four buckets are the point. Of 1,478 failures: **422 are grammar gaps** — valid C this grammar rejects, the number to drive down — **334 are configuration-inherent**, valid C that cannot be represented as written because a preprocessor conditional splits a construct, and **722 are noise**, where the reference parser did not vouch for the file.
 
-What HAS been measured, stated as exactly what it is: 3,662 `.c` and `.h` files present on the build machine — glibc, X11, php, openssl, glib and the linux UAPI headers under `/usr/include`, plus mypyc's vendored C — reduced first by `treebank-preprocessing` with `__cplusplus` undefined, exactly as a sweep would. **2,881 parse clean, 781 do not: 78.7%.** That number is raw parse success and NOT a gap rate: nothing adjudicated it, so the 781 still contain C++ headers the corpus filter would have dropped, `#include`d fragments that begin mid-expression and are not translation units at all, and files that are genuinely valid C the grammar cannot yet read. It is a floor on the grammar and a ceiling on nothing.
+The noise bucket is inflated and by how much is recorded: the oracle answered 756 valid, 41 invalid and **681 indeterminate** over the 1,478, and `Oracle::validate` collapses indeterminate to false so that no fix agent is ever aimed at a file whose validity nobody can vouch for. So 681 of the 722 noise files are "we could not tell", not "the reference rejected it". A C gap number quoted without its indeterminate count is not a claim this crate makes.
 
-For calibration on what that is worth: the patched upstream tree-sitter-c this grammar replaces passed 43,089 of 84,455 files on the real Debian corpus, 51%. The two numbers are over DIFFERENT populations and must not be subtracted; the local corpus is header-heavy where the Debian one is source-heavy, which flatters headers-first work like this one.
+Read the other way: 2,184 + 334 = **2,518 of 3,662 files, 68.8%, are either parsed or accounted for**, and 422 are the queue.
 
-Dead-branch elimination is load-bearing and its contribution is measured here too: without it, 1,477 of the same 3,662 files fail rather than 781, so it is worth 696 files here — 19% of the corpus. The `extern "C" {` opened inside one `#ifdef __cplusplus` and closed inside another is not a grammar bug and has no grammar fix — the token stream is not nested — which is what `routing::preprocessing` and the `treebank-preprocessing` crate exist for.'''
+Two contributions are worth separating out. Dead-branch elimination is load-bearing — without `treebank-preprocessing`, 1,477 of these files fail on a raw parse rather than 781, because the `extern "C" {` opened inside one `#ifdef __cplusplus` and closed inside another has no grammar fix at all; the token stream is not nested. And the sweep's macro census explains a further 78 gap files outright: they parse once their package's own macros are expanded.
+
+For calibration on what 422 is worth: the patched upstream tree-sitter-c this grammar replaces passed 43,089 of 84,455 files on the real Debian corpus, 51%, with 13,826 gap files. The two are over different populations and must not be subtracted.'''
 
 [corpus.recovery]
 note = '''
@@ -70,23 +82,25 @@ The rule reads category counts and no message text at all: valid iff no parse-ca
 
 [[known_gaps]]
 construct = 'an unexpanded macro inside the declaration specifiers'
-files = 128
+files = 45
 note = '''
-`extern ZEND_API zend_class_entry *zend_ce_closure;`, `static BASE64_FORCE_INLINE __m256i f(void)`, `OSSL_DEPRECATEDIN_3_0 int ERR_load_ASN1_strings(void);` — an identifier that will expand to a storage class, an attribute or nothing, sitting beside the real type. The specifier soup admits exactly one type and this is a second one, so the declaration fails.
+`static zend_always_inline zend_result zend_register_class_alias(...)`, `extern ZEND_API zend_class_entry *zend_ce_closure;`, `OSSL_DEPRECATEDIN_3_0 int ERR_load_ASN1_strings(void);` — an identifier that will expand to a storage class, an attribute or nothing, sitting beside the real type. The specifier soup admits exactly one type and this is a second one, so the declaration fails.
 
 The fix that suggests itself is a `macro_modifier` alternative in `_declaration_modifiers` matching a bare identifier at a negative dynamic precedence. It is deliberately NOT taken: it makes any juxtaposition of identifiers a declaration, which is the accepts-invalid direction the negative corpus exists to catch, and `test/negative/two-expressions-juxtaposed.c` would stop failing. Recorded here so the next attempt starts after that reasoning rather than before it.'''
 
 [[known_gaps]]
 construct = 'an unexpanded macro after a declarator'
-files = 65
+files = 94
 note = '''
-`CARD32 length B32;` in X11's protocol headers and `struct atm_trafprm rxtp __ATM_API_ALIGN;` in the linux UAPI ones: an attribute macro where `__attribute__((...))` would go. Same shape as the entry above and rejected for the same reason — admitting a bare identifier after a declarator makes `int x y;` parse.'''
+`extern void aio_init (const struct aioinit *__init) __THROW __nonnull ((1));` — this is the LARGEST single gap and it is glibc's, not one package's: `__THROW` sits after the declarator of very nearly every function glibc declares, and `_X_NONSTRING`, `__attribute_nonstring__` and `__ATM_API_ALIGN` do the same in X11 and the kernel UAPI headers. 65 files in the top cluster, 17 and 11 and 9 more in the clusters that differ only in what the return type was.
+
+Same shape as the entry above and rejected for the same reason — admitting a bare identifier after a declarator makes `int x y;` parse. The macro census in the sweep report names the macro at each site, which is what writing a minimal rule would need if the trade is ever taken.'''
 
 [[known_gaps]]
 construct = 'a macro standing in for a whole parameter list'
-files = 55
+files = 8
 note = '''
-`void base64_stream_encode_avx BASE64_ENC_PARAMS { … }` — the parameter list, parentheses and all, arrives from a macro. There is no declarator shape to match, because the tokens that would form one are not there.'''
+`void base64_stream_encode_avx BASE64_ENC_PARAMS { … }` — the parameter list, parentheses and all, arrives from a macro. There is no declarator shape to match, because the tokens that would form one are not there. This one the sweep diagnoses for itself: 8 of the 16 files in its cluster parse once `BASE64_ENC_PARAMS` is expanded, and the census names it.'''
 
 [[deviations]]
 what = '''

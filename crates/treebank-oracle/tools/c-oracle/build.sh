@@ -9,10 +9,21 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-LLVM_DIR="${TREEBANK_LLVM_DIR:-/usr/lib/llvm-20}"
-if [ ! -f "$LLVM_DIR/include/clang-c/Index.h" ]; then
-  echo "c-oracle: no libclang headers at $LLVM_DIR (apt install libclang-20-dev," >&2
-  echo "          or set TREEBANK_LLVM_DIR to an llvm install)" >&2
+# The version is PINNED by whatever this resolves to, and the pin is
+# recorded in each ledger. Searching newest-first rather than hard-coding
+# one is a convenience for a fresh machine, not a licence to let it float:
+# a build that picks a different libclang than the ledger names is a build
+# whose numbers are not the ledger's numbers, which is why the version is
+# echoed at the end and expected to be read.
+LLVM_DIR="${TREEBANK_LLVM_DIR:-}"
+if [ -z "$LLVM_DIR" ]; then
+  for d in $(ls -d /usr/lib/llvm-* 2>/dev/null | sort -V -r); do
+    if [ -f "$d/include/clang-c/Index.h" ]; then LLVM_DIR="$d"; break; fi
+  done
+fi
+if [ -z "$LLVM_DIR" ] || [ ! -f "$LLVM_DIR/include/clang-c/Index.h" ]; then
+  echo "c-oracle: no libclang headers found under /usr/lib/llvm-*" >&2
+  echo "          (apt install libclang-dev, or set TREEBANK_LLVM_DIR)" >&2
   exit 1
 fi
 
