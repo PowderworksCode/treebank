@@ -549,7 +549,23 @@
       "required": true,
       "types": [
         {
+          "type": "_expression",
+          "named": true
+        },
+        {
           "type": "_statement",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
+          "type": "concatenation",
+          "named": true
+        },
+        {
+          "type": "word",
           "named": true
         }
       ]
@@ -1304,6 +1320,10 @@
           "named": true
         },
         {
+          "type": "regex",
+          "named": true
+        },
+        {
           "type": "word",
           "named": true
         }
@@ -1822,6 +1842,10 @@
   {
     "type": "readonly",
     "named": false
+  },
+  {
+    "type": "regex",
+    "named": true
   },
   {
     "type": "return",

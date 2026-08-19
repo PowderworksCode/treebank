@@ -270,7 +270,16 @@ module.exports = grammar({
       repeat(field('argument', $._argument)),
     )),
 
-    _argument: $ => choice($._word_like, $.redirect),
+    // `!` and `{}` are ordinary ARGUMENTS here -- `find . ! -iname x`,
+    // `-exec rm {} \;` -- even though both are operator spellings at a
+    // statement's head. Position is the whole difference, so they are
+    // spelled at the argument position and aliased to word.
+    _argument: $ => choice(
+      $._word_like,
+      $.redirect,
+      alias('!', $.word),
+      alias(token('{}'), $.word),
+    ),
 
     _assignment: $ => choice($.variable_assignment, $.declaration_command),
 
@@ -327,7 +336,12 @@ module.exports = grammar({
 
     _conditional: $ => repeat1(choice(
       $._word_like,
-      '!', '&&', '||', '==', '!=', '=~', '<', '>', '-a', '-o', '(', ')',
+      // The right side of `=~` is a REGEX, lexed by bash in its own mode:
+      // `^(pip|easy)[23]$` is one operand even though parens and pipes are
+      // operators everywhere else. One token, bracket-groups kept whole so
+      // a `]` inside a class does not end the conditional.
+      seq('=~', optional(alias(token(prec(1, /([^\s\[\]]|\[[^\]]*\])+/)), $.regex))),
+      '!', '&&', '||', '==', '!=', '<', '>', '-a', '-o', '(', ')',
     )),
 
     arithmetic_command: $ => seq('((', optional($._arithmetic), '))'),
@@ -511,6 +525,9 @@ module.exports = grammar({
     // and started a phantom nested substitution that ran to EOF.
     command_substitution: $ => choice(
       seq('$(', $._statements, ')'),
+      // `$(< file)` is bash's read-a-file substitution -- a bare input
+      // redirect with no command, meaning `$(cat file)` without the cat.
+      seq('$(', '<', $._word_like, ')'),
       seq(
         alias($._backtick_open, '`'),
         $._statements,
