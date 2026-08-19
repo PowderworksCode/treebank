@@ -274,11 +274,11 @@
           "named": true
         },
         {
-          "type": "concatenation",
+          "type": "number",
           "named": true
         },
         {
-          "type": "word",
+          "type": "variable_name",
           "named": true
         }
       ]
@@ -297,11 +297,11 @@
           "named": true
         },
         {
-          "type": "concatenation",
+          "type": "number",
           "named": true
         },
         {
-          "type": "word",
+          "type": "variable_name",
           "named": true
         }
       ]
@@ -382,11 +382,11 @@
           "named": true
         },
         {
-          "type": "concatenation",
+          "type": "number",
           "named": true
         },
         {
-          "type": "word",
+          "type": "variable_name",
           "named": true
         }
       ]

@@ -316,8 +316,19 @@ module.exports = grammar({
     // shape a consumer wants here is "this is arithmetic", and building a
     // second expression grammar to say `a+b*c` groups one way earns nothing
     // a query would ask for.
+    //
+    // The OPERANDS are not `_word_like`, though: `word` admits `*` and `+`
+    // as ordinary characters, so `$A*5+$B` lexed its middle as one word
+    // `*5+` and the token stream inside the parens was fiction. A bare name
+    // in arithmetic IS a variable reference, so the operands are names,
+    // numbers and expansions, and the operators get to be themselves.
     _arithmetic: $ => repeat1(choice(
-      $._word_like,
+      $.variable_name,
+      // Hex and explicit-base literals are arithmetic-only spellings:
+      // `0x1f`, `2#101`, `10#99`. The plain `number` token stops at the
+      // digits and the tail read as a variable_name.
+      alias(token(prec(1, /0[xX][0-9a-fA-F]+|[0-9]+#[0-9a-zA-Z@_]+/)), $.number),
+      $._expression,
       '+', '-', '*', '/', '%', '**', '=', '+=', '-=', '*=', '/=', '%=',
       '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!', '~', '^', '&', '|',
       '<<', '>>', '++', '--', '?', ':', ',', '(', ')',
