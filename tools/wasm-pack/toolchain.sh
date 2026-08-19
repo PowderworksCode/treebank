@@ -2,7 +2,7 @@
 # The wasm toolchain pin, and how to get it.
 #
 # Sourced by scripts/build-wasm.sh. Kept separate because it is the piece with
-# the same weight as ledger.json's generate_cli: changing anything here changes
+# the same weight as ledger.toml's generate_cli: changing anything here changes
 # every pack's bytes, and it should be reviewable on its own.
 #
 # WHY wasi-sdk AND NOT EMSCRIPTEN. Both produce byte-reproducible output and

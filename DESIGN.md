@@ -371,7 +371,7 @@ and they are decided differently:
    from them.
 
 The cases that fall under (2) are recorded per grammar in
-`version_policy.json` and, because a policy nobody checks is a comment,
+`version_policy.toml` and, because a policy nobody checks is a comment,
 each one also gets a file in `test/negative/` — so the rejection is a gate,
 not a note. The sweep reads that file and books matching failures as
 `version` rather than `gap` (§4.3).
@@ -405,7 +405,7 @@ Adjudication over the version set:
   *and* the rejection is not a declared version-policy rejection (§4.2).
   Otherwise a bug; the union must cover every version it claims.
 - **version** — the grammar rejects a file that only an OLDER version-oracle
-  accepts, and `version_policy.json` declares that construct rejected. Both
+  accepts, and `version_policy.toml` declares that construct rejected. Both
   conditions are required: the declaration alone cannot suppress a failure
   that the CURRENT oracle calls valid, so a real gap can never hide behind a
   policy entry.
@@ -470,7 +470,7 @@ Four things make it work in practice:
    silence a real `PropertySignature` disagreement elsewhere, which is how a
    check like this quietly stops working.
 
-`shape_policy.json` per grammar holds the declared granularity differences,
+`shape_policy.toml` per grammar holds the declared granularity differences,
 each with its reasoning, and a `baseline_missed` ratchet. The ratchet is the
 part that makes it a gate rather than a report, and it earns its keep: the
 fix that raised the type operators above `PREC.cast` also lifted them above
@@ -796,9 +796,9 @@ which question was asked.
 is 2.7 ∪ 3.x by design, so `print x` is a widening against py3's parser and
 is meant to be one. Left undeclared, that single decision dominates every
 run and buries the findings that are not decisions. Each grammar may carry a
-`fuzz_policy.json` naming what it accepts on purpose, matched narrowly
+`fuzz_policy.toml` naming what it accepts on purpose, matched narrowly
 against a prefix of the shrunk program — the same discipline
-`shape_policy.json` uses, for the same reason: a blanket ignore silences the
+`shape_policy.toml` uses, for the same reason: a blanket ignore silences the
 real finding that arrives next month wearing similar clothes.
 
 Minimal examples also collapse together, so the tape doubles as the
@@ -854,7 +854,7 @@ crates/
                               #   the `treebank roles` checker
   treebank-python/
     grammar.js  src/scanner.c  src/ (generated, committed)
-    roles.json  ledger.json
+    roles.json  ledger.toml
     test/corpus/  test/negative/  test/negative/<version>/
     bindings/                 # rust crate + wasm
   treebank-rust/              # same shape
@@ -876,7 +876,13 @@ test/rosetta/                 # parallel programs + expected-roles files
   `tree-sitter-<lang>.wasm` alongside the Rust crate, and `treebank-core`
   ships a JS/wasm package that loads them and provides facet-aware queries.
   `roles.json` travels inside both the crate and the npm package.
-- **`ledger.json`** is each grammar's evidence file, machine-validated by
+- **`ledger.toml`** is TOML rather than JSON because it is mostly prose. A
+  paragraph explaining why a deviation exists is one escaped line in JSON
+  and a readable block in TOML, and this is the file someone reads when
+  deciding whether to trust the grammar. The machine-readable manifests
+  next to it — `roles.json`, `node_map.json`, `field_map.json` — stay JSON:
+  they are lists of node names, where TOML buys nothing.
+- **`ledger.toml`** is each grammar's evidence file, machine-validated by
   `treebank ledger`: language, versions covered, one pinned oracle per
   version family, corpus description and its declared blind spots, sweep
   results, conformance-suite results, and the vocabulary's uncategorised
@@ -913,7 +919,7 @@ test/rosetta/                 # parallel programs + expected-roles files
 
    That skew was not free while it lasted: a *query* valid under 0.25
    could be an impossible pattern under 0.26, which is how the
-   supertype-field rule in `treebank-rust/ledger.json` came to light.
+   supertype-field rule in `treebank-rust/ledger.toml` came to light.
 
 ## 8. Order of work
 

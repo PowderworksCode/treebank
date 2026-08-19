@@ -32,10 +32,19 @@ SLUG=$(git remote get-url origin 2>/dev/null \
   | sed -E 's#(git@|https://)github.com[:/]##; s/\.git$//') || SLUG="PowderworksCode/treebank"
 BASE="https://github.com/$SLUG/releases/download"
 
+# The ledger is TOML, which jq cannot read. One field at a time, so a
+# missing key is an empty string rather than a failed pipeline.
+ledger_field() {
+  python3 -c '
+import sys, tomllib
+d = tomllib.load(open(sys.argv[1] + "/ledger.toml", "rb"))
+print(d.get(sys.argv[2], ""))' "$1" "$2"
+}
+
 entries=()
 for crate in crates/treebank-*/; do
   lang=$(basename "$crate" | sed 's/^treebank-//')
-  [ -f "$crate/ledger.json" ] || continue          # only grammar crates
+  [ -f "$crate/ledger.toml" ] || continue          # only grammar crates
   pack="treebank-$lang"
 
   # The newest release tag for this pack is what "current" means.
@@ -56,9 +65,9 @@ for crate in crates/treebank-*/; do
   entries+=("$(jq -n \
     --arg pack "$pack" --arg grammar "$lang" --arg version "$version" \
     --arg tag "$tag" --arg base "$BASE" --arg sha "$sha" \
-    --arg vocabulary "$(jq -r '.vocabulary // ""' "$crate/ledger.json")" \
-    --arg cli "$(jq -r '.generate_cli // ""' "$crate/ledger.json")" \
-    --arg versions "$(jq -r '.versions // ""' "$crate/ledger.json")" \
+    --arg vocabulary "$(ledger_field "$crate" vocabulary)" \
+    --arg cli "$(ledger_field "$crate" generate_cli)" \
+    --arg versions "$(ledger_field "$crate" versions)" \
     '{
        pack: $pack,
        grammar: $grammar,

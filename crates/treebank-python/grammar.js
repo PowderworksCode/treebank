@@ -6,7 +6,7 @@
  * Threaded table-tier roles (18): _statement _expression _declaration
  * _pattern _name _literal _parameter _argument _member _clause? no — see
  * ledger. Actual list: see `supertypes` below; omissions and the reasons
- * for them are in ledger.json's roles_note.
+ * for them are in ledger.toml's roles_note.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />

@@ -30,7 +30,7 @@ for g in $GRAMMARS; do
   #    fine: the name is the one fact that catches it, and grammar.json is
   #    its authority, not the directory.
   "$PY" - "$g" "$OUT/treebank-$g.wasm" <<'PY'
-import json, sys
+import json, tomllib, sys
 from wasmtime import Engine, Linker, Module, Store, WasiConfig
 
 lang, path = sys.argv[1:3]
@@ -46,7 +46,7 @@ got_name = mem.read(store, e["tb_language_name"](store),
 assert got_name == want_name, f"{lang}: module says {got_name!r}, grammar.json says {want_name!r}"
 
 prov = blob(e["tb_provenance"](store), e["tb_provenance_len"](store))
-ledger = json.load(open(f"crates/treebank-{lang}/ledger.json"))
+ledger = tomllib.load(open(f"crates/treebank-{lang}/ledger.toml", "rb"))
 for field in ("language", "vocabulary", "generate_cli"):
     assert prov[field] == ledger[field], f"{lang}: provenance {field} {prov[field]!r} != ledger {ledger[field]!r}"
 

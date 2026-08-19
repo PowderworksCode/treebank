@@ -1,0 +1,174 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'rust'
+versions = '''
+editions 2015–2024 in one grammar: try!() coexists with ?, async/await/dyn are keywords, let-chains and let-else, labeled blocks, c"…" and cr"…" literals, &raw const/mut, PEP-nothing — plus `safe`/`raw`/`default`/`auto`/`union`/`box`/`macro_rules` handled as soft keywords so edition-crossing identifier uses keep parsing'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+21 of 22 table-tier terms are threaded — rust's expression-orientation makes _control_flow/_branch/_loop/_jump nest inside _expression (python could not thread _control_flow at all), _member threads through impl and trait bodies, and _modifier gets its first members (visibility_modifier, mutable_specifier). _clause was the one unthreadable term (match arms are position-specific; same argument as python's ledger) and MOVED to the facet tier in vocabulary 0.2.0 on that evidence — where_clause and match_arm are its members here. try_expression (`x?`) is a _jump member: it is rust's raise.'''
+toolchain_note = '''
+RESOLVED by bumping the generate CLI to 0.26.12, so the version that generates and the version that runs are the same and the rule below is simply the rule. Kept because the rule itself still governs what a consumer can write. Under 0.26 a field pattern whose PARENT is a supertype accepts only a SUPERTYPE child; a concrete child is an 'impossible pattern'. 0.25.10 accepted both, which is how the split was found. Measured on identical parsers: `(_declaration name: (_name))` valid in both; `(_declaration name: (identifier))` valid in 0.25, impossible in 0.26; same for `(_loop body: (_body))` vs `(_loop body: (block))`. A concrete parent is unaffected — `(if_statement alternative: (else_clause))` is valid in both. TWO CONSEQUENCES FOR THE VOCABULARY. First, its positional terms are load-bearing rather than decorative: `(_declaration name: (_name))` is writable ONLY because `_name` is a term, so `_name`, `_body`, `_pattern`, `_parameter`, `_argument` and `_type` are what make the supertype layer composable under a field at all — drop one and the corresponding cross-language field query becomes unwritable without naming concrete nodes per language, which is the thing the vocabulary exists to avoid. Second, FACET children cannot sit under a supertype parent: `(_branch alternative: (_clause))` expands to a concrete alternation and is impossible, while `(_branch alternative: (_body))` is fine. Facets are queryable in their own right, not as the child of a supertype field.'''
+shape_check = '''
+`treebank shape` compares our node BOUNDARIES against syn's over the whole corpus: 31,558,086 oracle nodes across 27,509 files, 237 missed. syn runs in-process with proc-macro2's `span-locations`, so there is no subprocess. HIR was considered and rejected: it is post-desugaring, so `for` and `while` become `loop` plus `match` and `?` becomes a match on Try, and every one of those would read as a disagreement. Declared granularity differences and two known limits are in shape_policy.toml.'''
+mutation_check = '''
+`treebank mutate` — 3,904 mutants over 500 corpus files, 143 widenings in 80 clusters.'''
+error_positions = '''
+`treebank errors` — 13 of 15 rejected files are comparable: 1 exact, 10 within 16 bytes, 2 further. Median |delta| 2 bytes.'''
+fuzz_check = '''
+`treebank fuzz` — 3,000 programs derived from grammar.json, judged by syn: 703 widenings reducing to 222 distinct shrunk programs and the eight causes listed in known_widenings. Thirteen were sampled and put to rustc itself; all thirteen were confirmed. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not — which matters because real source is valid, so no amount of it can show that we reject what rust rejects.'''
+
+[corpus]
+source = '''
+top-1000 crates.io crates by all-time downloads (crates.io db dump, fetched 2026-08-16), .crate tarballs'''
+files = 27526
+packages = 1000
+blind_to = '''
+pre-2018 idioms are underrepresented (top crates track current editions); no rustc test-suite torture cases; macro-heavy DSLs appear only as token trees'''
+mutation_falsification = '''
+the same corpus swept with while_expression deleted from _loop reports 2,323 gap files (vs 2); restored, 2 again. The number is a measurement, not a silence.'''
+
+[corpus.sweep]
+files = 27526
+passed = 27511
+failed = 15
+gap_files = 2
+noise_files = 13
+pass_rate = '99.95%'
+noise_note = '''
+all 13 verified by inspection: derivative's doc/ fragments, cxx and pin-project trybuild ui fixtures (invalid by design), disabled/ source, one non-rust script'''
+
+[[oracles]]
+family = 'rust'
+tool = 'syn::parse_file, in-process (no subprocess), driven by rayon'
+version = 'syn 2'
+role = '''
+primary and only. syn is edition-tolerant in the same direction this grammar is: it parses the union of editions without needing a flag per file. rustc -Zparse-only with --edition sweeps remains the adjudicator of last resort for future disagreements; nothing in this ledger needed it.'''
+note = '''
+an unreadable file is an error, never a verdict — the property every treebank oracle carries'''
+
+[[known_gaps]]
+construct = '''
+ron's fuzzer fixture (a 2KB string of unbalanced braces with embedded blank lines) and json5's escape-soup test'''
+files = 2
+note = '''
+both are generated test fixtures; each parses clean when extracted in halves, failing only whole — a GLR interaction still uncharacterized. The one real-library construct found and fixed on the way was worth more than these two.'''
+
+[[deviations]]
+what = '''
+source_file accepts statements (not just items) at top level, so `(_statement)` matches top-level occurrences the same way it does in blocks; rustc rejects expression statements there. Union-widening, covered by test/negative would-be cases only in spirit'''
+
+[[deviations]]
+what = '''
+struct literals in condition position (`if x == S{} {}`) parse where rustc requires parens; the ban is enforced only at the condition's top level, matching the grammar's structural restriction (_no_struct_expression)'''
+
+[[deviations]]
+what = '''
+`1 +* 2` parses because `*` is unary deref in rust — the negative corpus uses `1 ++ 2` instead (no unary + in rust)'''
+
+[[deviations]]
+what = '''
+macro token trees keep strings, chars and raw strings as real tokens (so quotes and braces inside them never unbalance the tree) but everything else is deliberate soup, fenced at whitespace, '/', and '@' — each fence bought by a measured corpus failure'''
+
+[[deviations]]
+what = '''
+`else` is an else_clause node, not an inline tail of if_expression — the shared name python and typescript already used. Found by the rosetta gate on its first run: `alternative:` pointed at a block here and at an else_clause there, so no cross-language query on it worked, and `(_clause)` was a member short. Verdict-level sweep numbers are unchanged (27,511/27,526), as a pure node-level change must leave them.'''
+
+[[deviations]]
+construct = '''
+a block-like expression in statement position, followed by `*`, `-` or `&`'''
+was = '''
+one binary expression whose LEFT operand was the block. `if c { *rem = 0; }` followed by `*buf = Some(slice);` was a single multiplication, not two statements.'''
+now = '''
+the block alternative of `expression_statement` sits above every binary operator and carries `prec.dynamic(1)` — needed because the pair is a declared GLR conflict, where static precedence is not consulted. The two readings differ in what they contain: splitting gives two statements, merging gives one.'''
+note = '''
+SILENT, and rustc's own rule. Found by the shape check. In expression position nothing changed: `if c { 1 } else { 2 } * 3` is still one multiplication.'''
+
+[[deviations]]
+construct = "a macro statement's semicolon"
+was = '''
+attached, and it stayed attached — but only once the block-statement fix above was scoped to exclude macros. Boosting `macro_invocation` along with the real blocks orphaned the `;` of every `foo!(...)` in the language into an `empty_statement`.'''
+now = '''
+macros get their own alternative with a NEGATIVE dynamic precedence: available when there is no semicolon (`cfg_if! { ... }`), losing to the semicolon form whenever there is one. syn agrees — `Stmt::Macro` carries the semi.'''
+note = '''
+Recorded because it was a regression introduced by a fix and caught by the sweep in the same session; the two halves of that trade are what the scoping is for.'''
+
+[[known_widenings]]
+construct = '`_:: Errno` — a doubled colon in a parameter'
+found_by = 'mutate'
+why_accepted = 'not isolated.'
+why_not_fixed = 'not yet attempted.'
+
+[[known_widenings]]
+construct = '''
+`$x` metavariable outside a macro body — `$aa ! { }`, `use $aa ;`, `# ! [ $aa ]`'''
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 310
+why_accepted = '''
+`metavariable` is reachable from ordinary path and attribute positions, not only from inside a macro_rules transcriber where `$` has meaning.'''
+why_not_fixed = '''
+queued. Largest single family; wants metavariable confined to the macro body rules.'''
+
+[[known_widenings]]
+construct = '''
+`extern` ABI accepts a non-plain-string literal — `unsafe extern b" " { }`'''
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 234
+why_accepted = '''
+the ABI slot is `optional($.string)`, and `$.string` covers byte and raw strings. rustc: `non-string ABI literal`.'''
+why_not_fixed = 'queued. Wants a plain-string-literal rule in the ABI slot.'
+
+[[known_widenings]]
+construct = '''
+`mut` where only visibility belongs — `mut use r#XX ;`, `mut unsafe mod r#XX { }`'''
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 70
+why_accepted = '''
+`_modifier` is `choice(visibility_modifier, mutable_specifier)`, so every item taking `optional($._modifier)` also takes `mut`. rustc: `expected item, found keyword mut`.'''
+why_not_fixed = '''
+queued. Item positions should take `visibility_modifier` directly; `_modifier` stays a supertype covering both where both are legal.'''
+
+[[known_widenings]]
+construct = '''
+reserved and path keywords as a macro name — `box ! { }`, `self ! { }`, `crate ! { }`'''
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 16
+why_accepted = '''
+the macro invocation path admits path keywords and reserved words in the name position.'''
+why_not_fixed = 'queued.'
+
+[[known_widenings]]
+construct = '''
+brace macro invocation with a trailing `;` at item level — `r#XX ! { } ;`'''
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 12
+why_accepted = '''
+a braced invocation is already a complete item; the `;` is then accepted as a second, empty one. rustc: `expected item, found ;`.'''
+why_not_fixed = 'queued. Shares a cause with the `;`-as-item entry below.'
+
+[[known_widenings]]
+construct = "token tree accepts a malformed char literal \u2014 `r#XX ! { b ' a ' }`"
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 11
+why_accepted = '''
+the token tree is permissive about what a char literal may contain. rustc: `character literal may only contain one codepoint`.'''
+why_not_fixed = '''
+queued. Lexical, and the least valuable of the eight — a macro body is meant to be permissive.'''
+
+[[known_widenings]]
+construct = '`;` accepted as an item in an item list — `unsafe extern { ; }`'
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 7
+why_accepted = '''
+a stray semicolon is admitted where a foreign item is required. rustc: `non-item in item list`.'''
+why_not_fixed = 'queued.'
+
+[[known_widenings]]
+construct = '`impl` with `;` instead of a body — `unsafe impl :: r#XX ;`'
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
+seeds = 3
+why_accepted = '''
+the impl body is optional where rustc requires a block. rustc: `expected {}, found ;`.'''
+why_not_fixed = 'queued.'

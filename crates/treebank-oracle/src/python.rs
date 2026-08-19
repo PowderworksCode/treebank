@@ -19,7 +19,7 @@ impl Oracle for Python {
     /// `compile(src, path, 'exec')` — parse and post-parse SyntaxErrors,
     /// no import, no execution — so each file is judged on its own text.
     /// The interpreter versions are the language versions and are recorded
-    /// in ledger.json.
+    /// in ledger.toml.
     ///
     /// python2 is REQUIRED, not optional: a union grammar swept with only
     /// the py3 oracle books every py2-only file as noise, which silently

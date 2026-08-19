@@ -309,11 +309,11 @@ pub fn roles_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
 /// verify it: the ledger is the artifact a consumer reads to find out what
 /// this grammar is, and it is worth less than nothing when it is wrong.
 fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> Option<String> {
-    let text = std::fs::read_to_string(grammar_dir.join("ledger.json")).ok()?;
-    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let text = std::fs::read_to_string(grammar_dir.join("ledger.toml")).ok()?;
+    let v: toml::Value = toml::from_str(&text).ok()?;
     let stated = v.get("vocabulary")?.as_str()?;
     (stated != expected).then(|| {
-        format!("ledger.json states vocabulary {stated} but treebank-core carries {expected}")
+        format!("ledger.toml states vocabulary {stated} but treebank-core carries {expected}")
     })
 }
 

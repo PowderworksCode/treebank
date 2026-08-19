@@ -4,7 +4,7 @@
 #   crates/treebank-<lang>/src/     (generated, committed, checked by CI)
 #   + the tree-sitter runtime       (pinned by sha256, cached)
 #   + tools/wasm-pack/shim.c        (the pack ABI)
-#   + provenance + roles generated from ledger.json and roles.json
+#   + provenance + roles generated from ledger.toml and roles.json
 #   -> dist/wasm/treebank-<lang>.wasm
 #
 # The pack is a STANDALONE wasm module: it imports only WASI, so any runtime
@@ -62,10 +62,10 @@ trap 'rm -rf "$WORK"' EXIT
 # would break the byte-reproducibility the provenance exists to make
 # checkable.
 python3 - "$CRATE" "$GRAMMAR_NAME" "$RUNTIME_VERSION" "$WORK/embedded.c" <<'PY'
-import hashlib, json, sys
+import hashlib, json, sys, tomllib
 
 crate, grammar_name, runtime_version, out = sys.argv[1:5]
-ledger = json.load(open(f"{crate}/ledger.json"))
+ledger = tomllib.load(open(f"{crate}/ledger.toml", "rb"))
 roles_text = open(f"{crate}/roles.json").read()
 
 def sha256_file(p):

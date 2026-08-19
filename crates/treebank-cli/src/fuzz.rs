@@ -54,11 +54,11 @@
 //! grammar is 2.7 ∪ 3.x by design, so `print x` is a widening against py3's
 //! parser and is meant to be. Left undeclared, that one decision dominates
 //! every run and buries the findings that are not decisions. So each
-//! grammar may carry a `fuzz_policy.json` naming what it accepts on
+//! grammar may carry a `fuzz_policy.toml` naming what it accepts on
 //! purpose, and the report separates declared from undeclared.
 //!
 //! Entries match a PREFIX of the shrunk program, and narrowly — the same
-//! discipline `shape_policy.json` uses, for the same reason: a blanket
+//! discipline `shape_policy.toml` uses, for the same reason: a blanket
 //! ignore silences the real finding that arrives next week wearing similar
 //! clothes. Declaring `print ` is a claim about py2 print statements;
 //! declaring nothing at all would have been better than declaring `p`.
@@ -533,12 +533,12 @@ struct Declared {
 
 impl FuzzPolicy {
     fn load(grammar_dir: &Path) -> Result<FuzzPolicy> {
-        let path = grammar_dir.join("fuzz_policy.json");
+        let path = grammar_dir.join("fuzz_policy.toml");
         if !path.exists() {
             return Ok(FuzzPolicy::default());
         }
         let text = std::fs::read_to_string(&path)?;
-        serde_json::from_str(&text).with_context(|| format!("parse {}", path.display()))
+        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))
     }
 
     fn declared_reason(&self, program: &str) -> Option<&str> {
@@ -816,7 +816,7 @@ pub fn run(
         declared_count,
     );
     if !policy.rule.is_empty() && declared_count > 0 {
-        println!("  ({} declared by fuzz_policy.json)", declared_count);
+        println!("  ({} declared by fuzz_policy.toml)", declared_count);
     }
     for f in undeclared.iter().take(20) {
         println!("  {:>3}x  {}", f.seeds, f.program.replace('\n', " ⏎ "));

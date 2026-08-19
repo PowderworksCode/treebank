@@ -1,0 +1,138 @@
+# Declared exceptions for `treebank shape`. Every entry names WHY, and a
+# reason nobody can read is a reason nobody re-examines -- which is how a
+# check like this quietly stops working. TOML so the reasons are legible.
+
+rule = '''
+Boundaries `treebank shape` may ignore, as `"<tscKind> <- <our_kind>"` pairs. Each is a place our tree groups the code DIFFERENTLY from tsc on purpose, not a place we disagree about the code. Pairs rather than bare tsc kinds: ignoring `PropertySignature` outright would also silence a real PropertySignature disagreement somewhere else, which is how a check like this quietly stops working. Every entry below was read and confirmed by hand; nothing goes in here to make a number go down.'''
+baseline_missed = 23
+baseline_note = '''
+Down from 3,229. What remains is the three entries in known_limits — 6 files, each a GLR tie where the two readings hold identical node multisets, so there is nothing for dynamic precedence to weigh. Raising this number is a decision that belongs in a commit message.'''
+baseline_field_mismatched = 14634
+field_note = '''
+14,634 edge mismatches across 23 clusters, ratcheted rather than ignore-listed. Every one is an edge tsc labels and we do not carry under the mapped field -- `ArrowFunction.parameters`, `TypeParameter.name`, `BinaryExpression.operatorToken` and the rest. That is a work queue, and a ratchet keeps it visible where an ignore list would bury it. The python field map is at zero for comparison, so this is TypeScript's remaining distance rather than a limit of the check.'''
+
+[[ignore]]
+signature = 'VariableDeclarationList <- variable_declaration'
+why = '''
+tsc splits a variable statement into modifiers + a declaration LIST; we have one `variable_declaration` covering modifiers, declarators and the terminator. `declare const x: T;` gives tsc a list spanning `const x: T` with no node of ours at that start, because ours begins at `declare`.'''
+
+[[ignore]]
+signature = 'VariableDeclarationList <- for_in_statement'
+why = '''
+Same split inside `for (const k in o)`. tsc has a declaration list around `const k`; our `for_in_statement` names `left` directly.'''
+
+[[ignore]]
+signature = 'ImportClause <- import_statement'
+why = '''
+tsc's ImportClause includes the `type` keyword of `import type { A }`; our `import_clause` starts after it, with `type` as a sibling token.'''
+
+[[ignore]]
+signature = 'HeritageClause <- interface_definition'
+why = '''
+We have no node for an interface's `extends` list — the types hang directly off `interface_definition`. A real `heritage_clause` node would be an improvement, not a correction; recorded here so the difference is a decision rather than a surprise.'''
+
+[[ignore]]
+signature = 'HeritageClause <- class_heritage'
+why = '''
+tsc gives `class C extends A implements B` TWO heritage clauses; our single `class_heritage` spans both. Same call as above.'''
+
+[[ignore]]
+signature = 'Parameter <- index_signature'
+why = '''
+The `k: string` of `[k: string]: V` is a Parameter to tsc; we expose it as `name` and `index_type` fields of `index_signature` with no wrapping node.'''
+
+[[ignore]]
+signature = 'TypeParameter <- mapped_type'
+why = '''
+The `K in keyof T` of a mapped type is a TypeParameter to tsc; we model the `in` form inside `mapped_type` rather than as a type parameter.'''
+
+[[ignore]]
+signature = 'NamespaceExport <- export_statement'
+why = '''
+`export * as ns from 'm'` — tsc wraps `* as ns`; we keep the parts as siblings of `export_statement`.'''
+
+[[ignore]]
+signature = 'TemplateSpan <- template_string'
+why = '''
+tsc decomposes a template literal into Head / Span / Middle / Tail, each of which straddles a `}...${` boundary. We model it as alternating `string_content` and `template_substitution`, so no node of ours spans a substitution's close brace plus the following text. A different decomposition of the same string, not a different reading of it. Applies to the four TemplateSpan/Head/Middle/TemplateTail entries here and their `template_literal_type` twins.'''
+
+[[ignore]]
+signature = 'TemplateHead <- template_string'
+why = 'See `TemplateSpan <- template_string`.'
+
+[[ignore]]
+signature = 'TemplateMiddle <- template_string'
+why = 'See `TemplateSpan <- template_string`.'
+
+[[ignore]]
+signature = 'TemplateTail <- template_string'
+why = 'See `TemplateSpan <- template_string`.'
+
+[[ignore]]
+signature = 'TemplateLiteralTypeSpan <- template_literal_type'
+why = '''
+See `TemplateSpan <- template_string`; same decomposition, type position.'''
+
+[[ignore]]
+signature = 'TemplateHead <- template_literal_type'
+why = 'See `TemplateSpan <- template_string`.'
+
+[[ignore]]
+signature = 'TemplateMiddle <- template_literal_type'
+why = 'See `TemplateSpan <- template_string`.'
+
+[[ignore]]
+signature = 'TemplateTail <- template_literal_type'
+why = 'See `TemplateSpan <- template_string`.'
+
+[[ignore]]
+signature = 'VariableDeclaration <- catch_clause'
+why = '''
+tsc wraps a catch parameter in a VariableDeclaration; we expose it as `parameter` and `type` fields of `catch_clause` with no wrapping node. Same call as `Parameter <- index_signature`.'''
+
+[[ignore]]
+signature = 'JsxAttributes <- jsx_self_closing_element'
+why = '''
+tsc wraps an element's attributes in a JsxAttributes container; ours are direct children of the element. No information is lost -- they are already unambiguously that element's attributes -- so this is the same call as `arguments` or `class_heritage`.'''
+
+[[ignore]]
+signature = 'JsxAttributes <- jsx_opening_element'
+why = 'See `JsxAttributes <- jsx_self_closing_element`.'
+
+[[ignore]]
+signature = 'BinaryExpression <- sequence_expression'
+why = '''
+tsc models the comma operator as a left-associative BinaryExpression, so `a, b, c` nests; we model it as one flat `sequence_expression`. Different shape for the same operator, and ours is the one the vocabulary wants -- see the `sequence_expression` note in roles.json.'''
+
+[[known_limits]]
+signature = 'ArrayType <- array_type / TypeParameter <- array_type'
+files = 4
+why = '''
+`infer R extends PropertyKey[][]` binds one `[]` into the constraint and leaves the other outside. The single-`[]` case was fixed by weighting `_no_conditional_type`'s growable alternatives, but at two levels the readings are exactly symmetric: whichever way it nests, precisely one `array_type` is reached through `_no_conditional_type`, so any bonus cancels. The real fix is to forbid a bare `infer_type` as the base of `array_type` -- `(infer R extends P)[]` needs parentheses in TypeScript anyway -- which costs a duplicated type tier. Not worth it for 4 files.'''
+
+[[known_limits]]
+signature = 'CallExpression <- call_expression'
+files = 1
+why = '''
+`await f<T>(x)` binds as `(await f)<T>(x)`. `[binary_expression, await_expression, call_expression]` is a declared GLR conflict and the two readings hold IDENTICAL node multisets -- one await, one call, one type_arguments each -- so dynamic precedence has nothing to weigh. Would need the ambiguity removed structurally.'''
+
+[[known_limits]]
+signature = 'ConditionalType <- conditional_type'
+files = 1
+why = '''
+One deeply nested conditional inside a spread inside a tuple, in type-fest. Same shape as the resolved cases; not isolated further.'''
+
+[[mismatch_ignore]]
+signature = 'InferType => array_type'
+why = '''
+The nested `infer R extends PropertyKey[][]` limit already recorded under known_limits, arriving through the mapping instead of the boundary: the outer `[]` lands outside the infer, so the InferType's span holds our array_type and not our infer_type.'''
+
+[[mismatch_ignore]]
+signature = 'AwaitExpression => call_expression'
+why = '''
+The `await f<T>(x)` limit already recorded under known_limits. Same bytes, opposite nesting, so the mapping sees it where the boundary check cannot.'''
+
+[[mismatch_ignore]]
+signature = 'RestType => conditional_type'
+why = '''
+The one deeply nested type-fest conditional already recorded under known_limits.'''

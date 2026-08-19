@@ -23,9 +23,14 @@ pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 /// The grammar's facet manifest (`roles.json`).
 pub const ROLES: &str = include_str!("../../roles.json");
 
-/// The grammar's evidence file (`ledger.json`): versions covered, pinned
+/// The grammar's evidence file (`ledger.toml`): versions covered, pinned
 /// oracles, corpus and sweep numbers, known gaps and declared deviations.
-pub const LEDGER: &str = include_str!("../../ledger.json");
+///
+/// TOML rather than JSON because the content is mostly prose — a paragraph
+/// explaining why a deviation exists is one escaped line in JSON and a
+/// readable block in TOML, and this file is meant to be read by whoever is
+/// deciding whether to trust the grammar.
+pub const LEDGER: &str = include_str!("../../ledger.toml");
 
 #[cfg(test)]
 mod tests {
@@ -41,7 +46,7 @@ mod tests {
     fn ships_its_manifests() {
         let roles: serde_json::Value = serde_json::from_str(super::ROLES).unwrap();
         assert!(roles["facets"].is_object(), "roles.json carries facets");
-        let ledger: serde_json::Value = serde_json::from_str(super::LEDGER).unwrap();
-        assert_eq!(ledger["language"], "typescript");
+        let ledger: toml::Value = toml::from_str(super::LEDGER).unwrap();
+        assert_eq!(ledger["language"].as_str(), Some("typescript"));
     }
 }
