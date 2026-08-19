@@ -748,6 +748,102 @@ conformance suites, and the ledger says which population covers what. A
 clean sweep over a biased corpus is weak evidence on its own; the ledger is
 where that weakness is written down instead of discovered.
 
+### 5.9 Generating from the grammar (`treebank fuzz`)
+
+Every other check starts from source somebody wrote. The sweep reads the
+corpus, `mutate` perturbs it, `roundtrip` reprints it — all three are
+bounded by what the corpus happens to contain. That bound bites hardest in
+the accepts-invalid direction, because real source is *valid*: no quantity
+of it can demonstrate that we reject what the language rejects.
+
+So generate instead. `grammar.json` is already an EBNF syntax tree, which
+makes it a generator as well as a description — a random derivation is a
+walk that chooses branches and emits terminals. **No unparser is needed in
+this direction; the grammar is the emitter.** Then the oracle judges, and
+anything we accept that it rejects is a widening.
+
+**Soundness, given that the generator is not faithful.** Joining tokens with
+spaces is a lie — `'a` is a lifetime and `' a` is not — so some derivations
+produce text whose tokenisation differs from the derivation behind it. This
+does not weaken a finding. A case is reported only when *our parser accepts
+the text* and *the oracle rejects it*, and that pair is a widening whatever
+derivation produced the bytes: accepting a program the language does not is
+the defect, and how we came to type it is irrelevant. Infidelity costs
+yield, never correctness — an unfaithful derivation we then reject is
+discarded before it can be reported, which is most of them.
+
+**Shrinking is over the choice tape, not the program.** Generation consumes
+a byte tape and is deterministic in it, so shrinking searches for a shorter,
+smaller tape that still reproduces — Hypothesis's model rather than
+proptest's typed `Strategy`. That is the right fit here because the grammar
+is *runtime data*: a typed strategy would have to be written per grammar,
+while a tape does not care what it drives. Running off the end of the tape
+yields the first alternative, so a truncated tape still produces a complete
+program and shrinking can cut freely without emitting half a sentence.
+
+**Ask the parser, not the compiler.** Where an oracle can separate the two,
+`fuzz` uses `validate_syntax_only`. The first python run made the reason
+plain: nearly every finding was `break`, `yield` or `* x` at module level —
+all of which CPython's *parser* accepts and its *compiler* rejects. "`break`
+outside a loop" is not a syntax error, and a tree-sitter grammar has no
+business tracking loop nesting in order to produce one. Judged by
+`compile()` the check mostly rediscovers CPython's semantic pass; judged by
+`ast.parse` it reports what it is for. Where the reference tool has no
+parse-only mode — rust's `syn` has none — it falls back, and the report says
+which question was asked.
+
+**Declared widenings.** Some over-acceptance is deliberate: python's grammar
+is 2.7 ∪ 3.x by design, so `print x` is a widening against py3's parser and
+is meant to be one. Left undeclared, that single decision dominates every
+run and buries the findings that are not decisions. Each grammar may carry a
+`fuzz_policy.json` naming what it accepts on purpose, matched narrowly
+against a prefix of the shrunk program — the same discipline
+`shape_policy.json` uses, for the same reason: a blanket ignore silences the
+real finding that arrives next month wearing similar clothes.
+
+Minimal examples also collapse together, so the tape doubles as the
+clustering key. The first run over rust reduced 474 findings to 156 distinct
+programs, and those to a handful of causes — one alternation putting `mut`
+where only visibility belongs, `metavariable` reachable outside a macro
+body, an `extern` ABI accepting a byte string. This is the difference from
+`mutate`, which reports *a corpus file that does it*: here the report is
+`mut use r#XX ;`.
+
+### 5.10 Reformat invariance (`treebank reformat`)
+
+The sibling of the round trip, asking the opposite question of the same two
+tools. A *printer* renders from the tree and never sees the original bytes,
+so it asks whether we handle the canonical spelling. A *formatter* is
+text-to-text — it reflows a token stream it never stopped holding, keeps
+comments and keeps the author's spelling — so it asks whether **layout moves
+our tree**, which it must not. A rule that reads whitespace it should not,
+or a token that only lexes when it abuts its neighbour, shows up here and
+nowhere else.
+
+**Only files the formatter changed in whitespace alone are compared**, and
+that restriction is the check rather than a detail of it, because a
+formatter is *not* tree-preserving. rustfmt reorders `use` declarations,
+rewrites `extern {` into `extern "C" {`, adds a semicolon after a tail
+`return`, and collapses `|x| { f() }` to `|x| f()`. Every one is
+semantically neutral and syntactically real: the tree moves and nothing is
+wrong. Two of those are configured off; the rest cannot be.
+
+The alternative was to compare everything and keep a list of the formatter's
+known rewrites, and it is worse — the list is open-ended, and each entry is
+a blanket that also silences a genuine finding wearing the same node pair.
+Comparing the two texts with all whitespace removed costs a little yield (a
+file where black added a trailing comma is skipped) and buys a question with
+an unambiguous answer: a divergence that survives was caused by layout, and
+is therefore ours.
+
+Measured: rust 171 whitespace-only reformats of 2,000 files, **0 diverged**;
+python 157 of 1,200, **0 diverged**. Python matters most of the three,
+because python's layout is load-bearing and the invariant is not obvious
+there the way it is in a free-form language. TypeScript has no formatter
+here — tsc exposes formatting only through the language service and prettier
+is not vendored — and the command says so rather than substituting
+something else.
+
 ## 6. Code organization
 
 ```

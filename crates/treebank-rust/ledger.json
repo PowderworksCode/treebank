@@ -74,7 +74,64 @@
       "found_by": "mutate",
       "why_accepted": "not isolated.",
       "why_not_fixed": "not yet attempted."
+    },
+    {
+      "construct": "`$x` metavariable outside a macro body \u2014 `$aa ! { }`, `use $aa ;`, `# ! [ $aa ]`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 310,
+      "why_accepted": "`metavariable` is reachable from ordinary path and attribute positions, not only from inside a macro_rules transcriber where `$` has meaning.",
+      "why_not_fixed": "queued. Largest single family; wants metavariable confined to the macro body rules."
+    },
+    {
+      "construct": "`extern` ABI accepts a non-plain-string literal \u2014 `unsafe extern b\" \" { }`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 234,
+      "why_accepted": "the ABI slot is `optional($.string)`, and `$.string` covers byte and raw strings. rustc: `non-string ABI literal`.",
+      "why_not_fixed": "queued. Wants a plain-string-literal rule in the ABI slot."
+    },
+    {
+      "construct": "`mut` where only visibility belongs \u2014 `mut use r#XX ;`, `mut unsafe mod r#XX { }`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 70,
+      "why_accepted": "`_modifier` is `choice(visibility_modifier, mutable_specifier)`, so every item taking `optional($._modifier)` also takes `mut`. rustc: `expected item, found keyword mut`.",
+      "why_not_fixed": "queued. Item positions should take `visibility_modifier` directly; `_modifier` stays a supertype covering both where both are legal."
+    },
+    {
+      "construct": "reserved and path keywords as a macro name \u2014 `box ! { }`, `self ! { }`, `crate ! { }`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 16,
+      "why_accepted": "the macro invocation path admits path keywords and reserved words in the name position.",
+      "why_not_fixed": "queued."
+    },
+    {
+      "construct": "brace macro invocation with a trailing `;` at item level \u2014 `r#XX ! { } ;`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 12,
+      "why_accepted": "a braced invocation is already a complete item; the `;` is then accepted as a second, empty one. rustc: `expected item, found ;`.",
+      "why_not_fixed": "queued. Shares a cause with the `;`-as-item entry below."
+    },
+    {
+      "construct": "token tree accepts a malformed char literal \u2014 `r#XX ! { b ' a ' }`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 11,
+      "why_accepted": "the token tree is permissive about what a char literal may contain. rustc: `character literal may only contain one codepoint`.",
+      "why_not_fixed": "queued. Lexical, and the least valuable of the eight \u2014 a macro body is meant to be permissive."
+    },
+    {
+      "construct": "`;` accepted as an item in an item list \u2014 `unsafe extern { ; }`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 7,
+      "why_accepted": "a stray semicolon is admitted where a foreign item is required. rustc: `non-item in item list`.",
+      "why_not_fixed": "queued."
+    },
+    {
+      "construct": "`impl` with `;` instead of a body \u2014 `unsafe impl :: r#XX ;`",
+      "found_by": "fuzz (derived from the grammar, shrunk, confirmed against rustc)",
+      "seeds": 3,
+      "why_accepted": "the impl body is optional where rustc requires a block. rustc: `expected {}, found ;`.",
+      "why_not_fixed": "queued."
     }
   ],
-  "error_positions": "`treebank errors` \u2014 13 of 15 rejected files are comparable: 1 exact, 10 within 16 bytes, 2 further. Median |delta| 2 bytes."
+  "error_positions": "`treebank errors` \u2014 13 of 15 rejected files are comparable: 1 exact, 10 within 16 bytes, 2 further. Median |delta| 2 bytes.",
+  "fuzz_check": "`treebank fuzz` \u2014 3,000 programs derived from grammar.json, judged by syn: 703 widenings reducing to 222 distinct shrunk programs and the eight causes listed in known_widenings. Thirteen were sampled and put to rustc itself; all thirteen were confirmed. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not \u2014 which matters because real source is valid, so no amount of it can show that we reject what rust rejects."
 }
