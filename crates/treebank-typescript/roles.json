@@ -1,11 +1,9 @@
 {
   "vocabulary": "0.1.0",
+  "demoted": {
+    "_modifier": "TypeScript partitions it: `override` is the one modifier a variable declaration may not carry (`'override' modifier cannot appear on a variable declaration`), while tsc's parser takes the rest. One alternation across all seven is exactly what accepted `override var x`. All seven members are concrete types occurring nowhere else, so facet membership selects the same nodes."
+  },
   "facets": {
-    "_callable": [
-      "function_definition",
-      "arrow_function",
-      "function_expression"
-    ],
     "_binding": [
       "function_definition",
       "class_definition",
@@ -32,6 +30,38 @@
       "assignment_pattern",
       "for_in_statement"
     ],
+    "_callable": [
+      "function_definition",
+      "arrow_function",
+      "function_expression"
+    ],
+    "_clause": [
+      "case_clause",
+      "catch_clause",
+      "default_clause",
+      "else_clause",
+      "export_clause",
+      "finally_clause",
+      "import_clause"
+    ],
+    "_comment": [
+      "comment"
+    ],
+    "_identifier": [
+      "identifier",
+      "nested_identifier",
+      "private_name",
+      "type_identifier"
+    ],
+    "_modifier": [
+      "abstract_modifier",
+      "accessibility_modifier",
+      "accessor_modifier",
+      "declare_modifier",
+      "override_modifier",
+      "readonly_modifier",
+      "static_modifier"
+    ],
     "_scope": [
       "program",
       "function_definition",
@@ -43,27 +73,9 @@
       "namespace_definition",
       "catch_clause"
     ],
-    "_clause": [
-      "case_clause",
-      "catch_clause",
-      "default_clause",
-      "else_clause",
-      "export_clause",
-      "finally_clause",
-      "import_clause"
-    ],
-    "_identifier": [
-      "identifier",
-      "nested_identifier",
-      "private_name",
-      "type_identifier"
-    ],
     "_string": [
       "string",
       "template_string"
-    ],
-    "_comment": [
-      "comment"
     ]
   },
   "uncategorised": [

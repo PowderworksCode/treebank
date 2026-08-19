@@ -323,8 +323,33 @@
         {
           "type": "REPEAT",
           "content": {
-            "type": "SYMBOL",
-            "name": "_modifier"
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "SYMBOL",
+                "name": "accessibility_modifier"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "readonly_modifier"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "static_modifier"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "abstract_modifier"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "declare_modifier"
+              },
+              {
+                "type": "SYMBOL",
+                "name": "accessor_modifier"
+              }
+            ]
           }
         },
         {
@@ -10580,6 +10605,10 @@
       "mapped_type"
     ],
     [
+      "variable_declaration",
+      "_modifier"
+    ],
+    [
       "assignment_expression",
       "assignment_pattern"
     ],
@@ -10817,7 +10846,6 @@
     "_invocation",
     "_access",
     "_attribute",
-    "_modifier",
     "_interpolation"
   ],
   "reserved": {}

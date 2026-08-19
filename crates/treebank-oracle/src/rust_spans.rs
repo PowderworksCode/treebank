@@ -48,7 +48,8 @@ impl SpanOracle for RustSpans {
                 let file = match std::fs::read_to_string(&full) {
                     Ok(src) => match syn::parse_file(&src) {
                         Ok(ast) => {
-                            let mut v = SpanVisitor { spans: Vec::new() };
+                            let offset = ast.shebang.as_ref().map_or(0, |s| s.len());
+                            let mut v = SpanVisitor { spans: Vec::new(), offset };
                             v.visit_file(&ast);
                             // `has_edges: false`: syn has no generic field
                             // reflection, so there is no honest way to name
@@ -97,13 +98,36 @@ impl SpanOracle for RustSpans {
 
 struct SpanVisitor {
     spans: Vec<Span>,
+    /// Bytes of shebang line that `proc-macro2` never saw.
+    ///
+    /// `syn::parse_file` strips a `#!/usr/bin/env rust-script` line into
+    /// `File::shebang` before tokenising, so every span it reports is
+    /// relative to the text after it. Adding it back is the oracle's job:
+    /// the file on disk is what both parsers were handed, and offsets that
+    /// disagree about the first line are a fact about `syn`, not about the
+    /// grammar.
+    ///
+    /// The amount is `shebang.len()`, and the missing `+1` for the newline
+    /// is not an oversight. Measured on a 27-byte first line (26 + `\n`),
+    /// syn reports the following item at `1..25` where it truly sits at
+    /// `27..51` — proc-macro2 collapses the whole stripped region to a
+    /// SINGLE byte, so the correction is the line's length and not the
+    /// length of what was removed.
+    ///
+    /// Found the moment the grammar learned to parse shebang files: they
+    /// stopped being sweep gaps and immediately became 62 shape misses.
+    offset: usize,
 }
 
 impl SpanVisitor {
     fn push<T: Spanned>(&mut self, node: &T, kind: &str) {
         let r = node.span().byte_range();
         if r.end > r.start {
-            self.spans.push(Span { start: r.start, end: r.end, kind: kind.to_string() });
+            self.spans.push(Span {
+                start: r.start + self.offset,
+                end: r.end + self.offset,
+                kind: kind.to_string(),
+            });
         }
     }
 }

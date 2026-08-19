@@ -8,9 +8,11 @@ oracle_note = '''
 syn, in-process, with proc-macro2's `span-locations` feature turning every span into a file-relative byte_range(). HIR was the obvious candidate and the wrong one: it is post-desugaring, so `for` and `while` become `loop` plus `match` and `?` becomes a match on Try, and comparing a surface tree against it would report a disagreement at each, none of them a parser defect. rustc's AST is the right level but unreachable — `-Zast-json` was removed in 2020 and `-Zunpretty=ast-tree` prints session-global BytePos on nightly.'''
 attribute_note = '''
 The `Expr::* <- block|arguments|array_expression|tuple_expression` family is one difference seen from many angles: syn treats an attribute on an EXPRESSION as part of that expression, while our grammar attaches attributes to statements and items but leaves them as siblings elsewhere. Not a mis-parse — the attribute is adjacent to the thing it decorates either way — but a place our tree says less than syn's, and a candidate for a real change later.'''
-baseline_missed = 148
+baseline_missed = 275
 baseline_note = '''
-148 of 31,558,086 oracle nodes, in 59 files of 27,509 -- down from 237 after the callee tier stopped ranges and jumps being callable. This is the ratchet; raising it is a decision that belongs in a commit message.'''
+275 missed of 58,476,153 oracle nodes across 61,753 files, raised from 148 of 31,558,086 when the corpus went from 1,000 crates to 2,500. Raised because the RATE did not move: 4.690 missed per million nodes before, 4.703 after. A number that grows exactly in proportion to the corpus is the corpus growing, and the ratchet has to be told so explicitly rather than left to drift.
+
+Two things were fixed rather than absorbed on the way to that number. The oracle was reporting spans relative to the text AFTER a shebang, which cost 62 misses the moment the grammar learned to parse shebang files; see rust_spans.rs. And 92 of the 98 kind mismatches were the deliberate choice to parse attribute-macro input structurally, now declared in mismatch_ignore. Two kind mismatches remain, one node each, both a type path we label as a value path.'''
 
 [[ignore]]
 signature = 'Pat::Type <- let_declaration'
@@ -278,3 +280,13 @@ The range-operand limit already recorded under known_limits, arriving through th
 signature = 'Item::Macro => source_file'
 why = '''
 One file: a macro invocation at the very top of a file where our tree has no node between it and source_file. Not isolated further.'''
+
+[[mismatch_ignore]]
+signature = 'Item::Other => impl_block'
+why = '''
+`#[ext] pub impl<T> Cell<T> { … }`. An attribute macro receives its item as a token stream, so `pub impl` is real code that never reaches rustc's item parser; syn parks it as `Item::Verbatim` and reports no interior at all, while this grammar parses it. Being MORE structural than the oracle on macro input is the deliberate choice recorded in ledger.toml, and this is what it looks like from the shape check.'''
+
+[[mismatch_ignore]]
+signature = 'Item::Other => static_definition'
+why = '''
+`#[distributed_slice] pub static SLICE: [i32];` — a static with no initializer, which is linkme macro input rather than a standalone item. Same phenomenon as the `pub impl` entry above and the same call.'''

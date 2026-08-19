@@ -388,40 +388,6 @@
     ]
   },
   {
-    "type": "_modifier",
-    "named": true,
-    "subtypes": [
-      {
-        "type": "abstract_modifier",
-        "named": true
-      },
-      {
-        "type": "accessibility_modifier",
-        "named": true
-      },
-      {
-        "type": "accessor_modifier",
-        "named": true
-      },
-      {
-        "type": "declare_modifier",
-        "named": true
-      },
-      {
-        "type": "override_modifier",
-        "named": true
-      },
-      {
-        "type": "readonly_modifier",
-        "named": true
-      },
-      {
-        "type": "static_modifier",
-        "named": true
-      }
-    ]
-  },
-  {
     "type": "_name",
     "named": true,
     "subtypes": [
@@ -1348,11 +1314,35 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
           "named": true
         },
         {
           "type": "class_heritage",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -1726,7 +1716,31 @@
       "required": false,
       "types": [
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -2055,7 +2069,31 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -2307,7 +2345,31 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -2710,7 +2772,31 @@
       "required": false,
       "types": [
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -2797,11 +2883,35 @@
       "required": false,
       "types": [
         {
-          "type": "_modifier",
+          "type": "_type",
           "named": true
         },
         {
-          "type": "_type",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -3351,7 +3461,31 @@
       "required": false,
       "types": [
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -3828,7 +3962,31 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -3992,7 +4150,31 @@
       "required": false,
       "types": [
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -4506,7 +4688,31 @@
       "required": false,
       "types": [
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "override_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         }
       ]
@@ -4755,7 +4961,27 @@
       "required": true,
       "types": [
         {
-          "type": "_modifier",
+          "type": "abstract_modifier",
+          "named": true
+        },
+        {
+          "type": "accessibility_modifier",
+          "named": true
+        },
+        {
+          "type": "accessor_modifier",
+          "named": true
+        },
+        {
+          "type": "declare_modifier",
+          "named": true
+        },
+        {
+          "type": "readonly_modifier",
+          "named": true
+        },
+        {
+          "type": "static_modifier",
           "named": true
         },
         {
