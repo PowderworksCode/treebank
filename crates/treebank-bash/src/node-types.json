@@ -839,10 +839,6 @@
             "named": false
           },
           {
-            "type": ";;",
-            "named": false
-          },
-          {
             "type": "_statement",
             "named": true
           }
@@ -862,10 +858,6 @@
           },
           {
             "type": ";",
-            "named": false
-          },
-          {
-            "type": ";;",
             "named": false
           },
           {
@@ -1267,10 +1259,6 @@
             "named": false
           },
           {
-            "type": ";;",
-            "named": false
-          },
-          {
             "type": "_statement",
             "named": true
           }
@@ -1344,10 +1332,6 @@
           },
           {
             "type": ";",
-            "named": false
-          },
-          {
-            "type": ";;",
             "named": false
           },
           {

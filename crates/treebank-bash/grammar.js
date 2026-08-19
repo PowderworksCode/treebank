@@ -91,7 +91,12 @@ module.exports = grammar({
       repeat('\n'),
     )),
 
-    _terminator: $ => choice(';', '\n', '&', ';;'),
+    // `;;` is NOT here. It terminates a case ITEM, not a statement, and
+    // listing it meant `optional($._statements)` inside a case_item ate the
+    // item's own terminator: a whole multi-item `case` collapsed into one
+    // case_item, and the realistic multi-line form did not parse at all.
+    // No corpus file ever produced a clean case_statement.
+    _terminator: $ => choice(';', '\n', '&'),
 
     // ── statements ───────────────────────────────────────────────────
     _statement: $ => choice(
@@ -159,20 +164,43 @@ module.exports = grammar({
     case_statement: $ => seq(
       'case',
       field('value', $._word_like),
-      optional('\n'),
+      repeat('\n'),
       'in',
-      optional('\n'),
+      repeat('\n'),
       repeat($.case_item),
+      // The LAST item may drop its terminator: `case x in a) echo ;; b) echo
+      // esac` is legal. Spelling that as a separate rule rather than adding
+      // `esac` to the item's terminator choice, which is what this grammar
+      // did before -- that made the item CONSUME the `esac` the statement
+      // still needed, so a case wanted two of them and no real file had one.
+      optional(alias($._case_item_last, $.case_item)),
       'esac',
     ),
 
+    _case_item_last: $ => seq(
+      optional('('),
+      field('pattern', $._case_patterns),
+      ')',
+      optional($._case_body),
+    ),
+
+    // The last item may drop its terminator -- `case x in a) echo ;; b) echo
+    // esac` is legal -- so the terminator is optional and the newlines that
+    // follow it belong to the item. Without those `repeat('\n')` the rule
+    // admitted only a single-line case.
     case_item: $ => seq(
       optional('('),
       field('pattern', $._case_patterns),
       ')',
-      optional($._statements),
-      choice(';;', ';&', ';;&', 'esac'),
+      optional($._case_body),
+      choice(';;', ';&', ';;&'),
+      repeat('\n'),
     ),
+
+    // An item body is either statements or nothing but blank lines --
+    // `a)` followed by a newline and `;;` is common, and `_statements`
+    // cannot match it because it requires at least one statement.
+    _case_body: $ => choice($._statements, repeat1('\n')),
 
     _case_patterns: $ => seq($._word_like, repeat(seq('|', $._word_like))),
 
