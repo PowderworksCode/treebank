@@ -41,6 +41,18 @@ For calibration on what that is worth: the patched upstream tree-sitter-c this g
 
 Dead-branch elimination is load-bearing and its contribution is measured here too: without it, 1,477 of the same 3,662 files fail rather than 784, so it is worth 693 files here — 19% of the corpus. The `extern "C" {` opened inside one `#ifdef __cplusplus` and closed inside another is not a grammar bug and has no grammar fix — the token stream is not nested — which is what `routing::preprocessing` and the `treebank-preprocessing` crate exist for.'''
 
+[corpus.recovery]
+note = '''
+`treebank recovery` needs no oracle — it deletes one token from a file that parses cleanly and measures how much of the file lands inside an ERROR — so it is the one distribution here that the local corpus can produce honestly. Over 400 files and 818 breaking deletions: **median blast radius 0.1%, p90 3.5%, p99 44.4%, 6 shredded**. For the shape of that, DESIGN.md §5.12 records python at 0.3 / 17.1 / 99.1 and typescript at 0.5 / 17.5 / 94.1 over their own corpora.
+
+The tail is what a user notices and it is the brace, as it is everywhere: two of the six shreds are a deleted `}`, and the worst case is a deleted `;` in a 63 kB kernel UAPI header. A C file is one long run of declarations with no statement-level resynchronisation point, so a lost brace has nothing to recover ONTO until the next one — which is a fact about C rather than about this parse table.'''
+
+[corpus.kinds]
+note = '''
+`treebank kinds` over the same 3,662 files, which measures the CORPUS rather than the grammar: 93 of 113 named kinds appear, 20 never do, 14 fewer than twenty times. The twenty absent ones are worth naming because they say what this corpus is blind to rather than what the grammar lacks — `asm_statement`, `generic_expression`, `typeof_specifier`, `static_assert_declaration`, `compound_literal_expression`, `atomic_type_specifier` and `attributed_statement` among them.
+
+Every one of those is a GNU or C11 construct that this grammar has a rule for and a corpus test on, and the reason none is counted is that `kinds` counts only CLEAN parses: the files carrying them are largely the files that fail for the macro reasons in `known_gaps`. That makes this number a second view of the same gap rather than an independent finding, and it is the view that says which constructs a generated program (`treebank fuzz`) would be worth aiming at first.'''
+
 [[oracles]]
 family = 'c'
 tool = 'tools/c-oracle — libclang, parse-only, verdict from clang’s own diagnostic categories'
