@@ -256,8 +256,11 @@ module.exports = grammar({
     // ── commands ─────────────────────────────────────────────────────
     _invocation: $ => $.command,
 
+    // Redirects may come FIRST: `>&2 echo msg` is the standard
+    // print-to-stderr idiom (311 corpus files as `command > MISSING word`,
+    // 396 more as `redirect > MISSING word`).
     command: $ => prec.left(seq(
-      repeat($.variable_assignment),
+      repeat(choice($.variable_assignment, $.redirect)),
       field('name', $._word_like),
       repeat(field('argument', $._argument)),
     )),

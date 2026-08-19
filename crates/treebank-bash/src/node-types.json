@@ -526,6 +526,10 @@
       "required": false,
       "types": [
         {
+          "type": "redirect",
+          "named": true
+        },
+        {
           "type": "variable_assignment",
           "named": true
         }
