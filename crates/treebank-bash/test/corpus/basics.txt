@@ -68,3 +68,122 @@ EOF
             (heredoc_start)
             (heredoc_body)
             (heredoc_end)))))))
+
+================================================================================
+the overnight constructs: comments, redirects, substitutions
+================================================================================
+
+# a full-line comment
+echo hi # a trailing comment
+>&2 echo err
+{ echo a; } 2>/dev/null
+while read -r l; do echo "$l"; done < f
+x=`date`
+y=$(<"$f")
+grep -q x <<< "$str"
+arr[0]=val
+w=${T:-/tmp}/sp
+mkdir -p $G/{bin,pkg}
+find . ! -iname '*.c' -exec rm {} \;
+if [[ $X =~ ^(a|b)[23]$ ]]; then :; fi
+clean()
+{
+  echo 2> log
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (comment)
+  (command
+    (word)
+    (word))
+  (comment)
+  (command
+    (redirect
+      (number))
+    (word)
+    (word))
+  (compound_statement
+    (command
+      (word)
+      (word))
+    (redirect
+      (file_descriptor)
+      (word)))
+  (while_statement
+    (command
+      (word)
+      (word)
+      (word))
+    (do_group
+      (command
+        (word)
+        (string
+          (simple_expansion
+            (variable_name)))))
+    (redirect
+      (word)))
+  (variable_assignment
+    (variable_name)
+    (command_substitution
+      (command
+        (word))))
+  (variable_assignment
+    (variable_name)
+    (command_substitution
+      (string
+        (simple_expansion
+          (variable_name)))))
+  (command
+    (word)
+    (word)
+    (word)
+    (redirect
+      (string
+        (simple_expansion
+          (variable_name)))))
+  (variable_assignment
+    (variable_name)
+    (word)
+    (word))
+  (variable_assignment
+    (variable_name)
+    (concatenation
+      (expansion
+        (variable_name)
+        (word))
+      (word)))
+  (command
+    (word)
+    (word)
+    (concatenation
+      (simple_expansion
+        (variable_name))
+      (word)
+      (brace_expression)))
+  (command
+    (word)
+    (word)
+    (word)
+    (word)
+    (raw_string)
+    (word)
+    (word)
+    (word)
+    (word))
+  (if_statement
+    (test_command
+      (simple_expansion
+        (variable_name))
+      (regex))
+    (command
+      (word)))
+  (function_definition
+    (word)
+    (compound_statement
+      (command
+        (word)
+        (redirect
+          (file_descriptor)
+          (word))))))
