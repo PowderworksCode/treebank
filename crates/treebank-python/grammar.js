@@ -325,7 +325,25 @@ module.exports = grammar({
     // `del` takes TARGETS, not expressions: `del a if b else c` is
     // `cannot delete conditional expression` to CPython, and admitting the
     // whole expression tier here is what let it through.
-    delete_statement: $ => seq('del', $._left_hand_side),
+    // A star is not deletable: `del *a` is `cannot delete starred`. The
+    // targets are otherwise the assignment ones.
+    delete_statement: $ => seq('del', choice(
+      $._del_target,
+      alias($._del_target_list, $.pattern_list),
+    )),
+
+    _del_target: $ => choice(
+      $.identifier,
+      alias($._soft_keyword, $.identifier),
+      $.member_expression,
+      $.subscript_expression,
+      $.tuple_pattern,
+      $.list_pattern,
+    ),
+    _del_target_list: $ => seq(
+      $._del_target,
+      choice(',', seq(repeat1(seq(',', $._del_target)), optional(','))),
+    ),
 
     assert_statement: $ => seq('assert', $._expression, optional(seq(',', $._expression))),
 
@@ -374,9 +392,24 @@ module.exports = grammar({
       'import',
       choice(
         $.wildcard_import,
-        commaSep1(choice($.dotted_name, $.aliased_import)),
-        seq('(', commaSep1(choice($.dotted_name, $.aliased_import)), optional(','), ')'),
+        commaSep1($._imported_name),
+        seq('(', commaSep1($._imported_name), optional(','), ')'),
       ),
+    ),
+
+    // What `from x import …` may name is a plain identifier, never a dotted
+    // path: `from a import b.c` is `invalid syntax`. Only the MODULE half
+    // takes dots. The node types are unchanged -- a single-identifier
+    // `dotted_name` is exactly what `from a import b` already produced.
+    _imported_name: $ => choice(
+      alias($._single_dotted_name, $.dotted_name),
+      alias($._imported_aliased, $.aliased_import),
+    ),
+    _single_dotted_name: $ => seq($.identifier),
+    _imported_aliased: $ => seq(
+      field('name', alias($._single_dotted_name, $.dotted_name)),
+      'as',
+      field('alias', $._name),
     ),
 
     relative_import: $ => seq(repeat1('.'), optional($.dotted_name)),

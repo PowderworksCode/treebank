@@ -36,11 +36,22 @@ incremental_check = '''
 recovery_check = '''
 `treebank recovery` — 1978 files, 10920 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.3%, p90 17.1%, p99 99.1%; 240 deletions put more than half of a file of at least 1 KiB inside an error, most often `"""` x59, `:` x34, `(` x23, `)` x22. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
 
+[[known_gaps]]
+construct = 'indentation that mixes tabs and spaces'
+files = 1
+note = '''
+`def apply(self, inst, t):` indented with four spaces and its body with a tab. CPython's tokenizer expands a tab to the next multiple of eight when it measures indentation; the scanner asks tree-sitter for `get_column`, which counts CHARACTERS, so it reads the tab as column 1, sees 1 < 4, and dedents out of the body. The fix is to measure the indent run directly with CPython's rules (space +1, tab to the next multiple of 8, form feed resets to 0) instead of calling get_column. One file in 297,612, against the riskiest code in the repository to change, so it is written down rather than attempted.'''
+
+[[known_gaps]]
+construct = 'backslash continuation as the first line of a block'
+files = 2
+note = '''
+`class C:` followed by a line holding only ` \\`, then `pass` at column 0 — the continuation joins them into one logical line indented by one space. Same scanner area as the tab gap: the indent is measured before the continuation is resolved. Also covers the `else:\\` fixture.'''
 [corpus]
 source = '''
 top-1000 PyPI packages by download rank (hugovk top-pypi-packages), sdists only; 951 of 1000 publish one'''
-files = 139205
-packages = 951
+files = 297612
+packages = 1914
 blind_to = '''
 python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension'''
 mutation_falsification = '''
@@ -49,7 +60,7 @@ corpus_composition_note = '''
 4 grammar gaps and 12 version-policy rejections. ruff, ty and ast-serialize each vendor ruff's parser test corpus, so every ruff fixture is counted three times: the 4 gaps are 2 distinct sources and the 12 rejections are 3. Exactly one gap file (dill/source.py) is ordinary library code; everything else here is an adversarial parser fixture.'''
 
 [corpus.sweep]
-files = 139205
+files = 297612
 passed = 138273
 failed = 932
 gap_files = 4
@@ -263,4 +274,4 @@ found_by = 'fuzz (derived from the grammar, shrunk, confirmed against CPython as
 why_accepted = '''
 `del` now takes `_left_hand_side`, which is right for `del a, b[1], c.d` and still admits `star_pattern`. CPython: `cannot delete starred`.'''
 why_not_fixed = '''
-queued. Needs a del-specific target rule, since the star is legal in the assignment and for-loop targets that share `_left_hand_side`.'''
+FIXED. `del` has its own target set now, the assignment targets minus the star.'''

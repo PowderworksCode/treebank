@@ -32,15 +32,15 @@ what = '''
 [corpus]
 source = '''
 top-1000 crates.io crates by all-time downloads (crates.io db dump, fetched 2026-08-16), .crate tarballs'''
-files = 27526
-packages = 1000
+files = 61801
+packages = 2500
 blind_to = '''
 pre-2018 idioms are underrepresented (top crates track current editions); no rustc test-suite torture cases; macro-heavy DSLs appear only as token trees'''
 mutation_falsification = '''
 the same corpus swept with while_expression deleted from _loop reports 2,323 gap files (vs 2); restored, 2 again. The number is a measurement, not a silence.'''
 
 [corpus.sweep]
-files = 27526
+files = 61801
 passed = 27511
 failed = 15
 gap_files = 2
