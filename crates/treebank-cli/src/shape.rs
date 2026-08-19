@@ -1191,6 +1191,7 @@ fn extensions(lang: LangName) -> &'static [&'static str] {
         LangName::Typescript | LangName::Javascript => {
             &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]
         }
+        LangName::Java => &["java"],
     }
 }
 

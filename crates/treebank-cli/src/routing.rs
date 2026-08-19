@@ -19,7 +19,8 @@ pub fn grammar_dirs(lang: LangName) -> &'static [&'static str] {
         LangName::Python
         | LangName::Rust
         | LangName::Typescript
-        | LangName::Javascript => &["."],
+        | LangName::Javascript
+        | LangName::Java => &["."],
     }
 }
 

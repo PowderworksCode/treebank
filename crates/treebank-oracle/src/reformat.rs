@@ -57,6 +57,9 @@ pub fn get(name: LangName) -> Option<&'static dyn Reformatter> {
         // tsc exposes formatting only through the language service, and
         // prettier is not vendored. Stated rather than faked.
         LangName::Typescript | LangName::Javascript => None,
+        // google-java-format is the obvious candidate and is not installed;
+        // the JDK ships no formatter of its own.
+        LangName::Java => None,
     }
 }
 

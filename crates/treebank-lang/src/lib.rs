@@ -20,6 +20,9 @@ pub enum LangName {
     #[serde(rename = "javascript")]
     #[value(name = "javascript")]
     Javascript,
+    #[serde(rename = "java")]
+    #[value(name = "java")]
+    Java,
 }
 
 impl LangName {
@@ -29,6 +32,7 @@ impl LangName {
             LangName::Rust => "rust",
             LangName::Typescript => "typescript",
             LangName::Javascript => "javascript",
+            LangName::Java => "java",
         }
     }
 }

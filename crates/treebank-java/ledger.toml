@@ -1,0 +1,51 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'java'
+versions = '''
+Java 8 through 21 in one grammar: lambdas and method references (8), modules (9), `var` (10), switch expressions and arrow rules (14), text blocks (15), `instanceof` patterns (16), records and sealed types (17), record patterns and pattern switches (21). The contextual keywords -- `record`, `sealed`, `permits`, `yield`, `when` -- are soft, so code predating each one keeps parsing.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+19 of 22 table-tier terms are threaded. `_declaration` is demoted to the facet tier because java partitions it -- see `demoted` in roles.json. `_interpolation` has no member: java has no string interpolation at any version. `_directive` covers package and import declarations, which is why `program` routes through it rather than naming the two rules.'''
+
+[corpus]
+source = 'top-1000 maven artifacts by dependent_repos_count (ecosyste.ms over repo1.maven.org, fetched 2026-08-19), -sources.jar per artifact'
+files = 243573
+packages = 889
+ranking_note = '''
+Maven Central publishes no download counts, so popularity has to come from elsewhere: ecosyste.ms exposes how many public repositories depend on each artifact. That is a dependency-graph proxy rather than traffic, and it differs from the crates.io and npm metrics in a way worth stating -- it over-weights libraries everything depends on transitively and under-weights applications. For a SYNTAX corpus that is the harmless direction, since what it selects is library code and library code is where the less common constructs live.'''
+blind_to = '''
+Sources jars, so anything that ships no `-sources.jar` is absent: 111 of the top 1,000 artifacts, mostly pom-only aggregators and relocated coordinates. Generated code is under-represented for the same reason -- an annotation processor's output is not in the sources jar.'''
+
+[corpus.sweep]
+files = 243573
+passed = 242762
+failed = 811
+gap_files = 811
+noise_files = 0
+pass_rate = '99.67%'
+
+[[oracles]]
+family = 'java'
+tool = "javac's own parser via JavacTask.parse(), through the JDK single-file source launcher"
+version = 'javac 21'
+role = '''
+primary and only. `parse()` runs the parser and stops -- it never attributes, so an unresolved import or a missing classpath entry is not an error and a file is judged on its own text, exactly as `ts.createSourceFile` does for typescript. Only ERROR diagnostics count. The source level is the JDK's own latest, which is a decision rather than a default: a file javac rejects there is not valid modern java, and `enum` or `assert` used as an identifier is 1.4-era code that belongs in noise.'''
+
+[[known_gaps]]
+construct = '`case A -> …` where the case constant is a bare identifier'
+files = 539
+note = '''
+`case PROXY -> getProxyImports();` — an arrow switch over an enum, which is most arrow switches. At `A` the parser cannot tell a case constant from a lambda parameter, and only the `->` settles it, by which time the reduce toward the label is gone. Java puts LambdaExpression at the top of its expression grammar and a case constant is a ConstantExpression, so the language is unambiguous; the parse table is not. Tried and rejected: excluding lambda from `_case_constant`, an expression tier below lambda (kept anyway -- it is more faithful and fixed other things), dynamic precedence on the rule and on the label, a declared conflict against `lambda`, and inlining the label into `switch_rule` to remove the shared reduction. Each is recorded here so the next attempt starts after them rather than before.'''
+
+[[known_gaps]]
+construct = 'module declarations (`module-info.java`)'
+files = 83
+note = '''
+Java 9 modules are not in the grammar at all. `module com.google.gson { requires …; exports …; }` is a small, self-contained sub-language and the omission is deliberate for a first pass, not a defect discovered late.'''
+
+[[deviations]]
+what = '''
+`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to a facet is the alternative if it ever matters.'''
