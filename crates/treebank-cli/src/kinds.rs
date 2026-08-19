@@ -211,6 +211,16 @@ pub fn run(
             let Some(tree) = parser.parse(&src, None) else {
                 return Ok((0, BTreeMap::new(), BTreeMap::new(), BTreeMap::new()));
             };
+            // Only a CLEAN parse is evidence. tree-sitter salvages nodes
+            // from an error tree, so counting those says we cover a
+            // construct when what actually happened is that we failed on
+            // the file and kept the wreckage. Invisible where the sweep
+            // passes (python, java), decisive where it does not: bash
+            // fails on 56% of its corpus, so most of its coverage was
+            // being read off trees we got wrong.
+            if tree.root_node().has_error() {
+                return Ok((0, BTreeMap::new(), BTreeMap::new(), BTreeMap::new()));
+            }
             let mut counts = BTreeMap::new();
             let mut all = BTreeMap::new();
             let mut edges = BTreeMap::new();
