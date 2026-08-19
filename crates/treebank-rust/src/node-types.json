@@ -378,20 +378,6 @@
     ]
   },
   {
-    "type": "_modifier",
-    "named": true,
-    "subtypes": [
-      {
-        "type": "mutable_specifier",
-        "named": true
-      },
-      {
-        "type": "visibility_modifier",
-        "named": true
-      }
-    ]
-  },
-  {
     "type": "_name",
     "named": true,
     "subtypes": [
@@ -1299,7 +1285,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -1466,7 +1452,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         },
         {
@@ -1636,7 +1622,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -1676,7 +1662,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -2022,11 +2008,11 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "string",
           "named": true
         },
         {
-          "type": "string",
+          "type": "visibility_modifier",
           "named": true
         },
         {
@@ -2343,7 +2329,7 @@
     "fields": {
       "body": {
         "multiple": false,
-        "required": false,
+        "required": true,
         "types": [
           {
             "type": "declaration_list",
@@ -2981,7 +2967,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -3304,7 +3290,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -3344,7 +3330,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -3432,7 +3418,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -4053,7 +4039,11 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "mutable_specifier",
+          "named": true
+        },
+        {
+          "type": "visibility_modifier",
           "named": true
         }
       ]
@@ -4107,7 +4097,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         },
         {
@@ -4313,11 +4303,11 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "trait_bounds",
           "named": true
         },
         {
-          "type": "trait_bounds",
+          "type": "visibility_modifier",
           "named": true
         },
         {
@@ -4477,11 +4467,11 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "trait_bounds",
           "named": true
         },
         {
-          "type": "trait_bounds",
+          "type": "visibility_modifier",
           "named": true
         },
         {
@@ -4713,7 +4703,7 @@
           "named": true
         },
         {
-          "type": "_modifier",
+          "type": "visibility_modifier",
           "named": true
         },
         {
@@ -4812,10 +4802,6 @@
           "named": true
         },
         {
-          "type": "_modifier",
-          "named": true
-        },
-        {
           "type": "identifier",
           "named": true
         },
@@ -4845,6 +4831,10 @@
         },
         {
           "type": "use_wildcard",
+          "named": true
+        },
+        {
+          "type": "visibility_modifier",
           "named": true
         }
       ]

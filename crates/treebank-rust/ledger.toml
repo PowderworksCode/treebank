@@ -18,7 +18,7 @@ mutation_check = '''
 error_positions = '''
 `treebank errors` — 13 of 15 rejected files are comparable: 1 exact, 10 within 16 bytes, 2 further. Median |delta| 2 bytes.'''
 fuzz_check = '''
-`treebank fuzz` — 3,000 programs derived from grammar.json, judged by syn: 703 widenings reducing to 222 distinct shrunk programs and the eight causes listed in known_widenings. Thirteen were sampled and put to rustc itself; all thirteen were confirmed. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not — which matters because real source is valid, so no amount of it can show that we reject what rust rejects.'''
+`treebank fuzz` — programs derived from grammar.json and judged by syn. The first run over 3,000 derivations gave 703 widenings reducing to 222 distinct shrunk programs and eight causes; thirteen were sampled and put to rustc itself, and all thirteen were confirmed. Five of the eight are now fixed and the distinct count is 121. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not — which matters because real source is valid, so no amount of it can show that we reject what rust rejects.'''
 
 [corpus]
 source = '''
@@ -118,7 +118,8 @@ found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
 seeds = 234
 why_accepted = '''
 the ABI slot is `optional($.string)`, and `$.string` covers byte and raw strings. rustc: `non-string ABI literal`.'''
-why_not_fixed = 'queued. Wants a plain-string-literal rule in the ABI slot.'
+why_not_fixed = '''
+FIXED. The ABI slot takes a plain-string token aliased to `string`, so `b"…"` and `c"…"` no longer reach it.'''
 
 [[known_widenings]]
 construct = '''
@@ -128,7 +129,7 @@ seeds = 70
 why_accepted = '''
 `_modifier` is `choice(visibility_modifier, mutable_specifier)`, so every item taking `optional($._modifier)` also takes `mut`. rustc: `expected item, found keyword mut`.'''
 why_not_fixed = '''
-queued. Item positions should take `visibility_modifier` directly; `_modifier` stays a supertype covering both where both are legal.'''
+FIXED. `_modifier` was demoted to the facet tier for this grammar and every item position now takes `visibility_modifier` directly; rust never lets visibility and `mut` share a slot.'''
 
 [[known_widenings]]
 construct = '''
@@ -146,7 +147,8 @@ found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
 seeds = 12
 why_accepted = '''
 a braced invocation is already a complete item; the `;` is then accepted as a second, empty one. rustc: `expected item, found ;`.'''
-why_not_fixed = 'queued. Shares a cause with the `;`-as-item entry below.'
+why_not_fixed = '''
+FIXED, together with the `;`-as-item entry: the delimiter decides, so `m!{…}` is complete and `m!(…)`/`m![…]` take the semicolon.'''
 
 [[known_widenings]]
 construct = "token tree accepts a malformed char literal \u2014 `r#XX ! { b ' a ' }`"
@@ -163,7 +165,8 @@ found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
 seeds = 7
 why_accepted = '''
 a stray semicolon is admitted where a foreign item is required. rustc: `non-item in item list`.'''
-why_not_fixed = 'queued.'
+why_not_fixed = '''
+FIXED. `declaration_list` no longer offers a bare `;`; member macro invocations carry their own terminator instead.'''
 
 [[known_widenings]]
 construct = '`impl` with `;` instead of a body — `unsafe impl :: r#XX ;`'
@@ -171,4 +174,5 @@ found_by = 'fuzz (derived from the grammar, shrunk, confirmed against rustc)'
 seeds = 3
 why_accepted = '''
 the impl body is optional where rustc requires a block. rustc: `expected {}, found ;`.'''
-why_not_fixed = 'queued.'
+why_not_fixed = '''
+FIXED. `impl` requires a body.'''
