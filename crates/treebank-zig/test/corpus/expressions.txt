@@ -281,3 +281,261 @@ pub fn h(n: usize) usize {
               capture: (payload
                 name: (identifier))
               body: (identifier))))))))
+
+================================================================================
+the labelled switch, and `continue` dispatching to it with a value
+================================================================================
+
+pub fn vm(code: []const u8, ip: usize) void {
+    sw: switch (code[ip]) {
+        5 => continue :sw 4,
+        else => |x| continue :sw x / 2,
+    }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (slice_type
+          modifier: (pointer_qualifier)
+          type: (identifier)))
+      (parameter
+        name: (identifier)
+        type: (identifier)))
+    return_type: (identifier)
+    body: (block
+      (expression_statement
+        (switch_expression
+          label: (block_label
+            (identifier))
+          value: (subscript_expression
+            object: (identifier)
+            index: (identifier))
+          (switch_case
+            value: (integer)
+            body: (continue_expression
+              label: (loop_label
+                (identifier))
+              value: (integer)))
+          (switch_case
+            capture: (payload
+              name: (identifier))
+            body: (continue_expression
+              label: (loop_label
+                (identifier))
+              value: (binary_expression
+                left: (identifier)
+                right: (integer)))))))))
+
+================================================================================
+destructuring, and `comptime var`
+================================================================================
+
+pub fn f(rgba: [4]u8) void {
+    const r, const g, const b, const a = rgba;
+    comptime var start: usize = 0;
+    _ = .{ r, g, b, a, start };
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (array_type
+          size: (integer)
+          type: (identifier))))
+    return_type: (identifier)
+    body: (block
+      (expression_statement
+        (destructuring_assignment
+          left: (variable_declaration
+            name: (identifier))
+          left: (variable_declaration
+            name: (identifier))
+          left: (variable_declaration
+            name: (identifier))
+          left: (variable_declaration
+            name: (identifier))
+          right: (identifier)))
+      (variable_declaration
+        modifier: (comptime_modifier)
+        name: (identifier)
+        type: (identifier)
+        value: (integer))
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (anonymous_initializer_expression
+            value: (initializer_list
+              (identifier)
+              (identifier)
+              (identifier)
+              (identifier)
+              (identifier))))))))
+
+================================================================================
+a capture list of any length, each element by value or by reference
+================================================================================
+
+pub fn g(xs: []u8, ys: []u8) void {
+    for (xs, ys, 0..) |*x, y, i| {
+        x.* = y + @as(u8, @intCast(i));
+    }
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (slice_type
+          type: (identifier)))
+      (parameter
+        name: (identifier)
+        type: (slice_type
+          type: (identifier))))
+    return_type: (identifier)
+    body: (block
+      (expression_statement
+        (for_expression
+          subject: (identifier)
+          subject: (identifier)
+          subject: (range_expression
+            start: (integer))
+          capture: (payload
+            name: (identifier)
+            name: (identifier)
+            name: (identifier))
+          body: (block
+            (expression_statement
+              (assignment_expression
+                left: (deref_expression
+                  value: (identifier))
+                right: (binary_expression
+                  left: (identifier)
+                  right: (builtin_call
+                    function: (builtin_identifier)
+                    arguments: (arguments
+                      (identifier)
+                      (builtin_call
+                        function: (builtin_identifier)
+                        arguments: (arguments
+                          (identifier))))))))))))))
+
+================================================================================
+a type chosen at comptime, and a merged error set as a return type
+================================================================================
+
+const S = struct {
+    v: if (native) A else B align(4) = .unset,
+};
+
+fn h() (Foo.Error || Bar.Error)!bool {
+    const bits: switch (T) {
+        else => u8,
+    } = 0;
+    _ = bits;
+    return true;
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (if_expression
+            condition: (identifier)
+            consequence: (identifier)
+            alternative: (else_clause
+              body: (identifier)))
+          (align_qualifier
+            (integer))
+          value: (enum_literal
+            name: (identifier))))))
+  (function_declaration
+    name: (identifier)
+    parameters: (parameters)
+    return_type: (error_union_type
+      error_set: (grouped_expression
+        (binary_expression
+          left: (field_expression
+            object: (identifier)
+            field: (identifier))
+          right: (field_expression
+            object: (identifier)
+            field: (identifier))))
+      payload: (identifier))
+    body: (block
+      (variable_declaration
+        name: (identifier)
+        type: (switch_expression
+          value: (identifier)
+          (switch_case
+            body: (identifier)))
+        value: (integer))
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (identifier)))
+      (expression_statement
+        (return_expression
+          value: (boolean))))))
+
+================================================================================
+keywords that are field names, because Zig reads the name slot as a type
+================================================================================
+
+const Token = enum {
+    true,
+    false,
+    null,
+};
+
+const U = union(enum) {
+    null: void,
+    undefined: u8,
+};
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body
+        (container_field
+          name: (identifier))
+        (container_field
+          name: (identifier))
+        (container_field
+          name: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      tag: (inferred_enum_tag)
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier))
+        (container_field
+          name: (identifier)
+          type: (identifier))))))

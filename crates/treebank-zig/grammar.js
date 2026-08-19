@@ -1,5 +1,5 @@
 /**
- * treebank-zig: a from-scratch grammar for Zig 0.11–0.15, carrying the
+ * treebank-zig: a from-scratch grammar for Zig 0.11–0.16, carrying the
  * treebank vocabulary (DESIGN.md §3) in its parse table.
  *
  * Zig is the first language here whose TYPES ARE VALUES, and that decides
@@ -9,10 +9,15 @@
  * sibling of `_expression` the way it is in rust — every type occurrence
  * would then be reachable as both at one position, which generate rejects
  * outright (DESIGN.md §2, fact 3). It is a NESTED partition instead:
- * `_expression → _type → pointer_type | slice_type | …`, covering the
- * syntax that CONSTRUCTS a type. `(_type)` therefore answers "where is
- * type syntax written", which is the question the term exists for, and it
- * answers it without claiming Zig has a type grammar it does not have.
+ * `_expression → _type → pointer_type | slice_type | …`, holding the type
+ * OPERATORS — pointer, slice, array, optional, error union, `anyframe`,
+ * `anytype`. `struct { … }` and `error{ … }` are primaries beside the
+ * literals rather than members of `_type`, because they occur wherever a
+ * value may and `struct { fn lessThan(…) … }.lessThan` is an everyday
+ * argument here; with them in both, every one of those was a choice
+ * between a type position and a suffix chain. So `(_type)` answers "where
+ * is type syntax written" without claiming Zig has a type grammar it does
+ * not have.
  *
  * The second Zig-shaped decision is `_type_operand`. `T{…}` is an
  * initializer, so a type position that admits a full `_expression` eats the
@@ -123,7 +128,19 @@ module.exports = grammar({
     // body, since no member may begin with a `.`.
     source_file: $ => choice(
       containerMembers($),
-      field('value', $.anonymous_initializer_expression),
+      // A `.zon` file is one VALUE. Usually `.{ … }`, but the test suite
+      // has files that are a bare string, integer or character, and a
+      // grammar that only took the struct form failed 42 of them. None of
+      // these can begin a container member, so the choice stays LR(1).
+      // Above the container-body reading, because both parses exist: a
+      // tuple field is a bare type, so a file that is nothing but `10`
+      // could be a struct with one unnamed field. It is a `.zon` VALUE.
+      field('value', choice(
+        prec(1, $.anonymous_initializer_expression),
+        prec(1, $.enum_literal),
+        prec(1, $._literal),
+        prec(1, $.container_declaration),
+      )),
     ),
 
     // ── members ──────────────────────────────────────────────────────
@@ -156,10 +173,10 @@ module.exports = grammar({
     container_field: $ => seq($._container_field_body, ','),
 
     _container_field_body: $ => seq(
-      optional(field('modifier', $.parameter_modifier)),
+      optional(field('modifier', $.comptime_modifier)),
       choice(
         seq(
-          field('name', $._name),
+          field('name', $._field_name),
           ':',
           field('type', $._type_operand),
           optional($.align_qualifier),
@@ -170,16 +187,27 @@ module.exports = grammar({
         // than needing a declared conflict: the tuple form admits type
         // syntax, `a.b` and `f(x)`, and none of those is a lone name.
         seq(
-          field('name', $._name),
+          field('name', $._field_name),
+          optional($.align_qualifier),
           optional(seq('=', field('value', $._expression))),
         ),
-        // The tuple form: `struct { []const u8, std.ArrayList(u8) }` —
-        // fields that are types with no name at all. Deliberately NOT the
-        // whole expression category: a bare identifier there is the
-        // enum-member reading above, and admitting every expression also
-        // made `comptime { … }` at container level indistinguishable from
-        // a comptime field whose type is a block.
-        field('type', choice($._type, $.field_expression, $.call_expression)),
+        // The tuple form: `struct { []const u8, error{Foo} }` — fields
+        // that are types with no name at all. Deliberately NOT the whole
+        // expression category: a bare identifier there is the enum-member
+        // reading above, and admitting every expression also made
+        // `comptime { … }` at container level indistinguishable from a
+        // comptime field whose type is a block.
+        seq(
+          field('type', choice(
+            $._type,
+            $.field_expression,
+            $.call_expression,
+            $.builtin_call,
+            $.container_declaration,
+            $.error_set_declaration,
+          )),
+          optional(seq('=', field('value', $._expression))),
+        ),
       ),
     ),
 
@@ -214,17 +242,28 @@ module.exports = grammar({
     _inferred_error_union: $ => seq('!', field('payload', $._type_operand)),
 
     variable_declaration: $ => seq(
+      $._variable_declaration_prototype,
+      optional(seq('=', field('value', $._expression))),
+      ';',
+    ),
+
+    // Everything up to the `=`, factored out because destructuring reuses
+    // it: `const min, const max = blk: { … };` binds two names from one
+    // expression, and each element of the list is one of these.
+    _variable_declaration_prototype: $ => seq(
       optional(field('modifier', $.visibility_modifier)),
       optional(field('modifier', $.linkage_modifier)),
       optional(field('modifier', $.threadlocal_modifier)),
+      // `comptime var i: usize = 0;` is a STATEMENT form and the single
+      // biggest thing a first-pass Zig grammar leaves out: 336 corpus files
+      // failed on it alone. It is not a container-level modifier.
+      optional(field('modifier', $.comptime_modifier)),
       field('kind', choice('const', 'var')),
       field('name', $._name),
       optional(seq(':', field('type', $._type_operand))),
       optional(field('modifier', $.align_qualifier)),
       optional(field('modifier', $.addrspace_qualifier)),
       optional(field('modifier', $.link_section)),
-      optional(seq('=', field('value', $._expression))),
-      ';',
     ),
 
     test_declaration: $ => seq(
@@ -251,7 +290,8 @@ module.exports = grammar({
     linkage_modifier: $ => choice('export', seq('extern', optional($.string))),
     inline_modifier: _ => choice('inline', 'noinline'),
     threadlocal_modifier: _ => 'threadlocal',
-    parameter_modifier: _ => choice('comptime', 'noalias'),
+    comptime_modifier: _ => 'comptime',
+    noalias_modifier: _ => 'noalias',
     pointer_qualifier: _ => choice('const', 'volatile', 'allowzero'),
 
     _fn_qualifier: $ => choice(
@@ -279,7 +319,7 @@ module.exports = grammar({
     ),
 
     parameter: $ => seq(
-      optional(field('modifier', $.parameter_modifier)),
+      optional(field('modifier', choice($.comptime_modifier, $.noalias_modifier))),
       optional(seq(field('name', $._name), ':')),
       // `anytype` reaches here through `_type`, not as an extra
       // alternative: listed twice it is two ways to parse one token.
@@ -325,7 +365,27 @@ module.exports = grammar({
     errdefer_statement: $ => seq('errdefer', optional(field('capture', $.payload)), field('body', $._statement)),
     suspend_statement: $ => seq('suspend', choice(field('body', $._body), ';')),
 
-    _assignment: $ => choice($.assignment_expression, $.augmented_assignment_expression),
+    _assignment: $ => choice(
+      $.assignment_expression,
+      $.augmented_assignment_expression,
+      $.destructuring_assignment,
+    ),
+
+    // `const r, const g, const b = rgba;` and `const len, pos = readLeb(…);`
+    // — Zig 0.12. Each target is either a fresh binding or an existing
+    // place, and they mix freely, which is why the target is a choice
+    // rather than two forms of the rule.
+    destructuring_assignment: $ => prec.left(PREC.assign, seq(
+      field('left', $._destructuring_target),
+      repeat1(seq(',', field('left', $._destructuring_target))),
+      '=',
+      field('right', $._expression),
+    )),
+
+    _destructuring_target: $ => choice(
+      alias($._variable_declaration_prototype, $.variable_declaration),
+      $._expression,
+    ),
 
     assignment_expression: $ => prec.left(PREC.assign, seq(
       field('left', $._expression),
@@ -398,6 +458,17 @@ module.exports = grammar({
       $.grouped_expression,
       $.enum_literal,
       $.error_value,
+      // The container and error-set declarations are PRIMARIES here, not
+      // members of `_type`, and the corpus is what settled it: they occur
+      // wherever a value may, and `struct { fn lessThan(…) … }.lessThan` is
+      // an everyday argument in this language. With them in `_type` as well,
+      // every `struct { … }` followed by a `.` or a `(` was a choice between
+      // a type position and a suffix chain — an ambiguity at each of the
+      // 28 sites the sweep found and at every type position besides.
+      // `(_type)` is therefore the type OPERATORS: pointer, slice, array,
+      // optional, error union, anyframe, `anytype`.
+      $.container_declaration,
+      $.error_set_declaration,
       $.anonymous_initializer_expression,
       // `initializer_expression` is deliberately NOT here. With it, an
       // initializer is reachable from inside every type operand (through
@@ -441,6 +512,32 @@ module.exports = grammar({
     _type_operand: $ => choice(
       prec(PREC.prefix, $._suffix_expression),
       prec(PREC.prefix, $._type),
+      // A type CHOSEN at comptime: `const bits: switch (T) { … }` and
+      // `v: if (arch.isSPARC()) sparc_lock else other_lock`. Zig's own
+      // grammar has `IfTypeExpr` and `LabeledTypeExpr` for this, and the
+      // standard library uses it wherever a field's type depends on the
+      // target.
+      //
+      // The `if` is a rule of its own whose ARMS are also type operands,
+      // which is Zig's `IfTypeExpr` and is not decoration: with ordinary
+      // expression arms, `fn f() if (c) A else B!C {` reads the body's `{`
+      // as an initializer on `C` and the function loses its body.
+      prec(PREC.prefix, $.switch_expression),
+      prec(PREC.prefix, alias($._if_type_expression, $.if_expression)),
+    ),
+
+    _if_type_expression: $ => prec.right(seq(
+      'if',
+      '(', field('condition', $._expression), ')',
+      optional(field('capture', $.payload)),
+      field('consequence', $._type_operand),
+      optional(field('alternative', alias($._else_type_clause, $.else_clause))),
+    )),
+
+    _else_type_clause: $ => seq(
+      'else',
+      optional(field('capture', $.payload)),
+      field('body', $._type_operand),
     ),
 
     // ── types ────────────────────────────────────────────────────────
@@ -454,8 +551,6 @@ module.exports = grammar({
       $.optional_type,
       $.error_union_type,
       $.anyframe_type,
-      $.container_declaration,
-      $.error_set_declaration,
       $.inferred_type,
     ),
 
@@ -507,6 +602,10 @@ module.exports = grammar({
         $.field_expression,
         $.call_expression,
         $.error_set_declaration,
+        // `(Compilation.Error || std.Io.Writer.Error)!bool` — a merged error
+        // set is written in parentheses, and it is how every function that
+        // unions two error sets spells its return type.
+        $.grouped_expression,
       )),
       '!',
       field('payload', $._type_operand),
@@ -552,17 +651,25 @@ module.exports = grammar({
       'if',
       '(', field('condition', $._expression), ')',
       optional(field('capture', $.payload)),
-      field('consequence', $._expression),
+      // An assignment as well as an expression: `if (i != 0) i -= 1 else
+      // break;` is Zig's `BlockExprStatement <- BlockExpr / AssignExpr
+      // SEMICOLON`, and a body that only took expressions failed on every
+      // one-line assignment in a conditional.
+      field('consequence', bodyExpression($)),
       optional(field('alternative', $.else_clause)),
     )),
 
     else_clause: $ => seq(
       'else',
       optional(field('capture', $.payload)),
-      field('body', $._expression),
+      field('body', bodyExpression($)),
     ),
 
     switch_expression: $ => seq(
+      // Zig 0.14's labelled switch, which `continue :sw .next` jumps back
+      // to. It is how the standard library writes a state machine now, and
+      // 75 corpus files use it.
+      optional(field('label', $.block_label)),
       'switch',
       '(', field('value', $._expression), ')',
       '{',
@@ -578,7 +685,7 @@ module.exports = grammar({
       ),
       '=>',
       optional(field('capture', $.payload)),
-      field('body', choice($._expression, $._assignment)),
+      field('body', bodyExpression($)),
     ),
 
     _switch_item: $ => choice($._expression, $.switch_range),
@@ -594,7 +701,7 @@ module.exports = grammar({
       '(', field('condition', $._expression), ')',
       optional(field('capture', $.payload)),
       optional(seq(':', '(', field('continuation', choice($._expression, $._assignment)), ')')),
-      field('body', $._expression),
+      field('body', bodyExpression($)),
       optional(field('alternative', $.else_clause)),
     )),
 
@@ -604,17 +711,20 @@ module.exports = grammar({
       'for',
       '(', commaSep1(field('subject', $._expression)), optional(','), ')',
       field('capture', $.payload),
-      field('body', $._expression),
+      field('body', bodyExpression($)),
       optional(field('alternative', $.else_clause)),
     )),
 
     // `|x|`, `|x, i|`, `|*item|` — the capture list every Zig control
     // construct can carry.
+    // `|x|`, `|x, i|`, `|*a, b, i|`. Zig 0.11 made `for` take any number of
+    // objects, so the capture list is a comma list and EACH element may be
+    // by-reference — not one name plus an optional index, which is what the
+    // pre-0.11 shape was and what 232 corpus files failed on.
     payload: $ => seq(
       '|',
-      optional('*'),
-      field('name', $._name),
-      optional(seq(',', field('index', $._name))),
+      commaSep1(seq(optional('*'), field('name', $._name))),
+      optional(','),
       '|',
     ),
 
@@ -633,7 +743,15 @@ module.exports = grammar({
       optional(field('value', $._expression)),
     )),
 
-    continue_expression: $ => prec.right(seq('continue', optional(field('label', $.loop_label)))),
+    // `continue :sw .next` — the labelled switch dispatches by CONTINUING
+    // to itself with a new value, which is what makes Zig 0.14's switch a
+    // state machine rather than a conditional. 58 corpus files, and none of
+    // them is a loop.
+    continue_expression: $ => prec.right(seq(
+      'continue',
+      optional(field('label', $.loop_label)),
+      optional(field('value', $._expression)),
+    )),
 
     loop_label: $ => seq(':', $._name),
 
@@ -646,7 +764,7 @@ module.exports = grammar({
     _invocation: $ => choice($.call_expression, $.builtin_call),
 
     call_expression: $ => prec(PREC.suffix, seq(
-      field('function', $._suffix_expression),
+      field('function', suffixOperand($)),
       field('arguments', $.arguments),
     )),
 
@@ -669,21 +787,21 @@ module.exports = grammar({
     _access: $ => choice($.field_expression, $.subscript_expression),
 
     field_expression: $ => prec(PREC.suffix, seq(
-      field('object', $._suffix_expression),
+      field('object', suffixOperand($)),
       '.',
       field('field', $._name),
     )),
 
     subscript_expression: $ => prec(PREC.suffix, seq(
-      field('object', $._suffix_expression),
+      field('object', suffixOperand($)),
       '[',
       field('index', $._expression),
       optional(seq(':', field('sentinel', $._expression))),
       ']',
     )),
 
-    unwrap_expression: $ => prec(PREC.suffix, seq(field('value', $._suffix_expression), '.', '?')),
-    deref_expression: $ => prec(PREC.suffix, seq(field('value', $._suffix_expression), '.', '*')),
+    unwrap_expression: $ => prec(PREC.suffix, seq(field('value', suffixOperand($)), '.', '?')),
+    deref_expression: $ => prec(PREC.suffix, seq(field('value', suffixOperand($)), '.', '*')),
 
     // ── operators ────────────────────────────────────────────────────
     binary_expression: $ => {
@@ -776,7 +894,13 @@ module.exports = grammar({
       optional(field('modifier', $.asm_volatile)),
       '(',
       field('template', $._expression),
-      repeat(seq(':', optional(seq(commaSep1(choice($.asm_operand, $.string)), optional(','))))),
+      // Clobbers were a list of strings until 0.15 and are a struct
+      // literal after it (`: .{ .rcx = true, .r11 = true }`). Both spellings
+      // are here, which is what the version union means.
+      repeat(seq(':', optional(seq(
+        commaSep1(choice($.asm_operand, $.string, $.anonymous_initializer_expression)),
+        optional(','),
+      )))),
       ')',
     ),
 
@@ -804,11 +928,37 @@ module.exports = grammar({
     // ── names ────────────────────────────────────────────────────────
     _name: $ => choice($.identifier),
 
+    // A field's name may be one of five KEYWORDS, and this is a fact about
+    // Zig's parser rather than a widening: it reads a field's name position
+    // as a type expression first, so `null`, `undefined`, `unreachable`,
+    // `true` and `false` all land there and are accepted. `std` uses them —
+    // `null: void,` in a tagged union, `null = 0,` in an explicit enum,
+    // `true,` and `false,` in the JSON scanner's token enum. Aliased to
+    // `identifier`, because in this position that is what they are.
+    //
+    // `anyframe` is the fourth keyword Zig accepts there and is left out:
+    // it is also a type all by itself, so `anyframe,` in a container body
+    // is a field named `anyframe` and a tuple field of type `anyframe` at
+    // once, and the tuple reading is the one real code means.
+    _field_name: $ => choice(
+      $._name,
+      alias($._keyword_field_name, $.identifier),
+    ),
+
+    // Below the literal reading. A `.zon` file whose whole content is
+    // `null` is the VALUE null, not a struct with a field called null.
+    _keyword_field_name: _ => prec(-1, choice(
+      'null', 'undefined', 'unreachable', 'true', 'false',
+    )),
+
     // `@"any string at all"` is an identifier too, which is how Zig names
     // things its keyword list has taken.
     identifier: _ => token(choice(
       /[A-Za-z_][A-Za-z0-9_]*/,
-      seq('@"', /[^"\n]*/, '"'),
+      // The quoted form takes STRING escapes, which is not decoration:
+      // `@"{.payload.name%summary#\"}"` is a real field name in the
+      // compiler, and a rule that stopped at the first `\"` cut it in half.
+      seq('@"', repeat(choice(/[^"\\\n]/, /\\[^\n]/)), '"'),
     )),
 
     // `@` followed by a LETTER, which is what keeps it apart from the
@@ -830,19 +980,21 @@ module.exports = grammar({
       $.undefined,
     ),
 
-    integer: _ => token(choice(
-      /0[xX][0-9a-fA-F][0-9a-fA-F_]*/,
-      /0[oO][0-7][0-7_]*/,
-      /0[bB][01][01_]*/,
-      /[0-9][0-9_]*/,
-    )),
+    // As permissive as Zig's own tokenizer, which emits ONE
+    // `number_literal` token for any digit-led run and leaves `0x`,
+    // `1_x0.0` and `0x1.0p1ab1` to be rejected by AstGen. A grammar
+    // stricter than the tokenizer reports gaps on files the reference
+    // PARSER accepts, which is what 27 corpus files were. The split into
+    // `integer` and `float` is kept — it is what a query wants and Zig's
+    // single token does not give — and the `.` is what decides, with the
+    // digit after it required so `0..10` stays a range and not a float.
+    integer: _ => token(/[0-9][0-9a-zA-Z_]*/),
 
-    float: _ => token(choice(
-      /[0-9][0-9_]*\.[0-9][0-9_]*([eE][-+]?[0-9_]+)?/,
+    float: _ => token(prec(1, choice(
+      /[0-9][0-9a-zA-Z_]*\.[0-9][0-9a-zA-Z_]*([eEpP][-+][0-9a-zA-Z_]*)?/,
       /[0-9][0-9_]*[eE][-+]?[0-9_]+/,
-      /0[xX][0-9a-fA-F][0-9a-fA-F_]*\.[0-9a-fA-F][0-9a-fA-F_]*([pP][-+]?[0-9_]+)?/,
-      /0[xX][0-9a-fA-F][0-9a-fA-F_]*[pP][-+]?[0-9_]+/,
-    )),
+      /0[xX][0-9a-fA-F_]+[pP][-+]?[0-9_]+/,
+    ))),
 
     string: $ => seq(
       '"',
@@ -858,14 +1010,17 @@ module.exports = grammar({
     // that looks like it carries state is a regular token repeated.
     multiline_string: _ => prec.right(repeat1(token(seq('\\\\', /[^\n]*/)))),
 
+    // Permissive for the same reason the number literals are: Zig's
+    // tokenizer takes the whole `'…'` and leaves `'\u{}'`, `'\u{12z34}'`
+    // and `''` to AstGen, so a grammar that validates the escape here
+    // rejects files the reference PARSER accepts.
     character: _ => token(seq(
       "'",
-      choice(
+      repeat(choice(
         /[^'\\\n]/,
-        seq('\\', /u\{[0-9a-fA-F]+\}/),
-        seq('\\', /x[0-9a-fA-F][0-9a-fA-F]/),
-        seq('\\', /[^\n]/),
-      ),
+        /\\u\{[^}\n]*\}/,
+        /\\[^\n]/,
+      )),
       "'",
     )),
 
@@ -902,6 +1057,45 @@ module.exports = grammar({
     container_doc_comment: _ => token(seq('//!', /[^\n]*/)),
   },
 });
+
+/**
+ * What may sit in the BODY of an `if`, `while`, `for`, `else` or switch
+ * prong. Zig's `BlockExprStatement <- BlockExpr / AssignExpr SEMICOLON`:
+ * an assignment is a body, which is why `if (i != 0) i -= 1 else break;`
+ * parses.
+ *
+ * DESTRUCTURING is left out of it. `a, b = c` and `a` followed by a comma
+ * are the same three tokens, so a body that could destructure eats the
+ * comma that ends a switch prong and the one that continues an outer
+ * destructuring. Zig's own parser is greedy and takes the destructuring;
+ * the parse table cannot be, and a conditional whose one-line body binds a
+ * tuple is not a construct the corpus contains.
+ *
+ * @param {any} $
+ */
+function bodyExpression($) {
+  return choice(
+    $._expression,
+    $.assignment_expression,
+    $.augmented_assignment_expression,
+  );
+}
+
+/**
+ * What a `(`, a `.` or a `[` may bind to: a primary, or a branch —
+ * `switch (x) { … }(args)` is real, and is how the compiler's own test
+ * suite picks between two functions.
+ *
+ * A function rather than a rule, and INLINED at every use, for the reason
+ * `_block_statement` was: a one-symbol `_suffix_operand -> _suffix_expression`
+ * production in between is a second way to reduce the same symbol, and the
+ * parse table cannot tell it from `_expression -> _suffix_expression`.
+ *
+ * @param {any} $
+ */
+function suffixOperand($) {
+  return choice($._suffix_expression, $._branch);
+}
 
 /**
  * A container body: members, then optionally one last field with no comma

@@ -35,11 +35,12 @@
       "align_qualifier",
       "asm_volatile",
       "calling_convention",
+      "comptime_modifier",
       "container_layout",
       "inline_modifier",
       "link_section",
       "linkage_modifier",
-      "parameter_modifier",
+      "noalias_modifier",
       "pointer_qualifier",
       "threadlocal_modifier",
       "visibility_modifier"
