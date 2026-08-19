@@ -1,0 +1,71 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_binding": [
+      "c_style_for_statement",
+      "declaration_command",
+      "for_statement",
+      "variable_assignment"
+    ],
+    "_callable": [
+      "function_definition"
+    ],
+    "_clause": [
+      "case_item",
+      "do_group",
+      "elif_clause",
+      "else_clause"
+    ],
+    "_comment": [
+      "comment"
+    ],
+    "_identifier": [
+      "special_variable",
+      "variable_name",
+      "word"
+    ],
+    "_scope": [
+      "compound_statement",
+      "do_group",
+      "function_definition",
+      "program",
+      "subshell"
+    ],
+    "_string": [
+      "ansi_c_string",
+      "heredoc_body",
+      "raw_string",
+      "string"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "array",
+      "reason": "a parenthesised word list on the right of an assignment"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "a backslash escape inside a double-quoted string"
+    },
+    {
+      "node": "file_descriptor",
+      "reason": "the digit before a redirection operator"
+    },
+    {
+      "node": "heredoc_start",
+      "reason": "the delimiter word after `<<`; the scanner captures it to find the end"
+    },
+    {
+      "node": "heredoc_end",
+      "reason": "the line that closes a heredoc"
+    },
+    {
+      "node": "subscript",
+      "reason": "`x[i]` inside an expansion"
+    },
+    {
+      "node": "heredoc_redirect",
+      "reason": "the `<<` form of the same"
+    }
+  ]
+}

@@ -1,0 +1,70 @@
+================================================================================
+commands, assignments and pipelines
+================================================================================
+
+x=1
+echo "$x" | grep -q hi
+if [ -f /etc/passwd ]; then echo yes; else echo no; fi
+
+--------------------------------------------------------------------------------
+
+(program
+  (variable_assignment
+    (variable_name)
+    (number))
+  (pipeline
+    (command
+      (word)
+      (string
+        (simple_expansion
+          (variable_name))))
+    (command
+      (word)
+      (word)
+      (word)))
+  (if_statement
+    (test_command
+      (word)
+      (word))
+    (command
+      (word)
+      (word))
+    (else_clause
+      (command
+        (word)
+        (word)))))
+
+================================================================================
+loops, functions and heredocs
+================================================================================
+
+for i in 1 2 3; do echo hi; done
+
+greet() {
+  cat <<EOF
+hello
+EOF
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (for_statement
+    (variable_name)
+    (number)
+    (number)
+    (number)
+    (do_group
+      (command
+        (word)
+        (word))))
+  (function_definition
+    (word)
+    (compound_statement
+      (command
+        (word)
+        (redirect
+          (heredoc_redirect
+            (heredoc_start)
+            (heredoc_body)
+            (heredoc_end)))))))

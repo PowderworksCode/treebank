@@ -20,7 +20,8 @@ pub fn grammar_dirs(lang: LangName) -> &'static [&'static str] {
         | LangName::Rust
         | LangName::Typescript
         | LangName::Javascript
-        | LangName::Java => &["."],
+        | LangName::Java
+        | LangName::Bash => &["."],
     }
 }
 

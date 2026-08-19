@@ -68,6 +68,8 @@ pub fn get(name: LangName) -> Option<&'static dyn Unparser> {
         // --add-exports, and it is lossy in ways that would read as our
         // failures. Left out until it is worth the argument.
         LangName::Java => None,
+        // bash has no printer; nothing renders a script back from a tree.
+        LangName::Bash => None,
     }
 }
 

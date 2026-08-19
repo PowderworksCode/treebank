@@ -1,0 +1,34 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'bash'
+versions = '''
+GNU bash 5.x, which is the union that matters: `${x@Q}`, `[[ … =~ … ]]`, `((` arithmetic, process substitution, `;&` and `;;&` case terminators, and the `<<-` heredoc. POSIX sh is a subset and parses; zsh, ksh and fish are different languages and are not targeted.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+13 of 22 table-tier terms are threaded, the fewest of any grammar here, and the shortfall is a fact about shell rather than about the grammar. There is no `_declaration`, `_type`, `_member`, `_modifier`, `_attribute`, `_parameter` or `_pattern` because shell has none of those things: a script declares nothing, types nothing and takes no parameters but `$1`. `_name` is deliberately not threaded either — a command name, a function name and a loop variable are all just WORDS, and `variable_name` exists only inside an expansion where nothing else can be. Threading `_name` through the word positions would put `variable_name` back into the lexer's choice at a command's head, which is exactly where it must not be.'''
+
+[corpus]
+source = 'top-600 GitHub repositories by stars with `language:Shell` (fetched 2026-08-19), tarball at the pinned commit'
+files = 76830
+packages = 588
+ranking_note = '''
+Stars, which is attention rather than use, and the weakest popularity metric in this repository — a star costs nothing and never decays. It is used because GitHub publishes no download counts and shell has no registry at all. The consequence is a different POPULATION from the Debian path the ecosystem also supports: GitHub shell is dotfile frameworks, installers and self-contained tools where shell is the whole product, while Debian shell is configure scripts, init scripts and test harnesses inside projects written in C. A gap number from one is not a gap number from the other. `TREEBANK_BASH_CORPUS=debian` selects the other.'''
+
+[corpus.sweep]
+files = 76830
+passed = 33624
+failed = 43206
+gap_files = 42580
+noise_files = 626
+pass_rate = '43.8%'
+note = '''
+FIRST PASS, and the number says so. This grammar is at the stage java was seven sweeps ago. Three fixes have moved it so far -- 6% to 37% when `_statements` learned to start with a newline, which is what a function body written over more than one line needs, and 37% to 43.8% when arrays and the `|`/`&&` operators learned the same. Shell is a harder grammar than any other here and the remaining 42,580 are not yet clustered into causes.'''
+[[oracles]]
+family = 'bash'
+tool = 'bash -n, via tools/bash-oracle/check.sh'
+version = 'GNU bash 5.2'
+role = '''
+primary and only. `bash -n` is bash's own parser: it reads the script, builds the command list and stops before executing a single word, so a file is judged on its own text with no side effects. Two limits set the ceiling on what a bash sweep can mean, and both are the oracle's rather than ours: `bash -n` does not expand, so an error inside a command substitution is invisible until run time, and it accepts constructs that fail at run time for non-syntactic reasons.'''

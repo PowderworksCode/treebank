@@ -60,6 +60,8 @@ pub fn get(name: LangName) -> Option<&'static dyn Reformatter> {
         // google-java-format is the obvious candidate and is not installed;
         // the JDK ships no formatter of its own.
         LangName::Java => None,
+        // shfmt is the candidate and is not installed.
+        LangName::Bash => None,
     }
 }
 

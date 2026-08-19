@@ -20,6 +20,7 @@
 //! programs live in this crate's `tools/` and are resolved relative to
 //! `CARGO_MANIFEST_DIR`, so the binary works from any cwd in-repo.
 
+mod bash;
 mod java;
 mod javascript;
 mod python;
@@ -100,11 +101,13 @@ pub fn get(name: LangName) -> &'static dyn Oracle {
     static TYPESCRIPT: typescript::TypeScript = typescript::TypeScript;
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
+    static BASH: bash::Bash = bash::Bash;
     match name {
         LangName::Python => &PYTHON,
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
         LangName::Javascript => &JAVASCRIPT,
         LangName::Java => &JAVA,
+        LangName::Bash => &BASH,
     }
 }

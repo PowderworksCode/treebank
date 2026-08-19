@@ -1192,6 +1192,7 @@ fn extensions(lang: LangName) -> &'static [&'static str] {
             &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]
         }
         LangName::Java => &["java"],
+        LangName::Bash => &["sh", "bash"],
     }
 }
 
