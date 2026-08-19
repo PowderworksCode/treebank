@@ -114,11 +114,13 @@ jobs:
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
       # Whether there is anything to guard is a property of the checkout,
-      # not a list of exceptions: java and zig have no test/shape yet, for
-      # different reasons (java's span oracle exists and its fixtures do
-      # not; zig has no span oracle at all, because `zig fmt` reports a
-      # verdict and not a tree). Both read as "no fixtures", and the day
-      # either grows some the step starts running by itself.
+      # not a list of exceptions: java, zig, c and cpp have no test/shape
+      # yet, for different reasons (java's span oracle exists and its
+      # fixtures do not; zig has no span oracle at all, because `zig fmt`
+      # reports a verdict and not a tree; libclang can give one for the C
+      # family through `clang_getCursorExtent` and that program is not
+      # built). All of them read as "no fixtures", and the day any grows
+      # some the step starts running by itself.
       - name: are there shape fixtures
         id: fixtures
         run: |
