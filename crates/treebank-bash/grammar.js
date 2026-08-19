@@ -418,12 +418,25 @@ module.exports = grammar({
       '}',
     ),
 
+    // The index may NOT be `_word_like`. `word` admits `[` and `]` (they
+    // are ordinary characters in a bash word), so it matches `0]` in
+    // `${arr[0]}` -- two characters against the one-character `]` token,
+    // and the lexer takes the longer match every time. The closing bracket
+    // was then never available and no corpus file ever produced a
+    // `subscript` node. This token stops at the bracket instead; it is only
+    // valid inside an index, so the higher precedence cannot leak into an
+    // ordinary word.
     subscript: $ => seq(
       field('name', $.variable_name),
       '[',
-      field('index', repeat1($._word_like)),
+      field('index', repeat1(choice($._expression, alias($._index_word, $.word)))),
       ']',
     ),
+
+    _index_word: _ => token(prec(1, repeat1(choice(
+      /[^\s'"<>{}()$`|&;!\\\[\]]/,
+      /\\[^\r\n]/,
+    )))),
 
     _expansion_tail: $ => repeat1(choice(
       $._word_like,

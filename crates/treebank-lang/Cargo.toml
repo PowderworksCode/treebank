@@ -2,6 +2,7 @@
 name = "treebank-lang"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
 description = "The canonical language names treebank's crates agree on."
 
 [dependencies]

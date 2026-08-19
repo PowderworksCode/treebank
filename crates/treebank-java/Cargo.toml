@@ -9,6 +9,7 @@ keywords = ["incremental", "parsing", "tree-sitter", "java"]
 categories = ["parsing", "text-editors"]
 build = "build.rs"
 include = [
+  "LICENSE",
   "bindings/rust/*",
   "grammar.js",
   "build.rs",

@@ -52,6 +52,7 @@
       "interface_declaration",
       "local_variable_declaration",
       "method_declaration",
+      "module_declaration",
       "record_declaration"
     ],
     "_identifier": [
@@ -68,6 +69,7 @@
       "initializer_block",
       "interface_body",
       "lambda",
+      "module_body",
       "program",
       "switch_block"
     ],
@@ -105,6 +107,10 @@
     {
       "node": "modifiers",
       "reason": "the run of modifiers and annotations before a declaration; its elements carry the roles"
+    },
+    {
+      "node": "module_directive",
+      "reason": "a `requires`/`exports`/`opens`/`uses`/`provides` line in module-info; it declares nothing and binds nothing -- it states a relation between modules"
     },
     {
       "node": "parameters",

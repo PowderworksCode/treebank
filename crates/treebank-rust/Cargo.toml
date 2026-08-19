@@ -9,6 +9,7 @@ keywords = ["incremental", "parsing", "tree-sitter", "rust"]
 categories = ["parsing", "text-editors"]
 build = "build.rs"
 include = [
+  "LICENSE",
   "bindings/rust/*",
   "grammar.js",
   "build.rs",
@@ -16,7 +17,7 @@ include = [
   "src/*.json",
   "src/tree_sitter/*.h",
   "roles.json",
-  "ledger.json",
+  "ledger.toml",
 ]
 
 [lib]

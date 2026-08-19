@@ -2162,8 +2162,22 @@
           "content": {
             "type": "REPEAT1",
             "content": {
-              "type": "SYMBOL",
-              "name": "_word_like"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_expression"
+                },
+                {
+                  "type": "ALIAS",
+                  "content": {
+                    "type": "SYMBOL",
+                    "name": "_index_word"
+                  },
+                  "named": true,
+                  "value": "word"
+                }
+              ]
             }
           }
         },
@@ -2172,6 +2186,29 @@
           "value": "]"
         }
       ]
+    },
+    "_index_word": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "REPEAT1",
+          "content": {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "PATTERN",
+                "value": "[^\\s'\"<>{}()$`|&;!\\\\\\[\\]]"
+              },
+              {
+                "type": "PATTERN",
+                "value": "\\\\[^\\r\\n]"
+              }
+            ]
+          }
+        }
+      }
     },
     "_expansion_tail": {
       "type": "REPEAT1",
