@@ -206,7 +206,7 @@ fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'''
 why_accepted = '''
 `*x` is reachable from the general expression position rather than only from the contexts that unpack (call arguments, assignment targets, sequence displays).'''
 why_not_fixed = '''
-queued. Largest python family; wants the starred form confined to the positions that take it.'''
+FIXED. `starred_expression` is out of `_expression` and written out at each position that takes it -- call arguments, displays, subscripts, comma lists, and a PEP 646 variadic annotation. Written out rather than hidden behind a rule: a hidden rule is a unit reduction, and at `(yield x , …)` that reduction must happen before the parser can tell a yielded expression from a collection element.'''
 
 [[known_widenings]]
 construct = 'conditional expression where a target belongs — `del XX if XX else XX`'
@@ -214,7 +214,8 @@ found_by = '''
 fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'''
 why_accepted = '''
 the `del` target list admits a full expression. CPython: `cannot delete conditional expression`.'''
-why_not_fixed = 'queued.'
+why_not_fixed = '''
+FIXED. `del` takes `_left_hand_side` rather than the expression tier.'''
 
 [[known_widenings]]
 construct = 'augmented assignment to a tuple — `XX , += XX`'
@@ -222,14 +223,16 @@ found_by = '''
 fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'''
 why_accepted = '''
 the augmented-assignment target admits an expression list. CPython: `'tuple' is an illegal expression for augmented assignment`.'''
-why_not_fixed = 'queued.'
+why_not_fixed = '''
+FIXED for `a, b += 1` and `[a] += 1`; the target is now a single name, attribute, subscript or parenthesized expression. `(a + b) += 1` is still accepted -- spelling the parentheses into the target rule instead would need four declared conflicts, and a declared conflict also switches static precedence off in this grammar.'''
 
 [[known_widenings]]
 construct = '`return yield`'
 found_by = '''
 fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'''
 why_accepted = 'a bare `yield` is reachable as the returned expression.'
-why_not_fixed = 'queued.'
+why_not_fixed = '''
+NOT FIXED, and removing `yield_expression` from `return` does not fix it: tree-sitter prefers an extracted keyword only where the keyword is valid, so with `yield` no longer a legal continuation the lexer falls back to `identifier` and the program parses as returning a variable named `yield` -- the same acceptance wearing a worse tree. Rejecting it needs `yield` to be unable to lex as an identifier anywhere, which is what tree-sitter's `reserved` word sets are for.'''
 
 [[known_widenings]]
 construct = '''
@@ -239,3 +242,19 @@ fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'''
 why_accepted = '''
 named_expression's value is the full expression tier rather than the tier below the conditional.'''
 why_not_fixed = 'queued.'
+
+[[known_widenings]]
+construct = "starred operand tier differs by position — `[*a if b else c]`"
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'
+why_accepted = '''
+`starred_expression` is `'*' _expression`, so its operand may be a conditional everywhere. CPython splits it: a call argument is `'*' expression` and takes one, while a display element is `'*' bitwise_or` and does not — `f(*a if b else c)` is valid and `[*a if b else c]` is not.'''
+why_not_fixed = '''
+queued. Needs two starred rules, one per operand tier.'''
+
+[[known_widenings]]
+construct = '`del *a`'
+found_by = 'fuzz (derived from the grammar, shrunk, confirmed against CPython ast.parse)'
+why_accepted = '''
+`del` now takes `_left_hand_side`, which is right for `del a, b[1], c.d` and still admits `star_pattern`. CPython: `cannot delete starred`.'''
+why_not_fixed = '''
+queued. Needs a del-specific target rule, since the star is legal in the assignment and for-loop targets that share `_left_hand_side`.'''
