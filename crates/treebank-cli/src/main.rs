@@ -6,6 +6,7 @@ mod errpos;
 mod roundtrip;
 mod fuzz;
 mod incremental;
+mod kinds;
 mod recovery;
 mod reformat;
 mod mutate;
@@ -181,6 +182,24 @@ enum Cmd {
         #[arg(long)]
         manifest: Option<PathBuf>,
         /// [default: corpus/<lang>/reports/recovery.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Count node kinds over the corpus and report which ones real code
+    /// never produces. Those are the blind spot: no oracle has been asked
+    /// about them, because every corpus-driven check starts from code that
+    /// does not contain them.
+    Kinds {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/kinds.json]
         #[arg(long)]
         out: Option<PathBuf>,
         #[arg(long)]
@@ -462,6 +481,13 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, manifest, "manifest.json"),
             limit,
             &out.unwrap_or_else(|| recovery::default_out(lang)),
+        ),
+        Cmd::Kinds { lang, grammar, manifest, out, limit } => kinds::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            limit,
+            &out.unwrap_or_else(|| kinds::default_out(lang)),
         ),
         Cmd::Fuzz { lang, grammar, out, iterations, seed, unguided } => fuzz::run(
             lang,
