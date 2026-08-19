@@ -1337,7 +1337,83 @@
         "required": true,
         "types": [
           {
-            "type": "_expression",
+            "type": "_access",
+            "named": true
+          },
+          {
+            "type": "_assignment",
+            "named": true
+          },
+          {
+            "type": "_invocation",
+            "named": true
+          },
+          {
+            "type": "_literal",
+            "named": true
+          },
+          {
+            "type": "_name",
+            "named": true
+          },
+          {
+            "type": "array_creation_expression",
+            "named": true
+          },
+          {
+            "type": "binary_expression",
+            "named": true
+          },
+          {
+            "type": "cast_expression",
+            "named": true
+          },
+          {
+            "type": "class_literal",
+            "named": true
+          },
+          {
+            "type": "instanceof_expression",
+            "named": true
+          },
+          {
+            "type": "lambda",
+            "named": true
+          },
+          {
+            "type": "method_reference",
+            "named": true
+          },
+          {
+            "type": "object_creation_expression",
+            "named": true
+          },
+          {
+            "type": "parenthesized_expression",
+            "named": true
+          },
+          {
+            "type": "super",
+            "named": true
+          },
+          {
+            "type": "switch_expression",
+            "named": true
+          },
+          {
+            "type": "ternary_expression",
+            "named": true
+          },
+          {
+            "type": "this",
+            "named": true
+          },
+          {
+            "type": "unary_expression",
+            "named": true
+          },
+          {
+            "type": "update_expression",
             "named": true
           }
         ]
@@ -2649,11 +2725,7 @@
       "required": true,
       "types": [
         {
-          "type": "_attribute",
-          "named": true
-        },
-        {
-          "type": "final_modifier",
+          "type": "modifiers",
           "named": true
         },
         {
@@ -4327,7 +4399,79 @@
       "required": true,
       "types": [
         {
-          "type": "_expression",
+          "type": "_access",
+          "named": true
+        },
+        {
+          "type": "_assignment",
+          "named": true
+        },
+        {
+          "type": "_invocation",
+          "named": true
+        },
+        {
+          "type": "_literal",
+          "named": true
+        },
+        {
+          "type": "_name",
+          "named": true
+        },
+        {
+          "type": "array_creation_expression",
+          "named": true
+        },
+        {
+          "type": "binary_expression",
+          "named": true
+        },
+        {
+          "type": "cast_expression",
+          "named": true
+        },
+        {
+          "type": "class_literal",
+          "named": true
+        },
+        {
+          "type": "instanceof_expression",
+          "named": true
+        },
+        {
+          "type": "method_reference",
+          "named": true
+        },
+        {
+          "type": "object_creation_expression",
+          "named": true
+        },
+        {
+          "type": "parenthesized_expression",
+          "named": true
+        },
+        {
+          "type": "super",
+          "named": true
+        },
+        {
+          "type": "switch_expression",
+          "named": true
+        },
+        {
+          "type": "ternary_expression",
+          "named": true
+        },
+        {
+          "type": "this",
+          "named": true
+        },
+        {
+          "type": "unary_expression",
+          "named": true
+        },
+        {
+          "type": "update_expression",
           "named": true
         }
       ]

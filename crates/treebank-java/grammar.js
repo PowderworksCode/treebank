@@ -92,6 +92,7 @@ module.exports = grammar({
     [$._type_id, $.inferred_parameters, $._name],
     [$.annotation_type_body, $._member],
     [$.modifiers, $.local_variable_declaration],
+    [$.local_variable_declaration, $.enhanced_for_statement],
     [$._modifier, $.local_variable_declaration],
     [$.array_type],
     [$._primary, $.scoped_identifier],
@@ -226,13 +227,26 @@ module.exports = grammar({
       field('body', $.class_body),
     ),
 
-    annotation_type_declaration: $ => seq(
+    // The dynamic precedence breaks a GLR tie. `public @interface C { }`
+    // as a class member has a second complete reading: a compact
+    // constructor named C whose modifiers include an annotation named
+    // `interface` -- keyword extraction only prefers the keyword within
+    // one branch, and a GLR split keeps both alive. With an empty body
+    // nothing downstream kills the wrong branch, and the tie broke toward
+    // the compact constructor: zero errors, entirely wrong tree, found by
+    // the javac span oracle in args4j. A real annotation-type declaration
+    // beats a constructor conjured from `@interface`.
+    //
+    // The deeper looseness -- compact constructors are RECORD-only members
+    // (JLS 8.10.4) and `_member` offers them in every class body -- is a
+    // declared widening, not fixable here without splitting `_member`.
+    annotation_type_declaration: $ => prec.dynamic(1, seq(
       optional($.modifiers),
       '@',
       'interface',
       field('name', $.identifier),
       field('body', $.annotation_type_body),
-    ),
+    )),
 
     annotation_type_body: $ => seq('{', repeat(choice($._member, $.annotation_type_element, ';')), '}'),
 
@@ -355,7 +369,13 @@ module.exports = grammar({
     // ── types ────────────────────────────────────────────────────────
     _type: $ => choice($._unannotated_type, $.annotated_type),
 
-    annotated_type: $ => seq(repeat1($._attribute), $._unannotated_type),
+    // The negative dynamic precedence loses GLR ties on purpose: at
+    // `@SuppressWarnings("x") @Override R call();` both readings complete --
+    // annotations on the DECLARATION (javac's MODIFIERS) or a java-8
+    // annotated TYPE `@A @B R`. javac attributes leading annotations to the
+    // declaration, and so do we; annotated_type still wins wherever it is
+    // the only reading, e.g. `List<@NonNull String>`.
+    annotated_type: $ => prec.dynamic(-1, seq(repeat1($._attribute), $._unannotated_type)),
 
     _type_id: $ => alias($.identifier, $.type_identifier),
 
@@ -492,14 +512,24 @@ module.exports = grammar({
       ';',
     ),
 
+    // `modifiers`-wrapped, like every other declaration. This used to be a
+    // bare repeat, which gave the SAME construct two tree shapes -- a field
+    // wraps its annotations in `modifiers`, a local scattered them as
+    // direct children -- and any consumer querying modifiers had to know
+    // which position it was standing in. The javac span oracle surfaced it:
+    // MODIFIERS had a boundary at every annotated local and we had no node.
+    // Only what a local may carry goes in (JLS 14.4: annotations and
+    // `final`), so `public int x;` in a block stays an error.
     local_variable_declaration: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       $._declarator_list,
       ';',
     ),
 
     _declarator_list: $ => seq($.variable_declarator, repeat(seq(',', $.variable_declarator))),
+
+    _local_modifiers: $ => repeat1(choice($._attribute, $.final_modifier)),
 
     variable_declarator: $ => seq(
       field('name', $.identifier),
@@ -747,9 +777,17 @@ module.exports = grammar({
       field('operand', $._no_lambda),
     )),
 
+    // The prefix operand is `_no_lambda`, NOT `_expression`, and the
+    // alternative is prec.LEFT. Both matter. With the full `_expression`
+    // there, `++last == maxSize` parsed as `++(last == maxSize)` -- the
+    // operand slot admitted a binary_expression and right-associativity
+    // told the conflict to keep extending it. javac reads it as
+    // `(++last) == maxSize`, which the shape oracle caught on real code
+    // (logback's CyclicBuffer) after the sweep had passed the file: the
+    // wrong tree parses cleanly.
     update_expression: $ => choice(
-      prec.right(PREC.unary, seq(choice('++', '--'), $._expression)),
-      prec.left(PREC.postfix, seq($._expression, choice('++', '--'))),
+      prec.left(PREC.unary, seq(choice('++', '--'), $._no_lambda)),
+      prec.left(PREC.postfix, seq($._no_lambda, choice('++', '--'))),
     ),
 
     cast_expression: $ => prec(PREC.cast, seq(
@@ -757,7 +795,15 @@ module.exports = grammar({
       field('type', $._type),
       repeat(seq('&', $._type)),
       ')',
-      field('value', $._expression),
+      // Spelled as an inline choice rather than `$._expression`, which is
+      // the same set -- but `_expression` is a hidden rule, and its unit
+      // reduction is where the conflict resolution went wrong: with it in
+      // place, `(float)keys.length / x` parsed as `(float)(keys.length/x)`,
+      // the cast swallowing the division exactly as `++last == maxSize`
+      // swallowed the comparison. Java casts bind their operand at unary
+      // strength (JLS 15.16); the lambda stays because casting a lambda to
+      // a functional interface is ordinary code.
+      field('value', choice($.lambda, $._no_lambda)),
     )),
 
     instanceof_expression: $ => prec(PREC.relational, seq(

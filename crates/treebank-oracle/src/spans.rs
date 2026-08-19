@@ -100,15 +100,12 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
     static TS: TypeScriptSpans = TypeScriptSpans;
     static PY: PythonSpans = PythonSpans;
     static RS: crate::rust_spans::RustSpans = crate::rust_spans::RustSpans;
+    static JAVA: JavaSpans = JavaSpans;
     match name {
         LangName::Typescript | LangName::Javascript => Some(&TS),
         LangName::Python => Some(&PY),
         LangName::Rust => Some(&RS),
-        // javac can give one: `Trees.getSourcePositions()` yields start and
-        // end offsets for every tree node, so a span oracle is reachable
-        // the same way the validity one was. Not built yet, and saying so
-        // beats a `spans` run that silently compares against nothing.
-        LangName::Java => None,
+        LangName::Java => Some(&JAVA),
         // bash has no AST to ask for: `bash -n` reports a verdict and
         // nothing else, and there is no second implementation to borrow
         // one from.
@@ -118,6 +115,7 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
 
 struct TypeScriptSpans;
 struct PythonSpans;
+struct JavaSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -126,6 +124,12 @@ struct RawFile {
     spans: Vec<(usize, usize, String)>,
     #[serde(default)]
     edges: Vec<(usize, usize, String, String, usize, usize)>,
+    /// Whether this oracle reports edges AT ALL. Absent means yes, which
+    /// the two original span oracles both do; javac's TreeScanner has no
+    /// generic field reflection, so its script says `false` explicitly
+    /// rather than letting an empty list claim every file has no edges.
+    #[serde(default)]
+    has_edges: Option<bool>,
     #[serde(default)]
     tokens: Option<Vec<(usize, usize)>>,
     #[serde(default)]
@@ -161,6 +165,23 @@ impl SpanOracle for PythonSpans {
     }
 }
 
+impl SpanOracle for JavaSpans {
+    /// javac's own parser, via `Trees.getSourcePositions()` over
+    /// `JavacTask.parse()`. Parse only — no analyze — so nothing synthetic
+    /// exists and every reported node is something the file spells.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        let script = crate::tool("java-oracle/Spans.java");
+        let lines = stdin_oracle::run_lines(
+            "java",
+            &[script.to_string_lossy().as_ref()],
+            "java tools/java-oracle/Spans.java — is a JDK (not just a JRE) installed?",
+            srcroot,
+            paths,
+        )?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
 /// Both span oracles answer in the same JSON-lines shape, so the decoding is
 /// shared: one object per file, spans as `[start, end, kind]` triples.
 fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileSpans>> {
@@ -189,7 +210,7 @@ fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileS
                         child: (cs, ce),
                     })
                     .collect(),
-                has_edges: true,
+                has_edges: raw.has_edges.unwrap_or(true),
                 has_tokens: raw.tokens.is_some(),
                 tokens: raw.tokens.unwrap_or_default(),
                 error: raw.error,
