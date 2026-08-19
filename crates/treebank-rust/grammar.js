@@ -177,8 +177,10 @@ module.exports = grammar({
         // Brace-delimited needs no semicolon: `cfg_if! { ... }`.
         alias($._brace_macro_invocation, $.macro_invocation),
         // Paren- and bracket-delimited require one, which is why
-        // `criterion_main!(benches)` alone is not an item.
-        seq($.macro_invocation, ';'),
+        // `criterion_main!(benches)` alone is not an item. Spelled with a
+        // non-brace token tree, because `$.macro_invocation` covers the
+        // brace form too and `m! { } ;` is `expected item, found ;`.
+        seq(alias($._delimited_macro_invocation, $.macro_invocation), ';'),
       ),
     ),
 
@@ -186,6 +188,12 @@ module.exports = grammar({
       field('macro', $._path_ref),
       '!',
       alias($._brace_token_tree, $.token_tree),
+    ),
+
+    _delimited_macro_invocation: $ => seq(
+      field('macro', $._path_ref),
+      '!',
+      alias($._delimited_token_tree, $.token_tree),
     ),
 
     _brace_token_tree: $ => seq('{', repeat($._token), '}'),
@@ -803,7 +811,6 @@ module.exports = grammar({
       $.scoped_identifier,
       $.generic_function,
       $.self,
-      $.metavariable,
       $.binary_expression,
       $.unary_expression,
       $.reference_expression,
@@ -1041,7 +1048,6 @@ module.exports = grammar({
       $.scoped_identifier,
       $.generic_function,
       $.self,
-      $.metavariable,
       $.parenthesized_expression,
       $.try_expression,
       $.await_expression,
@@ -1210,12 +1216,20 @@ module.exports = grammar({
       $.identifier,
       alias($._soft_keyword, $.identifier),
     ),
+    // `box` is here for a reason that does not survive checking: it is a
+    // reserved keyword in every edition, so `struct box;` and `fn box() {}`
+    // are errors in 2015 as much as in 2021. Taking it out changes nothing
+    // measurable, though, and that is the point worth recording. tree-sitter
+    // prefers an extracted keyword only where the keyword is VALID, so at
+    // `struct •` the lexer offers `identifier` and `box` arrives as one no
+    // matter what this list says. The same sentence explains python
+    // accepting `return yield` and typescript accepting `function ( ) ;`.
+    // All three want `reserved` word sets, which is one change, not three.
     _soft_keyword: _ => choice('raw', 'default', 'auto', 'union', 'macro_rules', 'safe', 'box'),
 
     identifier: _ => /r#?[_\p{XID_Start}][_\p{XID_Continue}]*|[_\p{XID_Start}][_\p{XID_Continue}]*/,
 
     self: _ => 'self',
-    metavariable: _ => /\$[a-zA-Z_][a-zA-Z0-9_]*/,
 
     scoped_identifier: $ => seq(
       field('path', optional(choice(
@@ -1239,7 +1253,6 @@ module.exports = grammar({
       $.scoped_identifier,
       $.self,
       alias(choice('crate', 'super'), $.identifier),
-      $.metavariable,
     ),
 
     // ── patterns ─────────────────────────────────────────────────────

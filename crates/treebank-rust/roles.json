@@ -50,7 +50,6 @@
     "_identifier": [
       "identifier",
       "lifetime",
-      "metavariable",
       "scoped_identifier",
       "type_identifier"
     ],
