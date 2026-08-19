@@ -20,8 +20,8 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | path | what it is |
 |---|---|
 | `DESIGN.md` | the design: vocabulary, invariants, layout, order of work |
-| `VARIANTS.md` | proposal: one parse table per dialect/version-family from shared grammar source — splitting Python 2 out, and taking on SQL |
-| `crates/treebank-python` | Python 2.7 ∪ 3.x in one grammar |
+| `VARIANTS.md` | variants: one parse table per dialect/version-family from shared grammar source. Built for Python; a proposal for SQL |
+| `crates/treebank-python` | Python 3 and Python 2.7 as two parsers from one grammar source |
 | `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
 | `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |
 | `crates/treebank-java` | Java 8 through 21 in one grammar |
@@ -75,6 +75,7 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | negative corpus | accepts-invalid-code — the direction optimizing a pass rate drifts toward, and the one no corpus of real source can reveal |
 | `treebank roles` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
 | `treebank rosetta` | a role threaded in one grammar and forgotten in another (supertype matching is derivation-based, so a missed thread is otherwise silent) |
+| `treebank crossvariant` | a multi-variant language's variants drifting back into one permissive union — invisible to every per-variant gate, because a corpus of real Python 3 never contains `print "x"` and so never rejects |
 | `treebank lint` | the FIELD_GUIDE.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 

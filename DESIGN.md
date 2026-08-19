@@ -330,12 +330,17 @@ grade it.
 A language gets one grammar accepting the **union of its versions** — no
 python2 crate, no per-edition Rust grammars.
 
-> Under review. [`VARIANTS.md`](VARIANTS.md) proposes a second axis —
-> versions union *inside* a variant, dialects and incompatible version
-> families get their own parse table from shared grammar source — and
-> would split Python 2 out on the evidence in this grammar's
-> `version_policy.toml` and `ledger.toml`. This section stands until
-> that is adopted.
+> **Superseded for Python.** [`VARIANTS.md`](VARIANTS.md) added a second
+> axis and Python now uses it: versions union *inside* a variant, and
+> incompatible version families get their own parse table from shared
+> grammar source. `treebank-python` ships `python3` and `python2` from one
+> `common/define-grammar.js`, recorded with its evidence in
+> `crates/treebank-python/variants.toml` (which replaces the old
+> `version_policy.toml`). Rust and TypeScript are unaffected and remain
+> single-variant: editions and TS versions are a version axis, and the
+> union rule below still governs them. The three-case conflict policy
+> below is intact — it is now the rule for versions WITHIN a variant, with
+> VARIANTS.md §1 sitting above it for the split between variants.
 
 - **Python**: 2.7 ∪ 3.x. The union adds the py2 `print` and `exec`
   statements, `except E, e:` clauses, backtick repr, and old-style octal
@@ -439,6 +444,11 @@ Adjudication over the version set:
   noise. The sweep measures that cost rather than assuming it small, by
   asking `ast.parse` about every noise file, and reports the count. It is
   currently zero; the one construct it found is fixed.
+- **misroute** — a file the variant's own table rejects, another variant's
+  table accepts, and that other variant's oracle calls valid. Only a
+  multi-variant language can produce one, and without the bucket it books as
+  a gap. See VARIANTS.md §6.3 for why routing is deliberately not allowed to
+  read the source to avoid them.
 - the sweep stores the full per-oracle verdict vector per file.
 
 ### 5.6 The shape check (`treebank shape`)
@@ -979,10 +989,15 @@ crates/
     vocabulary/supertypes.js  #   the closed term list grammars import
     src/                      #   roles.json schema, facet query expansion,
                               #   the `treebank roles` checker
-  treebank-python/
-    grammar.js  src/scanner.c  src/ (generated, committed)
-    roles.json  ledger.toml
-    test/corpus/  test/negative/  test/negative/<version>/
+  treebank-python/            # two variants, one grammar source:
+    common/define-grammar.js  #   the whole grammar, parameterized
+    common/lexicon.js         #   the token layer that differs by variant
+    common/helpers.js  common/py2-rules.js  common/py3-rules.js
+    common/scanner.c          #   one scanner, variant flag from a #define
+    python3/grammar.js  python3/src/ (generated, committed)  python3/test/
+    python2/grammar.js  python2/src/  python2/test/  python2/ledger.toml
+    variants.toml  roles.json  ledger.toml
+    test/crossvariant/<a>-not-<b>/
     bindings/                 # rust crate + wasm
   treebank-rust/              # same shape
   treebank-typescript/        # common/define-grammar.js + typescript/ + tsx/
@@ -1027,13 +1042,22 @@ test/rosetta/                 # parallel programs + expected-roles files
    exactly the drifting query layer this design exists to kill.
 2. **One `_declaration`,** with or without body; `_binding` is a separate
    facet. A `_signature` facet can be added later, additively.
-3. **`treebank-typescript` covers JavaScript,** as two dialect parsers
-   generated from one source.
+3. **`treebank-typescript` covers JavaScript,** in ONE parser. This decision
+   read "as two dialect parsers generated from one source" until the corpus
+   was asked: the only construct the split existed for is the legacy `<T>x`
+   cast, its incidence measures ≈ 0, and it is a ledgered known-gap instead.
+   Under the variant rule (VARIANTS.md §1) that is cause (3) answering
+   "no" — a genuine ambiguity that does not matter enough to pay for.
 4. **Shared concrete names and fields across grammars,** diverging only
    where syntax genuinely differs.
 5. **Underscore spelling for every vocabulary term;** concrete nodes never
    start with an underscore.
-6. **tree-sitter-cli pinned at 0.26.12**, matching the `tree-sitter`
+6. **A language may have several variants** (VARIANTS.md), each owning a
+   parse table, a corpus and a ledger, generated from one grammar source.
+   Python is the first: `python3` and `python2`. `treebank crossvariant` is
+   the gate that keeps them from converging, and it is the only check that
+   can see that happening.
+7. **tree-sitter-cli pinned at 0.26.12**, matching the `tree-sitter`
    runtime library consumers link, so the version that generates and the
    version that runs are the same. Bumping the pin is treated like a
    grammar change — full sweep, before/after numbers, ledger entry —
