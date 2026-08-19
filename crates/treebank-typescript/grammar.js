@@ -86,7 +86,9 @@ module.exports = grammar({
     '_invocation',
     '_access',
     '_attribute',
-    '_modifier',
+    // `_modifier` is demoted to the facet tier here; typescript partitions
+    // it. See roles.json and DESIGN.md 3.1.1.
+    ...tb.assertDemotable([]),
     '_interpolation',
   ]).map((name) => $[name]),
 
@@ -229,6 +231,10 @@ module.exports = grammar({
     [$.conditional_type, $.rest_type],
     [$.rest_type, $.optional_type],
     [$._modifier, $.mapped_type],
+    // A modifier before `var` could belong to `_modifier` (a class member
+    // is coming) or to the variable declaration's own narrower set. The
+    // keyword settles it one token later.
+    [$.variable_declaration, $._modifier],
     [$.assignment_expression, $.assignment_pattern],
     [$.function_definition],
     [$.parameter, $.assignment_expression],
@@ -356,8 +362,20 @@ module.exports = grammar({
 
     _semicolon: $ => choice(';', $._automatic_semicolon),
 
+    // Every modifier but `override`: tsc's parser takes `declare var x`,
+    // and even `static var x` and `readonly var x`, but `override var x` is
+    // `'override' modifier cannot appear on a variable declaration`. Naming
+    // the set here is what partitions `_modifier` in this grammar, and is
+    // why it is a facet rather than a supertype.
     variable_declaration: $ => seq(
-      repeat($._modifier),
+      repeat(choice(
+        $.accessibility_modifier,
+        $.readonly_modifier,
+        $.static_modifier,
+        $.abstract_modifier,
+        $.declare_modifier,
+        $.accessor_modifier,
+      )),
       field('kind', choice('var', 'let', 'const')),
       commaSep1($.variable_declarator),
       $._semicolon,

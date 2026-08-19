@@ -26,6 +26,8 @@ incremental_check = '''
 recovery_check = '''
 `treebank recovery` — 1993 files, 11435 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.5%, p90 17.5%, p99 94.1%; 60 deletions put more than half of a file of at least 1 KiB inside an error, most often `}` x15, `{` x13, `import` x8, `/` x5. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
 
+fuzz_check = '''
+`treebank fuzz` — the first runs over this grammar. 8 distinct shrunk programs, all confirmed against tsc: `try { }` with neither catch nor finally, `for await (x in y)`, `override var x`, and a `function ( ) ;` family. Four are fixed and the count is 4. What remains is one cause: the keyword-less method form is reachable at STATEMENT level, so `function ( ) ;` and `foo ( ) { }` both parse — `function` lexes as an identifier where the keyword is not valid, and the method form picks it up. The fix is the `_declaration` refactor the grammar already carries a note about, and that note understates it: class members route through `_declaration` on purpose so a method answers `(_declaration)`, and splitting the rule drops that.'''
 [corpus]
 source = '''
 top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)'''
