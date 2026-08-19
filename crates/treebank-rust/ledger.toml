@@ -20,6 +20,12 @@ error_positions = '''
 fuzz_check = '''
 `treebank fuzz` — programs derived from grammar.json and judged by syn. The first run over 3,000 derivations gave 703 widenings reducing to 222 distinct shrunk programs and eight causes; thirteen were sampled and put to rustc itself, and all thirteen were confirmed. Five of the eight are now fixed and the distinct count is 121. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not — which matters because real source is valid, so no amount of it can show that we reject what rust rejects.'''
 
+incremental_check = '''
+`treebank incremental` — 3000 files, 9000 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 27 diverged, 0 of them on text that still parses cleanly. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
+
+recovery_check = '''
+`treebank recovery` — 1999 files, 11096 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.1%, p90 5.6%, p99 78.9%; 116 deletions put more than half of a file of at least 1 KiB inside an error, most often `)` x37, `}` x12, `{` x10, `->` x5. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
+
 [corpus]
 source = '''
 top-1000 crates.io crates by all-time downloads (crates.io db dump, fetched 2026-08-16), .crate tarballs'''

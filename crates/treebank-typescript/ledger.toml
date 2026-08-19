@@ -20,6 +20,12 @@ error_positions = '''
 roundtrip_check = '''
 `treebank roundtrip` — all 11,988 files re-rendered through `ts.createPrinter` and reparsed: 11,982 rendered, 4 failures, and every one is a gap already recorded under known_gaps (the `symbol` parameter in a bare function type, and the angle-bracket cast). The canonical spelling of everything else parses, which is the result worth having: the check doubled the corpus with source no human wrote and found no new construct.'''
 
+incremental_check = '''
+`treebank incremental` — 3000 files, 9000 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 0 diverged, 0 of them on text that still parses cleanly. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
+
+recovery_check = '''
+`treebank recovery` — 1993 files, 11435 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.5%, p90 17.5%, p99 94.1%; 60 deletions put more than half of a file of at least 1 KiB inside an error, most often `}` x15, `{` x13, `import` x8, `/` x5. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
+
 [corpus]
 source = '''
 top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)'''

@@ -844,6 +844,72 @@ here — tsc exposes formatting only through the language service and prettier
 is not vendored — and the command says so rather than substituting
 something else.
 
+### 5.11 The reparse path (`treebank incremental`)
+
+Every other check here parses from scratch. tree-sitter's reason for
+existing is that you can edit a file and reparse only what changed, and the
+contract is that the result is indistinguishable from a fresh parse — so a
+grammar can pass all 204,000 corpus files and still hand a broken tree to
+the editor actually using it.
+
+This is the one check with a **hard invariant** rather than an oracle:
+parse, edit, reparse incrementally, parse the edited text fresh, compare
+kinds and byte ranges. Both halves matter — a reparse with the right shape
+at the wrong offsets is still wrong, and is the likelier failure.
+
+Measured over 26,898 edits across the three grammars: **27 divergences, all
+of them in rust, and none on text that still parses cleanly.** That split is
+the finding. An incremental reparse is exact whenever the edit leaves the
+file valid; the divergences are all on text the edit broke, where error
+recovery and subtree reuse can stitch the same wreckage together more than
+one way and a fresh parse need not choose as a reused one did. The gate is
+the clean half; the broken half is reported and not failed.
+
+The usual suspect for this class of bug is an external scanner whose
+`serialize`/`deserialize` does not round-trip, which is why python — whose
+scanner carries an indent stack — was the language expected to fail. It did
+not; rust, whose scanner is stateless, is the one that diverges.
+
+### 5.12 Error recovery (`treebank recovery`)
+
+Editors spend most of their time on text the language does not accept:
+source is broken between one keystroke and the next, and what a tool can do
+with it depends on how much structure survives. A parser that turns one
+missing brace into a file-length ERROR is useless there while scoring
+perfectly on every other check in this document.
+
+There is no oracle. CPython, `syn` and tsc all stop at the first error and
+return a message; none produces a recovered tree, so there is nothing to
+compare against. So this measures a **property**: take a file that parses
+cleanly, delete exactly one token, and see how much of the file lands inside
+an ERROR. One token rather than one byte, because deleting a byte usually
+just shortens an identifier, while deleting a token is the smallest edit
+that reliably breaks a parse and is what a half-typed line looks like.
+
+The result is a distribution, not a number, because the shape is the point —
+a parser can have an excellent median and still shred one file in fifty, and
+the tail is what a user notices:
+
+| | median | p90 | p99 | shredded |
+|---|---|---|---|---|
+| python | 0.3% | 17.1% | 99.1% | 240 |
+| rust | 0.1% | 5.6% | 78.9% | 116 |
+| typescript | 0.5% | 17.5% | 94.1% | 60 |
+
+"Shredded" means more than half of a file of at least 1 KiB ended up inside
+an error. **The size floor was added after the first run reported nearly
+twice as many.** Deleting `import` from `from a b` errors for two lines and
+recovers — correct behaviour — but on a four-line file two lines is more
+than half of it. A percentage measures the file as much as the parser when
+the file is small, and the count was measuring both.
+
+Shredding is reported by the token that caused it, because a bare count is
+not actionable: losing a quote and losing an identifier are the same number
+and completely different problems. Python's largest cause is `"""` (59),
+which is inherent — an unterminated docstring genuinely does swallow the
+rest of the file. Rust's and TypeScript's are brackets, which are inherent
+for the same reason. What is left after those is where improvement lives.
+
 ## 6. Code organization
 
 ```
