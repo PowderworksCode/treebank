@@ -593,6 +593,7 @@ fn ext(lang: LangName) -> &'static str {
         LangName::Typescript => "ts",
         LangName::Javascript => "js",
         LangName::Java => "java",
+        LangName::Bash => "sh",
     }
 }
 

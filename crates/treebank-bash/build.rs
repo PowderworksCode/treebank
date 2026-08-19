@@ -1,0 +1,17 @@
+fn main() {
+    let src_dir = std::path::Path::new("src");
+
+    let mut c_config = cc::Build::new();
+    c_config.std("c11").include(src_dir);
+    c_config
+        .flag_if_supported("-Wno-unused-parameter")
+        .flag_if_supported("-Wno-unused-but-set-variable")
+        .flag_if_supported("-Wno-trigraphs");
+    // Bash needs one: a heredoc body is delimited by a word that appeared
+    // earlier on the line, which no regular token can express.
+    c_config.file(src_dir.join("parser.c"));
+    c_config.file(src_dir.join("scanner.c"));
+    c_config.compile("tree-sitter-bash");
+
+    println!("cargo:rerun-if-changed=src/parser.c");
+}

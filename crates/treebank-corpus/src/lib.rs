@@ -8,6 +8,9 @@
 pub mod fetch;
 pub mod rank;
 
+mod bash;
+mod debian;
+mod github;
 mod java;
 mod javascript;
 mod npm;
@@ -93,11 +96,13 @@ pub fn get(name: LangName) -> &'static dyn Ecosystem {
     static TYPESCRIPT: typescript::TypeScript = typescript::TypeScript;
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
+    static BASH: bash::Bash = bash::Bash;
     match name {
         LangName::Python => &PYTHON,
         LangName::Rust => &RUST,
         LangName::Typescript => &TYPESCRIPT,
         LangName::Javascript => &JAVASCRIPT,
         LangName::Java => &JAVA,
+        LangName::Bash => &BASH,
     }
 }

@@ -1,0 +1,27 @@
+{
+  "grammars": [
+    {
+      "name": "bash",
+      "camelcase": "Bash",
+      "scope": "source.rust",
+      "file-types": [
+        "sh",
+        "bash",
+        "ebuild",
+        "eclass",
+        "bashrc",
+        "bash_profile"
+      ],
+      "injection-regex": "^(ba)?sh$",
+      "first-line-regex": "^#!.*\\b(sh|bash|dash)\\b"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "GNU bash 5.x in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

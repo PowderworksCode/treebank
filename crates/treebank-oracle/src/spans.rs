@@ -109,6 +109,10 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
         // the same way the validity one was. Not built yet, and saying so
         // beats a `spans` run that silently compares against nothing.
         LangName::Java => None,
+        // bash has no AST to ask for: `bash -n` reports a verdict and
+        // nothing else, and there is no second implementation to borrow
+        // one from.
+        LangName::Bash => None,
     }
 }
 

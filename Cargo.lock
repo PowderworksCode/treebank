@@ -1024,6 +1024,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "009994f150cc0cd50ff54917d5bc8bffe8cad10ca10d81c34da2ec421ae61782"
 
 [[package]]
+name = "treebank-bash"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "treebank-cli"
 version = "0.1.0"
 dependencies = [
@@ -1061,6 +1072,7 @@ dependencies = [
  "csv",
  "flate2",
  "liblzma",
+ "rayon",
  "serde",
  "serde_json",
  "sha2",

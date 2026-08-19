@@ -5,6 +5,7 @@ edition = "2021"
 description = "Corpus acquisition: rank an ecosystem's packages, fetch their tarballs, extract source files, write the manifest sweeps consume. Self-contained so it can move out of this repo."
 
 [dependencies]
+rayon = "1"
 anyhow = "1"
 bzip2 = "0.6.1"
 csv = "1"
