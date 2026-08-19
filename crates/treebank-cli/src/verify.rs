@@ -9,11 +9,39 @@
 //! gigabytes, and their numbers live in each grammar's ledger. What is here
 //! is everything checkable from a clean checkout.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use treebank_lang::LangName;
+
+/// The variant directories of a language crate, in declaration order, or
+/// `["."]` for a single-variant language whose grammar sits at the crate
+/// root. Read from tree-sitter.json's `path` fields, which is where
+/// tree-sitter itself looks, so the gate and the generator cannot disagree
+/// about what exists.
+pub fn variant_dirs(crate_dir: &Path) -> Vec<PathBuf> {
+    let Ok(text) = std::fs::read_to_string(crate_dir.join("tree-sitter.json")) else {
+        return vec![crate_dir.to_path_buf()];
+    };
+    let Ok(json) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return vec![crate_dir.to_path_buf()];
+    };
+    let dirs: Vec<PathBuf> = json["grammars"]
+        .as_array()
+        .map(|gs| {
+            gs.iter()
+                .filter_map(|g| g["path"].as_str())
+                .map(|p| crate_dir.join(p))
+                .collect()
+        })
+        .unwrap_or_default();
+    if dirs.is_empty() {
+        vec![crate_dir.to_path_buf()]
+    } else {
+        dirs
+    }
+}
 
 pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<()> {
     let name = grammar_dir
@@ -22,11 +50,12 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         .unwrap_or_default();
     let mut failed = Vec::new();
 
-    // 0. Registration. Everything below this asks whether the grammar is
-    //    GOOD; this asks whether the rest of the repository can find it at
-    //    all. A grammar whose directory name is not a language, or whose
-    //    tree-sitter.json disagrees with the registry about which files it
-    //    parses, builds and tests perfectly and is invisible to `--lang`.
+    // 0. Registration, once per LANGUAGE. Everything below asks whether
+    //    the grammar is GOOD; this asks whether the rest of the
+    //    repository can find it at all. A grammar whose directory name is
+    //    not a language, or whose tree-sitter.json disagrees with the
+    //    registry about which files it parses, builds and tests perfectly
+    //    and is invisible to `--lang`.
     match registered(grammar_dir) {
         Ok(lang) => println!("  registered    {lang}"),
         Err(e) => {
@@ -35,43 +64,72 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         }
     }
 
-    // 1. Reproducible generation. Without this the parser that ships and the
-    //    grammar you can read drift apart silently.
-    match generation_is_reproducible(grammar_dir) {
-        Ok(true) => println!("  generate      reproducible"),
-        Ok(false) => {
-            println!("  generate      DRIFTED — src/ is not what grammar.js produces");
-            failed.push("generate");
-        }
-        Err(e) => {
-            println!("  generate      could not check: {e}");
-            failed.push("generate");
-        }
-    }
+    // Gates 1-3 are per PARSE TABLE, so a multi-variant language runs them
+    // once per variant: each has its own generated src/, its own corpus and
+    // its own negative corpus.
+    let variants = variant_dirs(grammar_dir);
+    let multi = variants.len() > 1;
+    for dir in &variants {
+        let label = if multi {
+            format!(
+                " [{}]",
+                dir.file_name().map(|n| n.to_string_lossy()).unwrap_or_default()
+            )
+        } else {
+            String::new()
+        };
 
-    // 2. The grammar's own corpus tests: tree SHAPE, not just accept/reject.
-    match run_tool("tree-sitter", &["test"], grammar_dir) {
-        Ok(true) => println!("  corpus tests  pass"),
-        _ => {
-            println!("  corpus tests  FAIL");
-            failed.push("corpus tests");
-        }
-    }
-
-    // 3. The negative corpus. Sweeps catch rejects-valid-code; this catches
-    //    accepts-invalid-code, which no corpus of real source can reveal.
-    let neg = grammar_dir.join("test/negative");
-    if neg.is_dir() {
-        match crate::sweep::negative_quiet(grammar_dir, &neg) {
-            Ok(()) => println!("  negative      all rejected"),
+        // 1. Reproducible generation. Without this the parser that ships and
+        //    the grammar you can read drift apart silently.
+        match generation_is_reproducible(dir) {
+            Ok(true) => println!("  generate      reproducible{label}"),
+            Ok(false) => {
+                println!("  generate      DRIFTED — src/ is not what grammar.js produces{label}");
+                failed.push("generate");
+            }
             Err(e) => {
-                println!("  negative      FAIL: {e}");
-                failed.push("negative");
+                println!("  generate      could not check: {e}{label}");
+                failed.push("generate");
+            }
+        }
+
+        // 2. The grammar's own corpus tests: tree SHAPE, not accept/reject.
+        match run_tool("tree-sitter", &["test"], dir) {
+            Ok(true) => println!("  corpus tests  pass{label}"),
+            _ => {
+                println!("  corpus tests  FAIL{label}");
+                failed.push("corpus tests");
+            }
+        }
+
+        // 3. The negative corpus. Sweeps catch rejects-valid-code; this
+        //    catches accepts-invalid-code, which no corpus of real source
+        //    can reveal.
+        let neg = dir.join("test/negative");
+        if neg.is_dir() {
+            match crate::sweep::negative_quiet(dir, &neg) {
+                Ok(()) => println!("  negative      all rejected{label}"),
+                Err(e) => {
+                    println!("  negative      FAIL: {e}{label}");
+                    failed.push("negative");
+                }
             }
         }
     }
 
-    // 4. Vocabulary conformance.
+    // 3b. The variants must still be different languages. Nothing above can
+    //     see them converging: each variant passes its own gates all the way
+    //     into being one lenient grammar wearing two names.
+    match crate::crossvariant::run_quiet(grammar_dir) {
+        Ok(summary) if summary.starts_with('0') => {}
+        Ok(summary) => println!("  crossvariant  {summary}"),
+        Err(e) => {
+            println!("  crossvariant  FAIL: {e}");
+            failed.push("crossvariant");
+        }
+    }
+
+    // 4. Vocabulary conformance. One manifest per language, so once.
     match crate::roles_check(grammar_dir) {
         Ok(summary) => println!("  roles         {summary}"),
         Err(e) => {

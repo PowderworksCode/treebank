@@ -77,7 +77,14 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
                 continue;
             }
             let grammar_dir = crates_dir.join(lang.grammar_crate());
-            let (language, _) = crate::grammar::load(&grammar_dir)?;
+            // The rosetta corpus is a CROSS-LANGUAGE gate, so a
+            // multi-variant language enters it once, as its default
+            // variant. The within-language version of this check -- the
+            // same program in every variant -- is what
+            // `treebank crossvariant` would grow into if a language ever
+            // needs it; python does not, because its variants disagree
+            // about the vocabulary's members rather than sharing them.
+            let (language, _) = crate::grammar::load(&crate::verify::variant_dirs(&grammar_dir)[0])?;
             let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
             let facets: BTreeMap<String, Vec<String>> = roles.facets.into_iter().collect();
             let node_types = treebank_core::node_types::NodeTypes::load(

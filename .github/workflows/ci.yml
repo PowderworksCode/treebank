@@ -39,20 +39,38 @@ jobs:
       - id: list
         run: |
           set -euo pipefail
-          list=$(ls -d crates/treebank-*/grammar.js \
-            | sed 's|^crates/treebank-||; s|/grammar.js$||' \
-            | jq -R . | jq -sc .)
+          # Both depths: a single-variant language keeps grammar.js at its
+          # crate root, and a multi-variant one (VARIANTS.md §2) keeps one
+          # per variant directory. Globbing only the first depth would drop
+          # a variant language out of the matrix entirely — the same
+          # silently-ungated failure this discovery step was added to stop.
+          list=$(
+            for g in crates/treebank-*/grammar.js crates/treebank-*/*/grammar.js; do
+              [ -f "$g" ] || continue
+              dir=${g%/grammar.js}
+              rest=${dir#crates/treebank-}
+              case "$rest" in
+                */*) grammar=${rest%%/*}; variant=${rest#*/} ;;
+                *)   grammar=$rest;       variant="" ;;
+              esac
+              jq -nc --arg g "$grammar" --arg v "$variant" --arg d "$dir" \
+                '{grammar:$g,variant:$v,dir:$d}'
+            done | jq -sc .
+          )
           echo "grammars=$list" >> "$GITHUB_OUTPUT"
           echo "gating: $list"
 
   grammars:
-    name: gates (${{ matrix.grammar }})
+    name: gates (${{ matrix.grammar }}${{ matrix.variant && format('/{0}', matrix.variant) || '' }})
     runs-on: ubuntu-latest
     needs: discover
     strategy:
       fail-fast: false
       matrix:
-        grammar: ${{ fromJSON(needs.discover.outputs.grammars) }}
+        # One row per PARSE TABLE, discovered rather than listed: a
+        # multi-variant language contributes one row per variant, each
+        # carrying the directory its grammar.js lives in.
+        include: ${{ fromJSON(needs.discover.outputs.grammars) }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -70,7 +88,7 @@ jobs:
       # what grammar.js produces at the pinned CLI; without this the
       # published parser and the readable grammar can drift apart.
       - name: generation is reproducible
-        working-directory: crates/treebank-${{ matrix.grammar }}
+        working-directory: ${{ matrix.dir }}
         run: |
           tree-sitter generate
           if ! git diff --quiet -- src/; then
@@ -81,7 +99,7 @@ jobs:
 
       # The grammar's own corpus tests: tree shapes, not just accept/reject.
       - name: corpus tests
-        working-directory: crates/treebank-${{ matrix.grammar }}
+        working-directory: ${{ matrix.dir }}
         run: tree-sitter test
 
       # Sweeps catch rejects-valid-code. This catches accepts-invalid-code,
@@ -89,12 +107,14 @@ jobs:
       # corpus of real (valid) source can ever reveal.
       - name: negative corpus
         run: ./target/debug/treebank negative
-          --grammar crates/treebank-${{ matrix.grammar }}
-          --dir crates/treebank-${{ matrix.grammar }}/test/negative
+          --grammar ${{ matrix.dir }}
+          --dir ${{ matrix.dir }}/test/negative
 
       # I4 — vocabulary conformance: closed term lists, total node
       # coverage, containments, and a roles.json whose members all exist.
+      # One manifest per LANGUAGE, so the default variant runs it.
       - name: vocabulary conformance
+        if: matrix.variant == '' || matrix.variant == 'python3'
         run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
 
       # The FIELD_GUIDE.md smell detector: declared-conflict growth, early
@@ -124,20 +144,35 @@ jobs:
       - name: are there shape fixtures
         id: fixtures
         run: |
-          if [ -d "crates/treebank-${{ matrix.grammar }}/test/shape" ]; then
+          if [ -d "${{ matrix.dir }}/test/shape" ]; then
             echo "have=true" >> "$GITHUB_OUTPUT"
           else
             echo "have=false" >> "$GITHUB_OUTPUT"
-            echo "no crates/treebank-${{ matrix.grammar }}/test/shape; nothing to guard"
+            echo "no ${{ matrix.dir }}/test/shape; nothing to guard"
           fi
 
       - name: shape (tree agrees with the reference parser)
         if: steps.fixtures.outputs.have == 'true'
         run: ./target/debug/treebank shape
           --lang ${{ matrix.grammar }}
-          --grammar crates/treebank-${{ matrix.grammar }}
-          --dir crates/treebank-${{ matrix.grammar }}/test/shape
+          --grammar ${{ matrix.dir }}
+          --dir ${{ matrix.dir }}/test/shape
           --out /tmp/shape-fixture.json
+
+  crossvariant:
+    name: gates (crossvariant)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo build -p treebank-cli
+      # The only gate that can see a multi-variant language's variants
+      # drifting back into one permissive union. Every per-variant gate
+      # above stays green all the way through that: a corpus of real
+      # python 3 never contains `print "x"`, so nothing in it ever
+      # rejects. VARIANTS.md §5.
+      - run: ./target/debug/treebank crossvariant crates/treebank-python
 
   rosetta:
     name: gates (cross-language rosetta)

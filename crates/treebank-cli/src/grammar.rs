@@ -31,7 +31,19 @@ pub fn load(grammar_dir: &Path) -> Result<(tree_sitter::Language, String)> {
     let mut hasher = Sha256::new();
     hasher.update(std::fs::read(&parser_c)?);
     if scanner_c.exists() {
-        hasher.update(std::fs::read(&scanner_c)?);
+        let scanner = std::fs::read(&scanner_c)?;
+        hasher.update(&scanner);
+        // A variant's src/scanner.c is a stub that `#include`s the shared
+        // scanner (VARIANTS.md §2), so the stub's bytes do not change when
+        // the real scanner does. Without hashing what it includes, editing
+        // common/scanner.c leaves this cache serving the PREVIOUS parser --
+        // which is how a deliberately broken variant first passed the
+        // crossvariant gate.
+        for included in local_includes(&scanner_c, &scanner) {
+            hasher.update(std::fs::read(&included).with_context(|| {
+                format!("{} includes {}", scanner_c.display(), included.display())
+            })?);
+        }
     }
     let key = format!("{:x}", hasher.finalize());
     let dylib = std::env::temp_dir().join(format!("treebank-{name}-{}.dylib", &key[..16]));
@@ -66,4 +78,22 @@ pub fn load(grammar_dir: &Path) -> Result<(tree_sitter::Language, String)> {
         std::mem::forget(lib);
         Ok((language, key[..16].to_string()))
     }
+}
+
+/// Quoted `#include` paths in a C file, resolved relative to it. One level
+/// deep, which is all the variant stubs use; a deeper chain would need this
+/// to recurse, and the day one appears is the day to make it.
+fn local_includes(file: &Path, contents: &[u8]) -> Vec<std::path::PathBuf> {
+    let dir = file.parent().unwrap_or(Path::new("."));
+    String::from_utf8_lossy(contents)
+        .lines()
+        .filter_map(|line| {
+            let line = line.trim_start();
+            let rest = line.strip_prefix("#include")?.trim_start();
+            let inner = rest.strip_prefix('"')?;
+            let end = inner.find('"')?;
+            Some(dir.join(&inner[..end]))
+        })
+        .filter(|p| p.exists())
+        .collect()
 }

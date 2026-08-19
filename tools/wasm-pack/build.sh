@@ -41,7 +41,25 @@ while [ $# -gt 0 ]; do
 done
 
 CRATE="$ROOT/crates/treebank-$LANG"
-[ -d "$CRATE/src" ] || { echo "build.sh: no such grammar: $LANG" >&2; exit 2; }
+[ -d "$CRATE" ] || { echo "build.sh: no such grammar: $LANG" >&2; exit 2; }
+
+# A multi-variant language keeps its generated parser under a variant
+# directory (VARIANTS.md §2). The pack is built for the DEFAULT variant --
+# the first one tree-sitter.json declares -- because that is what the
+# language's name means to a consumer: `treebank-python.wasm` is python 3,
+# the same way treebank_python::LANGUAGE is. A pack per variant is a
+# separate decision and a separate artifact name; nothing needs it yet.
+VARIANT=$(python3 - "$CRATE" <<'PY'
+import json, sys, pathlib
+crate = pathlib.Path(sys.argv[1])
+try:
+    grammars = json.load(open(crate / "tree-sitter.json"))["grammars"]
+    print(crate / grammars[0].get("path", "."))
+except Exception:
+    print(crate)
+PY
+)
+[ -d "$VARIANT/src" ] || { echo "build.sh: no generated grammar at $VARIANT" >&2; exit 2; }
 
 SDK=$(wasi_sdk_ensure)
 BINARYEN=$(binaryen_ensure)
@@ -52,7 +70,7 @@ WASM_OPT="$BINARYEN/bin/wasm-opt"
 
 # The grammar's exported entry point comes from grammar.json, not the
 # directory: a grammar may declare a name its directory does not spell.
-GRAMMAR_NAME=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "$CRATE/src/grammar.json")
+GRAMMAR_NAME=$(python3 -c "import json,sys; print(json.load(open(sys.argv[1]))['name'])" "$VARIANT/src/grammar.json")
 
 WORK=$(mktemp -d)
 trap 'rm -rf "$WORK"' EXIT
@@ -61,22 +79,28 @@ trap 'rm -rf "$WORK"' EXIT
 # Deliberately carries no timestamp, build host or git sha: anything ambient
 # would break the byte-reproducibility the provenance exists to make
 # checkable.
-python3 - "$CRATE" "$GRAMMAR_NAME" "$RUNTIME_VERSION" "$WORK/embedded.c" <<'PY'
-import hashlib, json, sys, tomllib
+python3 - "$CRATE" "$VARIANT" "$GRAMMAR_NAME" "$RUNTIME_VERSION" "$WORK/embedded.c" <<'PY'
+import hashlib, json, os, sys, tomllib
 
-crate, grammar_name, runtime_version, out = sys.argv[1:5]
+crate, variant, grammar_name, runtime_version, out = sys.argv[1:6]
 ledger = tomllib.load(open(f"{crate}/ledger.toml", "rb"))
 roles_text = open(f"{crate}/roles.json").read()
 
 def sha256_file(p):
     return hashlib.sha256(open(p, "rb").read()).hexdigest()
 
-sources = {"grammar.js": sha256_file(f"{crate}/grammar.js")}
+sources = {"grammar.js": sha256_file(f"{variant}/grammar.js")}
 try:
-    sources["scanner.c"] = sha256_file(f"{crate}/src/scanner.c")
+    # The variant's scanner.c is a stub that includes the shared one, so
+    # hash what it includes as well: otherwise the provenance is blind to
+    # every change in common/scanner.c.
+    sources["scanner.c"] = sha256_file(f"{variant}/src/scanner.c")
+    shared = f"{crate}/common/scanner.c"
+    if os.path.exists(shared):
+        sources["common/scanner.c"] = sha256_file(shared)
 except FileNotFoundError:
     pass
-sources["parser.c"] = sha256_file(f"{crate}/src/parser.c")
+sources["parser.c"] = sha256_file(f"{variant}/src/parser.c")
 
 corpus = ledger.get("corpus", {})
 sweeps = {k: v for k, v in corpus.items() if k.endswith("sweep")}
@@ -142,8 +166,8 @@ PY
   -Wl,--export-dynamic \
   -o "$WORK/pack.wasm" \
   "$RUNTIME/lib/src/lib.c" \
-  "$CRATE/src/parser.c" \
-  $([ -f "$CRATE/src/scanner.c" ] && echo "$CRATE/src/scanner.c") \
+  "$VARIANT/src/parser.c" \
+  $([ -f "$VARIANT/src/scanner.c" ] && echo "$VARIANT/src/scanner.c") \
   "$ROOT/tools/wasm-pack/shim.c" \
   "$WORK/embedded.c"
 

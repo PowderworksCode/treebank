@@ -1,7 +1,12 @@
 # Variants — splitting Python 2 out, and taking on SQL
 
-A proposal, not yet policy. [`DESIGN.md`](DESIGN.md) §4.2 remains authoritative
-until this is adopted; §11 below says exactly which paragraphs it replaces.
+**Python is done.** Steps 1–3 and 5 of §10 are built and gated: `treebank-python`
+ships two parse tables from one grammar source, `treebank crossvariant` is a
+gate in `verify` and in CI, and the numbers below marked *measured* are from
+the split rather than from a projection. The SQL half (§7, steps 4–6) is still
+a proposal.
+
+[`DESIGN.md`](DESIGN.md) §4.2 is superseded for Python by §11 below.
 
 Two questions, one answer. Python should stop being a 2 ∪ 3 union grammar, and
 SQL cannot be a union grammar at all — Postgres and MySQL disagree about what a
@@ -216,7 +221,8 @@ backticks, so nothing ever rejects — and at the end you have five copies of on
 lenient grammar and a `--dialect` flag that does nothing.
 
 `treebank crossvariant`: for each pair of variants, a corpus of files valid in A
-and **required to be rejected** by B.
+and **required to be rejected** by B. *Built* — a CLI command, a step in
+`treebank verify`, and its own CI job.
 
 ```
 crates/treebank-sql/test/crossvariant/
@@ -225,10 +231,22 @@ crates/treebank-sql/test/crossvariant/
   sqlite-not-postgres/
 ```
 
-Each file carries the construct's name and the reason, and each is checked by
-the *other* dialect's oracle as well, so the corpus itself cannot rot into
-"files that are invalid everywhere." This runs in `treebank verify` and it is
-the single most important new check in this proposal — for Python it is small
+Each file carries the construct's name and the reason, and **both directions are
+asserted** — a file variant A also rejects is a broken fixture, not a passing
+test, which is what stops the corpus itself from rotting into "files that are
+invalid everywhere."
+
+A gate that cannot fail is not a gate, so it was falsified three ways before
+being trusted: a fixture nothing accepts is caught, python2 re-admitting
+f-strings is caught, and python3 re-admitting the py2 print statement is
+caught. The second of those failed to be caught on the first attempt — the
+CLI's compiled-parser cache fingerprinted only a variant's own `src/scanner.c`
+and not the shared scanner it `#include`s, so a deliberately broken grammar
+passed on a stale dylib. Fixed in `grammar.rs`, and it is the third
+stale-artifact bug this work turned up (§10).
+
+This runs in `treebank verify` and it is the single most important new check
+here — for Python it is small
 (the py2 forms must fail python3, and vice versa for `async`/`await`), and for
 SQL it is the whole justification for having dialects at all.
 
@@ -262,7 +280,12 @@ That is split-rule cause (2), documented in the repo's own files, with the
 evidence already gathered. The py2 half is the least-measured part of the
 best-measured grammar here.
 
-### 6.2 The split
+### 6.2 The split — built
+
+Done, in three commits, each with its own proof: the `common/` extraction is
+byte-identical, the strip is differential-tested, and the second variant is
+falsification-tested. What follows is what was planned; the numbers are what
+happened.
 
 **`python3`** — today's grammar minus the py2-only forms. Removed:
 `print_statement`, `exec_statement`, `repr_expression` (backticks), `<>`,
@@ -272,6 +295,12 @@ and the three dynamic precedences. Expected: a smaller table, a faster sweep,
 and — the part worth measuring first — some number of ambiguity-driven
 mis-shapes that only existed because a losing fork was on the table.
 
+*Measured:* parser.c −8.0% (2,891,295 → 2,660,725 bytes), 2,494 → 2,387 parse
+states, 214 → 176 large states, six conflicts and three negative dynamic
+precedences gone. Zero mis-shapes surfaced: a differential parse of 8,761
+CPython-3.11-valid files gives byte-identical trees before and after. Nine
+constructs it now rejects, all nine of which CPython 3.11 also rejects.
+
 **`python2`** — the shared core plus a py2 rule module. Everything above comes
 back as ordinary unambiguous grammar, and the three purpose-rejected constructs
 *become accepted*, because there is no py3 reading to protect: bare `nonlocal`
@@ -279,6 +308,21 @@ and bare `await` are just identifiers, and `print x` needs no dynamic precedence
 when `print` is a keyword. `variants.toml` keeps `f((a)=1)` as a rejection —
 that one is py3.0–3.7, an intra-variant version question, and the union rule
 still governs it.
+
+*Measured:* 1,797 parse states against python3's 2,387, and 13 declared
+conflicts against 37. The two tables disagree about 55.9% of the 8,761-file
+py3 corpus, and about all 29 crossvariant fixtures.
+
+*Not done:* seven python 3 constructs python2 still accepts — `@` matmul, the
+PEP 448 unpacking generalizations, and the py3 parameter-list separators. They
+are one boundary rather than a backlog: every removal that succeeded was a
+**member** of a declared extension point or a token family, and these seven are
+the internal **structure** of the shared parameter chain and collection rules.
+Removing them means rewriting a shared rule's internals behind a variant flag —
+the one thing §3 forbids. The mechanism needs a declared extension point for
+parameter and collection *shape* before they can go, and that is a design
+change, not a line change. Recorded in `python2/ledger.toml` with the probe
+that found each.
 
 `treebank_python::LANGUAGE` continues to mean Python 3. Consumers who never
 thought about this get the parser they already wanted; `LANGUAGE_PYTHON2` is
@@ -503,18 +547,44 @@ catches it, so it ships with the first split, not after.
 
 ## 10. Order of work
 
-1. `variants.toml`, the roles delta check, and `treebank crossvariant` — the
+1. ✅ `variants.toml`, the roles delta check, and `treebank crossvariant` — the
    mechanism, against the existing single-variant grammars, where it must be a
-   no-op. If it is not a no-op, that is a finding.
-2. `common/` extraction for Python, still generating one `python3` table.
-   Reproducible generation (I1) proves the refactor changed nothing: the
-   committed `src/` must be byte-identical after the extraction, minus the
-   deliberate py2 removals.
-3. The `python2` variant, its PyPI-historical corpus, and the CPython 2.7 oracle
-   container. Before-and-after sweep numbers for py3 in the ledger — this is the
-   step that either justifies the split or does not.
+   no-op. It is: rust, typescript, java and bash verify unchanged, and
+   `crossvariant` is silent for them.
+2. ✅ `common/` extraction for Python, still generating one `python3` table.
+   Reproducible generation (I1) proved the refactor changed nothing:
+   `grammar.json`, `node-types.json` and `parser.c` regenerated byte-identical.
+3. ✅ The `python2` variant — **minus** its PyPI-historical corpus and the
+   CPython 2.7 oracle container, which are not built. That omission is the
+   variant's biggest gap and its ledger leads with it: with no oracle, nothing
+   python2 does has been adjudicated by a reference parser, which is why its
+   seven known widenings are recorded rather than guessed at.
+
+   **Three things went wrong here, and every one of them reported success**
+   while being wrong. They are listed because the pattern is the lesson, not
+   the bugs: each was a *stale or missing artifact* that made a check pass
+   vacuously.
+
+   - tree-sitter caches its compiled parser at
+     `~/.cache/tree-sitter/lib/<grammar-name>.so`. Both variants were briefly
+     named `python`, so the first differential loaded **one** library twice and
+     reported the two grammars identical — the answer I was hoping for.
+   - The shared scanner spelled its entry points
+     `tree_sitter_python_external_scanner_*`, which do not link against a
+     parser named `python2`. Every python2 parse failed to **link**, and the
+     probe harness read "no output" as "accepts" — so the first python2 result
+     claimed it accepted all of Python 3. The harness now refuses to report a
+     verdict for a parse that did not run.
+   - The CLI's dylib cache had the same blind spot as the first bug, one layer
+     down (above, §5).
+
+   Moving rules between modules also silently duplicated three `choice`
+   members; nothing but a diff of the regenerated `grammar.json` against the
+   previous commit could have seen it, because the grammar still worked.
 4. `treebank-sql`: `common/` + `ansi/` + `postgres/`, with `libpg_query` and the
    Postgres regression corpus. One dialect, fully gated, before a second.
+   *Not started.* The Python half of this document is now evidence that the
+   mechanism holds; §7 is still a plan.
 5. `sqlite`, then `duckdb`. Two more dialects is where the `crossvariant` corpus
    starts earning its keep and where the lexicon layer gets its real test.
 6. `mysql` and `t-sql` only after their oracles are measured, not assumed.

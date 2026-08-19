@@ -1,0 +1,119 @@
+# The python2 variant's evidence file. Separate from ../ledger.toml because
+# everything in a ledger is per parse table: corpus, oracle, sweep numbers,
+# known gaps. VARIANTS.md §4.
+#
+# Read this one knowing it is young. The python3 ledger records a
+# 297,612-file corpus, four sweeps, a shape check against CPython's `ast`
+# and a fuzz run. This variant has none of that, and the reason is one
+# thing: it has no oracle.
+
+language = 'python'
+variant = 'python2'
+versions = '2.7'
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+grammar_name = 'python2'
+
+why_it_exists = '''
+See ../variants.toml. Briefly: python 2 was living in DESIGN.md §4.2's
+case-(2) escape hatch inside the union grammar, and it cost six declared
+conflicts, three negative dynamic precedences, two purpose-rejections of
+its own syntax, and a declared corpus blind spot that admitted the py2 half
+of the union was measured by hand-written fixtures.'''
+
+oracle = '''
+NONE. There is no python 2 binary in CI, so nothing here has been
+adjudicated by a reference parser -- the single most important fact about
+this variant, and the reason the widenings below are recorded rather than
+fixed. VARIANTS.md §6.4 sets out what wiring one looks like: CPython 2.7's
+`compile` in a container, pinned like the others, with the existing frozen
+battery demoted from oracle to smoke test.'''
+
+corpus = '''
+NONE. VARIANTS.md §6.4 names the source that should exist -- for each
+top-ranked PyPI package, the last release carrying the
+`Programming Language :: Python :: 2` classifier, acquired by the same
+`Ecosystem` machinery as every other corpus. Until that exists this variant
+is measured by its corpus tests, its negative corpus, and the crossvariant
+gate, and by nothing else.'''
+
+what_is_measured = '''
+`tree-sitter test` 6/6; negative corpus 15/15 rejected; `treebank
+crossvariant` 29 files across both pairs -- 12 py2 forms this table accepts
+and python3 rejects, 17 py3 forms python3 accepts and this table rejects.
+Over the 8,761 local CPython-3.11-valid files, this table rejects 4,895
+(55.9%), which is the blunt evidence that the two tables are two languages.
+
+The crossvariant gate was falsified three ways before being trusted: a
+fixture nothing accepts is caught, python2 re-admitting f-strings is
+caught, and python3 re-admitting the py2 print statement is caught.'''
+
+table = '''
+1,797 parse states (python3: 2,387), 87 large states (176), 256 symbols
+(295), 181 node types (196), 13 declared conflicts (37), parser.c 1.82 MB
+(2.66 MB). `print` and `exec` are hard keywords here, so the statement
+forms need no dynamic precedence and declare no conflicts at all -- in the
+union they carried a negative dynamic precedence and six conflicts each to
+lose a fork at every occurrence.'''
+
+# Constructs python 2.7 rejects that this table accepts. Every one was found
+# by probing, not by reading: the probe is quoted so it can be re-run.
+[[known_widenings]]
+constructs = '`def f(*, a)` and `def f(a, /, b)` — the py3 parameter-list separators'
+introduced = 'Python 3.0 (keyword-only) and 3.8 (positional-only)'
+why = '''
+The parameter list is a chain of "what may still follow" rules carrying two
+bits of state (see helpers.js `parameterRules`), and the separators are
+positions IN that chain, not members of a list. Removing them means
+rewriting a shared rule's internals behind a variant flag, which is the one
+thing VARIANTS.md §3 forbids -- it is how a parameterized grammar stops
+being readable. Doing it properly needs a declared extension point for
+parameter-list SHAPE, which is a design change rather than a line change.'''
+
+[[known_widenings]]
+constructs = '`{**a}`, `[*a, *b]`, `f(*a, *b)`, `f(**a, **b)` — the PEP 448 unpacking generalizations'
+introduced = 'Python 3.5'
+why = '''
+Same cause as the parameter separators, in the collection-element rules
+rather than the parameter chain. py2 allows exactly one `*args` and one
+`**kwargs` in a call and no unpacking in a display at all; saying that
+needs the element rules split into groups with different member sets, which
+is rule structure, not a member list.'''
+
+[[known_widenings]]
+constructs = '`a @ b` — the matrix-multiplication operator'
+introduced = 'Python 3.5'
+why = '''
+The one cheap item in this list: `@` is an entry in the binary-operator
+table and `@=` in the augmented-assignment set. It stays because splitting
+the operator table is the same KIND of change as the two above and is worth
+making once, as one extension point for operator sets, rather than
+piecemeal.'''
+
+[[known_gaps]]
+construct = 'py2 tab/space indentation rules'
+note = '''
+Inherited from the shared scanner, and identical to the python3 ledger's
+first known gap: the indent is measured with `get_column`, which counts
+characters, where CPython expands a tab to the next multiple of eight. If
+anything the exposure is larger here, because tabs are far more common in
+python 2 code than in python 3 code -- and with no corpus, nothing measures
+how much larger.'''
+
+[[known_gaps]]
+construct = '`f((a)=1)` — a parenthesized keyword argument'
+note = '''
+Valid python 2, rejected here. This is the opposite direction from the
+widenings above: the shared `arguments` rule takes the python 3 shape, and
+admitting the py2 one would fork against `f((a) == 1)` at every
+parenthesized first argument. Recorded rather than fixed because the
+construct is vanishingly rare and the fork is not.'''
+
+[[known_gaps]]
+construct = '`True` and `False` as assignable names'
+note = '''
+They are ordinary names in python 2 (`True = 0` is legal, if unwise) and
+`_literal` members here, so this table gives them a `true`/`false` node
+where python 2 semantics would say `identifier`. Left alone deliberately:
+it is a tree-shape difference with no oracle to adjudicate it, and guessing
+at one is worse than recording it.'''

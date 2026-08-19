@@ -40,7 +40,12 @@ e = lk.instantiate(store, Module.from_file(eng, path)).exports(store)
 mem = e["memory"]; e["_initialize"](store)
 blob = lambda p, n: json.loads(mem.read(store, p, p + n))
 
-want_name = json.load(open(f"crates/treebank-{lang}/src/grammar.json"))["name"]
+crate = f"crates/treebank-{lang}"
+try:
+    variant = json.load(open(f"{crate}/tree-sitter.json"))["grammars"][0].get("path", ".")
+except Exception:
+    variant = "."
+want_name = json.load(open(f"{crate}/{variant}/src/grammar.json"))["name"]
 got_name = mem.read(store, e["tb_language_name"](store),
                     e["tb_language_name"](store) + e["tb_strlen"](store, e["tb_language_name"](store))).decode()
 assert got_name == want_name, f"{lang}: module says {got_name!r}, grammar.json says {want_name!r}"
