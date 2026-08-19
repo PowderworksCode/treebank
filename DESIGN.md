@@ -1057,7 +1057,7 @@ strings, template literals, regex-vs-division and other ASI-adjacent token
 decisions, JSX text. One language at a time, with the sweep and the roles
 checker live from the first week, is what keeps that risk measured.
 
-### 8.1 C, and what C++ costs — measured
+### 8.1 C and C++, and what the C++ parse table costs — measured
 
 C landed as the sixth grammar and it is the first whose **preprocessor is
 part of the syntax**: a conditional does not enclose a construct, it
@@ -1066,25 +1066,26 @@ generated once per context they may interrupt. That, two declarator
 hierarchies rather than four, and the GNU dialect throughout are the whole
 of its shape; `crates/treebank-c/ledger.toml` carries the numbers.
 
-**C++ was attempted at the same time and is not here.** The attempt was a
-`grammar(C, …)` extension — which is the right architecture, and not the
-thing that failed: C++ genuinely is C's declarator grammar with more on
-top, and a second copy of the declaration specifiers, the four declarator
-shapes and the whole preprocessor is a copy that drifts. What failed is the
-**parse table**, and the failure has a shape worth recording so the next
-attempt starts after it:
+C++ is the seventh, and it **extends** C through tree-sitter's own grammar
+inheritance rather than copying it. That is the right architecture and was
+never in doubt: C++ genuinely is C's declarator grammar with more on top,
+and a second copy of the declaration specifiers, the four declarator
+shapes, the whole preprocessor and every GNU extension is a copy that
+drifts. What was in doubt, for a long time, was whether the **parse table**
+could be built at all — and that is the part worth recording, because it is
+the part a second C-family grammar will hit again.
 
-- A first version generated, after 49 declared conflicts, to a **65 MB
-  `parser.c`** — six times TypeScript's and fifteen times C's — taking
-  about twenty minutes. Reproducible generation is CI's first gate, so a
-  twenty-minute generate is disqualifying on its own.
-- Every subsequent round plateaued in the same place: about twenty declared
-  conflicts, after which each additional conflict cost ten minutes and
-  bought one more. A declared conflict SPLITS the parse state and carries
-  both readings; twenty of them over the same three symbols multiply.
+A first version generated, after 49 declared conflicts, to a **65 MB
+`parser.c`** — six times TypeScript's and fifteen times C's — taking about
+twenty minutes. Reproducible generation is CI's first gate, so a
+twenty-minute generate is disqualifying on its own. Every round after that
+plateaued in the same place: about twenty declared conflicts, after which
+each additional conflict cost ten minutes and bought one more. A declared
+conflict SPLITS the parse state and carries both readings; twenty of them
+over the same three symbols multiply.
 
-What helped, in the order it was measured, because each of these is worth
-doing first next time:
+What brought it to 44 MB and about a minute, in the order it was measured,
+because each of these is worth doing FIRST next time:
 
 1. **Static precedence instead of a declared conflict**, wherever one
    reading is simply right. `Widget(` at the head of a member is a
@@ -1095,7 +1096,11 @@ doing first next time:
    offered wherever a declaration goes gives every `f(x)` in the language a
    second reading; offered only from `_member`, it gives nothing a second
    reading, because a member function declaration needs a return type
-   before its name.
+   before its name. The out-of-line definition is the same story with a
+   sharper edge: C++ has no nested function definitions, and while that
+   rule was reachable from a statement its `prec(2)` won inside every
+   block, so `std::__terminate();` read as a declaration of
+   `std::__terminate` and errored on its own semicolon.
 3. **Not duplicating the base grammar's own alternatives.** The `struct`
    extension made the base clause optional, which made it a second,
    identical reading of every plain `struct X { … }` in the corpus.
@@ -1108,16 +1113,15 @@ doing first next time:
    C++, where the same shapes are already a constructor call, a functional
    cast and a template argument.
 
-What did NOT help: cutting features. Fold expressions, user-defined
-literals, concepts in the function-suffix position, the parenthesised
-initialiser, condition declarations and pack expansion as an ordinary
-expression were all removed, and the plateau did not move. The cost is not
-in C++'s feature count; it is in the declaration-versus-expression
-ambiguity that C already has and C++ multiplies with `::`, `&` and `<`.
+What did NOT help is worth as much: cutting features. Fold expressions,
+user-defined literals, concepts in the function-suffix position, the
+parenthesised initialiser, condition declarations and pack expansion as an
+ordinary expression were all removed, and the plateau did not move until
+the five structural changes above were made. The cost was never C++'s
+feature count; it is the declaration-versus-expression ambiguity that C
+already has, multiplied by `::`, `&` and `<`.
 
-The **pipeline for C++ is in the tree and works**: `LangName::Cpp`, a
-Debian ecosystem whose SLOC filter partitions with C's rather than
-overlapping it, the same libclang oracle at `-x c++ -std=gnu++17`, and
-`routing::preprocessing` declaring `__cplusplus` as `201703L` to match it.
-A C++ grammar can be swept the day it exists. There is no half-built crate
-in the tree, because a grammar that cannot generate is not a grammar.
+Six constructs stayed cut, and `crates/treebank-cpp/ledger.toml` names each
+with what it was costing. The C++ corpus is libstdc++, which is a floor
+rather than a typical case: the standard library's own implementation is
+the most macro- and template-dense C++ there is.
