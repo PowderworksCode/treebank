@@ -77,7 +77,10 @@ module.exports = grammar({
     [$.variable_assignment],],
 
   rules: {
-    program: $ => optional($._statements),
+    // A file of nothing but comments and blank lines is a program: the
+    // newline token is a real terminator here, not whitespace, so it needs
+    // somewhere to land when no statement ever arrives.
+    program: $ => optional(choice($._statements, repeat1('\n'))),
 
     // Newlines are terminators here, not whitespace, so every blank line
     // and every block that opens on its own line has to be tolerated
@@ -240,9 +243,12 @@ module.exports = grammar({
     continue_statement: $ => seq('continue', optional(field('value', $._word_like))),
 
     // ── functions ────────────────────────────────────────────────────
+    // The body may open on its own line -- `clean()\n{ ... }` is the
+    // common K&R-ish shell style and 408 corpus files -- so the newlines
+    // between the parens and the body belong to the definition.
     function_definition: $ => choice(
-      seq('function', field('name', $.word), optional(seq('(', ')')), field('body', $._body)),
-      seq(field('name', $.word), '(', ')', field('body', $._body)),
+      seq('function', field('name', $.word), optional(seq('(', ')')), repeat('\n'), field('body', $._body)),
+      seq(field('name', $.word), '(', ')', repeat('\n'), field('body', $._body)),
     ),
 
     // ── commands ─────────────────────────────────────────────────────
@@ -301,7 +307,10 @@ module.exports = grammar({
     // ── tests and arithmetic ─────────────────────────────────────────
     test_command: $ => choice(
       seq('[[', $._conditional, ']]'),
-      seq('[', repeat($._word_like), ']'),
+      // `[` is a command and its arguments are words -- but `!=`, `=` and
+      // `!` are operator characters the word token excludes, so they have
+      // to be spelled: `[ "$a" != "$b" ]` errored on the `!=`.
+      seq('[', repeat(choice($._word_like, '!', '!=', '==', '=', '-a', '-o', '(', ')')), ']'),
     ),
 
     _conditional: $ => repeat1(choice(
@@ -352,12 +361,29 @@ module.exports = grammar({
 
     // A bare word: anything not special. The negated class is the grammar
     // — shell has no keyword list at the lexical level, only positions.
-    word: _ => token(prec(-1, repeat1(choice(
-      /[^\s'"<>{}()$`|&;!\\\[\]]/,
-      /\\[^\r\n]/,
-      /\[/,
-      /\]/,
-    )))),
+    // The first character may not be `#`: a hash begins a comment only at
+    // the START of a word -- `foo#bar` is one word to bash, `foo #bar` is
+    // a word and a comment. With `#` in the first-char class, `# comment`
+    // lexed as a command NAMED `#` with the words as arguments: no error,
+    // no comment node, in every file -- invisible to the sweep (nothing
+    // errors) and to the span oracle (our extra nodes are not its
+    // business). The ledger records that raising the comment token's
+    // precedence instead made the sweep WORSE, because that steals the
+    // mid-word hashes too; the word-start restriction is bash's own rule.
+    word: _ => token(prec(-1, seq(
+      choice(
+        /[^\s'"<>{}()$`|&;!\\\[\]#]/,
+        /\\[^\r\n]/,
+        /\[/,
+        /\]/,
+      ),
+      repeat(choice(
+        /[^\s'"<>{}()$`|&;!\\\[\]]/,
+        /\\[^\r\n]/,
+        /\[/,
+        /\]/,
+      )),
+    ))),
 
     // Only inside an expansion, where nothing else can be there. At a
     // command's head this token must not exist: `echo` matches it as
