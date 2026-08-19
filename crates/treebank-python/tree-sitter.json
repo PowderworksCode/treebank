@@ -8,13 +8,14 @@
         "py",
         "pyi"
       ],
-      "injection-regex": "python"
+      "injection-regex": "python",
+      "path": "python3"
     }
   ],
   "metadata": {
     "version": "0.1.0",
     "license": "MIT",
-    "description": "treebank python grammar",
+    "description": "treebank python grammars (python3, python2)",
     "links": {
       "repository": "https://github.com/PowderworksCode/treebank"
     }
