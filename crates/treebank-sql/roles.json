@@ -1,0 +1,154 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {
+    "_modifier": "SQL partitions it. Every modifier here is bound to one construct — `DISTINCT` only after SELECT, `TEMPORARY` only after CREATE, `ASC` only in an ordering term, `NOT NULL` only in a column definition — so one alternation reachable from all of those positions accepts `SELECT TEMPORARY`, `CREATE DISTINCT TABLE` and `ORDER BY x PRIMARY KEY`. All sixteen members are concrete node types occurring nowhere else, so facet membership selects exactly the nodes the supertype would have."
+  },
+  "facets": {
+    "_binding": [
+      "alias",
+      "column_definition",
+      "common_table_expression",
+      "create_index_statement",
+      "create_schema_statement",
+      "create_table_statement",
+      "create_view_statement",
+      "rename_clause",
+      "savepoint_statement"
+    ],
+    "_clause": [
+      "add_clause",
+      "common_table_expression",
+      "compound_select",
+      "conflict_clause",
+      "default_values_clause",
+      "delete_using_clause",
+      "drop_column_clause",
+      "else_clause",
+      "filter_clause",
+      "frame_clause",
+      "from_clause",
+      "group_by_clause",
+      "having_clause",
+      "join_clause",
+      "limit_clause",
+      "locking_clause",
+      "module_clause",
+      "offset_clause",
+      "on_clause",
+      "on_conflict_clause",
+      "on_duplicate_key_clause",
+      "order_by_clause",
+      "over_clause",
+      "partition_by_clause",
+      "reference_action",
+      "references_clause",
+      "rename_clause",
+      "returning_clause",
+      "select_clause",
+      "set_clause",
+      "using_clause",
+      "values_clause",
+      "when_clause",
+      "where_clause",
+      "window_clause",
+      "with_clause"
+    ],
+    "_comment": [
+      "comment"
+    ],
+    "_identifier": [
+      "identifier",
+      "qualified_name",
+      "quoted_identifier"
+    ],
+    "_modifier": [
+      "all_modifier",
+      "column_constraint",
+      "default_modifier",
+      "direction_modifier",
+      "distinct_modifier",
+      "if_exists_modifier",
+      "if_not_exists_modifier",
+      "ignore_modifier",
+      "materialized_modifier",
+      "nulls_modifier",
+      "or_modifier",
+      "or_replace_modifier",
+      "recursive_modifier",
+      "temporary_modifier",
+      "unique_modifier",
+      "virtual_modifier"
+    ],
+    "_scope": [
+      "common_table_expression",
+      "program",
+      "select_statement",
+      "subquery"
+    ],
+    "_string": [
+      "string"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "column_name_list",
+      "reason": "the parenthesised `(a, b)` of an insert target, a CTE or a join's USING; a container whose names carry `_name`"
+    },
+    {
+      "node": "compound_operator",
+      "reason": "the `UNION`/`INTERSECT`/`EXCEPT` between two queries; an operator, and the vocabulary has no term for one"
+    },
+    {
+      "node": "expression_list",
+      "reason": "the parenthesised list on the right of `IN` and of a row assignment; its elements are `_expression`"
+    },
+    {
+      "node": "indexed_column",
+      "reason": "one entry of an index or key list: an expression plus an optional direction, both of which carry their own roles"
+    },
+    {
+      "node": "join_type",
+      "reason": "`LEFT OUTER`, `CROSS`, `NATURAL` and friends. Not `_modifier`: it alters a join, and `_modifier` is defined over declarations"
+    },
+    {
+      "node": "ordering_term",
+      "reason": "one entry of an ORDER BY list; the value is an `_expression` and the direction a `_modifier`"
+    },
+    {
+      "node": "parenthesized_relation",
+      "reason": "`(a JOIN b)` in a FROM clause; grouping, carrying no role of its own"
+    },
+    {
+      "node": "qualified_star",
+      "reason": "`t.*` in a select list. Not `_access`: it names no member, it stands for all of them"
+    },
+    {
+      "node": "relation",
+      "reason": "one item of a FROM clause: a name, a subquery or a table-valued call, plus an optional alias. The alias is the `_binding`; the relation itself is a position"
+    },
+    {
+      "node": "result_column",
+      "reason": "one entry of a select list; it exists so an alias can be attached to the expression it renames rather than to the clause"
+    },
+    {
+      "node": "signed_number",
+      "reason": "`DEFAULT -1`: the sign belongs to the literal there rather than being a unary operator, which is what lets `DEFAULT -1 NOT NULL` end where it should"
+    },
+    {
+      "node": "table_option",
+      "reason": "one `ENGINE = InnoDB` pair after a MySQL table body; a storage instruction, not a modifier of the declaration's meaning"
+    },
+    {
+      "node": "table_options",
+      "reason": "the run of them; its elements carry what there is to carry"
+    },
+    {
+      "node": "value_row",
+      "reason": "one `(…)` row of a VALUES list; its elements are `_expression`"
+    },
+    {
+      "node": "window_definition",
+      "reason": "the parenthesised window specification after OVER; the clauses inside it carry the roles"
+    }
+  ]
+}

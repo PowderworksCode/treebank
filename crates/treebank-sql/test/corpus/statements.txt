@@ -1,0 +1,166 @@
+================================================================================
+create table: columns, constraints and a foreign key
+================================================================================
+
+CREATE TABLE IF NOT EXISTS t (
+  id INTEGER PRIMARY KEY,
+  name TEXT NOT NULL DEFAULT 'x',
+  org_id INT REFERENCES orgs (id) ON DELETE CASCADE,
+  UNIQUE (name)
+);
+
+--------------------------------------------------------------------------------
+
+(program
+  (create_table_statement
+    (if_not_exists_modifier)
+    name: (identifier)
+    body: (table_body
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint))
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint)
+        (column_constraint
+          value: (string)))
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint
+          (references_clause
+            name: (identifier)
+            (identifier)
+            (reference_action))))
+      (table_constraint
+        (indexed_column
+          value: (identifier))))))
+
+================================================================================
+create: view, index and schema
+================================================================================
+
+CREATE SCHEMA IF NOT EXISTS s;
+CREATE OR REPLACE VIEW v AS SELECT * FROM t;
+CREATE UNIQUE INDEX i ON t (name DESC);
+
+--------------------------------------------------------------------------------
+
+(program
+  (create_schema_statement
+    (if_not_exists_modifier)
+    name: (identifier))
+  (create_view_statement
+    (or_replace_modifier)
+    name: (identifier)
+    value: (select_statement
+      (select_clause
+        (result_column
+          (star)))
+      (from_clause
+        (relation
+          name: (identifier)))))
+  (create_index_statement
+    (unique_modifier)
+    name: (identifier)
+    value: (identifier)
+    (indexed_column
+      value: (identifier)
+      (direction_modifier))))
+
+================================================================================
+insert, update and delete
+================================================================================
+
+INSERT INTO t (a, b) VALUES (1, 'x')
+ON CONFLICT (a) DO UPDATE SET b = 'y'
+RETURNING a;
+
+UPDATE t SET b = 'z' WHERE a = 1;
+
+DELETE FROM t WHERE a = 1;
+
+--------------------------------------------------------------------------------
+
+(program
+  (insert_statement
+    name: (identifier)
+    (column_name_list
+      (identifier)
+      (identifier))
+    (values_clause
+      (value_row
+        (number)
+        (string)))
+    (on_conflict_clause
+      (column_name_list
+        (identifier))
+      (set_clause
+        (assignment
+          left: (identifier)
+          right: (string))))
+    (returning_clause
+      (result_column
+        value: (identifier))))
+  (update_statement
+    name: (identifier)
+    (set_clause
+      (assignment
+        left: (identifier)
+        right: (string)))
+    (where_clause
+      condition: (binary_expression
+        left: (identifier)
+        right: (number))))
+  (delete_statement
+    name: (identifier)
+    (where_clause
+      condition: (binary_expression
+        left: (identifier)
+        right: (number)))))
+
+================================================================================
+alter, drop, transactions and directives
+================================================================================
+
+ALTER TABLE t ADD COLUMN c INT;
+ALTER TABLE t RENAME COLUMN c TO d;
+DROP TABLE IF EXISTS t;
+BEGIN TRANSACTION;
+SAVEPOINT sp;
+ROLLBACK TO SAVEPOINT sp;
+COMMIT;
+PRAGMA foreign_keys = ON;
+
+--------------------------------------------------------------------------------
+
+(program
+  (alter_table_statement
+    name: (identifier)
+    (add_clause
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier)))))
+  (alter_table_statement
+    name: (identifier)
+    (rename_clause
+      value: (identifier)
+      name: (identifier)))
+  (drop_statement
+    (if_exists_modifier)
+    name: (identifier))
+  (begin_statement)
+  (savepoint_statement
+    name: (identifier))
+  (rollback_statement
+    name: (identifier))
+  (commit_statement)
+  (pragma_statement
+    name: (identifier)
+    value: (identifier)))

@@ -70,6 +70,10 @@ pub fn get(name: LangName) -> Option<&'static dyn Unparser> {
         LangName::Java => None,
         // bash has no printer; nothing renders a script back from a tree.
         LangName::Bash => None,
+        // Nothing renders SQL back from sqlite's parse: it is freed during
+        // prepare, and the VDBE program the oracle can see is not the
+        // statement.
+        LangName::Sql => None,
     }
 }
 

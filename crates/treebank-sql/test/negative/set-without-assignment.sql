@@ -1,0 +1,1 @@
+UPDATE t SET WHERE a = 1;

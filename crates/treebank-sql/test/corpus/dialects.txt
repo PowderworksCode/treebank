@@ -1,0 +1,172 @@
+================================================================================
+dialects: bracketed and backquoted identifiers, MySQL table options
+================================================================================
+
+CREATE TABLE [dbo].[messages] (
+  id INT,
+  `order` INT
+) ENGINE = InnoDB;
+
+ALTER TABLE [dbo].[messages] ADD CONSTRAINT [fk_user]
+  FOREIGN KEY (id) REFERENCES [dbo].[users] (id) ON DELETE CASCADE;
+
+--------------------------------------------------------------------------------
+
+(program
+  (create_table_statement
+    name: (qualified_name
+      value: (quoted_identifier)
+      name: (quoted_identifier))
+    body: (table_body
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier)))
+      (column_definition
+        name: (quoted_identifier)
+        type: (type_name
+          name: (identifier))))
+    (table_options
+      (table_option
+        name: (identifier)
+        value: (identifier))))
+  (alter_table_statement
+    name: (qualified_name
+      value: (quoted_identifier)
+      name: (quoted_identifier))
+    (add_clause
+      (table_constraint
+        name: (quoted_identifier)
+        (identifier)
+        (references_clause
+          name: (qualified_name
+            value: (quoted_identifier)
+            name: (quoted_identifier))
+          (identifier)
+          (reference_action))))))
+
+================================================================================
+defaults, conflict clauses and a virtual table
+================================================================================
+
+CREATE TABLE t (
+  argument TEXT DEFAULT '' NOT NULL,
+  pages INTEGER DEFAULT 0 NOT NULL,
+  weight REAL DEFAULT -1.5,
+  schema VARCHAR PRIMARY KEY ON CONFLICT REPLACE
+);
+
+CREATE VIRTUAL TABLE songs_fts USING fts5(title, artist, tokenize = 'porter');
+
+--------------------------------------------------------------------------------
+
+(program
+  (create_table_statement
+    name: (identifier)
+    body: (table_body
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint
+          value: (string))
+        (column_constraint))
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint
+          value: (number))
+        (column_constraint))
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint
+          value: (signed_number
+            (number))))
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier))
+        (column_constraint
+          (conflict_clause)))))
+  (create_table_statement
+    (virtual_modifier)
+    name: (identifier)
+    (module_clause
+      name: (identifier)
+      (identifier)
+      (identifier)
+      (binary_expression
+        left: (identifier)
+        right: (string)))))
+
+================================================================================
+types, casts and a VALUES-seeded recursive CTE
+================================================================================
+
+CREATE TABLE stamps (d1 timestamp(2) without time zone, tags TEXT[]);
+
+WITH RECURSIVE xaxis(x) AS (
+  VALUES(-2.0)
+  UNION ALL
+  SELECT x + 0.05 FROM xaxis WHERE x < 1.2
+)
+SELECT DATE '2024-01-01', x::NUMERIC FROM xaxis;
+
+--------------------------------------------------------------------------------
+
+(program
+  (create_table_statement
+    name: (identifier)
+    body: (table_body
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier)
+          (number)))
+      (column_definition
+        name: (identifier)
+        type: (type_name
+          name: (identifier)
+          name: (quoted_identifier)))))
+  (select_statement
+    (with_clause
+      (recursive_modifier)
+      (common_table_expression
+        name: (identifier)
+        (column_name_list
+          (identifier))
+        body: (values_clause
+          (value_row
+            (unary_expression
+              value: (number))))
+        body: (compound_select
+          operator: (compound_operator
+            (all_modifier))
+          (select_clause
+            (result_column
+              value: (binary_expression
+                left: (identifier)
+                right: (number))))
+          (from_clause
+            (relation
+              name: (identifier)))
+          (where_clause
+            condition: (binary_expression
+              left: (identifier)
+              right: (number))))))
+    (select_clause
+      (result_column
+        value: (typed_literal
+          type: (identifier)
+          value: (string)))
+      (result_column
+        value: (cast_expression
+          value: (identifier)
+          type: (type_name
+            name: (identifier)))))
+    (from_clause
+      (relation
+        name: (identifier)))))

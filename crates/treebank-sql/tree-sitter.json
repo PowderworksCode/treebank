@@ -1,0 +1,25 @@
+{
+  "grammars": [
+    {
+      "name": "sql",
+      "camelcase": "Sql",
+      "scope": "source.sql",
+      "file-types": [
+        "sql",
+        "ddl",
+        "dml",
+        "psql",
+        "mysql"
+      ],
+      "injection-regex": "^sql$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "SQLite ∪ PostgreSQL ∪ MySQL in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

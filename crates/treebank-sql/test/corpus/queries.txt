@@ -1,0 +1,244 @@
+================================================================================
+select: projection, join, filter and order
+================================================================================
+
+SELECT name, count(*) AS n
+FROM users AS u
+JOIN orgs ON orgs.id = u.org_id
+WHERE u.age > 18
+GROUP BY name
+HAVING count(*) > 1
+ORDER BY n DESC
+LIMIT 10 OFFSET 5;
+
+--------------------------------------------------------------------------------
+
+(program
+  (select_statement
+    (select_clause
+      (result_column
+        value: (identifier))
+      (result_column
+        value: (function_call
+          name: (identifier)
+          arguments: (star))
+        (alias
+          name: (identifier))))
+    (from_clause
+      (join_clause
+        left: (relation
+          name: (identifier)
+          (alias
+            name: (identifier)))
+        right: (relation
+          name: (identifier))
+        (on_clause
+          condition: (binary_expression
+            left: (qualified_name
+              value: (identifier)
+              name: (identifier))
+            right: (qualified_name
+              value: (identifier)
+              name: (identifier))))))
+    (where_clause
+      condition: (binary_expression
+        left: (qualified_name
+          value: (identifier)
+          name: (identifier))
+        right: (number)))
+    (group_by_clause
+      (identifier))
+    (having_clause
+      condition: (binary_expression
+        left: (function_call
+          name: (identifier)
+          arguments: (star))
+        right: (number)))
+    (order_by_clause
+      (ordering_term
+        value: (identifier)
+        (direction_modifier)))
+    (limit_clause
+      value: (number))
+    (offset_clause
+      value: (number))))
+
+================================================================================
+select: set operations and a common table expression
+================================================================================
+
+WITH RECURSIVE walk AS (
+  SELECT 1 AS n
+  UNION ALL
+  SELECT n + 1 FROM walk WHERE n < 10
+)
+SELECT sum(n) FROM walk;
+
+--------------------------------------------------------------------------------
+
+(program
+  (select_statement
+    (with_clause
+      (recursive_modifier)
+      (common_table_expression
+        name: (identifier)
+        body: (select_statement
+          (select_clause
+            (result_column
+              value: (number)
+              (alias
+                name: (identifier))))
+          (compound_select
+            operator: (compound_operator
+              (all_modifier))
+            (select_clause
+              (result_column
+                value: (binary_expression
+                  left: (identifier)
+                  right: (number))))
+            (from_clause
+              (relation
+                name: (identifier)))
+            (where_clause
+              condition: (binary_expression
+                left: (identifier)
+                right: (number)))))))
+    (select_clause
+      (result_column
+        value: (function_call
+          name: (identifier)
+          arguments: (identifier))))
+    (from_clause
+      (relation
+        name: (identifier)))))
+
+================================================================================
+select: subqueries, EXISTS and IN
+================================================================================
+
+SELECT *
+FROM (SELECT id FROM t) AS inner_t
+WHERE id IN (SELECT id FROM allowed)
+  AND NOT EXISTS (SELECT 1 FROM bans WHERE bans.id = inner_t.id);
+
+--------------------------------------------------------------------------------
+
+(program
+  (select_statement
+    (select_clause
+      (result_column
+        (star)))
+    (from_clause
+      (relation
+        name: (subquery
+          (select_statement
+            (select_clause
+              (result_column
+                value: (identifier)))
+            (from_clause
+              (relation
+                name: (identifier)))))
+        (alias
+          name: (identifier))))
+    (where_clause
+      condition: (binary_expression
+        left: (in_expression
+          value: (identifier)
+          right: (subquery
+            (select_statement
+              (select_clause
+                (result_column
+                  value: (identifier)))
+              (from_clause
+                (relation
+                  name: (identifier))))))
+        right: (unary_expression
+          value: (exists_expression
+            value: (subquery
+              (select_statement
+                (select_clause
+                  (result_column
+                    value: (number)))
+                (from_clause
+                  (relation
+                    name: (identifier)))
+                (where_clause
+                  condition: (binary_expression
+                    left: (qualified_name
+                      value: (identifier)
+                      name: (identifier))
+                    right: (qualified_name
+                      value: (identifier)
+                      name: (identifier))))))))))))
+
+================================================================================
+expressions: case, cast, window and the operator ladder
+================================================================================
+
+SELECT CASE WHEN a > 1 THEN 'big' ELSE 'small' END,
+       CAST(b AS TEXT),
+       c::INT,
+       d BETWEEN 1 AND 10,
+       e IS NOT NULL,
+       f || 'x',
+       -g * 2 + 1,
+       row_number() OVER (PARTITION BY h ORDER BY i)
+FROM t;
+
+--------------------------------------------------------------------------------
+
+(program
+  (select_statement
+    (select_clause
+      (result_column
+        value: (case_expression
+          (when_clause
+            condition: (binary_expression
+              left: (identifier)
+              right: (number))
+            value: (string))
+          (else_clause
+            value: (string))))
+      (result_column
+        value: (cast_expression
+          value: (identifier)
+          type: (type_name
+            name: (identifier))))
+      (result_column
+        value: (cast_expression
+          value: (identifier)
+          type: (type_name
+            name: (identifier))))
+      (result_column
+        value: (between_expression
+          value: (identifier)
+          left: (number)
+          right: (number)))
+      (result_column
+        value: (is_expression
+          left: (identifier)
+          right: (null_literal)))
+      (result_column
+        value: (binary_expression
+          left: (identifier)
+          right: (string)))
+      (result_column
+        value: (binary_expression
+          left: (binary_expression
+            left: (unary_expression
+              value: (identifier))
+            right: (number))
+          right: (number)))
+      (result_column
+        value: (function_call
+          name: (identifier)
+          (over_clause
+            (window_definition
+              (partition_by_clause
+                (identifier))
+              (order_by_clause
+                (ordering_term
+                  value: (identifier))))))))
+    (from_clause
+      (relation
+        name: (identifier)))))

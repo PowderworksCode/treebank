@@ -1,0 +1,125 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'sql'
+versions = '''
+SQL is the first target here whose "versions" (DESIGN.md §4.2) are DIALECTS rather than releases, and the union policy applies to them unchanged: one grammar accepts SQLite, PostgreSQL and MySQL, and a construct only one of them has is accepted everywhere. The shared core is SQL:2016's data-manipulation and data-definition syntax -- SELECT with CTEs, set operations, joins, window functions and FILTER; INSERT/UPDATE/DELETE with RETURNING; CREATE/ALTER/DROP for tables, views, indexes and schemas; transactions -- plus each dialect's cheap divergences: `REPLACE INTO`, `ON DUPLICATE KEY UPDATE`, backquoted identifiers and `#` comments from MySQL; `::` casts, `ARRAY[…]`, `DISTINCT FROM`, `FOR UPDATE` and `DELETE … USING` from PostgreSQL; `PRAGMA`, `OR REPLACE`-style conflict clauses and typeless columns from SQLite.
+
+What is deliberately outside the union is the PROCEDURAL half: PL/pgSQL, Oracle PL/SQL, T-SQL batches, MySQL routine bodies and `CREATE TRIGGER … BEGIN … END`. Those are a different language wearing SQL syntax -- they have their own statement grammar, their own control flow and their own delimiters -- and taking them on is a second grammar's worth of work, not a widening of this one. It is also why `_loop`, `_jump` and `_parameter` are not threaded: SQL as scoped here has no loop, no non-local transfer and no formal parameter list.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+15 of 22 table-tier terms are threaded, and every omission is a fact about the language rather than about the grammar.
+
+`_loop`, `_jump` and `_parameter` are absent because the procedural half of SQL is out of scope (see `versions`); a `SELECT` repeats over rows, but nothing in its syntax is a loop. `_attribute` is absent because SQL annotates nothing. `_interpolation` is absent because a SQL string cannot embed an expression -- which is also what lets every `string` be a `_literal`, the test python's f-strings fail.
+
+`_pattern` is absent for a reason worth stating, because SQL looks like it should have one: `LIKE 'a%'` and `SIMILAR TO` take patterns, but the pattern is an ordinary string literal with no syntax of its own -- the grammar cannot see inside it, and calling the string a `_pattern` would make `(_pattern)` mean "a string that happens to sit right of LIKE". The vocabulary's `_pattern` is a destructuring or matching POSITION in the syntax, and SQL has none.
+
+`_modifier` is demoted to the facet tier; roles.json carries the reason. `_declaration` is NOT demoted, and the difference from java is instructive: java had to demote it because a field declaration and a local variable declaration are the same syntax in two positions, while SQL's declarations are the `CREATE` family and occur only at statement position. A column definition also introduces a name, but it lives in a table body and is reached as a `_member`, so the two never share a position.
+
+`_callable` is the one facet omitted: nothing in scope defines something invokable. A `CREATE FUNCTION` body is the procedural language again, and a trigger is not invoked by name.'''
+
+[corpus]
+source = 'Debian sid sources, ranked by popcon installs, keeping every source package carrying at least 500 lines of SQL'
+ranking_note = '''
+SQL is a guest language and more completely so than shell: no package is written in SQL. It arrives as schema, migrations, seed data and test fixtures inside software written in something else, so the corpus question is bash's Debian question -- "which installed packages carry SQL" -- and not the registry question python, rust and typescript answer. There is no SQL registry to rank, and GitHub's `language:SQL` selects repositories that are MOSTLY SQL, which for a guest language is a small unrepresentative tail: dialect tutorials, interview-question repos and sample databases, not the migration directories where SQL lives.
+
+popcon attributes installs to the PACKAGE, not to its SQL, so what this ranks is "SQL that ships inside software people install". That is the honest reading and it is not the same as "popular SQL". The population it selects is database engines and their test suites (postgresql-18 alone carries 130,141 lines), ORM and driver packages, web applications with a migration history, and a long tail of packages with one schema.sql -- so dialect is skewed toward whatever engine is shipping, which in Debian means postgres first.
+
+Two blind spots, declared rather than filtered. Files that are `.sql` but are really TEMPLATES -- a `${schema}` or a `@table@` inside an otherwise ordinary script -- are in the corpus, because no cheap rule separates them from SQL that merely mentions a brace, and they will be counted as gaps. And the 250 MB artifact cap excludes a handful of very large sources that may carry SQL; every skip is logged by the fetch driver.'''
+
+[corpus.sweep]
+files = 3494
+packages = 36
+passed = 774
+failed = 2720
+gap_files = 36
+noise_files = 2684
+pass_rate = '22.2%'
+note = '''
+FIRST PASS, and the pass rate is the least interesting number in it. 774 of 3,494 files parse; of the 2,720 that do not, SQLite rejects 2,684 as well, and only 36 are files the oracle calls valid SQL. So the sweep found 36 adjudicated gaps and could say nothing at all about the other 2,684.
+
+That gap between 22.2% and "36 gaps" is the ONE-DIALECT ORACLE, and it is the number to read this ledger for. The corpus is dominated by three engines' own test suites -- virtuoso 1,127 files (32%), postgresql 806 (23%), postgis 499 (14%) -- and those files are written in the dialect of the engine that ships them. SQLite rejects them, so they book as corpus noise whether or not the grammar was right to reject them too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
+
+Seven fixes were made against that first sweep and both ends are recorded so the grind is visible: 734 passed and 63 gaps before, 774 and 36 after. The fixes were `DEFAULT '' NOT NULL` (the default value is a literal position, not an expression position -- with a full expression the parser reads `'' NOT LIKE …` and never reaches the NOT NULL); `CREATE VIRTUAL TABLE … USING fts5(…)`; T-SQL's `[bracketed]` identifiers, which turned out not to collide with the array subscript after all because the lexer is state-aware; `ALTER TABLE … ADD CONSTRAINT`, which now takes a `_member` rather than a column definition; SQLite's `ON CONFLICT REPLACE` on a column constraint; a VALUES-seeded recursive CTE; and `timestamp(2) without time zone`.
+
+The last two fixes moved no file count -- the files carrying `timestamp(2) without time zone` fail for other reasons as well -- and are kept because a cluster that disappears is still a construct that now parses.
+
+One fix made things WORSE before it was corrected, and it is worth naming because it is the shape of mistake a corpus catches and a test suite does not. MySQL table options were first spelled `name [=] value` with the `=` optional, as MySQL allows. `name value` matches any two words, so a `CREATE TABLE …)` followed by an unterminated `alter table foo add` -- which is how the mssql scripts in openldap are written, with `GO` rather than `;` as the separator -- had its next statement eaten as an option, and a `table_option > ERROR(ALTER TABLE)` cluster appeared in the second sweep that was not in the first. Requiring the `=` costs a form nobody writes and removed it.
+'''
+composition = '''
+36 packages, 3,494 files, from a walk of the top 6,000 popcon sources (41 carried >= 500 lines of SQL; 5 of those 41 were skipped by the 250 MB artifact cap). Largest contributors: virtuoso-opensource 1,127 files, postgresql-18 806, postgis 499, roundcube 152, ceph 107.
+
+**mysql-9.7 is one of the five the cap skipped**, at 429 MB, and so are chromium, firefox, qt6-webengine and qtwebengine. That is a real hole in a dialect-union corpus: the MySQL third of the union is represented only by what other packages ship for it (roundcube's and freeradius's mysql schemas), not by MySQL's own test suite. Raising the cap for this language is the cheapest single improvement to the corpus after adding a second oracle.
+
+The walk was bounded at 6,000 popcon entries rather than run to exhaustion, so this is "SQL inside the 6,000 most-installed Debian sources", not "SQL inside Debian". A longer walk is more packages, not different ones.
+'''
+methodology_note = '''
+The ranking and fetch were run with the methodology `treebank_corpus::debian` implements -- popcon order, sources.debian.org's sloc census, the >= 500-line floor, the 250 MB cap, one leading path component stripped -- but through curl rather than through the crate, because the machine reaches deb.debian.org and popcon.debian.org only via a TLS-terminating proxy whose CA `ureq` (which bundles its own root store) does not see. The sweep itself, the oracle and the report are the real ones: `treebank sweep --lang sql --grammar crates/treebank-sql` over the manifest that produced. Anyone re-running this on a machine with ordinary network access should use `treebank rank --lang sql` and `treebank fetch --lang sql` and expect the same corpus.
+'''
+
+[[oracles]]
+family = 'sqlite'
+tool = 'SQLite via python3 -m sqlite3, through tools/sql-oracle/check.py'
+version = 'SQLite 3.45.1 (the version bundled with the CPython running the oracle)'
+role = '''
+primary and only, and the "only" is the ceiling on what a SQL sweep can mean. Statements are split with `sqlite3.complete_statement` (sqlite3_complete, which knows that the `;` inside a trigger body does not end a statement) and each is prepared under `EXPLAIN`, which compiles it to a VDBE program and returns the listing instead of running it -- so no corpus file ever executes.
+
+The syntax/semantics line is drawn on the ERROR MESSAGE rather than the error class, because preparing resolves names: `SELECT * FROM t` against an empty database fails with "no such table", and a file that is perfectly good SQL must not be booked as noise for it. SQLite's parser emits a short closed set of messages (near "X": syntax error / unrecognized token / incomplete input / parser stack overflow); everything else it can say is about a schema this oracle deliberately does not have.
+
+THE LIMIT: this is a one-dialect oracle for a dialect-union grammar. PostgreSQL's parser lives inside the server or inside libpg_query (a C library to build) and MySQL's inside mysqld; SQLite's is the only one reachable with nothing installed. So postgres-only and mysql-only syntax is never contradicted, and a file that fails BOTH the grammar and SQLite is booked as corpus noise rather than as the gap it may be. That direction is the safe one -- the sweep can miss a grammar bug, it can never invent one -- and adding libpg_query as a second oracle is the single highest-value thing anyone can do for this language's numbers.'''
+
+[[deviations]]
+what = 'reserved words'
+why = '''
+29 words may never be an identifier here: SELECT FROM WHERE GROUP HAVING ORDER JOIN UNION INTERSECT EXCEPT INSERT UPDATE DELETE CREATE DROP ALTER TABLE INTO VALUES SET AND OR NOT NULL CASE WHEN THEN ELSE END. All 29 are reserved in SQLite, PostgreSQL and MySQL alike, so no dialect lets a bare column be called `select`.
+
+The set is small on purpose. tree-sitter offers a token only where the parse state could accept it, so SQL's enormous keyword list mostly costs nothing -- a column called `key`, `text` or `value` lexes as an identifier everywhere those words are not tokens the parser could take next. The exception is the position where both readings are live: after `SELECT` an identifier is expected, so before this list existed `SELECT FROM users` parsed as one column named FROM aliased `users`, and the grammar accepted a statement no engine will.
+
+`ON` is deliberately NOT reserved even though all three dialects reserve it: `PRAGMA foreign_keys = ON` puts it in value position and that form is real. The cost is that `SELECT on FROM t` parses. Every word left off the list is a word a column may be named after, which is the safe direction for a union grammar.'''
+
+[[deviations]]
+what = 'one node for every dotted name'
+why = '''
+`schema.table` in a FROM clause and `table.column` in a WHERE clause are the same three tokens, and this grammar gives them the same node (`qualified_name`) rather than two. Telling them apart is name resolution, not parsing: the parser cannot know whether `a.b` names a column of table `a` or a table `b` in schema `a` without a catalogue. The node carries `_access` where it occurs in expression position, which is where "reads a member" is true of it.'''
+
+[[gaps]]
+what = 'the procedural dialects'
+detail = '''
+PL/pgSQL, PL/SQL, T-SQL and MySQL routine bodies do not parse, by design (see `versions`). `test/negative/plpgsql-block.sql` and `test/negative/mysql-delimiter.sql` pin that: a `DO $$ … $$` block and a `DELIMITER //` script must be REJECTED, so the day someone adds them it is a deliberate change with its own evidence rather than a drift.'''
+
+[[gaps]]
+what = 'dollar-quoted strings'
+detail = '''
+Postgres's `$$ … $$` and `$tag$ … $tag$` need an external scanner -- the closing delimiter is a word that appeared earlier, which no regular token can express, exactly the shape of bash's heredoc. This grammar ships no scanner.c at all, and writing one before a corpus has asked for it is the wrong order. It is the first scanner this language will need.'''
+
+[[gaps]]
+what = 'MySQL `SET @var = …`'
+detail = '''
+`SET @x = 1` does not parse: `@x` lexes as a bind parameter and the assignment rule takes a name on the left. Widening the shared `assignment` node would also accept `UPDATE t SET @x = 1`, which is invalid, so the fix is a MySQL-specific left-hand side rather than a loosened one. Worth doing when a corpus says how much MySQL dump traffic there is.'''
+
+[[gaps]]
+what = 'row values on the left of IN'
+detail = '''
+`WHERE (a, b) IN (SELECT c, d FROM u)` does not parse. `(a, b)` in expression position is a row constructor, and `(a)` would then be both a row of one and a parenthesised expression with nothing to settle them. The row form is supported where it is unambiguous -- `UPDATE t SET (a, b) = (1, 2)`, where only a row is legal -- and the general case needs a dynamic precedence rather than a rule.'''
+
+[[gaps]]
+what = 'DCL and the special function forms'
+detail = '''
+`GRANT`/`REVOKE`, `COMMENT ON`, `SUBSTRING(x FROM 1 FOR 2)`, `TRIM(BOTH ' ' FROM x)`, `POSITION(x IN y)`, MySQL's `group_concat(… SEPARATOR ',')` and `= ALL (subquery)` are all unparsed. `EXTRACT(field FROM source)` IS supported, as the one member of that family common enough to justify reserving its keyword. The rest are listed together because they are one decision, not five: each needs a keyword reserved in a position where an ordinary function call is also legal, and a corpus is what should decide whether that trade is worth making.'''
+
+[[gaps]]
+what = 'the rest of the CREATE family'
+detail = '''
+Measured on the first sweep and still open: `CREATE TYPE`, `CREATE FUNCTION`, `CREATE DOMAIN`, `CREATE OPERATOR`, `CREATE CAST` (118 occurrences, largely postgres's own regression suite) and `CREATE USER`/`CREATE ROLE` (40, DCL). They are one decision rather than several: each is a statement whose tail is a small language of its own, and `CREATE FUNCTION` in particular is the procedural gap above wearing a different hat. Whether they are worth having depends on how much of a real corpus is a database engine's test suite -- in THIS corpus it is 70%, which is a fact about Debian more than about SQL.'''
+
+[[gaps]]
+what = "postgres's utility statements"
+detail = '''
+`SHOW`, `CHECKPOINT`, `VACUUM`, `ANALYZE`, `CLUSTER`, `REINDEX`, `DISCARD`, `RESET` (17 occurrences). Each is two or three tokens and none is hard; they are listed rather than added because adding a few arbitrary members of an open-ended list is how a grammar starts lying about what it covers. The corpus should decide which, and a corpus with a postgres oracle behind it would say.'''
+
+[[gaps]]
+what = "T-SQL's filegroup clause"
+detail = '''
+`) ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]` after a mssql `CREATE TABLE` (6 occurrences in roundcube's mssql scripts). The bracketed identifiers parse now; the `ON <filegroup>` tail does not. Small, and unblocked -- it is a table option with a keyword instead of an `=`.'''

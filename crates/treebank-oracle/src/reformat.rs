@@ -62,6 +62,9 @@ pub fn get(name: LangName) -> Option<&'static dyn Reformatter> {
         LangName::Java => None,
         // shfmt is the candidate and is not installed.
         LangName::Bash => None,
+        // sqlformat and pg_format are the candidates and neither is
+        // installed; SQLite ships no formatter of its own.
+        LangName::Sql => None,
     }
 }
 

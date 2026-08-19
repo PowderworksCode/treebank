@@ -1142,6 +1142,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "treebank-sql"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "treebank-typescript"
 version = "0.1.0"
 dependencies = [

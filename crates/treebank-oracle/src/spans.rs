@@ -113,6 +113,12 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
         // nothing else, and there is no second implementation to borrow
         // one from.
         LangName::Bash => None,
+        // SQLite parses to a VDBE program, not to a tree with source
+        // positions: `EXPLAIN` reports opcodes, and the parse tree is freed
+        // inside sqlite3_prepare. libpg_query would give one -- it returns
+        // postgres's own parse tree as JSON with node locations -- and it
+        // is the same build this language's second validity oracle needs.
+        LangName::Sql => None,
     }
 }
 
