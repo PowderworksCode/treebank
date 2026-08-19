@@ -1,13 +1,13 @@
 {
   "language": "typescript",
-  "versions": "the TypeScript ∪ JavaScript ∪ JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
-  "dialect_decision": "One parser for TS + JS + JSX. The DESIGN.md §4.2 dialect split existed for the `<T>` ambiguity, and this ledger previously justified skipping it by measuring angle-bracket CASTS at zero incidence in the top-300. That measurement was right and the conclusion was wrong: the top-1000 corpus has 11+ files of GENERIC ARROW FUNCTIONS (`const f = <T extends X>(x: T) => x`, in zod and rxjs), which hit the same ambiguity and are ordinary modern style. They now parse in the single grammar. The fix was not precedence but a token collision: `_jsx_identifier` and `identifier` matched the same text, so the LEXER chose JSX before the parser could fork — the same trap the rust ledger records for identifier/type_identifier. With plain JSX names lexing as the ordinary identifier and only dashed names getting their own token, GLR forks and jsx_opening_element's negative dynamic precedence yields to the arrow whenever both complete. Casts remain a ledgered gap at 0 measured files.",
+  "versions": "the TypeScript \u222a JavaScript \u222a JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
+  "dialect_decision": "One parser for TS + JS + JSX. The DESIGN.md \u00a74.2 dialect split existed for the `<T>` ambiguity, and this ledger previously justified skipping it by measuring angle-bracket CASTS at zero incidence in the top-300. That measurement was right and the conclusion was wrong: the top-1000 corpus has 11+ files of GENERIC ARROW FUNCTIONS (`const f = <T extends X>(x: T) => x`, in zod and rxjs), which hit the same ambiguity and are ordinary modern style. They now parse in the single grammar. The fix was not precedence but a token collision: `_jsx_identifier` and `identifier` matched the same text, so the LEXER chose JSX before the parser could fork \u2014 the same trap the rust ledger records for identifier/type_identifier. With plain JSX names lexing as the ordinary identifier and only dashed names getting their own token, GLR forks and jsx_opening_element's negative dynamic precedence yields to the arrow whenever both complete. Casts remain a ledgered gap at 0 measured files.",
   "generate_cli": "0.26.12",
-  "vocabulary": "0.3.0",
+  "vocabulary": "0.1.0",
   "oracles": [
     {
       "family": "typescript",
-      "tool": "tools/ts-oracle under node (ts.createSourceFile parseDiagnostics — syntax-only, .d.ts-safe)",
+      "tool": "tools/ts-oracle under node (ts.createSourceFile parseDiagnostics \u2014 syntax-only, .d.ts-safe)",
       "version": "typescript 5.x (pinned by the oracle's package-lock)",
       "role": "judges .ts/.tsx/.mts/.cts"
     },
@@ -15,7 +15,7 @@
       "family": "javascript",
       "tool": "tools/js-oracle under node (V8 via vm, CJS/ESM picked by module rules, @babel/parser leg for JSX)",
       "version": "node 22 V8",
-      "role": "judges .js/.jsx/.mjs/.cjs — deliberately NOT the TypeScript parser, which would bless TS syntax in .js files"
+      "role": "judges .js/.jsx/.mjs/.cjs \u2014 deliberately NOT the TypeScript parser, which would bless TS syntax in .js files"
     }
   ],
   "corpus": {
@@ -47,14 +47,14 @@
       "note": "TypeScript reserves none of the three, so this is valid. Giving them an identifier reading fixes it and breaks `expectTypeOf<t1>().toEqualTypeOf<unknown>()` far worse: the identifier reading creates a competing generic-arrow fork that wins and the type-argument reading dies. Measured 10 -> 23 gap files. Held as a gap deliberately."
     },
     {
-      "construct": "ambient `declare class C { clear(): void\\n [Symbol.iterator]: ... }` — a bodyless method followed by an index signature",
+      "construct": "ambient `declare class C { clear(): void\\n [Symbol.iterator]: ... }` \u2014 a bodyless method followed by an index signature",
       "files": 2,
       "note": "`class_body` separates members by nothing, because an ordinary method ends in `}`. An ambient method ends in a TYPE, so `void` and the next `[` merge into one indexed_access_type. Adding `optional($._type_member_end)` to `class_body` generates cleanly but the token is never offered in that state, with or without the scanner's ASI guard. Both files are undici-types."
     },
     {
       "construct": "legacy `<T>x` angle-bracket casts",
       "files": 1,
-      "note": "the dialect-split construct; one file in 11,988. Accepted as a gap by design — see dialect_decision."
+      "note": "the dialect-split construct; one file in 11,988. Accepted as a gap by design \u2014 see dialect_decision."
     },
     {
       "construct": "a generic arrow whose type parameter carries an `extends` constraint at the head of a call argument",
@@ -63,7 +63,7 @@
   ],
   "deviations": [
     {
-      "what": "one parser instead of the typescript/tsx dialect pair; JSX is grammatical in .ts files (tsc rejects it there) — union-widening traded for a single table, justified by the zero measured cast incidence"
+      "what": "one parser instead of the typescript/tsx dialect pair; JSX is grammatical in .ts files (tsc rejects it there) \u2014 union-widening traded for a single table, justified by the zero measured cast incidence"
     },
     {
       "what": "class methods are function_definition (python/rust precedent: same construct, same name), class members route through _declaration so a method answers (_declaration), (_member) and the _callable facet alike"
@@ -72,16 +72,16 @@
       "what": "ASI is a static continuation set in the scanner (the flip side of the hazard list: ( [ ` + - * / % < > = & | ^ ? : , . in instanceof as satisfies extends), with ++/-- forcing insertion; spec-ASI's can-the-parse-continue rule is approximated, which costs exactly the one ledgered hazard file"
     },
     {
-      "what": "expression statements exclude function/class/{ at the first position structurally — the JS spec rule, enforced in the grammar rather than by dynamic precedence (which measured as unable to win the fork)"
+      "what": "expression statements exclude function/class/{ at the first position structurally \u2014 the JS spec rule, enforced in the grammar rather than by dynamic precedence (which measured as unable to win the fork)"
     },
     {
-      "what": "`T?` is a tuple-ELEMENT form, not a general type. TS only allows it there, and admitting it to the type tier let `x < -1 ? p : q` fork into a type-argument reading that outlived the expression one — 3 corpus files."
+      "what": "`T?` is a tuple-ELEMENT form, not a general type. TS only allows it there, and admitting it to the type tier let `x < -1 ? p : q` fork into a type-argument reading that outlived the expression one \u2014 3 corpus files."
     },
     {
       "what": "`void`, `never`, `unknown` and `symbol` are a predefined_type node rather than identifiers. `void` is a unary operator, so it can never arrive as an identifier and `f<void>()` previously had no reading at all."
     },
     {
-      "what": "object-type members are separated by a scanner token (_type_member_end) as well as , and ;. It carries ASI's continuation set with exactly one token flipped: `[` CONTINUES an expression (`foo` newline `[0]` is a subscript) and BEGINS a type member (an index signature). That single difference is why it is a separate token rather than reusing ASI, and it is what finally closed the 5-file .d.ts family — a precedence attempt had regressed 20 files, and a first version of this token with NO continuation set regressed to 100 by severing every multi-line member type."
+      "what": "object-type members are separated by a scanner token (_type_member_end) as well as , and ;. It carries ASI's continuation set with exactly one token flipped: `[` CONTINUES an expression (`foo` newline `[0]` is a subscript) and BEGINS a type member (an index signature). That single difference is why it is a separate token rather than reusing ASI, and it is what finally closed the 5-file .d.ts family \u2014 a precedence attempt had regressed 20 files, and a first version of this token with NO continuation set regressed to 100 by severing every multi-line member type."
     },
     {
       "what": "`string` is a `_literal` here and is NOT one in python, and that asymmetry is correct rather than a drift: typescript's string is a single token that cannot interpolate, so it satisfies the vocabulary's per-rule test ('determined by its own text, for EVERY instance of the rule'), while python's `string` rule carries f-strings and so cannot. It was excluded here by oversight until vocabulary 0.3.0 measured it. The `_string` facet exists because of exactly this: `(_literal)` is not comparable across languages for strings, and `(_string)` is."
@@ -94,7 +94,7 @@
     },
     {
       "construct": "`a(): asserts this is X` inside an object type",
-      "was": "`asserts` was reachable as a bare type name, so the member looked complete after it and `_type_member_end` was valid there. The external scanner is not forked by GLR, so it cut the member and the predicate reading died before the parser saw it — shredding into four bogus property_signatures.",
+      "was": "`asserts` was reachable as a bare type name, so the member looked complete after it and `_type_member_end` was valid there. The external scanner is not forked by GLR, so it cut the member and the predicate reading died before the parser saw it \u2014 shredding into four bogus property_signatures.",
       "now": "`asserts` and `is` reach identifier position only, via `_value_word`; `predicate_type` now requires `asserts` or `is` rather than deriving a bare name.",
       "note": "SILENT for the same reason: four property_signatures is well-formed. Only the generic form `asserts this is X<Y>` errored."
     },
@@ -113,13 +113,13 @@
     {
       "construct": "`new Date().getFullYear()`",
       "was": "`new (Date().getFullYear())`. The constructor was `$._expression`, so the call bound into it.",
-      "now": "the constructor is its own tier — the member chain over a primary expression, the spec's MemberExpression. Precedence cannot express it: `member` must bind INTO the constructor while `call` must not.",
-      "note": "SILENT, ~29 files. Our own corpus tests had it RECORDED as `new (Service())` and had been passing for it — hand-written expectations cannot catch a mis-parse the author did not already know about."
+      "now": "the constructor is its own tier \u2014 the member chain over a primary expression, the spec's MemberExpression. Precedence cannot express it: `member` must bind INTO the constructor while `call` must not.",
+      "note": "SILENT, ~29 files. Our own corpus tests had it RECORDED as `new (Service())` and had been passing for it \u2014 hand-written expectations cannot catch a mis-parse the author did not already know about."
     },
     {
       "construct": "`x as React.ReactElement`",
       "was": "`(x as React).ReactElement`, a member access on a cast. Same family as `x as A & B`.",
-      "now": "`prec.dynamic(1)` on `nested_type_identifier`. `[member_expression, nested_type_identifier]` is a DECLARED conflict, so static `prec` is never consulted for it — `prec(PREC.member + 1)` changed nothing at all.",
+      "now": "`prec.dynamic(1)` on `nested_type_identifier`. `[member_expression, nested_type_identifier]` is a DECLARED conflict, so static `prec` is never consulted for it \u2014 `prec(PREC.member + 1)` changed nothing at all.",
       "note": "SILENT, 73 files. Found by the shape check."
     },
     {
@@ -135,15 +135,15 @@
       "note": "SILENT, 119 files, introduced and caught within the same day. The argument for the shape ratchet in one line."
     },
     {
-      "construct": "`foo();` — any zero-argument call statement",
-      "was": "a bodyless `function_definition` named `foo`. The keyword-less method form is reachable at statement level, because members route through `_declaration`, and one blanket `prec.dynamic(1)` made it beat the call. `foo(1, 2)` was fine — number literals cannot be parameters — so only the argument-less case collided, and it collided everywhere.",
+      "construct": "`foo();` \u2014 any zero-argument call statement",
+      "was": "a bodyless `function_definition` named `foo`. The keyword-less method form is reachable at statement level, because members route through `_declaration`, and one blanket `prec.dynamic(1)` made it beat the call. `foo(1, 2)` was fine \u2014 number literals cannot be parameters \u2014 so only the argument-less case collided, and it collided everywhere.",
       "now": "`function_definition` splits into three alternatives; the BODYLESS method form takes `prec.dynamic(-1)` and loses to the call.",
       "note": "SILENT and invisible to the shape check too: `function_definition` and `expression_statement` span the same bytes and only the KINDS differ. Found by reading a shape fixture's tree by eye. Recorded because it marks the boundary of what a boundary check can do."
     }
   ],
-  "roles_note": "21 of 22 table-tier terms thread — _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term — the third language to record the same evidence — and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses).",
-  "shape_check": "`treebank shape` compares our node BOUNDARIES against tsc's over the whole corpus: 3,128,811 oracle nodes across 11,976 files. 3,229 missed boundaries at introduction, 23 now — the remaining 6 files are recorded under known_limits in shape_policy.json, each a GLR tie where the two readings hold identical node multisets so dynamic precedence has nothing to weigh. Declared granularity differences (places our tree groups differently on purpose) are `<TscKind> <- <our_kind>` pairs in the same file, each read by hand. Every fix has a fixture under test/shape/, checked in CI with a ceiling of zero.",
-  "mutation_check": "`treebank mutate` — 3,877 mutants over 500 corpus files, 57 widenings in 30 clusters.",
+  "roles_note": "21 of 22 table-tier terms thread \u2014 _control_flow nests in _statement (like python, unlike rust's expression-orientation), _member routes through _declaration in class bodies, _modifier has seven members (accessibility/readonly/static/abstract/override/declare/accessor: TS is the most modifier-rich language yet). _clause was the one unthreadable term \u2014 the third language to record the same evidence \u2014 and MOVED to the facet tier in vocabulary 0.2.0, with seven members here (else/case/default/finally/catch/import/export clauses).",
+  "shape_check": "`treebank shape` compares our node BOUNDARIES against tsc's over the whole corpus: 3,128,811 oracle nodes across 11,976 files. 3,229 missed boundaries at introduction, 23 now \u2014 the remaining 6 files are recorded under known_limits in shape_policy.json, each a GLR tie where the two readings hold identical node multisets so dynamic precedence has nothing to weigh. Declared granularity differences (places our tree groups differently on purpose) are `<TscKind> <- <our_kind>` pairs in the same file, each read by hand. Every fix has a fixture under test/shape/, checked in CI with a ceiling of zero.",
+  "mutation_check": "`treebank mutate` \u2014 3,877 mutants over 500 corpus files, 57 widenings in 30 clusters.",
   "known_widenings": [
     {
       "construct": "a top-level declaration with no `function` keyword, `declare foo(): void`",
@@ -152,6 +152,6 @@
       "why_not_fixed": "the same shape as the `f(a=1, b)` problem in python, and blocked on the same thing. Splitting the method form out of `_declaration` means a second hidden rule, and `_declaration` is a table-tier supertype -- derivation-based -- so whichever side does not route through it stops answering `(_declaration)`. Methods answering `(_declaration)` is deliberate and documented in the grammar. Left as a decision to take rather than one to slip in."
     }
   ],
-  "error_positions": "`treebank errors` — 6 of 12 rejected files are comparable: 1 exact, 4 within 128 bytes, 1 further. Median |delta| 106. Every outlier is the same construct, `export = function ...`: we report at the `export =` and tsc at the `function`.",
-  "roundtrip_check": "`treebank roundtrip` — all 11,988 files re-rendered through `ts.createPrinter` and reparsed: 11,982 rendered, 4 failures, and every one is a gap already recorded under known_gaps (the `symbol` parameter in a bare function type, and the angle-bracket cast). The canonical spelling of everything else parses, which is the result worth having: the check doubled the corpus with source no human wrote and found no new construct."
+  "error_positions": "`treebank errors` \u2014 6 of 12 rejected files are comparable: 1 exact, 4 within 128 bytes, 1 further. Median |delta| 106. Every outlier is the same construct, `export = function ...`: we report at the `export =` and tsc at the `function`.",
+  "roundtrip_check": "`treebank roundtrip` \u2014 all 11,988 files re-rendered through `ts.createPrinter` and reparsed: 11,982 rendered, 4 failures, and every one is a gap already recorded under known_gaps (the `symbol` parameter in a bare function type, and the angle-bracket cast). The canonical spelling of everything else parses, which is the result worth having: the check doubled the corpus with source no human wrote and found no new construct."
 }

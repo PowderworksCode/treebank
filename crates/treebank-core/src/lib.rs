@@ -43,8 +43,18 @@ pub struct Term {
 }
 
 /// The closed vocabulary. A grammar may omit terms its language lacks; it
-/// may not invent terms. Adding a term is a vocabulary change, versioned
-/// here, applying to every language at once.
+/// may not invent terms.
+///
+/// `version` is an identity, not a compatibility promise. It is deliberately
+/// NOT bumped per change while the vocabulary is still being worked out --
+/// a number climbing through 0.4 in a fortnight claims a stability nothing
+/// here has yet, and there is no external consumer to claim it to. What
+/// actually protects a stale `roles.json` is the structural checking in
+/// [`check`], not this string: a removed or renamed term fails rule 1 or
+/// rule 5, and a term that moved tier fails the demotion rules. Every
+/// breaking change is caught by what the manifest SAYS, not by what it
+/// claims to target. Start versioning for real when someone outside this
+/// repository depends on it.
 #[derive(Debug, Deserialize)]
 pub struct Vocabulary {
     pub version: String,
@@ -101,7 +111,7 @@ mod tests {
     #[test]
     fn embedded_vocabulary_parses_and_is_closed_and_underscored() {
         let v = vocabulary();
-        assert_eq!(v.version, "0.4.0");
+        assert_eq!(v.version, "0.1.0");
         assert_eq!(v.table.len(), 22);
         assert_eq!(v.facets.len(), 7);
         for t in v.table.iter().chain(v.facets.iter()) {

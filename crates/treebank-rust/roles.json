@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.4.0",
+  "vocabulary": "0.1.0",
   "demoted": {
     "_parameter": "Rust's parameter list is ordered: a `self` receiver is only ever the first parameter and the C-variadic `...` only ever the last, so the three parameter node types cannot share one supertype derivation without the grammar accepting `fn f(a: i32, self)`. All three are concrete types occurring nowhere but a parameter list, so facet membership selects the same nodes."
   },

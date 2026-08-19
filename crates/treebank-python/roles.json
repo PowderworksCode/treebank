@@ -1,5 +1,5 @@
 {
-  "vocabulary": "0.4.0",
+  "vocabulary": "0.1.0",
   "demoted": {
     "_parameter": "Python's parameter list is ordered by the grammar itself -- `def f(a=1, b)` and `def f(**kw, a)` are SyntaxErrors from CPython's parser -- so the six parameter node types cannot share one supertype derivation. All six are concrete types occurring nowhere but a parameter list, so facet membership selects the same nodes."
   },

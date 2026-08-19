@@ -261,11 +261,27 @@ pub fn roles_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
     ))
 }
 
+/// The ledger states the vocabulary it was written against, as part of
+/// being a standalone provenance record. Nothing checked it, and it had
+/// already drifted — every ledger said 0.3.0 while the vocabulary said
+/// 0.4.0. A documentation field nobody verifies is a field that lies, so
+/// verify it: the ledger is the artifact a consumer reads to find out what
+/// this grammar is, and it is worth less than nothing when it is wrong.
+fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> Option<String> {
+    let text = std::fs::read_to_string(grammar_dir.join("ledger.json")).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+    let stated = v.get("vocabulary")?.as_str()?;
+    (stated != expected).then(|| {
+        format!("ledger.json states vocabulary {stated} but treebank-core carries {expected}")
+    })
+}
+
 fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
     let vocab = treebank_core::vocabulary();
     let nt = treebank_core::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
     let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
-    let findings = treebank_core::check::check(&nt, &roles, vocab);
+    let mut findings = treebank_core::check::check(&nt, &roles, vocab);
+    findings.extend(ledger_vocabulary_finding(grammar_dir, &vocab.version));
     for f in &findings {
         eprintln!("roles: {f}");
     }
