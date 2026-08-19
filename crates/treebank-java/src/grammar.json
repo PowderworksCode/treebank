@@ -5715,8 +5715,13 @@
             "type": "CHOICE",
             "members": [
               {
-                "type": "SYMBOL",
-                "name": "_type_id"
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "identifier"
+                },
+                "named": true,
+                "value": "type_identifier"
               },
               {
                 "type": "SYMBOL",
@@ -5729,6 +5734,15 @@
             ]
           }
         },
+        {
+          "type": "SYMBOL",
+          "name": "_record_pattern_body"
+        }
+      ]
+    },
+    "_record_pattern_body": {
+      "type": "SEQ",
+      "members": [
         {
           "type": "STRING",
           "value": "("
@@ -6340,6 +6354,14 @@
       "_name"
     ],
     [
+      "arguments",
+      "_record_pattern_body"
+    ],
+    [
+      "_type_id",
+      "_name"
+    ],
+    [
       "annotation_type_body",
       "_member"
     ],
@@ -6369,6 +6391,10 @@
     [
       "element_value_pair",
       "_name"
+    ],
+    [
+      "arguments",
+      "_record_pattern_body"
     ],
     [
       "_type_id",

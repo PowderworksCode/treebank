@@ -90,6 +90,8 @@ module.exports = grammar({
     [$.switch_statement, $.switch_expression],
     [$._unannotated_type, $.generic_type],
     [$._type_id, $.inferred_parameters, $._name],
+    [$.arguments, $._record_pattern_body],
+    [$._type_id, $._name],
     [$.annotation_type_body, $._member],
     [$.modifiers, $.local_variable_declaration],
     [$.local_variable_declaration, $.enhanced_for_statement],
@@ -98,6 +100,7 @@ module.exports = grammar({
     [$._primary, $.scoped_identifier],
     [$._unannotated_type, $.scoped_type_identifier],
     [$.element_value_pair, $._name],
+    [$.arguments, $._record_pattern_body],
     [$._type_id, $._name],
     [$.parameter, $.spread_parameter, $.receiver_parameter],
     [$.modifiers],
@@ -934,8 +937,22 @@ module.exports = grammar({
       field('name', $.identifier),
     ),
 
+    // The type is a RAW identifier, aliased -- not `$._type_id`. Going
+    // through _type_id needs a reduce at the `(`, and method_invocation's
+    // static prec resolves that shift/reduce silently before GLR can fork,
+    // so `case Point(int x, int y)` committed to an invocation and the
+    // pattern reading was never explored (the [lambda, _name] lesson
+    // again). With the identifier raw, both readings shift the same tokens
+    // and diverge INSIDE the parens, where [$.arguments,
+    // $._record_pattern_body] is a declarable conflict -- upstream
+    // resolves it with exactly that pair. `int x` then kills the
+    // invocation branch and the pattern survives.
     record_pattern: $ => seq(
-      field('type', choice($._type_id, $.scoped_type_identifier, $.generic_type)),
+      field('type', choice(alias($.identifier, $.type_identifier), $.scoped_type_identifier, $.generic_type)),
+      $._record_pattern_body,
+    ),
+
+    _record_pattern_body: $ => seq(
       '(',
       optional(seq($._pattern_component, repeat(seq(',', $._pattern_component)))),
       ')',
