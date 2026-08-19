@@ -1256,6 +1256,20 @@
     "type": "variable_assignment",
     "named": true,
     "fields": {
+      "index": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "word",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,

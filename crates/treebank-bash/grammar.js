@@ -260,6 +260,10 @@ module.exports = grammar({
 
     variable_assignment: $ => seq(
       field('name', alias($._assignment_name, $.variable_name)),
+      // `a[0]=1`: the scanner fences the NAME and peeks through the
+      // brackets to find the `=`; the index itself is parsed here, with
+      // the same restricted word the subscript rule uses.
+      optional(seq('[', field('index', repeat1(choice($._expression, alias($._index_word, $.word)))), ']')),
       choice('=', '+='),
       field('value', optional(choice($._word_like, $.array))),
     ),

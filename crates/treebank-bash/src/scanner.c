@@ -165,9 +165,28 @@ static bool scan_assignment_name(TSLexer *lexer) {
   while (iswalnum(lexer->lookahead) || lexer->lookahead == '_') advance(lexer);
   lexer->mark_end(lexer);
   // An array subscript may sit between the name and the `=`: `a[0]=1`.
-  if (lexer->lookahead == '[') return false;
+  // The token is still just the NAME -- mark_end already fenced it -- but
+  // the lookahead must walk the brackets to see whether an `=` really
+  // follows, or `a[0]=1` lexes as one word and becomes a command named
+  // `a[0]=1`: the wrong tree with no error, invisible to the sweep and
+  // found by the mvdan/sh span oracle (issue #143).
+  if (lexer->lookahead == '[') {
+    int depth = 0;
+    while (lexer->lookahead != 0 && lexer->lookahead != '\n') {
+      if (lexer->lookahead == '[') depth++;
+      else if (lexer->lookahead == ']') {
+        depth--;
+        if (depth == 0) { advance(lexer); break; }
+      }
+      advance(lexer);
+    }
+    if (depth != 0) return false;
+  }
   if (lexer->lookahead == '+') advance(lexer);
   if (lexer->lookahead != '=') return false;
+  // `==` inside `[[ a == b ]]` must not read as an assignment to `a=`.
+  advance(lexer);
+  if (lexer->lookahead == '=') return false;
   lexer->result_symbol = ASSIGNMENT_NAME;
   return true;
 }
