@@ -9,9 +9,9 @@
 
 rule = '''
 Boundaries `treebank shape` may ignore, as `"<mvdan/sh node> <- <our_kind>"` pairs. Each is a place our tree groups the code differently from mvdan/sh on purpose or by a recorded not-yet decision, never a place we disagree about the code silently.'''
-baseline_missed = 0
+baseline_missed = 89
 baseline_note = '''
-Measured over the corpus files that parse cleanly under BOTH parsers; bash's sweep pass rate (see ledger) bounds how much of the corpus that is. The oracle's first 300-file run caught the `2>` file-descriptor mis-parse, which is exactly the class it exists for.'''
+89 of 60,575 oracle nodes over the first 1,000 corpus files (607 checked; the rest are sweep gaps or py2-style oracle skips), in small residue clusters -- `Stmt <- command` at 23, arithmetic inside subscripts and `(( ))` commands, heredoc redirects. Left UNDECLARED on purpose: each is either unread or a place the arithmetic gap surfaces somewhere new, and declaring unread differences is how a check quietly stops working. The oracle's first 300-file run caught the `2>` file-descriptor mis-parse, which is exactly the class it exists for. Ratchet down, never up.'''
 
 [[ignore]]
 signature = 'Lit <- string'
@@ -63,3 +63,50 @@ why = 'The heredoc delimiter word: mvdan Lit vs our external-scanner heredoc_sta
 [[ignore]]
 signature = 'Word <- heredoc_redirect'
 why = 'See `Lit <- heredoc_redirect`.'
+
+[[ignore]]
+signature = 'UnaryTest <- test_command'
+why = 'Same family as `BinaryTest <- test_command`: our _conditional is deliberately flat inside `[[ ... ]]`.'
+
+[[ignore]]
+signature = 'WordIter <- for_statement'
+why = '''
+mvdan/sh wraps a for-loop's variable-and-list -- `x in a b c` -- as a WordIter node. Ours holds `variable:` and the words directly on the for_statement, the same flattening java's policy declares for VARIABLE <- enhanced_for_statement.'''
+
+[[ignore]]
+signature = 'Lit <- expansion'
+why = '''
+Pattern and replacement fragments inside `${x/pat/rep}` and `${x#pat}`: mvdan/sh gives each its own Lit/Word; our _expansion_tail keeps them as plain words and operator tokens. Sub-token granularity, same family as `Lit <- string`.'''
+
+[[ignore]]
+signature = 'Word <- expansion'
+why = 'See `Lit <- expansion`.'
+
+[[ignore]]
+signature = 'Lit <- heredoc_body'
+why = '''
+Our heredoc body is ONE external-scanner token by design -- the scanner owns delimiter matching, so the body's internals are opaque to the grammar. mvdan/sh structures the interpolations inside it (Lit, ParamExp, CmdSubst). Real granularity we chose; if heredoc interpolation ever needs modelling, these entries are the acceptance test.'''
+
+[[ignore]]
+signature = 'ParamExp <- heredoc_body'
+why = 'See `Lit <- heredoc_body`.'
+
+[[ignore]]
+signature = 'Word <- heredoc_body'
+why = 'See `Lit <- heredoc_body`.'
+
+[[ignore]]
+signature = 'CmdSubst <- heredoc_body'
+why = 'See `Lit <- heredoc_body`.'
+
+[[ignore]]
+signature = 'BinaryArithm <- arithmetic_expansion'
+why = 'See `Lit <- word`: the arithmetic-expansion gap, surfacing against the expansion node itself.'
+
+[[ignore]]
+signature = 'Word <- arithmetic_expansion'
+why = 'See `Lit <- word`: the arithmetic-expansion gap.'
+
+[[ignore]]
+signature = 'Lit <- arithmetic_expansion'
+why = 'See `Lit <- word`: the arithmetic-expansion gap.'
