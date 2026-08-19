@@ -39,4 +39,30 @@ const PY2_INTEGERS = [
   /[0-9]+[lLjJ]?/,
 ];
 
-module.exports = { PY3_INTEGERS, PY2_INTEGERS };
+/** Python 3 floats: PEP 515 underscores throughout. */
+const PY3_FLOATS = [
+  /[0-9](_?[0-9])*\.([0-9](_?[0-9])*)?([eE][+-]?[0-9](_?[0-9])*)?[jJ]?/,
+  /\.[0-9](_?[0-9])*([eE][+-]?[0-9](_?[0-9])*)?[jJ]?/,
+  /[0-9](_?[0-9])*[eE][+-]?[0-9](_?[0-9])*[jJ]?/,
+];
+
+/** Python 2 floats: no separators. */
+const PY2_FLOATS = [
+  /[0-9]+\.([0-9]+)?([eE][+-]?[0-9]+)?[jJ]?/,
+  /\.[0-9]+([eE][+-]?[0-9]+)?[jJ]?/,
+  /[0-9]+[eE][+-]?[0-9]+[jJ]?/,
+];
+
+/**
+ * PEP 3131 gave python 3 unicode identifiers. Python 2 names are ASCII,
+ * and the difference is visible in real code: a py3 file may be all the
+ * way non-ASCII in its identifiers, and a py2 parser must not read it.
+ */
+const PY3_IDENTIFIER = /[_\p{XID_Start}][_\p{XID_Continue}]*/;
+const PY2_IDENTIFIER = /[_a-zA-Z][_a-zA-Z0-9]*/;
+
+module.exports = {
+  PY3_INTEGERS, PY2_INTEGERS,
+  PY3_FLOATS, PY2_FLOATS,
+  PY3_IDENTIFIER, PY2_IDENTIFIER,
+};

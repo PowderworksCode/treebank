@@ -10,6 +10,13 @@
       ],
       "injection-regex": "python",
       "path": "python3"
+    },
+    {
+      "name": "python2",
+      "camelcase": "Python2",
+      "scope": "source.python2",
+      "file-types": [],
+      "path": "python2"
     }
   ],
   "metadata": {

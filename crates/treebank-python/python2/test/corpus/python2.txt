@@ -1,0 +1,162 @@
+================================================================================
+python 2 statement forms — `print` and `exec` are keywords here, so the
+forms need no dynamic precedence and declare no conflicts
+================================================================================
+
+print "hello", x
+exec code in g, l
+raise E, arg, tb
+
+--------------------------------------------------------------------------------
+
+(module
+  (print_statement
+    (tuple
+      (string
+        (string_start)
+        (string_content)
+        (string_end))
+      (identifier)))
+  (exec_statement
+    (identifier)
+    (identifier)
+    (identifier))
+  (raise_statement
+    (identifier)
+    (identifier)
+    (identifier)))
+
+================================================================================
+the chevron print. python 3 reads this same text as a tuple whose head is a
+right-shift, and both readings are right for their own language — the case
+DESIGN.md §4.2 (1) had to decide for the union and the split does not
+================================================================================
+
+print >>sys.stderr, "err"
+
+--------------------------------------------------------------------------------
+
+(module
+  (print_statement
+    (member_expression
+      object: (identifier)
+      property: (identifier))
+    (string
+      (string_start)
+      (string_content)
+      (string_end))))
+
+================================================================================
+python 2 lexical forms
+================================================================================
+
+x = 0777
+y = 10L
+z = `obj`
+u = ur"lit"
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    left: (identifier)
+    right: (integer))
+  (assignment
+    left: (identifier)
+    right: (integer))
+  (assignment
+    left: (identifier)
+    right: (repr_expression
+      (identifier)))
+  (assignment
+    left: (identifier)
+    right: (string
+      (string_start)
+      (string_content)
+      (string_end))))
+
+================================================================================
+python 2 except and parameters
+================================================================================
+
+try:
+    pass
+except E, e:
+    pass
+
+def f((a, b), c):
+    pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (try_statement
+    body: (block
+      (pass_statement))
+    (except_clause
+      (identifier)
+      alias: (identifier)
+      body: (block
+        (pass_statement))))
+  (function_definition
+    name: (identifier)
+    parameters: (parameters
+      (tuple_parameter
+        (identifier)
+        (identifier))
+      (parameter
+        name: (identifier)))
+    body: (block
+      (pass_statement))))
+
+================================================================================
+`match`, `case`, `type`, `await` and `nonlocal` are ordinary names in
+python 2 — no soft-keyword machinery, because none of the constructs that
+made them keywords exists here
+================================================================================
+
+match = re.match(p, s)
+type = "widget"
+await = 1
+nonlocal = 2
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    left: (identifier)
+    right: (call_expression
+      function: (member_expression
+        object: (identifier)
+        property: (identifier))
+      arguments: (arguments
+        (identifier)
+        (identifier))))
+  (assignment
+    left: (identifier)
+    right: (string
+      (string_start)
+      (string_content)
+      (string_end)))
+  (assignment
+    left: (identifier)
+    right: (integer))
+  (assignment
+    left: (identifier)
+    right: (integer)))
+
+================================================================================
+`<>`
+================================================================================
+
+if a <> b: pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (if_statement
+    condition: (comparison_expression
+      (identifier)
+      (identifier))
+    body: (block
+      (pass_statement))))

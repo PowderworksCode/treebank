@@ -3,7 +3,7 @@ name = "treebank-python"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
-description = "Python 2.7 and 3.x in one grammar, carrying the treebank node vocabulary"
+description = "Python 3 and Python 2.7 as separate parsers from one grammar source, carrying the treebank node vocabulary"
 repository = "https://github.com/PowderworksCode/treebank"
 keywords = ["incremental", "parsing", "tree-sitter", "python"]
 categories = ["parsing", "text-editors"]
@@ -11,13 +11,21 @@ build = "build.rs"
 include = [
   "LICENSE",
   "bindings/rust/*",
-  "grammar.js",
   "build.rs",
-  "src/*.c",
-  "src/*.json",
-  "src/tree_sitter/*.h",
+  "common/*.js",
+  "common/scanner.c",
+  "python3/grammar.js",
+  "python3/src/*.c",
+  "python3/src/*.json",
+  "python3/src/tree_sitter/*.h",
+  "python2/grammar.js",
+  "python2/src/*.c",
+  "python2/src/*.json",
+  "python2/src/tree_sitter/*.h",
+  "python2/roles.delta.json",
   "roles.json",
   "ledger.toml",
+  "variants.toml",
 ]
 
 [lib]

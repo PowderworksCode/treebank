@@ -10,6 +10,8 @@
  * `v.*` lists read below, and they are the complete list:
  *
  *   v.statements           extra `_simple_statement` members
+ *   v.branches             extra `_branch` members
+ *   v.orTestMembers        extra `_or_test` members
  *   v.primaryExpressions   extra `_primary_expression` members
  *   v.comparisonOperators  extra comparison operators
  *   v.plainParameters      extra plain-parameter forms (`def` and `lambda`)
@@ -17,8 +19,22 @@
  *   v.raiseTails           what may follow `raise E`
  *   v.softKeywords         words that are keywords in one construct only
  *   v.integers             the integer token family (see lexicon.js)
+ *   v.floats               the float token family
+ *   v.identifier           the identifier token
+ *   v.literals             extra `_literal` members
+ *   v.patternMembers       extra `_pattern` members
  *   v.ruleGroups           rule definitions this variant includes
  *   v.conflicts            GLR conflicts only this variant needs
+ *   v.features             shared constructs this variant has at all:
+ *                          `async` (async/await), `annotations` (PEP 3107
+ *                          and PEP 526 type annotations), `yieldFrom`,
+ *                          `exceptStar`, `parenthesizedWithItems`
+ *
+ * `features` is the removal side of the same rule. Some differences are
+ * not a member of a list but a construct a variant simply lacks, and
+ * pretending otherwise by inventing a one-member extension point per
+ * construct reads worse than saying so. Each flag is read at the sites
+ * named beside it and nowhere else.
  *
  * Adding an extension point is a deliberate change to this file, reviewed
  * as one. That is what stops the parameterization from turning into a
@@ -34,7 +50,7 @@
 // @ts-check
 
 const tb = require('../../treebank-core/vocabulary/supertypes.js');
-const lexicon = require('./lexicon.js');
+const { PREC, parameterRules, commaSep1, sep1 } = require('./helpers.js');
 
 /**
  * A name position: a plain identifier, plus this variant's soft keywords —
@@ -56,30 +72,22 @@ function nameChoices(v, $) {
  * What may follow `raise E`. Two shapes rather than two keywords, so the
  * variant selects by name instead of the grammar branching on a flag.
  */
+/**
+ * `async` modifies `def`, `for` and `with`, and the comprehension `for`.
+ * A variant without it (python 2) drops the token at all four sites; the
+ * matching `await_expression` is an ordinary `primaryExpressions` member.
+ *
+ * @param {any} v
+ */
+function asyncModifier(v) {
+  return v.features.async ? [optional('async')] : [];
+}
+
 const RAISE_TAILS = {
   from: $ => seq('from', field('cause', $._expression)),
   py2Comma: $ => seq(',', $._expression, optional(seq(',', $._expression))),
 };
 
-const PREC = {
-  walrus: 1,
-  lambda: 2,
-  conditional: 0,
-  or: 10,
-  and: 11,
-  not: 12,
-  compare: 13,
-  bitor: 14,
-  bitxor: 15,
-  bitand: 16,
-  shift: 17,
-  plus: 18,
-  times: 19,
-  unary: 20,
-  power: 21,
-  await: 22,
-  postfix: 23,
-};
 
 module.exports = (v) => grammar({
   name: v.name,
@@ -131,23 +139,6 @@ module.exports = (v) => grammar({
     [$._augmented_target, $._name, $._pattern],
     [$._comma_expressions],
     [$._no_conditional_expression, $.conditional_expression],
-    [$._patterns_comma, $._closed_pattern],
-    [$._match_shape, $._access],
-    [$._match_shape, $._primary_expression],
-    [$.case_dict_splat, $._primary_expression],
-    [$.case_star_pattern, $._primary_expression],
-    [$.dictionary_pattern_pair, $._access],
-    [$.case_dict_pattern, $.dictionary],
-    [$.case_signed_number, $._literal],
-    [$.case_list_pattern, $.list],
-    [$.case_group_pattern, $._case_sequence],
-    [$.case_tuple_pattern, $.tuple],
-    [$._literal_pattern, $._primary_expression],
-    [$._closed_pattern, $._access],
-    [$.class_pattern, $._access],
-    [$._closed_pattern, $._primary_expression],
-    [$.class_pattern, $._primary_expression],
-    [$.case_complex_number, $._literal],
     // `a, b` at statement start: tuple until `=` proves pattern_list.
     [$.tuple, $.tuple_pattern],
     [$.list, $.list_pattern],
@@ -158,13 +149,6 @@ module.exports = (v) => grammar({
     [$._pattern, $._access],
     // `with (a, b):` — parenthesized with-items vs a parenthesized tuple.
     [$.with_item, $._collection_elements],
-    // In `def f(x: int)` the colon is an annotation; in `lambda x: y` it is
-    // the body. Same parameter rule, GLR decides per context.
-    [$.parameter],
-    [$.star_parameter],
-    [$.double_star_parameter],
-    [$.match_statement, $._soft_keyword],
-    [$.type_alias_statement, $._soft_keyword],
     // A conditional's consequence and a completed construct are
     // indistinguishable until the `if`/`else` arrives; GLR forks and the
     // reading without an `else` dies. Generate marks some of these
@@ -176,8 +160,6 @@ module.exports = (v) => grammar({
     [$._right_hand_side, $.conditional_expression],
     [$.assignment, $.conditional_expression],
     [$.conditional_expression, $._comma_expressions],
-    [$.type_alias_statement, $.conditional_expression],
-    [$._case_patterns, $.conditional_expression],
     ...v.conflicts($),
   ],
 
@@ -217,9 +199,7 @@ module.exports = (v) => grammar({
       $.delete_statement,
       $.assert_statement,
       $.global_statement,
-      $.nonlocal_statement,
       ...v.statements.map((name) => $[name]),
-      $.type_alias_statement,
     ),
 
     _compound_statement: $ => choice(
@@ -246,7 +226,11 @@ module.exports = (v) => grammar({
       field('left', $._left_hand_side),
       choice(
         seq('=', field('right', $._right_hand_side)),
-        seq(':', field('type', $._expression), optional(seq('=', field('right', $._right_hand_side)))),
+        // PEP 526 `x: int = 1`. Annotations are py3-only, and this arm is
+        // the reason `assignment` cannot simply be shared verbatim.
+        ...(v.features.annotations
+          ? [seq(':', field('type', $._expression), optional(seq('=', field('right', $._right_hand_side))))]
+          : []),
       ),
     ),
 
@@ -303,7 +287,7 @@ module.exports = (v) => grammar({
       ...nameChoices(v, $),
       $.member_expression,
       $.subscript_expression,
-      $.star_pattern,
+      ...v.patternMembers.map((name) => $[name]),
       $.tuple_pattern,
       $.list_pattern,
     ),
@@ -311,15 +295,6 @@ module.exports = (v) => grammar({
     // The match-pattern shapes, named as the destructuring ones so the
     // node vocabulary does not fork: `(tuple_pattern)` and `(list_pattern)`
     // mean the same shape in `a, b = x` and in `case (a, b)`.
-    _match_shape: $ => choice(
-      $._name,
-      $.member_expression,
-      $.class_pattern,
-      alias($.case_tuple_pattern, $.tuple_pattern),
-      alias($.case_list_pattern, $.list_pattern),
-      alias($.case_dict_pattern, $.dictionary_pattern),
-    ),
-
     pattern_list: $ => prec.right(seq(
       $._pattern,
       choice(
@@ -389,22 +364,12 @@ module.exports = (v) => grammar({
     assert_statement: $ => seq('assert', $._expression, optional(seq(',', $._expression))),
 
     global_statement: $ => seq('global', commaSep1($._name)),
-    nonlocal_statement: $ => seq('nonlocal', commaSep1($._name)),
 
-    // The variant's own rules land here, where the py2 statement forms
-    // used to be, so a variant grammar.json keeps a readable ordering.
+    // The variant's own rules land here, where python 2's print and exec
+    // statements used to sit, so a variant's grammar.json keeps a readable
+    // ordering rather than appending its rules at the end.
     ...v.ruleGroups,
 
-    // PEP 695 `type X = int`; `type` stays a plain name everywhere else.
-    type_alias_statement: $ => prec.dynamic(-1, seq(
-      'type',
-      field('name', $._name),
-      field('type_parameters', optional($.type_parameters)),
-      '=',
-      field('value', $._expression),
-    )),
-
-    // ── directives ───────────────────────────────────────────────────
     _directive: $ => choice(
       $.import_statement,
       $.import_from_statement,
@@ -455,24 +420,39 @@ module.exports = (v) => grammar({
 
     function_definition: $ => seq(
       repeat($._attribute),
-      optional('async'),
+      ...asyncModifier(v),
       'def',
       field('name', $._name),
-      field('type_parameters', optional($.type_parameters)),
+      ...(v.ruleGroups.type_parameters
+        ? [field('type_parameters', optional($.type_parameters))]
+        : []),
       field('parameters', $.parameters),
-      optional(seq('->', field('return_type', $._expression))),
+      ...(v.features.annotations
+        ? [optional(seq('->', field('return_type', $._expression)))]
+        : []),
       ':',
       field('body', $._body),
     ),
 
     parameters: $ => seq('(', optional($._params_list), ')'),
 
-    // `def f(...)`: annotations allowed.
-    ...parameterRules('_params', {
+    // `def f(...)`: annotations allowed, so the parameter forms are the
+    // annotated ones. A variant without annotations reuses the LAMBDA
+    // forms, which are already exactly the unannotated shapes -- python 2
+    // needs no new rules for its parameter list, only the other set.
+    ...parameterRules('_params', v.features.annotations ? {
       plain: $ => choice($.parameter, ...v.plainParameters.map((name) => $[name])),
       withDefault: $ => alias($._parameter_with_default, $.parameter),
       star: $ => $.star_parameter,
       doubleStar: $ => $.double_star_parameter,
+    } : {
+      plain: $ => choice(
+        alias($._lambda_plain_parameter, $.parameter),
+        ...v.plainParameters.map((name) => $[name]),
+      ),
+      withDefault: $ => alias($._lambda_parameter_with_default, $.parameter),
+      star: $ => alias($._lambda_star_parameter, $.star_parameter),
+      doubleStar: $ => alias($._lambda_double_star_parameter, $.double_star_parameter),
     }),
 
     // `lambda ...`: annotations forbidden -- see the note on
@@ -488,22 +468,6 @@ module.exports = (v) => grammar({
     }),
 
     // PEP 695: `def f[T](...)`, `class C[T]:`, `type X[T] = ...`.
-    type_parameters: $ => seq(
-      '[',
-      commaSep1($.type_parameter),
-      optional(','),
-      ']',
-    ),
-    type_parameter: $ => seq(
-      optional(choice('*', '**')),
-      field('name', $._name),
-      optional(seq(':', field('bound', $._expression))),
-      optional(seq('=', field('value', $._expression))),
-    ),
-
-    // A parameter with no default and one with a default are the same
-    // `parameter` node, but they are NOT interchangeable in the list, so
-    // they are separate rules. See `parameterRules`.
     parameter: $ => seq(
       field('name', $._name),
       optional(seq(':', field('type', $._expression))),
@@ -531,7 +495,9 @@ module.exports = (v) => grammar({
       repeat($._attribute),
       'class',
       field('name', $._name),
-      field('type_parameters', optional($.type_parameters)),
+      ...(v.ruleGroups.type_parameters
+        ? [field('type_parameters', optional($.type_parameters))]
+        : []),
       field('arguments', optional($.arguments)),
       ':',
       field('body', alias($.class_block, $.block)),
@@ -554,7 +520,7 @@ module.exports = (v) => grammar({
     _member: $ => choice($._statement),
 
     // ── control flow ─────────────────────────────────────────────────
-    _branch: $ => choice($.if_statement, $.match_statement),
+    _branch: $ => choice($.if_statement, ...v.branches.map((name) => $[name])),
 
     if_statement: $ => seq(
       'if',
@@ -569,147 +535,6 @@ module.exports = (v) => grammar({
 
     // PEP 634. `match` and `case` stay usable as plain names everywhere
     // else — they are in _soft_keyword.
-    match_statement: $ => prec.dynamic(1, seq(
-      'match',
-      field('subject', choice($._expression, $._expression_list_tuple)),
-      ':',
-      field('body', alias($.match_block, $.block)),
-    )),
-
-    match_block: $ => seq($._newline, $._indent, repeat1($.case_clause), $._dedent),
-
-    case_clause: $ => seq(
-      'case',
-      $._case_patterns,
-      // CPython's grammar reads `guard: 'if' named_expression`, and a
-      // named_expression is a full expression -- so a CONDITIONAL is a legal
-      // guard: `case y if a if True else b:`. Restricting it here rejected
-      // that, and the sweep could not see the gap because the fixture
-      // carrying it is also invalid to `compile()` for an unrelated reason.
-      optional(seq('if', field('guard', $._expression))),
-      ':',
-      field('body', $._body),
-    ),
-
-    // ── match patterns (PEP 634) ──────────────────────────────────
-    // A dedicated sub-grammar rather than the expression rules. Patterns
-    // LOOK like expressions — `Point(x=0)` like a call, `[a, *rest]` like
-    // a list — and reusing expressions is cheap and right for the common
-    // case, but `as` has no expression analogue, so it could only bind at
-    // the top level: `case X() as w` parsed and `case [a as b]` did not.
-    // 12 corpus files, including real matplotlib and cython code.
-    //
-    // Node names are shared with the destructuring patterns (aliased, not
-    // duplicated) so `(tuple_pattern)` means the same shape in `a, b = x`
-    // and in `case (a, b)`, and with rust wherever the construct matches.
-    _case_patterns: $ => prec.left(seq(
-      choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)),
-      repeat(seq(',', choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)))),
-      optional(','),
-    )),
-
-    _case_pattern: $ => choice($._or_pattern, $.as_pattern),
-
-    as_pattern: $ => seq(
-      field('pattern', $._or_pattern),
-      'as',
-      field('alias', $._name),
-    ),
-
-    _or_pattern: $ => choice($._closed_pattern, $.or_pattern),
-
-    or_pattern: $ => prec.left(seq(
-      $._closed_pattern,
-      repeat1(seq('|', $._closed_pattern)),
-    )),
-
-    // The leaves reuse the language's own nodes, exactly as rust's
-    // patterns reuse literals and paths: a bare name is an `identifier`
-    // (including `_`, which is a real identifier in python), a dotted
-    // value pattern is a `member_expression` — which is the occurrence
-    // story working as designed, since the same node answers `(_access)`
-    // where it is read and `(_pattern)` where it matches.
-    // NOT threaded through `_pattern`, and the reason is measured: python's
-    // destructuring positions and its match positions admit DIFFERENT
-    // member sets (`x[0]` and `*rest` destructure but do not match;
-    // `Point(x=0)` and `{"k": v}` match but do not destructure). A
-    // supertype's members enter every position that references it, so
-    // routing these through `_pattern` made `a, Point(x=0) = z` parse —
-    // invalid python. This is the `_clause` law in a second place, and it
-    // is why `(_pattern)` covers destructuring here while the match shapes
-    // are reachable by their shared node names instead. Rust does not hit
-    // this: its `let` and `match` patterns are one set.
-    _closed_pattern: $ => choice(
-      $._literal_pattern,
-      $._match_shape,
-      alias($.case_group_pattern, $.parenthesized_expression),
-    ),
-
-    // `-1`, `1+2j` and string concatenation are the literal forms PEP 634
-    // admits; everything else that looks literal is a value pattern.
-    _literal_pattern: $ => choice(
-      $._literal,
-      $.string,
-      $.concatenated_string,
-      alias($.case_signed_number, $.unary_expression),
-      alias($.case_complex_number, $.binary_expression),
-    ),
-
-    case_signed_number: $ => seq(field('operator', '-'), field('operand', choice($.integer, $.float))),
-    case_complex_number: $ => seq(
-      field('left', choice($.integer, $.float, alias($.case_signed_number, $.unary_expression))),
-      field('operator', choice('+', '-')),
-      field('right', choice($.integer, $.float)),
-    ),
-
-    class_pattern: $ => seq(
-      field('class', choice($._name, $.member_expression)),
-      '(',
-      optional(seq(commaSep1(choice($._case_pattern, $.keyword_pattern)), optional(','))),
-      ')',
-    ),
-
-    keyword_pattern: $ => seq(
-      field('name', $._name),
-      '=',
-      field('value', $._case_pattern),
-    ),
-
-    case_tuple_pattern: $ => seq('(', optional($._case_sequence), ')'),
-    case_list_pattern: $ => seq('[', optional($._case_sequence), ']'),
-
-    // A parenthesized single pattern with no comma is a group, not a
-    // one-tuple — python's own distinction.
-    case_group_pattern: $ => seq('(', $._case_pattern, ')'),
-
-    _case_sequence: $ => seq(
-      choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)),
-      repeat(seq(',', choice($._case_pattern, alias($.case_star_pattern, $.star_pattern)))),
-      optional(','),
-    ),
-
-    case_star_pattern: $ => seq('*', $._name),
-
-    case_dict_pattern: $ => seq(
-      '{',
-      optional(seq(
-        commaSep1(choice(
-          $.dictionary_pattern_pair,
-          alias($.case_dict_splat, $.dictionary_splat_pattern),
-        )),
-        optional(','),
-      )),
-      '}',
-    ),
-
-    dictionary_pattern_pair: $ => seq(
-      field('key', choice($._literal_pattern, $.member_expression)),
-      ':',
-      field('value', $._case_pattern),
-    ),
-
-    case_dict_splat: $ => seq('**', $._name),
-
     else_clause: $ => seq('else', ':', field('body', $._body)),
 
     _loop: $ => choice($.while_statement, $.for_statement),
@@ -723,7 +548,7 @@ module.exports = (v) => grammar({
     ),
 
     for_statement: $ => seq(
-      optional('async'),
+      ...asyncModifier(v),
       'for',
       field('left', $._left_hand_side),
       'in',
@@ -749,7 +574,7 @@ module.exports = (v) => grammar({
 
     except_clause: $ => seq(
       'except',
-      optional('*'),                      // py3.11 except*
+      ...(v.features.exceptStar ? [optional('*')] : []),  // py3.11
       optional(seq(
         $._expression,
         optional(choice(...v.exceptAliases.map((kw) => seq(kw, field('alias', $._name))))),
@@ -761,11 +586,11 @@ module.exports = (v) => grammar({
     finally_clause: $ => seq('finally', ':', field('body', $._body)),
 
     with_statement: $ => seq(
-      optional('async'),
+      ...asyncModifier(v),
       'with',
       choice(
         commaSep1($.with_item),
-        $._parenthesized_with_items,      // py3.10
+        ...(v.features.parenthesizedWithItems ? [$._parenthesized_with_items] : []),
       ),
       ':',
       field('body', $._body),
@@ -837,14 +662,13 @@ module.exports = (v) => grammar({
       alias($.boolean_expression, $.binary_expression),
       alias($.not_expression, $.unary_expression),
       $.comparison_expression,
-      $.named_expression,
+      ...v.orTestMembers.map((name) => $[name]),
       $._primary_expression,
     ),
 
     _primary_expression: $ => choice(
       $.binary_expression,
       $.unary_expression,
-      $.await_expression,
       $._invocation,
       $._access,
       $._name,
@@ -902,18 +726,6 @@ module.exports = (v) => grammar({
     _lambda_star_parameter: $ => seq('*', field('name', $._name)),
     _lambda_double_star_parameter: $ => seq('**', field('name', $._name)),
 
-    named_expression: $ => prec.right(PREC.walrus, seq(
-      field('name', $._name),
-      ':=',
-      field('value', $._expression),
-    )),
-
-    // Operands are `_or_test`, never a bare conditional. CPython's grammar
-    // reads `or_test: and_test ('or' and_test)*`, so a conditional can only
-    // be an operand of `or` in parentheses -- and it is the LOOSEST operator
-    // in the language, `a or b if c else d` being `(a or b) if c else d`.
-    // With `$._expression` on the right we produced `a or (b if c else d)`
-    // instead: a different program, no error, and no sweep could see it.
     boolean_expression: $ => choice(
       prec.left(PREC.or, seq(field('left', $._or_test), field('operator', 'or'), field('right', $._or_test))),
       prec.left(PREC.and, seq(field('left', $._or_test), field('operator', 'and'), field('right', $._or_test))),
@@ -963,12 +775,10 @@ module.exports = (v) => grammar({
       field('operand', $._primary_expression),
     )),
 
-    await_expression: $ => prec(PREC.await, seq('await', $._primary_expression)),
-
     yield_expression: $ => prec.right(seq(
       'yield',
       optional(choice(
-        seq('from', $._expression),
+        ...(v.features.yieldFrom ? [seq('from', $._expression)] : []),
         choice($._expression, $._expression_list_tuple),
       )),
     )),
@@ -1098,7 +908,7 @@ module.exports = (v) => grammar({
     ),
 
     for_in_clause: $ => prec.left(1, seq(
-      optional('async'),
+      ...asyncModifier(v),
       'for',
       field('left', $._left_hand_side),
       'in',
@@ -1178,23 +988,18 @@ module.exports = (v) => grammar({
       $.true,
       $.false,
       $.none,
-      $.ellipsis,
+      ...v.literals.map((name) => $[name]),
     ),
 
     integer: _ => token(choice(...v.integers)),
 
-    float: _ => token(choice(
-      /[0-9](_?[0-9])*\.([0-9](_?[0-9])*)?([eE][+-]?[0-9](_?[0-9])*)?[jJ]?/,
-      /\.[0-9](_?[0-9])*([eE][+-]?[0-9](_?[0-9])*)?[jJ]?/,
-      /[0-9](_?[0-9])*[eE][+-]?[0-9](_?[0-9])*[jJ]?/,
-    )),
+    float: _ => token(choice(...v.floats)),
 
     true: _ => 'True',
     false: _ => 'False',
     none: _ => 'None',
-    ellipsis: _ => '...',
 
-    identifier: _ => /[_\p{XID_Start}][_\p{XID_Continue}]*/,
+    identifier: _ => v.identifier,
 
     // `[^\r\n]*`, not `.*`: tree-sitter's `.` excludes \n but MATCHES \r, so
     // on a CRLF file the comment swallowed the carriage return and every
@@ -1203,93 +1008,3 @@ module.exports = (v) => grammar({
     comment: _ => token(seq('#', /[^\r\n]*/)),
   },
 });
-
-/**
- * Python's parameter list is ordered, and the order is enforced by the
- * parser rather than by a later semantic pass: `def f(a=1, b)`,
- * `def f(**kw, a)`, `def f(*)` and `def f(a, /, /)` are all SyntaxErrors
- * out of CPython's own grammar. One `_parameter` alternation repeated by
- * commas cannot say any of that, so the list is spelled out as a chain of
- * "what may still follow" rules carrying two bits of state -- whether `/`
- * has been seen, and whether a parameter with a default has been seen --
- * and a separate section after `*`, where a parameter WITHOUT a default may
- * legally follow one with a default (`def f(*, a=1, b)` is valid Python).
- *
- * This is the reason `_parameter` is a facet rather than a supertype in
- * this grammar: the six parameter node types no longer share a derivation,
- * so tree-sitter cannot collect them under one supertype. All six are
- * concrete types that occur nowhere but a parameter list, so type-level
- * facet membership selects exactly the nodes occurrence-level supertype
- * membership would have. `(_parameter)` through treebank-core is unchanged.
- * See roles.json's `demoted` and DESIGN.md section 3.4.
- *
- * @param {string} prefix   rule-name prefix for this family of rules
- * @param {Object} p        the language-level pieces, which differ between
- *                          `def` (annotations allowed) and `lambda` (not)
- */
-function parameterRules(prefix, p) {
-  const R = (name) => `${prefix}_${name}`;
-  // What may follow a parameter: nothing, a trailing comma, or a comma and
-  // then whichever continuations `rest` still permits.
-  const tail = ($, rest) => optional(seq(',', optional($[R(rest)])));
-
-  return {
-    // A list may not open with `/`, which needs something to be positional.
-    [R('list')]: $ => choice(
-      seq(p.plain($), tail($, 'nodefault_rest')),
-      seq(p.withDefault($), tail($, 'default_rest')),
-      $[R('star_section')],
-    ),
-
-    // No `/` yet, no default yet: everything is still open.
-    [R('nodefault_rest')]: $ => choice(
-      seq(p.plain($), tail($, 'nodefault_rest')),
-      seq(p.withDefault($), tail($, 'default_rest')),
-      seq($.positional_separator, tail($, 'slash_nodefault_rest')),
-      $[R('star_section')],
-    ),
-
-    // A default has been seen: a parameter without one may no longer
-    // follow, and `/` does not reset that.
-    [R('default_rest')]: $ => choice(
-      seq(p.withDefault($), tail($, 'default_rest')),
-      seq($.positional_separator, tail($, 'slash_default_rest')),
-      $[R('star_section')],
-    ),
-
-    // `/` has been seen; a second one is not allowed.
-    [R('slash_nodefault_rest')]: $ => choice(
-      seq(p.plain($), tail($, 'slash_nodefault_rest')),
-      seq(p.withDefault($), tail($, 'slash_default_rest')),
-      $[R('star_section')],
-    ),
-
-    [R('slash_default_rest')]: $ => choice(
-      seq(p.withDefault($), tail($, 'slash_default_rest')),
-      $[R('star_section')],
-    ),
-
-    // Everything after `*` is keyword-only. A bare `*` is a separator, not
-    // a parameter, so it must be followed by at least one keyword-only
-    // parameter -- `def f(*)` and `def f(*, **kw)` are both errors -- while
-    // `*args` may stand alone. `**kwargs` closes the list.
-    [R('star_section')]: $ => choice(
-      seq(p.star($), tail($, 'keyword_rest')),
-      seq($.keyword_separator, ',', choice(p.plain($), p.withDefault($)), tail($, 'keyword_rest')),
-      seq(p.doubleStar($), optional(',')),
-    ),
-
-    [R('keyword_rest')]: $ => choice(
-      seq(choice(p.plain($), p.withDefault($)), tail($, 'keyword_rest')),
-      seq(p.doubleStar($), optional(',')),
-    ),
-  };
-}
-
-function commaSep1(rule) {
-  return sep1(rule, ',');
-}
-
-function sep1(rule, separator) {
-  return seq(rule, repeat(seq(separator, rule)));
-}

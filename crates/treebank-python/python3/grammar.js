@@ -22,17 +22,62 @@ const lexicon = require('../common/lexicon.js');
 module.exports = require('../common/define-grammar.js')({
   name: 'python',
 
-  // Nothing to add: python 3 IS the shared grammar. Every list below is
-  // empty or single-valued precisely because the py2 forms that used to
-  // share this table have gone to the variant that wants them.
-  statements: [],
-  primaryExpressions: [],
+  statements: ['nonlocal_statement', 'type_alias_statement'],
+  literals: ['ellipsis'],
+  patternMembers: ['star_pattern'],
+  branches: ['match_statement'],
+  orTestMembers: ['named_expression'],
+  primaryExpressions: ['await_expression'],
   comparisonOperators: [],
   plainParameters: [],
   exceptAliases: ['as'],
   raiseTails: ['from'],
   softKeywords: ['match', 'case', 'type'],
   integers: lexicon.PY3_INTEGERS,
-  ruleGroups: {},
-  conflicts: (_) => [],
+  floats: lexicon.PY3_FLOATS,
+  identifier: lexicon.PY3_IDENTIFIER,
+  ruleGroups: require('../common/py3-rules.js'),
+  features: {
+    async: true,
+    annotations: true,
+    yieldFrom: true,
+    exceptStar: true,
+    parenthesizedWithItems: true,
+  },
+
+  // The match sub-grammar is where python 3's ambiguity lives: a pattern
+  // looks like an expression until the `case` line ends, so every closed
+  // pattern forks against the expression tier. They are declared here
+  // rather than in the shared list because a variant without `match` must
+  // not carry them — a conflict is a fork, and a fork nothing can win is
+  // still a fork the table pays for.
+  conflicts: ($) => [
+    [$._patterns_comma, $._closed_pattern],
+    [$._match_shape, $._access],
+    [$._match_shape, $._primary_expression],
+    [$.case_dict_splat, $._primary_expression],
+    [$.case_star_pattern, $._primary_expression],
+    [$.dictionary_pattern_pair, $._access],
+    [$.case_dict_pattern, $.dictionary],
+    [$.case_signed_number, $._literal],
+    [$.case_list_pattern, $.list],
+    [$.case_group_pattern, $._case_sequence],
+    [$.case_tuple_pattern, $.tuple],
+    [$._literal_pattern, $._primary_expression],
+    [$._closed_pattern, $._access],
+    [$.class_pattern, $._access],
+    [$._closed_pattern, $._primary_expression],
+    [$.class_pattern, $._primary_expression],
+    [$.case_complex_number, $._literal],
+    [$.match_statement, $._soft_keyword],
+    [$.type_alias_statement, $._soft_keyword],
+    [$.type_alias_statement, $.conditional_expression],
+    [$._case_patterns, $.conditional_expression],
+    // In `def f(x: int)` the colon is an annotation; in `lambda x: y` it is
+    // the body. Same parameter rule, GLR decides per context — and a
+    // variant without annotations never reaches the ambiguity.
+    [$.parameter],
+    [$.star_parameter],
+    [$.double_star_parameter],
+  ],
 });

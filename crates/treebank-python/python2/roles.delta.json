@@ -1,0 +1,25 @@
+{
+  "variant": "python2",
+  "note": "Additions to the shared ../roles.json, and the shared roles this variant declares absent. A delta rather than a second manifest: a role threaded in one variant and forgotten in the other is invisible to every other gate, because supertype matching is derivation-based and a missing thread just returns fewer nodes.",
+  "adds": {
+    "_binding": [
+      "tuple_parameter"
+    ],
+    "_parameter": [
+      "tuple_parameter"
+    ]
+  },
+  "absent": {
+    "_binding": {
+      "members": [
+        "as_pattern",
+        "named_expression",
+        "nonlocal_statement",
+        "star_pattern",
+        "type_alias_statement",
+        "type_parameter"
+      ],
+      "why": "Every one of these is a python 3 construct: PEP 634 as-patterns, the walrus, `nonlocal`, PEP 3132 starred assignment, and PEP 695 type aliases and type parameters. They are not node types in this variant at all, so they cannot be facet members here."
+    }
+  }
+}

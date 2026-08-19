@@ -58,6 +58,18 @@ typedef struct {
   OpenString strings[MAX_STRINGS];
 } Scanner;
 
+// One scanner source, two parsers: `tree-sitter generate` names the
+// external-scanner entry points after the GRAMMAR, so a shared scanner
+// cannot spell them literally. The variant's src/scanner.c stub sets the
+// prefix before including this file; python3 gets the default, which keeps
+// `tree_sitter_python_external_scanner_*` exactly as it was.
+#ifndef TREEBANK_SCANNER_PREFIX
+#define TREEBANK_SCANNER_PREFIX tree_sitter_python
+#endif
+#define TB_CAT_(a, b) a##b
+#define TB_CAT(a, b) TB_CAT_(a, b)
+#define TB_SCANNER(name) TB_CAT(TREEBANK_SCANNER_PREFIX, name)
+
 static inline void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
 static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
 
@@ -96,6 +108,12 @@ static bool scan_string_start(TSLexer *lexer, Scanner *s) {
   if (seen[2] && (seen[0] || seen[1] || seen[3])) return false;
 #endif
   if (seen[1] && seen[3]) return false;              // no fb
+#ifdef TREEBANK_PYTHON2
+  // PEP 498 is python 3.6. In py2 an `f` prefix is not a string prefix at
+  // all, so declining here is what makes `f"{x}"` lex as the name `f`
+  // followed by a string -- two tokens the grammar then rejects.
+  if (seen[3]) return false;
+#endif
   if (seen[0]) flags |= RAW;
   if (seen[1]) flags |= BYTES;
   if (seen[3]) flags |= FSTRING;
@@ -255,7 +273,7 @@ static uint32_t next_code_column(TSLexer *lexer) {
   }
 }
 
-bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
+bool TB_SCANNER(_external_scanner_scan)(void *payload, TSLexer *lexer,
                                               const bool *valid) {
   Scanner *s = (Scanner *)payload;
 
@@ -488,7 +506,7 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
   return false;
 }
 
-unsigned tree_sitter_python_external_scanner_serialize(void *payload,
+unsigned TB_SCANNER(_external_scanner_serialize)(void *payload,
                                                        char *buffer) {
   Scanner *s = (Scanner *)payload;
   unsigned i = 0;
@@ -507,7 +525,7 @@ unsigned tree_sitter_python_external_scanner_serialize(void *payload,
   return i;
 }
 
-void tree_sitter_python_external_scanner_deserialize(void *payload,
+void TB_SCANNER(_external_scanner_deserialize)(void *payload,
                                                      const char *buffer,
                                                      unsigned length) {
   Scanner *s = (Scanner *)payload;
@@ -529,12 +547,12 @@ void tree_sitter_python_external_scanner_deserialize(void *payload,
   }
 }
 
-void *tree_sitter_python_external_scanner_create(void) {
+void *TB_SCANNER(_external_scanner_create)(void) {
   Scanner *s = calloc(1, sizeof(Scanner));
   s->line_start_pending = true; // the first line of a file starts a line
   return s;
 }
 
-void tree_sitter_python_external_scanner_destroy(void *payload) {
+void TB_SCANNER(_external_scanner_destroy)(void *payload) {
   free(payload);
 }

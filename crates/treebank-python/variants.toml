@@ -1,0 +1,96 @@
+# What variants this language has, why each one exists, and the
+# measurement that forced the split. VARIANTS.md §1 and §4.
+#
+# This file replaces version_policy.toml, which could only say "rejected on
+# purpose". With two tables there are two different things to record — what
+# a variant rejects across ITS versions (the old §4.2 case (2), still here
+# per variant), and why a variant exists at all — and one file holding both
+# is the file someone reads to answer "which parser do I want".
+
+rule = '''
+DESIGN.md §4.2 governs versions WITHIN a variant: where a construct is
+valid only in an older version and admitting it would change how current
+code parses, the current language wins. VARIANTS.md §1 governs the split
+BETWEEN variants: a shared table has to serve both readings honestly, and
+where it cannot, the variants separate. Python separated on cause (2) —
+the union was measurably costing the majority variant.'''
+
+[[variants]]
+name = 'python3'
+grammar = 'python'
+versions = '3.0 – 3.13'
+default = true
+note = '''
+Keeps the grammar name `python` and therefore the C symbol
+`tree_sitter_python`, because python 3 is what `treebank_python::LANGUAGE`
+has always meant. The split cost consumers nothing.'''
+
+# §4.2 case (2), within python 3's own version range.
+[[variants.rejections]]
+construct = 'f((a)=1) — a parenthesized keyword argument'
+signature = 'arguments > ERROR(= integer)'
+valid_in = 'Python 3.0–3.7'
+rejected_from = 'Python 3.8'
+negative = 'python3/test/negative/parenthesized-kwarg.py'
+why = '''
+Admitting it means `arguments` accepts a parenthesized expression before
+`=`, which forks against `f((a) == 1)` at every parenthesized first
+argument. This one is unaffected by the variant split: it is a python 3
+point-release removal, so it is still a question about one table's version
+range, and the union rule still answers it.'''
+
+[[variants]]
+name = 'python2'
+grammar = 'python2'
+versions = '2.7'
+default = false
+split_evidence = '''
+Measured on the union grammar before the split, all of it visible in the
+tree at df0c243:
+
+  - Three constructs rejected on purpose in version_policy.toml, and TWO of
+    the three were py2 constructs rejected because the py2 reading forks
+    against modern py3 code. The file's own words on bare `await`: it
+    "forks at every `await` in modern async code — most of the corpus".
+  - Six declared GLR conflicts and three negative dynamic precedences
+    carried for `print` and `exec` alone. Every `print` token in every py3
+    file in a 297,612-file corpus took that fork and lost it.
+  - ledger.toml declared the py2 half of the corpus a blind spot: "modern
+    PyPI sdists are effectively py3-only, so the py2 half of the union
+    leans entirely on the corpus tests and batteries". The least-measured
+    part of the best-measured grammar in the repository.
+
+What the split bought, measured after:
+
+  parser.c            2,891,295 -> 2,660,725 bytes (python3)   -8.0%
+  parse states            2,494 -> 2,387                       -107
+  declared conflicts         33 -> 27 (python3), 13 (python2)
+  differential            8,761 CPython-3.11-valid files, trees
+                          byte-identical before and after the strip
+
+And the three purpose-rejections stop being rejections where they belong:
+bare `await` and bare `nonlocal` parse as ordinary identifiers in python2,
+because there is no py3 reading left to protect. Both files are in
+test/crossvariant/python2-not-python3/ now, where they say something true
+about two languages rather than something apologetic about one.'''
+
+# Everything below is what python2 does NOT yet get right, measured rather
+# than estimated. See ledger.toml [[known_widenings]] for the full list and
+# the probe that found each one.
+known_widening_summary = '''
+Seven python 3 constructs the python2 table still accepts: `@` matmul, the
+py3.5 unpacking generalizations ({**a}, [*a, *b], f(*a, *b), f(**a, **b)),
+and the py3 parameter-list separators (`def f(*, a)`, `def f(a, /, b)`).
+
+They share a cause, and it is a real boundary rather than a to-do list.
+Every removal already made was a MEMBER of a declared extension point or a
+token family — the shape VARIANTS.md §3 allows a variant to change. These
+seven are the internal STRUCTURE of the shared parameter chain and the
+shared collection-element rules, and removing them means rewriting a shared
+rule's internals behind a flag, which is the one thing §3 forbids. Doing it
+properly needs a new declared extension point designed for parameter and
+collection shape; doing it improperly is how the parameterization rots.
+
+They are recorded and not guessed at because this variant has no oracle:
+there is no python 2 binary in CI, so nothing can adjudicate a removal. A
+guess in a parse table is worse than a written-down gap.'''
