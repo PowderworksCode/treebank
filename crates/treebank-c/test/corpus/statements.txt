@@ -1,0 +1,120 @@
+==================
+Case ranges and a default
+==================
+
+void f(int c) {
+  switch (c) {
+    case 'a' ... 'z':
+      break;
+    case 0:
+    default:
+      return;
+  }
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration type: (primitive_type) declarator: (identifier))))
+    body: (compound_statement
+      (switch_statement
+        condition: (parenthesized_expression (identifier))
+        body: (compound_statement
+          (case_clause
+            value: (char_literal)
+            end: (char_literal)
+            (break_statement))
+          (case_clause value: (number_literal))
+          (default_clause (return_statement)))))))
+
+==================
+A label at the end of a compound statement
+==================
+
+int f(int x) {
+  if (x)
+    goto out;
+  x = 1;
+out:
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration type: (primitive_type) declarator: (identifier))))
+    body: (compound_statement
+      (if_statement
+        condition: (parenthesized_expression (identifier))
+        consequence: (goto_statement label: (identifier)))
+      (expression_statement
+        (assignment_expression left: (identifier) right: (number_literal)))
+      (trailing_label label: (identifier)))))
+
+==================
+Alternate asm qualifier keywords
+==================
+
+void f(void) {
+  __asm __volatile ("flush %0" : : "r" (0));
+  __asm__ __inline ("nop");
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list (parameter_declaration type: (primitive_type))))
+    body: (compound_statement
+      (asm_statement
+        (asm_qualifier)
+        assembly_code: (string_literal)
+        (asm_operand constraint: (string_literal) value: (number_literal)))
+      (asm_statement
+        (asm_qualifier)
+        assembly_code: (string_literal)))))
+
+==================
+A statement expression
+==================
+
+void f(void) {
+  int t = ({ int q = 1; q + 2; });
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list (parameter_declaration type: (primitive_type))))
+    body: (compound_statement
+      (declaration
+        type: (primitive_type)
+        declarator: (init_declarator
+          declarator: (identifier)
+          value: (parenthesized_expression
+            (compound_statement
+              (declaration
+                type: (primitive_type)
+                declarator: (init_declarator
+                  declarator: (identifier)
+                  value: (number_literal)))
+              (expression_statement
+                (binary_expression
+                  left: (identifier)
+                  right: (number_literal)))))))))) 

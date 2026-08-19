@@ -1,0 +1,133 @@
+==================
+A function definition
+==================
+
+int main(void) {
+  return 0;
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration type: (primitive_type))))
+    body: (compound_statement
+      (return_statement value: (number_literal)))))
+
+==================
+A K&R definition
+==================
+
+int f(a, b)
+  int a;
+  char *b;
+{
+  return a;
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (identifier_list (identifier) (identifier)))
+    parameters: (declaration
+      type: (primitive_type)
+      declarator: (identifier))
+    parameters: (declaration
+      type: (primitive_type)
+      declarator: (pointer_declarator declarator: (identifier)))
+    body: (compound_statement
+      (return_statement value: (identifier)))))
+
+==================
+Anonymous bit-fields
+==================
+
+struct s {
+  int x : 1;
+  int : 3;
+  unsigned : 0;
+};
+
+---
+
+(translation_unit
+  (declaration
+    type: (struct_specifier
+      name: (type_identifier)
+      body: (field_declaration_list
+        (field_declaration
+          type: (primitive_type)
+          declarator: (identifier)
+          (bitfield_clause width: (number_literal)))
+        (field_declaration
+          type: (primitive_type)
+          (bitfield_clause width: (number_literal)))
+        (field_declaration
+          type: (sized_type_specifier)
+          (bitfield_clause width: (number_literal)))))))
+
+==================
+GNU attributes in declaration positions
+==================
+
+int a __attribute__((unused));
+int b, c __attribute__((aligned(4)));
+int * __attribute__((nonnull)) f;
+typedef unsigned long int __attribute__((__may_alias__)) op_t;
+
+---
+
+(translation_unit
+  (declaration
+    type: (primitive_type)
+    declarator: (attributed_declarator
+      (identifier)
+      (attribute_specifier (attribute name: (identifier)))))
+  (declaration
+    type: (primitive_type)
+    declarator: (identifier)
+    declarator: (attributed_declarator
+      (identifier)
+      (attribute_specifier
+        (attribute name: (identifier) arguments: (argument_list (number_literal))))))
+  (declaration
+    type: (primitive_type)
+    declarator: (pointer_declarator
+      (attribute_specifier (attribute name: (identifier)))
+      declarator: (identifier)))
+  (type_definition
+    type: (sized_type_specifier type: (primitive_type))
+    (attribute_specifier (attribute name: (identifier)))
+    declarator: (identifier)))
+
+==================
+A tag declaration that declares nothing
+==================
+
+struct node { int x; };
+enum e { A, B };
+int;
+
+---
+
+(translation_unit
+  (declaration
+    type: (struct_specifier
+      name: (type_identifier)
+      body: (field_declaration_list
+        (field_declaration type: (primitive_type) declarator: (identifier)))))
+  (declaration
+    type: (enum_specifier
+      name: (type_identifier)
+      body: (enumerator_list
+        (enumerator name: (identifier))
+        (enumerator name: (identifier)))))
+  (declaration type: (primitive_type)))

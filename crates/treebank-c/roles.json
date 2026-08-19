@@ -1,0 +1,177 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {
+    "_parameter": "C orders the parameter position in the grammar itself: `...` is only ever last, and `void` alone is only ever the whole list, so one alternation repeated by commas necessarily accepts `f(..., int x)`. Both members are concrete node types occurring nowhere else, so facet membership selects exactly the nodes the supertype would have."
+  },
+  "facets": {
+    "_binding": [
+      "declaration",
+      "enumerator",
+      "field_declaration",
+      "function_definition",
+      "init_declarator",
+      "labeled_statement",
+      "parameter_declaration",
+      "preproc_def",
+      "preproc_function_def",
+      "trailing_label",
+      "type_definition"
+    ],
+    "_callable": [
+      "function_declarator",
+      "function_definition",
+      "preproc_function_def"
+    ],
+    "_clause": [
+      "asm_operand",
+      "bitfield_clause",
+      "case_clause",
+      "default_clause",
+      "else_clause",
+      "generic_association",
+      "preproc_elif",
+      "preproc_elifdef",
+      "preproc_else"
+    ],
+    "_comment": [
+      "comment"
+    ],
+    "_identifier": [
+      "identifier",
+      "type_identifier"
+    ],
+    "_parameter": [
+      "parameter_declaration",
+      "variadic_parameter"
+    ],
+    "_scope": [
+      "compound_statement",
+      "for_statement",
+      "function_definition",
+      "translation_unit"
+    ],
+    "_string": [
+      "concatenated_string",
+      "string_literal",
+      "system_lib_string"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "abstract_array_declarator",
+      "reason": "the declarator spine of a type with no name in it \u2014 the `[]` of `char (*)[8]`"
+    },
+    {
+      "node": "abstract_function_declarator",
+      "reason": "the same, for the `(void)` of `int (*)(void)`"
+    },
+    {
+      "node": "abstract_parenthesized_declarator",
+      "reason": "the same, for the parentheses that group it"
+    },
+    {
+      "node": "abstract_pointer_declarator",
+      "reason": "the same, for the `*`"
+    },
+    {
+      "node": "pointer_declarator",
+      "reason": "the concrete declarator spine: what a name is wrapped in to say it is a pointer. The name inside it is the `_name`; the wrapper declares nothing on its own"
+    },
+    {
+      "node": "array_declarator",
+      "reason": "the same, for `[n]`"
+    },
+    {
+      "node": "parenthesized_declarator",
+      "reason": "the same, for the parentheses that decide whether `*` or `[]` binds first"
+    },
+    {
+      "node": "attributed_declarator",
+      "reason": "a declarator carrying a GNU attribute; the attribute is the `_attribute` and the declarator is inside it"
+    },
+    {
+      "node": "argument_list",
+      "reason": "the parenthesised argument list of a call; its elements are `_argument`"
+    },
+    {
+      "node": "parameter_list",
+      "reason": "the parenthesised parameter list of a declarator; its elements are `_parameter`"
+    },
+    {
+      "node": "identifier_list",
+      "reason": "the K&R parameter-name list, `f(a, b)` before the declarations that type them \u2014 names in a list, not parameters yet"
+    },
+    {
+      "node": "preproc_params",
+      "reason": "a function-like macro's parameter list, which is not a `_parameter` position of the language \u2014 the names it binds are text, not values"
+    },
+    {
+      "node": "field_declaration_list",
+      "reason": "the braced member list of a struct or union. Deliberately not `_body`: rust and typescript both keep `_body` to the EXECUTABLE body of a definition, and this list's contents are answered for by `_member`"
+    },
+    {
+      "node": "enumerator_list",
+      "reason": "the braced enumerator list, for the same reason"
+    },
+    {
+      "node": "initializer_list",
+      "reason": "a braced initializer; it is a value rather than a body, and its elements are ordinary `_expression`s"
+    },
+    {
+      "node": "initializer_pair",
+      "reason": "`.field = v` \u2014 a designator and a value. It binds a POSITION, not a name, so it is not a `_binding`"
+    },
+    {
+      "node": "field_designator",
+      "reason": "the `.field` of a designated initializer"
+    },
+    {
+      "node": "subscript_designator",
+      "reason": "the `[3]` or `[0 ... 7]` of one"
+    },
+    {
+      "node": "comma_expression",
+      "reason": "the comma operator. Not a member of `_expression`, and C's own grammar draws the same line \u2014 it splits `expression` from `assignment-expression` because a comma inside an argument list separates arguments. Admitting it into `_expression` would make `f(a, b)` ambiguous with `f((a, b))` at every call in the corpus"
+    },
+    {
+      "node": "empty_declaration",
+      "reason": "a stray `;` at file scope, which C23 allows and every compiler accepted long before it. It declares nothing"
+    },
+    {
+      "node": "unexpanded_macro",
+      "reason": "a macro standing alone at file scope \u2014 `__BEGIN_DECLS`, `BEGIN_EXTERN_C()`. It is not a declaration, not a statement, and not a directive: it is the hole the preprocessor would have filled. See the declared deviation in ledger.toml"
+    },
+    {
+      "node": "extension_specifier",
+      "reason": "`__extension__`, which suppresses a pedantic diagnostic. It alters no meaning, so it is not a `_modifier`, and it annotates nothing, so it is not an `_attribute`"
+    },
+    {
+      "node": "asm_qualifier",
+      "reason": "`volatile`, `goto` and friends on an asm statement. `_modifier` is defined over declarations and an asm statement is not one"
+    },
+    {
+      "node": "attribute",
+      "reason": "one entry inside an attribute specifier's list; the specifier around it is the `_attribute`"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "one backslash escape inside a string or character literal"
+    },
+    {
+      "node": "preproc_arg",
+      "reason": "the raw tail of a directive, taken as one token because its content is not C \u2014 a macro body is text until it is expanded"
+    },
+    {
+      "node": "preproc_directive",
+      "reason": "the `#word` of a directive this grammar has no rule for: `#pragma`, `#error`, `#line`"
+    },
+    {
+      "node": "preproc_defined",
+      "reason": "the `defined X` operator, which exists only in a conditional's condition and is not an expression of the language \u2014 its operand is a macro name, and an undefined one is legal here and nowhere else"
+    },
+    {
+      "node": "preproc_has_include",
+      "reason": "`__has_include(<x.h>)`, for the same reason: its operand is a header name, not an expression"
+    }
+  ]
+}
