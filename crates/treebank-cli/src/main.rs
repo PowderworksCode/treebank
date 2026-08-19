@@ -122,6 +122,10 @@ enum Cmd {
         /// Reproduces a run exactly
         #[arg(long, default_value_t = 1)]
         seed: u64,
+        /// Derive every program from a fresh random tape, keeping nothing.
+        /// For measuring what the coverage guidance is worth.
+        #[arg(long, default_value_t = false)]
+        unguided: bool,
     },
     /// Reformat every corpus file with the language's own formatter and
     /// assert our tree is unchanged. A formatter preserves the program and
@@ -459,11 +463,12 @@ fn main() -> anyhow::Result<()> {
             limit,
             &out.unwrap_or_else(|| recovery::default_out(lang)),
         ),
-        Cmd::Fuzz { lang, grammar, out, iterations, seed } => fuzz::run(
+        Cmd::Fuzz { lang, grammar, out, iterations, seed, unguided } => fuzz::run(
             lang,
             &grammar,
             iterations,
             seed,
+            unguided,
             &out.unwrap_or_else(|| fuzz::default_out(lang)),
         ),
         Cmd::Mutate { lang, grammar, manifest, out, files, per_file, seed } => mutate::run(

@@ -792,6 +792,31 @@ business tracking loop nesting in order to produce one. Judged by
 parse-only mode — rust's `syn` has none — it falls back, and the report says
 which question was asked.
 
+**Coverage.** The fuzzer reports which of the grammar's alternatives its
+derivations reached, keyed on `(choice site, alternative)` — a number the
+check had no way to state before, and an uncovered list that names
+constructs in our own grammar nothing has exercised. That list is the
+actionable half: it doubles as a to-do list for hand-written corpus tests.
+
+Guidance is AFL's idea, and the measured result is worth recording because
+it is smaller than the idea suggests. Mutating tapes toward coverage was
+tried first and was WORSE than pure random at low budget (74.7% against
+78.7% at 1,000 iterations) and identical by 8,000: AFL searches for
+coverage because it cannot see inside the program, while a grammar fuzzer
+already holds the list of unreached alternatives and can simply take them.
+Seeking them by construction does win — 82% against 78.7% at 1,000, 98.9%
+against 97.9% at 8,000 — but only after a bug was fixed that made the whole
+idea look worthless: the seeker recorded a byte per choice while plain
+generation also consumes one per repeat, so the tape it produced decoded
+to a different program.
+
+And the honest limit: **better coverage did not find more widenings.** 166
+distinct findings either way at 8,000 iterations. The widenings cluster in
+a few families that random derivation already reaches, and the alternatives
+guidance adds are ones where the grammar happens to be right. The coverage
+number and the uncovered list are worth having; the guidance is worth about
+a thousand iterations of budget, and no more than that on this evidence.
+
 **Declared widenings.** Some over-acceptance is deliberate: python's grammar
 is 2.7 ∪ 3.x by design, so `print x` is a widening against py3's parser and
 is meant to be one. Left undeclared, that single decision dominates every
