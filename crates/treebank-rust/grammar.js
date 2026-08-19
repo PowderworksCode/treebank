@@ -150,7 +150,13 @@ module.exports = grammar({
     // valid Rust -- and it is also what made a stray `;` an item (`use x;;`)
     // and let a paren-delimited macro stand as an item without its semicolon.
     // Three catalogued widenings, one cause.
-    source_file: $ => repeat($._item),
+    source_file: $ => seq(optional($.shebang), repeat($._item)),
+
+    // `#!/usr/bin/env rust-script` at the top of a file. Distinguished from
+    // an inner attribute by what follows `#!`: an attribute opens a bracket,
+    // a shebang cannot. `optional` at the head of `source_file` is what
+    // confines it to the first line.
+    shebang: _ => token(seq('#!', /[^\[\r\n][^\r\n]*/)),
 
     // What may appear where items are expected: a file's top level, a
     // module body, an `extern` block. A macro invocation is one too, but
@@ -445,6 +451,12 @@ module.exports = grammar({
 
     impl_block: $ => seq(
       repeat($._attribute),
+      // `#[ext] pub impl<T> Cell<T> { … }` — an attribute macro receives its
+      // item as a token stream, so `pub impl` reaches the macro without ever
+      // being parsed as an impl by rustc. It is real code that has to parse:
+      // 22 files in one crate, and easy_ext is not obscure. Declared as a
+      // widening in ledger.toml rather than left as 22 gaps.
+      optional($.visibility_modifier),
       optional('unsafe'),
       'impl',
       field('type_parameters', optional($.type_parameters)),
@@ -678,6 +690,10 @@ module.exports = grammar({
     // ── types ────────────────────────────────────────────────────────
     _type: $ => choice(
       alias($.identifier, $.type_identifier),
+      // A soft keyword names a type as readily as it names a value:
+      // `input.parse::<raw>()` asks for a type called `raw`, and `raw` is
+      // only a keyword in `&raw const`.
+      alias($._soft_keyword, $.type_identifier),
       $.bounded_type,
       $.scoped_type_identifier,
       $.generic_type,

@@ -26,6 +26,9 @@ incremental_check = '''
 recovery_check = '''
 `treebank recovery` — 1999 files, 11096 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.1%, p90 5.6%, p99 78.9%; 116 deletions put more than half of a file of at least 1 KiB inside an error, most often `)` x37, `}` x12, `{` x10, `->` x5. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
 
+[[deviations]]
+what = '''
+`pub impl<T> Cell<T> { … }` parses. It is not an item rustc would accept on its own, but an attribute macro receives its item as a token stream, so `#[ext] pub impl …` reaches the macro without rustc's item parser ever seeing it — and `easy_ext` is widely enough used that 22 files in the expanded corpus depend on it. Accepting a visibility modifier on `impl` is the narrowest way to parse them; declared here rather than left as 22 gaps.'''
 [corpus]
 source = '''
 top-1000 crates.io crates by all-time downloads (crates.io db dump, fetched 2026-08-16), .crate tarballs'''
