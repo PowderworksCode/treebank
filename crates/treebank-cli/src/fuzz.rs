@@ -63,6 +63,33 @@
 //! clothes. Declaring `print ` is a claim about py2 print statements;
 //! declaring nothing at all would have been better than declaring `p`.
 //!
+//! **Where the corpus cannot see** — behind `--rare`, and off by default,
+//! because it was measured across four languages and helps exactly one.
+//! Java gains 17.9% more distinct findings (25 paired wins of 30 seeds,
+//! sign test p=0.00016); rust LOSES 21.1% and typescript 18.7%, each
+//! losing all 8 of 8 paired seeds; python has nothing to steer toward at
+//! all, because 297,612 files exercise all 104 of its node kinds.
+//!
+//! The difference is what the rare set IS. Java's is a coherent
+//! under-modelled region -- `guard`, `unnamed_pattern` and `record_pattern`
+//! are the whole of java 21 pattern matching, absent from a quarter of a
+//! million files. Rust's is `yield_expression`, an unstable feature `syn`
+//! rejects anyway, and `shebang`, which is one line. TypeScript's is seven
+//! unrelated corners at already-98.8% coverage. Steering concentrates the
+//! budget, and concentration only pays when the region is both untested
+//! and large enough to hold bugs; otherwise it costs the diversity that
+//! finds them.
+//!
+//! **The original reasoning.** The sweep is only as good as the code
+//! it reads: a construct no corpus file contains is one the oracle has
+//! never been asked about, so a bug there is invisible to every check that
+//! starts from real source. `treebank kinds` measures exactly that, and if
+//! its report is present this steers generation toward the node kinds real
+//! code never produces — java's `guard` and `unnamed_pattern` appear in
+//! zero of 243,573 files, and `record_pattern` in two. Those are the
+//! constructs where a generated program is worth the most, because nothing
+//! else can reach them.
+//!
 //! **Shrinking is over the choice tape, not the program.** Generation
 //! consumes a byte tape and is deterministic in it, so shrinking is a search
 //! for a shorter, smaller tape that still reproduces — Hypothesis's model
@@ -158,6 +185,10 @@ fn first_rule_name(text: &str) -> Option<String> {
 
 struct Grammar {
     rules: BTreeMap<String, Rule>,
+    /// Rules from which a corpus-rare node kind is reachable. Empty when
+    /// no `kinds.json` has been produced, which turns the steering off
+    /// rather than guessing at rarity.
+    reaches_rare: std::collections::HashSet<String>,
     /// Choice site id -> (rule it belongs to, number of alternatives).
     sites: Vec<(String, usize)>,
     start: String,
@@ -186,8 +217,13 @@ impl Grammar {
             .iter()
             .map(|(k, r)| Ok((k.clone(), parse_rule_at(r, k, &mut sites)?)))
             .collect::<Result<BTreeMap<_, _>>>()?;
-        let mut g =
-            Grammar { rules, sites: sites.of, start, min_len: HashMap::new() };
+        let mut g = Grammar {
+            rules,
+            reaches_rare: Default::default(),
+            sites: sites.of,
+            start,
+            min_len: HashMap::new(),
+        };
         g.compute_min_len();
         Ok(g)
     }
@@ -212,6 +248,42 @@ impl Grammar {
             if !changed {
                 return;
             }
+        }
+    }
+
+    /// Which rules can produce a kind the corpus never (or barely) shows.
+    /// Least fixed point, the same shape as `min_len`: a rule reaches rare
+    /// if it IS rare, or if anything it references does.
+    fn mark_rare(&mut self, rare: &std::collections::HashSet<String>) {
+        for name in self.rules.keys() {
+            if rare.contains(name) {
+                self.reaches_rare.insert(name.clone());
+            }
+        }
+        loop {
+            let mut grew = false;
+            let names: Vec<String> = self.rules.keys().cloned().collect();
+            for name in names {
+                if self.reaches_rare.contains(&name) {
+                    continue;
+                }
+                if self.rule_reaches_rare(&self.rules[&name]) {
+                    self.reaches_rare.insert(name);
+                    grew = true;
+                }
+            }
+            if !grew {
+                return;
+            }
+        }
+    }
+
+    fn rule_reaches_rare(&self, r: &Rule) -> bool {
+        match r {
+            Rule::Symbol(n) => self.reaches_rare.contains(n),
+            Rule::Seq(ms) | Rule::Choice(_, ms) => ms.iter().any(|m| self.rule_reaches_rare(m)),
+            Rule::Repeat(c) | Rule::Repeat1(c) | Rule::Wrap(c) => self.rule_reaches_rare(c),
+            _ => false,
         }
     }
 
@@ -393,6 +465,11 @@ enum Tok {
 /// than by making generation depend on what has been seen.
 struct Seeker<'a> {
     seen: &'a std::collections::HashSet<(u32, u32)>,
+    /// Prefer alternatives that can reach a corpus-rare kind, over merely
+    /// unvisited ones. Rarity beats novelty: an alternative this run has
+    /// not taken may still be one the sweep checks a million times a day,
+    /// while a rare kind is unchecked by anything else at all.
+    rare: bool,
     tape: Vec<u8>,
 }
 
@@ -515,9 +592,17 @@ impl Gen<'_, '_> {
                             .map(|(i, _)| i)
                             .unwrap_or(0)
                     } else {
-                        let fresh: Vec<usize> = (0..ms.len())
+                        let mut fresh: Vec<usize> = (0..ms.len())
                             .filter(|a| !seek.seen.contains(&(*site as u32, *a as u32)))
                             .collect();
+                        if seek.rare {
+                            let toward: Vec<usize> = (0..ms.len())
+                                .filter(|a| self.g.rule_reaches_rare(&ms[*a]))
+                                .collect();
+                            if !toward.is_empty() {
+                                fresh = toward;
+                            }
+                        }
                         if fresh.is_empty() {
                             return_choice = true;
                             0
@@ -596,6 +681,7 @@ fn seek_tape(
     g: &Grammar,
     lang: LangName,
     seen: &std::collections::HashSet<(u32, u32)>,
+    rare: bool,
     rng: &mut Rng,
 ) -> Vec<u8> {
     let random = rng.tape(256);
@@ -607,7 +693,7 @@ fn seek_tape(
         tape: &mut tape,
         out: Vec::new(),
         cov: Vec::new(),
-        seek: Some(Box::new(Seeker { seen, tape: Vec::new() })),
+        seek: Some(Box::new(Seeker { seen, rare, tape: Vec::new() })),
         level: 0,
         steps: 0,
     };
@@ -938,10 +1024,45 @@ pub fn run(
     iterations: usize,
     seed: u64,
     unguided: bool,
+    rare: bool,
     out_path: &Path,
 ) -> Result<()> {
-    let g = Grammar::load(&grammar_dir.join("src/grammar.json"))?;
+    let mut g = Grammar::load(&grammar_dir.join("src/grammar.json"))?;
     let policy = FuzzPolicy::load(grammar_dir)?;
+
+    // `treebank kinds` writes this. Absent, the steering is simply off.
+    let kinds_path = PathBuf::from(format!("corpus/{lang}/reports/kinds.json"));
+    let rare_kinds: std::collections::HashSet<String> = if !rare {
+        Default::default()
+    } else {
+        match std::fs::read_to_string(&kinds_path) {
+            Ok(text) => {
+                let v: serde_json::Value = serde_json::from_str(&text)?;
+                let never = v["never_seen"].as_array().cloned().unwrap_or_default();
+                let thin = v["thin"].as_array().cloned().unwrap_or_default();
+                never
+                    .iter()
+                    .filter_map(|x| x.as_str().map(String::from))
+                    .chain(thin.iter().filter_map(|x| {
+                        x.as_array()?.first()?.as_str().map(String::from)
+                    }))
+                    .collect()
+            }
+            Err(_) => Default::default(),
+        }
+    };
+    if !rare_kinds.is_empty() {
+        g.mark_rare(&rare_kinds);
+        println!(
+            "fuzz: steering toward {} kind(s) the corpus never or barely shows — {}",
+            rare_kinds.len(),
+            {
+                let mut v: Vec<&str> = rare_kinds.iter().map(String::as_str).collect();
+                v.sort_unstable();
+                v.join(", ")
+            }
+        );
+    }
     let dirs = crate::routing::grammar_dirs(lang);
     let (language, _) = crate::grammar::load(&grammar_dir.join(dirs[0]))?;
     let mut parser = Parser::new();
@@ -981,7 +1102,7 @@ pub fn run(
             // Keep exploring: seeking alone would walk the same frontier.
             rng.tape(64)
         } else if i % 3 == 1 || corpus.is_empty() {
-            seek_tape(&g, lang, &seen, &mut rng)
+            seek_tape(&g, lang, &seen, rare && i % 6 == 1, &mut rng)
         } else {
             let pick = (rng.next() as usize) % corpus.len();
             mutate_tape(&corpus[pick], &mut rng)

@@ -6,6 +6,7 @@ mod errpos;
 mod roundtrip;
 mod fuzz;
 mod incremental;
+mod kinds;
 mod recovery;
 mod reformat;
 mod mutate;
@@ -126,6 +127,11 @@ enum Cmd {
         /// For measuring what the coverage guidance is worth.
         #[arg(long, default_value_t = false)]
         unguided: bool,
+        /// Steer toward node kinds `treebank kinds` found the corpus never
+        /// produces. Measured across four languages and it helps exactly
+        /// one — see the note at the top of fuzz.rs before turning it on.
+        #[arg(long, default_value_t = false)]
+        rare: bool,
     },
     /// Reformat every corpus file with the language's own formatter and
     /// assert our tree is unchanged. A formatter preserves the program and
@@ -181,6 +187,24 @@ enum Cmd {
         #[arg(long)]
         manifest: Option<PathBuf>,
         /// [default: corpus/<lang>/reports/recovery.json]
+        #[arg(long)]
+        out: Option<PathBuf>,
+        #[arg(long)]
+        limit: Option<usize>,
+    },
+    /// Count node kinds over the corpus and report which ones real code
+    /// never produces. Those are the blind spot: no oracle has been asked
+    /// about them, because every corpus-driven check starts from code that
+    /// does not contain them.
+    Kinds {
+        #[arg(long, value_enum, default_value_t = LangName::Python)]
+        lang: LangName,
+        #[arg(long)]
+        grammar: PathBuf,
+        /// [default: corpus/<lang>/manifest.json]
+        #[arg(long)]
+        manifest: Option<PathBuf>,
+        /// [default: corpus/<lang>/reports/kinds.json]
         #[arg(long)]
         out: Option<PathBuf>,
         #[arg(long)]
@@ -463,12 +487,20 @@ fn main() -> anyhow::Result<()> {
             limit,
             &out.unwrap_or_else(|| recovery::default_out(lang)),
         ),
-        Cmd::Fuzz { lang, grammar, out, iterations, seed, unguided } => fuzz::run(
+        Cmd::Kinds { lang, grammar, manifest, out, limit } => kinds::run(
+            lang,
+            &grammar,
+            &lang_path(lang, manifest, "manifest.json"),
+            limit,
+            &out.unwrap_or_else(|| kinds::default_out(lang)),
+        ),
+        Cmd::Fuzz { lang, grammar, out, iterations, seed, unguided, rare } => fuzz::run(
             lang,
             &grammar,
             iterations,
             seed,
             unguided,
+            rare,
             &out.unwrap_or_else(|| fuzz::default_out(lang)),
         ),
         Cmd::Mutate { lang, grammar, manifest, out, files, per_file, seed } => mutate::run(

@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Mutex, OnceLock};
 
 use anyhow::Result;
 
@@ -26,13 +27,27 @@ impl Oracle for Java {
     /// `enum`, `assert` or `_` used as an identifier is 1.4-era code, and
     /// booking it as corpus noise is the right answer under the
     /// latest-version-wins policy (DESIGN.md §4.2).
+    /// One JVM for the whole run, not one per question.
+    ///
+    /// Measured: 0.57s of fixed cost per launch against 1.2ms per file. The
+    /// sweep never noticed, because it amortises a launch over hundreds of
+    /// thousands of files. `fuzz` asks about one program at a time and then
+    /// asks again at every step of shrinking, so it spent its life starting
+    /// JVMs. Precompiling `Check.java` takes the launch to 0.20s and is not
+    /// enough; keeping the process is.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        stdin_oracle::run(
-            "java",
-            &[crate::tool("java-oracle/Check.java").to_string_lossy().as_ref()],
-            "java tools/java-oracle/Check.java — is a JDK (not just a JRE) installed?",
-            srcroot,
-            paths,
-        )
+        static ORACLE: OnceLock<Mutex<stdin_oracle::Persistent>> = OnceLock::new();
+        let cell = ORACLE.get_or_init(|| {
+            Mutex::new(
+                stdin_oracle::Persistent::spawn(
+                    "java",
+                    &[crate::tool("java-oracle/Check.java").to_string_lossy().as_ref()],
+                    "java tools/java-oracle/Check.java — is a JDK (not just a JRE) installed?",
+                )
+                .expect("start the java oracle"),
+            )
+        });
+        let mut oracle = cell.lock().map_err(|_| anyhow::anyhow!("java oracle poisoned"))?;
+        oracle.ask(srcroot, paths)
     }
 }

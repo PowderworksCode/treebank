@@ -142,3 +142,110 @@ fn verdicts(lines: &[String], srcroot: &Path) -> HashMap<String, bool> {
     }
     map
 }
+
+/// A long-lived oracle process, for callers that ask many small questions.
+///
+/// The batch helpers above spawn a process per call, which is right for the
+/// sweep — one launch amortised over hundreds of thousands of files. It is
+/// wrong for `fuzz`, which asks about one program at a time and then asks
+/// again for every step of shrinking. Measured on java: 0.57s of fixed cost
+/// per launch against 1.2ms per file, so a run spends its time starting
+/// JVMs rather than parsing.
+///
+/// The protocol is a sentinel line in each direction. The caller writes
+/// paths, then the sentinel; the oracle answers, then echoes the sentinel.
+/// Paths are written from a separate thread because a batch can exceed the
+/// pipe buffer, and a caller that writes everything before reading anything
+/// deadlocks against an oracle doing the same.
+pub struct Persistent {
+    child: std::process::Child,
+    stdin: Option<std::process::ChildStdin>,
+    stdout: std::io::BufReader<std::process::ChildStdout>,
+}
+
+/// Chosen because no path contains it.
+pub const SENTINEL: &str = "\u{0}--end--";
+
+impl Persistent {
+    pub fn spawn(program: &str, args: &[&str], hint: &str) -> Result<Persistent> {
+        let mut child = Command::new(program)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .with_context(|| hint.to_string())?;
+        let stdin = child.stdin.take().context("oracle stdin")?;
+        let stdout =
+            std::io::BufReader::new(child.stdout.take().context("oracle stdout")?);
+        Ok(Persistent { child, stdin: Some(stdin), stdout })
+    }
+
+    pub fn ask(&mut self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
+        use std::io::{BufRead, Write};
+
+        let lines: Vec<String> = paths
+            .iter()
+            .map(|p| srcroot.join(p).display().to_string())
+            .collect();
+        let mut stdin = self.stdin.take().context("oracle stdin already closed")?;
+        let writer = std::thread::spawn(move || -> std::io::Result<std::process::ChildStdin> {
+            for line in &lines {
+                writeln!(stdin, "{line}")?;
+            }
+            writeln!(stdin, "{SENTINEL}")?;
+            stdin.flush()?;
+            Ok(stdin)
+        });
+
+        let mut out = Vec::new();
+        loop {
+            let mut line = String::new();
+            let n = self.stdout.read_line(&mut line)?;
+            if n == 0 {
+                anyhow::bail!("oracle exited mid-batch");
+            }
+            let line = line.trim_end_matches(['\n', '\r']).to_string();
+            if line == SENTINEL {
+                break;
+            }
+            out.push(line);
+        }
+
+        self.stdin = Some(
+            writer
+                .join()
+                .map_err(|_| anyhow::anyhow!("oracle stdin thread panicked"))??,
+        );
+        Ok(verdicts(&out, srcroot))
+    }
+}
+
+impl Drop for Persistent {
+    fn drop(&mut self) {
+        drop(self.stdin.take());
+        let _ = self.child.wait();
+    }
+}
+
+/// A named, lazily-started persistent oracle.
+///
+/// Every subprocess oracle here has the same shape and the same problem:
+/// startup dominates when the caller asks small questions. This keeps one
+/// process per (program, args) for the life of the run.
+pub fn persistent(
+    key: &'static str,
+    program: &str,
+    args: &[&str],
+    hint: &str,
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<HashMap<String, bool>> {
+    use std::sync::{Mutex, OnceLock};
+    static POOL: OnceLock<Mutex<HashMap<&'static str, Persistent>>> = OnceLock::new();
+    let pool = POOL.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut pool = pool.lock().map_err(|_| anyhow::anyhow!("oracle pool poisoned"))?;
+    if !pool.contains_key(key) {
+        pool.insert(key, Persistent::spawn(program, args, hint)?);
+    }
+    pool.get_mut(key).expect("just inserted").ask(srcroot, paths)
+}

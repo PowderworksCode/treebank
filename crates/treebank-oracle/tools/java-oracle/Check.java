@@ -38,16 +38,14 @@ import java.util.List;
 
 public class Check {
     public static void main(String[] args) throws IOException {
-        List<String> paths = new ArrayList<>();
-        try (BufferedReader in = new BufferedReader(
-                new InputStreamReader(System.in, StandardCharsets.UTF_8))) {
-            for (String line = in.readLine(); line != null; line = in.readLine()) {
-                String p = line.trim();
-                if (!p.isEmpty()) {
-                    paths.add(p);
-                }
-            }
-        }
+        // Two modes on one protocol. Reading to EOF answers a single batch
+        // and exits, which is what the sweep wants. A SENTINEL line ends a
+        // batch WITHOUT ending the process, which is what `fuzz` wants:
+        // starting a JVM costs 0.57s and parsing a file costs 1.2ms, so a
+        // fuzz run that launches per question spends its life in startup.
+        final String SENTINEL = "\u0000--end--";
+        BufferedReader in = new BufferedReader(
+                new InputStreamReader(System.in, StandardCharsets.UTF_8));
         PrintStream out = new PrintStream(System.out, false, StandardCharsets.UTF_8);
         JavaCompiler compiler = ToolProvider.getSystemJavaCompiler();
         if (compiler == null) {
@@ -62,11 +60,31 @@ public class Check {
         // neighbours' verdicts with it.
         try (StandardJavaFileManager fm =
                      compiler.getStandardFileManager(null, null, StandardCharsets.UTF_8)) {
-            for (String path : paths) {
-                out.printf("%s\t%s%n", path, parses(compiler, fm, path) ? "valid" : "invalid");
+            List<String> batch = new ArrayList<>();
+            for (String line = in.readLine(); line != null; line = in.readLine()) {
+                if (line.equals(SENTINEL)) {
+                    answer(compiler, fm, batch, out);
+                    batch.clear();
+                    out.println(SENTINEL);
+                    out.flush();
+                    continue;
+                }
+                String p = line.trim();
+                if (!p.isEmpty()) {
+                    batch.add(p);
+                }
             }
+            // EOF with work outstanding: the single-batch mode.
+            answer(compiler, fm, batch, out);
         }
         out.flush();
+    }
+
+    private static void answer(JavaCompiler compiler, StandardJavaFileManager fm,
+                               List<String> paths, PrintStream out) {
+        for (String path : paths) {
+            out.printf("%s\t%s%n", path, parses(compiler, fm, path) ? "valid" : "invalid");
+        }
     }
 
     // An unreadable file is NOT an invalid file. Returning false there looks

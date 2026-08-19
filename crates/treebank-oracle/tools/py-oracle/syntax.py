@@ -22,8 +22,17 @@ import sys
 
 
 def main():
-    for line in sys.stdin:
+    # `iter(readline, '')` rather than `for line in sys.stdin`: the file
+    # iterator reads ahead by a block, so a persistent oracle blocks until
+    # its caller sends enough data or closes the pipe -- which is exactly
+    # what a sentinel protocol must not require. python2's read-ahead is
+    # the larger, but neither is safe here.
+    for line in iter(sys.stdin.readline, ''):
         path = line.strip()
+        if path == "\x00--end--":
+            sys.stdout.write("\x00--end--\n")
+            sys.stdout.flush()
+            continue
         if not path:
             continue
         try:

@@ -48,8 +48,17 @@ def parses(path):
 
 def main():
     out = sys.stdout
-    for line in sys.stdin:
+    # `iter(readline, '')` rather than `for line in sys.stdin`: the file
+    # iterator reads ahead by a block, so a persistent oracle blocks until
+    # its caller sends enough data or closes the pipe -- which is exactly
+    # what a sentinel protocol must not require. python2's read-ahead is
+    # the larger, but neither is safe here.
+    for line in iter(sys.stdin.readline, ''):
         path = line.strip()
+        if path == "\x00--end--":
+            out.write("\x00--end--\n")
+            out.flush()
+            continue
         if not path:
             continue
         out.write("%s\t%s\n" % (path, "valid" if parses(path) else "invalid"))
