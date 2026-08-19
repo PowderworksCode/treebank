@@ -61,17 +61,11 @@ corpus_composition_note = '''
 
 [corpus.sweep]
 files = 297612
-passed = 138273
-failed = 932
-gap_files = 4
-noise_files = 916
-pass_rate = '99.997%'
-oracle_note = 'adjudicated by the two-leg union oracle (CPython 3.12.3 + 2.7.18).'
-noise_note = '''
-noise verified by sampling: deliberately-broken test fixtures (jedi completion corpora, ruff/black invalid-syntax fixtures), templating files, and one PEP 758 (py3.14) black fixture — see oracle horizon_note'''
-note = '''
-widened from the top-300 (46,466 files). Every remaining family is a formatter/parser test fixture or a declared deviation; 20 of the 23 are ruff's and black's own edge-case corpora.'''
-version_files = 12
+passed = 296513
+failed = 1099
+gap_files = 7
+noise_files = 1080
+pass_rate = '99.63%'
 
 [[oracles]]
 family = 'python3'

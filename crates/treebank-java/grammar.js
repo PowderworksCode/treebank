@@ -88,6 +88,11 @@ module.exports = grammar({
     [$.annotation_type_element, $.parameters],
     [$.switch_label_group],
     [$.switch_statement, $.switch_expression],
+    [$._statement_expression, $._primary],
+    [$._statement_expression, $._no_lambda],
+    [$.switch_block, $._switch_block_expr],
+    [$.switch_rule, $._switch_rule_expr],
+    [$.switch_label_group],
     [$._unannotated_type, $.generic_type],
     [$._type_id, $.inferred_parameters, $._name],
     [$.arguments, $._record_pattern_body],
@@ -498,7 +503,21 @@ module.exports = grammar({
 
     block: $ => seq('{', repeat($._statement), '}'),
     empty_statement: _ => ';',
-    expression_statement: $ => seq($._expression, ';'),
+    // JLS 14.8: an expression STATEMENT is an assignment, an increment or
+    // decrement, an invocation, or an instance creation -- never `1 + 2;`
+    // or a bare name. The same list serves the arrow-switch rule body,
+    // because `case A -> 1;` is only legal where the switch is an
+    // EXPRESSION; as a statement its arrow body must be one of these (or a
+    // block or throw). javac's span oracle flagged the switch half; the
+    // expression_statement half is the same rule enforced at its source.
+    expression_statement: $ => seq($._statement_expression, ';'),
+
+    _statement_expression: $ => choice(
+      $._assignment,
+      $.update_expression,
+      $._invocation,
+      $.object_creation_expression,
+    ),
 
     labeled_statement: $ => seq(field('label', $.identifier), ':', $._statement),
 
@@ -573,10 +592,28 @@ module.exports = grammar({
     switch_block: $ => seq('{', choice(repeat($.switch_rule), repeat($.switch_label_group)), '}'),
 
     // Java 14 arrow form: `case A -> expr;`
+    // The STATEMENT form: an arrow body here must be a statement
+    // expression (JLS 14.11.1) -- `case A -> 1;` is only legal where the
+    // switch is an expression. The expression form below stays lax.
     switch_rule: $ => seq(
       $._switch_label,
       '->',
+      choice(field('body', $.block), $.throw_statement, $.expression_statement),
+    ),
+
+    _switch_rule_expr: $ => seq(
+      $._switch_label,
+      '->',
       choice(field('body', $.block), $.throw_statement, seq($._expression, ';')),
+    ),
+
+    _switch_block_expr: $ => seq(
+      '{',
+      choice(
+        repeat(alias($._switch_rule_expr, $.switch_rule)),
+        repeat($.switch_label_group),
+      ),
+      '}',
     ),
 
     // The colon form, whose statements belong to the label until the next.
@@ -819,7 +856,7 @@ module.exports = grammar({
     switch_expression: $ => seq(
       'switch',
       field('condition', $.parenthesized_expression),
-      field('body', $.switch_block),
+      field('body', alias($._switch_block_expr, $.switch_block)),
     ),
 
     lambda: $ => seq(

@@ -2093,7 +2093,19 @@
       "required": true,
       "types": [
         {
-          "type": "_expression",
+          "type": "_assignment",
+          "named": true
+        },
+        {
+          "type": "_invocation",
+          "named": true
+        },
+        {
+          "type": "object_creation_expression",
+          "named": true
+        },
+        {
+          "type": "update_expression",
           "named": true
         }
       ]
@@ -3922,6 +3934,10 @@
         },
         {
           "type": "default_label",
+          "named": true
+        },
+        {
+          "type": "expression_statement",
           "named": true
         },
         {
