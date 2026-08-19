@@ -20,6 +20,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | path | what it is |
 |---|---|
 | `DESIGN.md` | the design: vocabulary, invariants, layout, order of work |
+| `VARIANTS.md` | proposal: one parse table per dialect/version-family from shared grammar source — splitting Python 2 out, and taking on SQL |
 | `crates/treebank-python` | Python 2.7 ∪ 3.x in one grammar |
 | `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
 | `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |

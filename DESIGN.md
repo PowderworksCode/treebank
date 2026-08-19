@@ -330,6 +330,13 @@ grade it.
 A language gets one grammar accepting the **union of its versions** — no
 python2 crate, no per-edition Rust grammars.
 
+> Under review. [`VARIANTS.md`](VARIANTS.md) proposes a second axis —
+> versions union *inside* a variant, dialects and incompatible version
+> families get their own parse table from shared grammar source — and
+> would split Python 2 out on the evidence in this grammar's
+> `version_policy.toml` and `ledger.toml`. This section stands until
+> that is adopted.
+
 - **Python**: 2.7 ∪ 3.x. The union adds the py2 `print` and `exec`
   statements, `except E, e:` clauses, backtick repr, and old-style octal
   literals, parsed alongside py3 syntax.
