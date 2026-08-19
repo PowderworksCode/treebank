@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "java",
+      "camelcase": "Java",
+      "scope": "source.rust",
+      "file-types": [
+        "java"
+      ],
+      "injection-regex": "^java$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Java 8 through 21 in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

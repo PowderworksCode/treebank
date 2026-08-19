@@ -104,6 +104,11 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
         LangName::Typescript | LangName::Javascript => Some(&TS),
         LangName::Python => Some(&PY),
         LangName::Rust => Some(&RS),
+        // javac can give one: `Trees.getSourcePositions()` yields start and
+        // end offsets for every tree node, so a span oracle is reachable
+        // the same way the validity one was. Not built yet, and saying so
+        // beats a `spans` run that silently compares against nothing.
+        LangName::Java => None,
     }
 }
 

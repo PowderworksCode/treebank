@@ -1,0 +1,154 @@
+================================================================================
+package, imports and a class header
+================================================================================
+
+package com.example;
+import java.util.List;
+public final class A extends B implements C {}
+
+--------------------------------------------------------------------------------
+
+(program
+  (package_declaration
+    (scoped_identifier
+      (identifier)
+      (identifier)))
+  (import_declaration
+    (scoped_identifier
+      (scoped_identifier
+        (identifier)
+        (identifier))
+      (identifier)))
+  (class_declaration
+    (modifiers
+      (access_modifier)
+      (final_modifier))
+    (identifier)
+    (superclass
+      (type_identifier))
+    (super_interfaces
+      (type_identifier))
+    (class_body)))
+
+================================================================================
+fields, constructor and a generic method
+================================================================================
+
+class A {
+    private static final int N = 1;
+    A(int n) { super(n); this.n = n; }
+    <T> T pick(List<T> xs, int i) { return xs.get(i); }
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (modifiers
+          (access_modifier)
+          (static_modifier)
+          (final_modifier))
+        (primitive_type)
+        (variable_declarator
+          (identifier)
+          (integer_literal)))
+      (constructor_declaration
+        (identifier)
+        (parameters
+          (parameter
+            (primitive_type)
+            (identifier)))
+        (block
+          (expression_statement
+            (explicit_constructor_invocation
+              (super)
+              (arguments
+                (identifier))))
+          (expression_statement
+            (assignment
+              (field_access
+                (this)
+                (identifier))
+              (identifier)))))
+      (method_declaration
+        (type_parameters
+          (type_parameter
+            (identifier)))
+        (type_identifier)
+        (identifier)
+        (parameters
+          (parameter
+            (generic_type
+              (type_identifier)
+              (type_arguments
+                (type_identifier)))
+            (identifier))
+          (parameter
+            (primitive_type)
+            (identifier)))
+        (block
+          (return_statement
+            (method_invocation
+              (identifier)
+              (identifier)
+              (arguments
+                (identifier)))))))))
+
+================================================================================
+records, enums and sealed types
+================================================================================
+
+sealed interface Shape permits Circle {}
+record Circle(double r) implements Shape {
+    Circle { if (r < 0) throw new IllegalArgumentException(); }
+}
+enum E { A, B; int f() { return 1; } }
+
+--------------------------------------------------------------------------------
+
+(program
+  (interface_declaration
+    (modifiers
+      (sealed_modifier))
+    (identifier)
+    (permits_clause
+      (type_identifier))
+    (interface_body))
+  (record_declaration
+    (identifier)
+    (parameters
+      (parameter
+        (primitive_type)
+        (identifier)))
+    (super_interfaces
+      (type_identifier))
+    (class_body
+      (compact_constructor_declaration
+        (identifier)
+        (block
+          (if_statement
+            (parenthesized_expression
+              (binary_expression
+                (identifier)
+                (integer_literal)))
+            (throw_statement
+              (object_creation_expression
+                (type_identifier)
+                (arguments))))))))
+  (enum_declaration
+    (identifier)
+    (enum_body
+      (enum_constant
+        (identifier))
+      (enum_constant
+        (identifier))
+      (method_declaration
+        (primitive_type)
+        (identifier)
+        (parameters)
+        (block
+          (return_statement
+            (integer_literal)))))))

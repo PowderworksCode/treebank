@@ -1,0 +1,85 @@
+================================================================================
+lambdas and method references
+================================================================================
+
+class A {
+    Runnable r = () -> {};
+    Function<String, Integer> f = String::length;
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (type_identifier)
+        (variable_declarator
+          (identifier)
+          (lambda
+            (parameters)
+            (block))))
+      (field_declaration
+        (generic_type
+          (type_identifier)
+          (type_arguments
+            (type_identifier)
+            (type_identifier)))
+        (variable_declarator
+          (identifier)
+          (method_reference
+            (type_identifier)
+            (identifier)))))))
+
+================================================================================
+text blocks, nested arrays and instanceof patterns
+================================================================================
+
+class A {
+    String s = """
+        hello""";
+    int[][][] a = new int[2][][];
+    boolean m(Object o) { return o instanceof String s && s.length() > 0; }
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (class_declaration
+    (identifier)
+    (class_body
+      (field_declaration
+        (type_identifier)
+        (variable_declarator
+          (identifier)
+          (text_block)))
+      (field_declaration
+        (array_type
+          (primitive_type))
+        (variable_declarator
+          (identifier)
+          (array_creation_expression
+            (primitive_type)
+            (integer_literal))))
+      (method_declaration
+        (primitive_type)
+        (identifier)
+        (parameters
+          (parameter
+            (type_identifier)
+            (identifier)))
+        (block
+          (return_statement
+            (binary_expression
+              (instanceof_expression
+                (identifier)
+                (type_pattern
+                  (type_identifier)
+                  (identifier)))
+              (binary_expression
+                (method_invocation
+                  (identifier)
+                  (identifier)
+                  (arguments))
+                (integer_literal)))))))))

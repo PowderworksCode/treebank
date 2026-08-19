@@ -122,7 +122,8 @@
   ],
   "either_tier": [
     "_parameter",
-    "_modifier"
+    "_modifier",
+    "_declaration"
   ],
   "containments": [
     [

@@ -1071,6 +1071,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "treebank-java"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "treebank-lang"
 version = "0.1.0"
 dependencies = [

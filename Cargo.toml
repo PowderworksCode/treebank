@@ -3,6 +3,7 @@ members = [
     "crates/treebank-cli",
     "crates/treebank-core",
     "crates/treebank-corpus",
+    "crates/treebank-java",
     "crates/treebank-lang",
     "crates/treebank-oracle",
     "crates/treebank-preprocessing",

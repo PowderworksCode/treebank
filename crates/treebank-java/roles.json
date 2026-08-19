@@ -1,0 +1,138 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {
+    "_declaration": "Java partitions it: a field declaration and a local variable declaration are the same syntax in different places, so one alternation reachable from both a class body and a block makes every field ambiguous with every local. All nine members are concrete types occurring nowhere else, so facet membership selects the same nodes."
+  },
+  "facets": {
+    "_binding": [
+      "catch_parameter",
+      "enum_constant",
+      "parameter",
+      "receiver_parameter",
+      "record_pattern",
+      "resource",
+      "spread_parameter",
+      "type_parameter",
+      "type_pattern",
+      "variable_declarator"
+    ],
+    "_callable": [
+      "annotation_type_element",
+      "compact_constructor_declaration",
+      "constructor_declaration",
+      "lambda",
+      "method_declaration",
+      "method_reference"
+    ],
+    "_clause": [
+      "case_label",
+      "catch_clause",
+      "default_label",
+      "extends_interfaces",
+      "finally_clause",
+      "guard",
+      "permits_clause",
+      "super_interfaces",
+      "superclass",
+      "switch_label_group",
+      "switch_rule",
+      "throws_clause"
+    ],
+    "_comment": [
+      "block_comment",
+      "line_comment"
+    ],
+    "_declaration": [
+      "annotation_type_declaration",
+      "class_declaration",
+      "compact_constructor_declaration",
+      "constructor_declaration",
+      "enum_declaration",
+      "field_declaration",
+      "interface_declaration",
+      "local_variable_declaration",
+      "method_declaration",
+      "record_declaration"
+    ],
+    "_identifier": [
+      "identifier",
+      "scoped_identifier",
+      "scoped_type_identifier",
+      "type_identifier"
+    ],
+    "_scope": [
+      "annotation_type_body",
+      "block",
+      "class_body",
+      "enum_body",
+      "initializer_block",
+      "interface_body",
+      "lambda",
+      "program",
+      "switch_block"
+    ],
+    "_string": [
+      "character_literal",
+      "string_literal",
+      "text_block"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "annotation_arguments",
+      "reason": "the parenthesised argument list of an annotation; a container, not a role"
+    },
+    {
+      "node": "arguments",
+      "reason": "the parenthesised argument list of a call; its elements carry _argument"
+    },
+    {
+      "node": "array_initializer",
+      "reason": "a braced initialiser; its elements are _expression"
+    },
+    {
+      "node": "element_value_array",
+      "reason": "the braced form an annotation element may take"
+    },
+    {
+      "node": "element_value_pair",
+      "reason": "`key = value` inside an annotation; neither an assignment nor a binding"
+    },
+    {
+      "node": "inferred_parameters",
+      "reason": "a lambda's parenthesised bare-identifier list; the names inside carry _binding"
+    },
+    {
+      "node": "modifiers",
+      "reason": "the run of modifiers and annotations before a declaration; its elements carry the roles"
+    },
+    {
+      "node": "parameters",
+      "reason": "the parenthesised parameter list; its elements carry _parameter"
+    },
+    {
+      "node": "resource_specification",
+      "reason": "the `(\u2026)` of try-with-resources; its elements carry _binding"
+    },
+    {
+      "node": "type_arguments",
+      "reason": "the `<\u2026>` of a use site; its elements are _type"
+    },
+    {
+      "node": "type_parameters",
+      "reason": "the `<\u2026>` of a declaration; its elements are _binding"
+    },
+    {
+      "node": "unnamed_pattern",
+      "reason": "`_` in a record pattern; binds nothing by definition"
+    },
+    {
+      "node": "void_type",
+      "reason": "the absence of a type, which is not a _type"
+    },
+    {
+      "node": "wildcard",
+      "reason": "`?` with an optional bound; a type argument, not a type"
+    }
+  ]
+}
