@@ -294,38 +294,60 @@
       ]
     },
     "subshell": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "("
-        },
-        {
-          "type": "SYMBOL",
-          "name": "_statements"
-        },
-        {
-          "type": "STRING",
-          "value": ")"
-        }
-      ]
+      "type": "PREC_LEFT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "("
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_statements"
+          },
+          {
+            "type": "STRING",
+            "value": ")"
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "SYMBOL",
+              "name": "redirect"
+            }
+          }
+        ]
+      }
     },
     "compound_statement": {
-      "type": "SEQ",
-      "members": [
-        {
-          "type": "STRING",
-          "value": "{"
-        },
-        {
-          "type": "SYMBOL",
-          "name": "_statements"
-        },
-        {
-          "type": "STRING",
-          "value": "}"
-        }
-      ]
+      "type": "PREC_LEFT",
+      "value": 0,
+      "content": {
+        "type": "SEQ",
+        "members": [
+          {
+            "type": "STRING",
+            "value": "{"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_statements"
+          },
+          {
+            "type": "STRING",
+            "value": "}"
+          },
+          {
+            "type": "REPEAT",
+            "content": {
+              "type": "SYMBOL",
+              "name": "redirect"
+            }
+          }
+        ]
+      }
     },
     "_body": {
       "type": "CHOICE",
@@ -1479,6 +1501,27 @@
           {
             "type": "SYMBOL",
             "name": "heredoc_redirect"
+          },
+          {
+            "type": "SEQ",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "operator",
+                "content": {
+                  "type": "STRING",
+                  "value": "<<<"
+                }
+              },
+              {
+                "type": "FIELD",
+                "name": "destination",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_word_like"
+                }
+              }
+            ]
           }
         ]
       }
@@ -1896,6 +1939,10 @@
         {
           "type": "SYMBOL",
           "name": "concatenation"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "brace_expression"
         }
       ]
     },
@@ -1938,6 +1985,10 @@
         {
           "type": "SYMBOL",
           "name": "_expression"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "brace_expression"
         }
       ]
     },
@@ -2006,6 +2057,26 @@
         "content": {
           "type": "PATTERN",
           "value": "[a-zA-Z_][a-zA-Z0-9_]*"
+        }
+      }
+    },
+    "brace_expression": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "PATTERN",
+              "value": "\\{[^{}\\s,]*,[^{}\\s]*\\}"
+            },
+            {
+              "type": "PATTERN",
+              "value": "\\{[^{}\\s.]*\\.\\.[^{}\\s]*\\}"
+            }
+          ]
         }
       }
     },

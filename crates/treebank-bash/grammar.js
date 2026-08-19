@@ -139,8 +139,10 @@ module.exports = grammar({
 
     negated_command: $ => seq('!', $._statement),
 
-    subshell: $ => seq('(', $._statements, ')'),
-    compound_statement: $ => seq('{', $._statements, '}'),
+    // Any compound command may carry trailing redirects:
+    // `{ ...; } 4>&1` and `(...) 2>/dev/null` are everyday shell.
+    subshell: $ => prec.left(seq('(', $._statements, ')', repeat($.redirect))),
+    compound_statement: $ => prec.left(seq('{', $._statements, '}', repeat($.redirect))),
 
     _body: $ => choice($.do_group, $.compound_statement, $.subshell),
 
@@ -293,6 +295,8 @@ module.exports = grammar({
         field('destination', $._word_like),
       ),
       $.heredoc_redirect,
+      // The herestring: `<<< word` feeds the word as stdin.
+      seq(field('operator', '<<<'), field('destination', $._word_like)),
     )),
 
     heredoc_redirect: $ => seq(
@@ -350,6 +354,7 @@ module.exports = grammar({
       $.word,
       $._expression,
       $.concatenation,
+      $.brace_expression,
     ),
 
     concatenation: $ => prec(-1, seq(
@@ -357,7 +362,7 @@ module.exports = grammar({
       repeat1(seq($._concat, $._word_part)),
     )),
 
-    _word_part: $ => choice($.word, $._expression),
+    _word_part: $ => choice($.word, $._expression, $.brace_expression),
 
     // A bare word: anything not special. The negated class is the grammar
     // — shell has no keyword list at the lexical level, only positions.
@@ -390,6 +395,14 @@ module.exports = grammar({
     // readily as it matches `word`, the lexer has to choose, and choosing
     // this one loses the command reading permanently.
     variable_name: _ => token(prec(1, /[a-zA-Z_][a-zA-Z0-9_]*/)),
+
+    // `{a,b}` and `{1..5}`: one token, requiring the comma or the range,
+    // so a braceless `{x}` stays the plain word bash treats it as. Nested
+    // expansions are beyond a single token and stay a recorded gap.
+    brace_expression: _ => token(prec(1, choice(
+      /\{[^{}\s,]*,[^{}\s]*\}/,
+      /\{[^{}\s.]*\.\.[^{}\s]*\}/,
+    ))),
 
     _literal: $ => choice($.string, $.raw_string, $.ansi_c_string, $.number),
 

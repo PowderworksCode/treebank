@@ -22,6 +22,10 @@
         "named": true
       },
       {
+        "type": "brace_expression",
+        "named": true
+      },
+      {
         "type": "concatenation",
         "named": true
       },
@@ -320,6 +324,10 @@
           "named": true
         },
         {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
           "type": "concatenation",
           "named": true
         },
@@ -340,6 +348,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -405,6 +417,10 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
             "named": true
           },
@@ -440,6 +456,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -484,6 +504,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -534,6 +558,10 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "redirect",
+          "named": true
         }
       ]
     }
@@ -548,6 +576,10 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
           "named": true
         },
         {
@@ -567,6 +599,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -591,6 +627,10 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
           "named": true
         },
         {
@@ -685,6 +725,10 @@
           "named": true
         },
         {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
           "type": "concatenation",
           "named": true
         },
@@ -715,6 +759,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -1012,6 +1060,10 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
             "named": true
           },
@@ -1039,6 +1091,10 @@
           },
           {
             "type": "<&",
+            "named": false
+          },
+          {
+            "type": "<<<",
             "named": false
           },
           {
@@ -1085,6 +1141,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -1187,6 +1247,10 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "redirect",
+          "named": true
         }
       ]
     }
@@ -1201,6 +1265,10 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
           "named": true
         },
         {
@@ -1290,6 +1358,10 @@
           },
           {
             "type": "array",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -1515,6 +1587,10 @@
     "named": false
   },
   {
+    "type": "<<<",
+    "named": false
+  },
+  {
     "type": "<=",
     "named": false
   },
@@ -1592,6 +1668,10 @@
   },
   {
     "type": "ansi_c_string",
+    "named": true
+  },
+  {
+    "type": "brace_expression",
     "named": true
   },
   {
