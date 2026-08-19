@@ -125,6 +125,9 @@ module.exports = grammar({
     [$._statement_expression, $.shorthand_property, $.shorthand_property_pattern],
     [$.function_definition, $.function_expression],
     [$.function_definition, $._reserved_property, $.function_expression],
+    [$._reserved_property, $.function_expression],
+    [$._default_function, $._reserved_property, $.function_expression],
+    [$._default_function, $.function_expression],
     [$.indexed_access_type, $.index_signature],
     [$.indexed_access_type, $.computed_property_name],
     [$.array_type, $.computed_property_name],
@@ -606,6 +609,12 @@ module.exports = grammar({
     // in a class or interface and nothing at all at statement level -- gets
     // a negative dynamic precedence and loses to the call. The other two
     // keep theirs.
+    // The name is REQUIRED here. A function DECLARATION must have one --
+    // `function ( ) ;` is not a program, and the fuzzer's biggest
+    // undeclared widening (311 seeds) was exactly that. The one place the
+    // language allows an anonymous (and in .d.ts even bodiless) function
+    // declaration is `export default`, which gets its own lax variant
+    // below, reachable from nowhere else.
     function_definition: $ => choice(
       prec.dynamic(1, prec.right(seq(
         repeat($._attribute),
@@ -613,12 +622,24 @@ module.exports = grammar({
         optional('async'),
         'function',
         optional('*'),
-        optional(field('name', $._name)),
+        field('name', $._name),
         field('type_parameters', optional($.type_parameters)),
         field('parameters', $.parameters),
         optional(seq(':', field('return_type', $._type))),
         choice(field('body', $._body), $._semicolon),
       ))),
+    ),
+
+    // The keyword-less METHOD form, reachable only from class bodies and
+    // object literals -- never from statement position. This is the
+    // "larger refactor of _declaration" the catch_clause comment promised:
+    // with the method form in `function_definition` itself, `foo ( ) { }`
+    // was a legal statement (a definition named foo), `catch (e) {}` grew
+    // a shadow reading, and requiring the declaration's name made
+    // `function ( ) ;` parse as a definition NAMED `function` via keyword
+    // fallback. Aliased back to function_definition so consumers see one
+    // kind.
+    _method_definition: $ => choice(
       prec.dynamic(1, prec.right(seq(
         $._method_head,
         field('type_parameters', optional($.type_parameters)),
@@ -717,6 +738,7 @@ module.exports = grammar({
     // method answers (_declaration) as well as (_member).
     _member: $ => choice(
       $._declaration,
+      alias($._method_definition, $.function_definition),
       $.field_definition,
       $.index_signature,
       $.static_block,
@@ -861,6 +883,7 @@ module.exports = grammar({
       seq('export', optional('type'), $.export_clause, optional(seq('from', field('source', $.string))), $._semicolon),
       seq('export', optional('type'), '*', optional(seq('as', field('alias', $._name))), 'from', field('source', $.string), $._semicolon),
       seq('export', optional('default'), $._declaration),
+      seq('export', 'default', alias($._default_function, $.function_definition)),
       seq('export', 'default', $._expression, $._semicolon),
       seq('export', $.variable_declaration),
       seq('export', '=', $._expression, $._semicolon),
@@ -1166,6 +1189,21 @@ module.exports = grammar({
       field('body', choice(prec.dynamic(2, $.block), $._expression)),
     )),
 
+    // `export default function () {}` -- and, in a .d.ts, even
+    // `export default function (): Promise<void>;` -- are the only
+    // anonymous function DECLARATIONS the language has (HoistableDeclaration
+    // with [Default]). mime-4.1.0 ships the bodiless form; upstream
+    // tree-sitter rejects it in 73 corpus files.
+    _default_function: $ => prec.dynamic(1, prec.right(seq(
+      optional('async'),
+      'function',
+      optional('*'),
+      field('type_parameters', optional($.type_parameters)),
+      field('parameters', $.parameters),
+      optional(seq(':', field('return_type', $._type))),
+      choice(field('body', $._body), $._semicolon),
+    ))),
+
     function_expression: $ => seq(
       optional('async'),
       'function',
@@ -1186,7 +1224,7 @@ module.exports = grammar({
       optional(seq(commaSep1(choice(
         $.pair,
         $.shorthand_property,
-        $.function_definition,
+        alias($._method_definition, $.function_definition),
         $.spread_element,
       )), optional(','))),
       '}',

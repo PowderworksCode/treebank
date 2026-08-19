@@ -378,6 +378,10 @@
         "named": true
       },
       {
+        "type": "function_definition",
+        "named": true
+      },
+      {
         "type": "index_signature",
         "named": true
       },
