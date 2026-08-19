@@ -1,0 +1,34 @@
+==================
+A function template with a requires clause
+==================
+
+template <typename T, typename... Args>
+requires Integral<T>
+T sum(T first, Args... rest);
+
+---
+
+(translation_unit
+  (template_declaration
+    parameters: (template_parameter_list
+      (type_parameter_declaration
+        name: (identifier))
+      (variadic_type_parameter_declaration
+        name: (identifier)))
+    constraint: (requires_clause
+      constraint: (template_type
+        name: (identifier)
+        arguments: (template_argument_list
+          (type_descriptor
+            type: (type_identifier)))))
+    (declaration
+      type: (type_identifier)
+      declarator: (function_declarator
+        declarator: (identifier)
+        parameters: (parameter_list
+          (parameter_declaration
+            type: (type_identifier)
+            declarator: (identifier))
+          (variadic_parameter_declaration
+            type: (type_identifier)
+            declarator: (identifier)))))))
