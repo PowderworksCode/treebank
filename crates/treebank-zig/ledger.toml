@@ -1,0 +1,71 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'zig'
+versions = '''
+Zig 0.11 through 0.15 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one anonymous initializer and nothing else, so it is the same tokenizer and the same expression rules rather than a second grammar. The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window: multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them, destructuring assignment in 0.12, and `usingnamespace` went the other way -- deprecated and then removed in 0.15. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so the older forms are kept and `usingnamespace` still parses. `async`/`await`/`suspend`/`resume` and `anyframe` are in the grammar although the compiler has not implemented them since 0.11: they are still the language's syntax and code using them is still in the corpus.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+19 of 22 table-tier terms are threaded, and the three that are not are facts about Zig.
+
+`_pattern` has no member. Zig has no pattern syntax: a `switch` prong holds VALUES and ranges (`.red`, `1...5`), not patterns, and the capture `|x|` binds one name with no structure to destructure. Destructuring assignment (`const a, const b = tuple;`) is the nearest thing and is a known gap below, not a pattern language.
+
+`_attribute` has no member. Zig has no annotation syntax at all -- no decorators, no `#[…]`, no `@interface`. The `@`-prefixed things that look like one are builtin CALLS and are `_invocation`.
+
+`_interpolation` has no member. Zig strings do not interpolate; `std.fmt` reads its `{}` at run time from an ordinary string, which is not syntax.
+
+`_parameter` and `_modifier` are DEMOTED to the facet tier rather than omitted; the reasons are in roles.json and are the same shape as rust's.
+
+Two threadings are worth stating because a reader would otherwise assume the opposite. `_type` is nested INSIDE `_expression` (`_expression -> _type -> pointer_type | …`) instead of beside it, because in Zig a type is a value and a sibling `_type` would put every type occurrence in two supertypes at one position -- which generate rejects outright. And `unreachable` is a `_jump`, not a literal: it transfers control out of the function and yields nothing, which is Zig's `raise`.'''
+
+[corpus]
+source = 'top GitHub repositories by stars with `language:Zig`, tarball at the pinned commit'
+ranking_note = '''
+Zig has a package manager and NO registry: `build.zig.zon` names a dependency by URL and content hash, so there is no index to rank and no download count to sort by. The "Zig package index" sites that exist are themselves GitHub scrapes. Stars are therefore the only ordering available, with everything `treebank-corpus::github` says about that bias applying unchanged -- attention rather than use, a metric that costs nothing and never decays.
+
+One bias is Zig's own. The language is pre-1.0 and its syntax moved inside the window this grammar claims, and a star-ranked GitHub corpus is weighted toward repositories that are maintained -- so it is weighted toward RECENT Zig, and it under-represents exactly the older forms the version union exists to keep. A pass rate over it is evidence about current Zig first.'''
+blind_to = '''
+Repositories GitHub classifies as mostly Zig, so Zig that ships inside a C or C++ project -- a `build.zig` added to an existing library, which is a large and growing population -- is absent. `.zon` files are admitted alongside `.zig` because they are the same tokenizer and the same expression grammar, but they are a rounding error in the file count and prove nothing about the statement grammar.'''
+
+[corpus.sweep]
+files = 0
+passed = 0
+failed = 0
+gap_files = 0
+noise_files = 0
+pass_rate = 'not measured'
+note = '''
+NOT SWEPT. There is no number here and there is deliberately not a made-up one: the corpus is gigabytes and gitignored, fetching it needs a GitHub token, and adjudicating it needs a `zig` on PATH -- none of which the machine this grammar was written on had. What HAS been checked is stated exactly and is much weaker than a sweep: the committed corpus tests (tree shapes, not accept/reject), the negative corpus, `treebank roles`, and two hand-written files exercising the constructs listed under `checked_by_hand` below. Treat the grammar as unmeasured until this table carries real figures. The first sweep is the next piece of work on it.'''
+checked_by_hand = '''
+Parsed clean, with the tree inspected rather than only the exit status: container declarations (struct, enum, tagged and bare union, opaque, `packed struct(u32)`, error sets), functions (pub/export/extern, `callconv`, `anytype`, comptime parameters, C-variadic `...`, function types and function pointers), the full pointer family (`*T`, `*const T`, `[]T`, `[:0]T`, `[*]T`, `[*c]T`, `[N]T`, `[N:0]T`, `?T`, `anyframe->T`, `align(16)`), control flow (labelled blocks and loops, `break :blk value`, `continue :outer`, `inline for`, `while` with continuation and `else`, `switch` with ranges and `inline else`), error handling (`try`, `catch |err|`, `orelse`, `errdefer |e|`, `error.X`, `E!T`, inferred `!T`), initializers (`T{…}`, `.{…}`, `[_]u8{…}`, `.field = value`), literals (all four integer bases, floats including hex, `@"quoted identifier"`, multiline strings, character escapes), `usingnamespace`, `test` declarations, container-level `comptime` blocks, inline assembly with input, output and clobber sections, all three comment kinds (including the `////` line that is an ordinary comment and not a doc comment), and a realistic `build.zig.zon`.'''
+
+[[oracles]]
+family = 'zig'
+tool = 'zig fmt --stdin, via tools/zig-oracle/check.sh'
+version = 'unpinned — the sweep that fixes a version has not been run'
+role = '''
+primary and only. `zig fmt --stdin` is the compiler's own tokenizer and parser and nothing after them: it builds a `std.zig.Ast`, renders it back out, and fails exactly when the source does not parse. It follows no `@import`, resolves no declaration and needs no `build.zig`, so a file is judged on its own text.
+
+`zig ast-check` is the obvious candidate and is deliberately NOT used. An `invalid` verdict books a file the grammar failed as corpus noise, so an oracle that answers `invalid` too readily reports a flawless grammar -- and `ast-check` runs AstGen as well as the parser, rejecting files that parse perfectly well (an unused local, a discard of something already void). Every one of those would excuse a real gap. Here the stricter tool is the dangerous one, which is the opposite of the intuition, and it is written down so the swap is not made later as an "improvement".
+
+The version pin is the one thing this oracle is missing, and it matters more for Zig than for any other language here: the parser is part of a pre-1.0 compiler and it has rejected constructs it used to accept. A sweep is not meaningful until the pin exists.'''
+
+[[known_gaps]]
+construct = 'destructuring assignment'
+note = '''
+`const x, const y = tuple;` and `a, b = f();`, added in Zig 0.12. Not in the grammar. The left side is a comma-separated list of var declarations and lvalues that only becomes distinguishable from a comma expression at the `=`, and every shape of it collides with the container-field and switch-item comma lists that are already the grammar's tightest spots. Left out on purpose for a first pass rather than bolted on before there is a sweep to measure the cost against.'''
+
+[[known_gaps]]
+construct = 'a labelled block as the operand of a container-level `comptime`'
+note = '''
+`comptime blk: { … }` at container level. `comptime` is also a container FIELD modifier, so `comptime x` is a field until proven otherwise, and a labelled block keeps the two indistinguishable until the token after the `:`. A label there can name nothing anyway -- nothing at container level can break to it -- which is why this is the shape that was given up.'''
+
+[[deviations]]
+what = '''
+`Foo{}.bar` and `Foo{}(x)` need parentheses: `(Foo{}).bar`. An initializer is not admitted as the operand of a `.`, a `[` or a `(`. With it admitted, an initializer becomes reachable from inside every type position through `a.b` and `f()`, and `*[3]u8{ 1, 2 }` turns into a choice between a pointer to an initialised array and an initialised pointer type -- at every `{` in the language. The narrowing is what makes `[_]u8{ 1, 2 }` and `fn f() void {` parse at all, and those are worth more than a form Zig code writes with parentheses anyway.'''
+
+[[deviations]]
+what = '''
+A container body accepts a member that Zig's own grammar orders more tightly: fields and declarations may interleave freely here, and a `fn` declaration is accepted inside a function body although Zig has no nested function declarations. Both are WIDENINGS -- they accept code Zig rejects -- so no corpus of real source can reveal them and the negative corpus is where they would be caught. Neither has a negative fixture yet; they are recorded here so that absence is deliberate rather than unnoticed.'''

@@ -1,0 +1,283 @@
+================================================================================
+the pointer family in type position
+================================================================================
+
+const p: [*c]u8 = undefined;
+const q: []const []const u8 = &.{};
+const r: [4:0]u8 = undefined;
+const s: ?*const anyopaque = null;
+var g: u32 align(16) = 0;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    type: (pointer_type
+      type: (identifier))
+    value: (undefined))
+  (variable_declaration
+    name: (identifier)
+    type: (slice_type
+      modifier: (pointer_qualifier)
+      type: (slice_type
+        modifier: (pointer_qualifier)
+        type: (identifier)))
+    value: (address_of_expression
+      operand: (anonymous_initializer_expression
+        value: (initializer_list))))
+  (variable_declaration
+    name: (identifier)
+    type: (array_type
+      size: (integer)
+      sentinel: (integer)
+      type: (identifier))
+    value: (undefined))
+  (variable_declaration
+    name: (identifier)
+    type: (optional_type
+      type: (pointer_type
+        modifier: (pointer_qualifier)
+        type: (identifier)))
+    value: (null))
+  (variable_declaration
+    name: (identifier)
+    type: (identifier)
+    modifier: (align_qualifier
+      (integer))
+    value: (integer)))
+
+================================================================================
+initializers, and why the element type does not eat the braces
+================================================================================
+
+const list = [_]u32{ 1, 2 };
+const anon = .{ .a = 1 };
+const empty = [_]u8{};
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (initializer_expression
+      type: (array_type
+        size: (identifier)
+        type: (identifier))
+      value: (initializer_list
+        (integer)
+        (integer))))
+  (variable_declaration
+    name: (identifier)
+    value: (anonymous_initializer_expression
+      value: (initializer_list
+        (field_initializer
+          name: (identifier)
+          value: (integer)))))
+  (variable_declaration
+    name: (identifier)
+    value: (initializer_expression
+      type: (array_type
+        size: (identifier)
+        type: (identifier))
+      value: (initializer_list))))
+
+================================================================================
+labelled block, labelled loop and the breaks that name them
+================================================================================
+
+pub fn f(buf: []u8) usize {
+    const n = blk: {
+        break :blk buf.len;
+    };
+    outer: while (true) {
+        for (buf) |c| {
+            if (c == 0) continue :outer;
+        }
+        break;
+    }
+    return n;
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (slice_type
+          type: (identifier))))
+    return_type: (identifier)
+    body: (block
+      (variable_declaration
+        name: (identifier)
+        value: (block
+          label: (block_label
+            (identifier))
+          (expression_statement
+            (break_expression
+              label: (loop_label
+                (identifier))
+              value: (field_expression
+                object: (identifier)
+                field: (identifier))))))
+      (expression_statement
+        (while_expression
+          label: (block_label
+            (identifier))
+          condition: (boolean)
+          body: (block
+            (expression_statement
+              (for_expression
+                subject: (identifier)
+                capture: (payload
+                  name: (identifier))
+                body: (block
+                  (expression_statement
+                    (if_expression
+                      condition: (binary_expression
+                        left: (identifier)
+                        right: (integer))
+                      consequence: (continue_expression
+                        label: (loop_label
+                          (identifier))))))))
+            (expression_statement
+              (break_expression)))))
+      (expression_statement
+        (return_expression
+          value: (identifier))))))
+
+================================================================================
+error handling: try, catch with a capture, orelse and errdefer
+================================================================================
+
+pub fn g(a: Allocator) !void {
+    errdefer |e| report(e);
+    const buf = try a.alloc(u8, 16);
+    const n = parse(buf) catch |err| switch (err) {
+        error.Invalid => return err,
+        else => unreachable,
+    };
+    const m = maybe() orelse 0;
+    _ = n + m;
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (identifier)))
+    return_type: (error_union_type
+      payload: (identifier))
+    body: (block
+      (errdefer_statement
+        capture: (payload
+          name: (identifier))
+        body: (expression_statement
+          (call_expression
+            function: (identifier)
+            arguments: (arguments
+              (identifier)))))
+      (variable_declaration
+        name: (identifier)
+        value: (try_expression
+          operand: (call_expression
+            function: (field_expression
+              object: (identifier)
+              field: (identifier))
+            arguments: (arguments
+              (identifier)
+              (integer)))))
+      (variable_declaration
+        name: (identifier)
+        value: (catch_expression
+          value: (call_expression
+            function: (identifier)
+            arguments: (arguments
+              (identifier)))
+          capture: (payload
+            name: (identifier))
+          fallback: (switch_expression
+            value: (identifier)
+            (switch_case
+              value: (error_value
+                name: (identifier))
+              body: (return_expression
+                value: (identifier)))
+            (switch_case
+              body: (unreachable_expression)))))
+      (variable_declaration
+        name: (identifier)
+        value: (orelse_expression
+          value: (call_expression
+            function: (identifier)
+            arguments: (arguments))
+          fallback: (integer)))
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (binary_expression
+            left: (identifier)
+            right: (identifier)))))))
+
+================================================================================
+switch with a range, an inline else and a multiline string
+================================================================================
+
+pub fn h(n: usize) usize {
+    const text =
+        \\one
+        \\two
+    ;
+    _ = text;
+    return switch (n) {
+        0 => 0,
+        1...4 => 1,
+        inline else => |v| v,
+    };
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (identifier)))
+    return_type: (identifier)
+    body: (block
+      (variable_declaration
+        name: (identifier)
+        value: (multiline_string))
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (identifier)))
+      (expression_statement
+        (return_expression
+          value: (switch_expression
+            value: (identifier)
+            (switch_case
+              value: (integer)
+              body: (integer))
+            (switch_case
+              value: (switch_range
+                start: (integer)
+                end: (integer))
+              body: (integer))
+            (switch_case
+              (inline_modifier)
+              capture: (payload
+                name: (identifier))
+              body: (identifier))))))))

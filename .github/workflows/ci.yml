@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        grammar: [python, rust, typescript, java]
+        grammar: [python, rust, typescript, java, zig]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -85,11 +85,11 @@ jobs:
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
       - name: shape (tree agrees with the reference parser)
-        # java has no span oracle yet: javac can report node boundaries
-        # through Trees.getSourcePositions(), but that oracle is not built,
-        # and `shape` says so and exits rather than comparing against
-        # nothing.
-        if: matrix.grammar != 'java'
+        # java and zig have no span oracle yet. javac can report node
+        # boundaries through Trees.getSourcePositions() and Zig can through
+        # std.zig.Ast, but neither oracle is built, and `shape` says so and
+        # exits rather than comparing against nothing.
+        if: matrix.grammar != 'java' && matrix.grammar != 'zig'
         run: ./target/debug/treebank shape
           --lang ${{ matrix.grammar }}
           --grammar crates/treebank-${{ matrix.grammar }}
@@ -115,9 +115,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # java is not in the wasm matrix yet: the pack build has not been
-        # exercised for it, and claiming a published artifact that has never
-        # been built is worse than shipping one language later.
+        # java, bash and zig are not in the wasm matrix yet: the pack build
+        # has not been exercised for them, and claiming a published artifact
+        # that has never been built is worse than shipping one language
+        # later. Zig has the best odds of the three — it ships no scanner.c,
+        # so there is nothing but parser.c to cross.
         grammar: [python, rust, typescript]
     steps:
       - uses: actions/checkout@v4

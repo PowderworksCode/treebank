@@ -1,0 +1,4 @@
+const S = struct {
+    a: u32
+    b: u32,
+};

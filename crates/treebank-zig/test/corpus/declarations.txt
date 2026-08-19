@@ -1,0 +1,242 @@
+================================================================================
+imports, constants and a struct with methods
+================================================================================
+
+const std = @import("std");
+
+pub const Point = struct {
+    x: i32,
+    y: i32 = 0,
+
+    pub fn init(x: i32) Point {
+        return Point{ .x = x };
+    }
+};
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (builtin_call
+      function: (builtin_identifier)
+      arguments: (arguments
+        (string))))
+  (variable_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier))
+        (container_field
+          name: (identifier)
+          type: (identifier)
+          value: (integer))
+        (function_declaration
+          modifier: (visibility_modifier)
+          name: (identifier)
+          parameters: (parameters
+            (parameter
+              name: (identifier)
+              type: (identifier)))
+          return_type: (identifier)
+          body: (block
+            (expression_statement
+              (return_expression
+                value: (initializer_expression
+                  type: (identifier)
+                  value: (initializer_list
+                    (field_initializer
+                      name: (identifier)
+                      value: (identifier))))))))))))
+
+================================================================================
+enum, tagged union and error set
+================================================================================
+
+const Color = enum { red, green };
+
+const Shape = union(enum) {
+    circle: f32,
+    none,
+};
+
+const Error = error{ OutOfMemory, Invalid };
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body
+        (container_field
+          name: (identifier))
+        (container_field
+          name: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      tag: (inferred_enum_tag)
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier))
+        (container_field
+          name: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (error_set_declaration
+      name: (identifier)
+      name: (identifier))))
+
+================================================================================
+extern and export functions, and a function type
+================================================================================
+
+extern "c" fn printf(fmt: [*:0]const u8, ...) c_int;
+
+export fn add(a: i32, b: i32) callconv(.C) i32 {
+    return a + b;
+}
+
+const Fn = fn (a: u32) void;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (linkage_modifier
+      (string))
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (pointer_type
+          sentinel: (integer)
+          modifier: (pointer_qualifier)
+          type: (identifier)))
+      (variadic_parameter))
+    return_type: (identifier))
+  (function_declaration
+    modifier: (linkage_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (identifier))
+      (parameter
+        name: (identifier)
+        type: (identifier)))
+    modifier: (calling_convention
+      (enum_literal
+        name: (identifier)))
+    return_type: (identifier)
+    body: (block
+      (expression_statement
+        (return_expression
+          value: (binary_expression
+            left: (identifier)
+            right: (identifier))))))
+  (variable_declaration
+    name: (identifier)
+    value: (function_type
+      parameters: (parameters
+        (parameter
+          name: (identifier)
+          type: (identifier)))
+      return_type: (identifier))))
+
+================================================================================
+a test declaration, a container comptime block and usingnamespace
+================================================================================
+
+pub usingnamespace @import("bits.zig");
+
+comptime {
+    _ = Point;
+}
+
+test "adds" {
+    try expect(add(1, 2) == 3);
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (usingnamespace_declaration
+    modifier: (visibility_modifier)
+    namespace: (builtin_call
+      function: (builtin_identifier)
+      arguments: (arguments
+        (string))))
+  (comptime_expression
+    operand: (block
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (identifier)))))
+  (test_declaration
+    name: (string)
+    body: (block
+      (expression_statement
+        (try_expression
+          operand: (call_expression
+            function: (identifier)
+            arguments: (arguments
+              (binary_expression
+                left: (call_expression
+                  function: (identifier)
+                  arguments: (arguments
+                    (integer)
+                    (integer)))
+                right: (integer)))))))))
+
+================================================================================
+three kinds of comment, and the four-slash line that is not a doc comment
+================================================================================
+
+//! a module doc
+//// four slashes is an ordinary comment
+/// a doc comment
+const A = 1;
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (container_doc_comment)
+  (line_comment)
+  (doc_comment)
+  (variable_declaration
+    name: (identifier)
+    value: (integer)))
+
+================================================================================
+a .zon file: one anonymous initializer and nothing else
+================================================================================
+
+.{
+    .name = "example",
+    .dependencies = .{},
+    .paths = .{"build.zig"},
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  value: (anonymous_initializer_expression
+    value: (initializer_list
+      (field_initializer
+        name: (identifier)
+        value: (string))
+      (field_initializer
+        name: (identifier)
+        value: (anonymous_initializer_expression
+          value: (initializer_list)))
+      (field_initializer
+        name: (identifier)
+        value: (anonymous_initializer_expression
+          value: (initializer_list
+            (string)))))))

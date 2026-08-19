@@ -1,0 +1,22 @@
+{
+  "grammars": [
+    {
+      "name": "zig",
+      "camelcase": "Zig",
+      "scope": "source.zig",
+      "file-types": [
+        "zig",
+        "zon"
+      ],
+      "injection-regex": "^zig$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Zig 0.11 through 0.15 in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

@@ -108,6 +108,12 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
         LangName::Rust => Some(&RS),
         LangName::Java => Some(&JAVA),
         LangName::Bash => Some(&BASH),
+        // Zig is the language the comment above was written for. `zig fmt`
+        // reports a verdict and a diagnostic, not a tree; the compiler can
+        // dump one (`std.zig.Ast` from a small program of our own, the way
+        // the java and bash oracles were built), and that is not built yet.
+        // Saying so beats a `shape` run that compares against nothing.
+        LangName::Zig => None,
     }
 }
 
