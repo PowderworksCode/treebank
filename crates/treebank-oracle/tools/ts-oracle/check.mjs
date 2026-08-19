@@ -34,18 +34,40 @@ function read(path) {
   }
 }
 
-const input = fs.readFileSync(0, "utf8");
-for (const line of input.split("\n")) {
-  const path = line.trim();
-  if (!path) continue;
+// A batch ends at EOF or at the sentinel; see py-oracle/check.py for why.
+// Read line by line rather than to EOF, because a persistent oracle must
+// answer a batch while its caller still holds the pipe open.
+const SENTINEL = "\u0000--end--";
+
+function verdict(path) {
   // An unreadable file is NOT an invalid file -- see read() above.
   const src = read(path);
-  let ok = false;
   try {
     const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, false, scriptKind(path));
-    ok = (sf.parseDiagnostics ?? []).length === 0;
+    return (sf.parseDiagnostics ?? []).length === 0;
   } catch {
-    ok = false;
+    return false;
   }
-  process.stdout.write(`${path}\t${ok ? "valid" : "invalid"}\n`);
 }
+
+let pending = "";
+process.stdin.on("data", (chunk) => {
+  pending += chunk;
+  let nl;
+  while ((nl = pending.indexOf("\n")) >= 0) {
+    const path = pending.slice(0, nl).trim();
+    pending = pending.slice(nl + 1);
+    if (path === SENTINEL) {
+      process.stdout.write(SENTINEL + "\n");
+      continue;
+    }
+    if (!path) continue;
+    process.stdout.write(`${path}\t${verdict(path) ? "valid" : "invalid"}\n`);
+  }
+});
+process.stdin.on("end", () => {
+  const path = pending.trim();
+  if (path && path !== SENTINEL) {
+    process.stdout.write(`${path}\t${verdict(path) ? "valid" : "invalid"}\n`);
+  }
+});

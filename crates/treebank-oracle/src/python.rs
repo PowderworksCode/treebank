@@ -26,7 +26,8 @@ impl Oracle for Python {
     /// hides the py2 half's gaps. If `python2` is not on PATH this errors
     /// loudly rather than degrading.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        let mut verdicts = stdin_oracle::run(
+        let mut verdicts = stdin_oracle::persistent(
+            "py3",
             "python3",
             &[crate::tool("py-oracle/check.py").to_string_lossy().as_ref()],
             "python3 tools/py-oracle/check.py — is python3 installed?",
@@ -43,7 +44,8 @@ impl Oracle for Python {
             return Ok(verdicts);
         }
 
-        let py2 = stdin_oracle::run(
+        let py2 = stdin_oracle::persistent(
+            "py2",
             "python2",
             &[crate::tool("py-oracle/check2.py").to_string_lossy().as_ref()],
             "python2 tools/py-oracle/check2.py — python2 (2.7) is REQUIRED \
@@ -69,7 +71,8 @@ impl Oracle for Python {
         srcroot: &Path,
         paths: &[String],
     ) -> Result<Option<HashMap<String, bool>>> {
-        Ok(Some(stdin_oracle::run(
+        Ok(Some(stdin_oracle::persistent(
+            "py3-syntax",
             "python3",
             &[crate::tool("py-oracle/syntax.py").to_string_lossy().as_ref()],
             "python3 tools/py-oracle/syntax.py — is python3 installed?",
@@ -82,7 +85,8 @@ impl Oracle for Python {
     /// of py3 and py2.7; this is the py3 half, and the difference between
     /// the two is exactly the set of py2-only files.
     fn validate_current(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        stdin_oracle::run(
+        stdin_oracle::persistent(
+            "py3",
             "python3",
             &[crate::tool("py-oracle/check.py").to_string_lossy().as_ref()],
             "python3 tools/py-oracle/check.py — is python3 installed?",

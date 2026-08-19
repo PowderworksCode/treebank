@@ -226,3 +226,26 @@ impl Drop for Persistent {
         let _ = self.child.wait();
     }
 }
+
+/// A named, lazily-started persistent oracle.
+///
+/// Every subprocess oracle here has the same shape and the same problem:
+/// startup dominates when the caller asks small questions. This keeps one
+/// process per (program, args) for the life of the run.
+pub fn persistent(
+    key: &'static str,
+    program: &str,
+    args: &[&str],
+    hint: &str,
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<HashMap<String, bool>> {
+    use std::sync::{Mutex, OnceLock};
+    static POOL: OnceLock<Mutex<HashMap<&'static str, Persistent>>> = OnceLock::new();
+    let pool = POOL.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut pool = pool.lock().map_err(|_| anyhow::anyhow!("oracle pool poisoned"))?;
+    if !pool.contains_key(key) {
+        pool.insert(key, Persistent::spawn(program, args, hint)?);
+    }
+    pool.get_mut(key).expect("just inserted").ask(srcroot, paths)
+}

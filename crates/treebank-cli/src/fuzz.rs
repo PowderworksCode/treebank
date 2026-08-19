@@ -63,7 +63,24 @@
 //! clothes. Declaring `print ` is a claim about py2 print statements;
 //! declaring nothing at all would have been better than declaring `p`.
 //!
-//! **Where the corpus cannot see.** The sweep is only as good as the code
+//! **Where the corpus cannot see** — behind `--rare`, and off by default,
+//! because it was measured across four languages and helps exactly one.
+//! Java gains 17.9% more distinct findings (25 paired wins of 30 seeds,
+//! sign test p=0.00016); rust LOSES 21.1% and typescript 18.7%, each
+//! losing all 8 of 8 paired seeds; python has nothing to steer toward at
+//! all, because 297,612 files exercise all 104 of its node kinds.
+//!
+//! The difference is what the rare set IS. Java's is a coherent
+//! under-modelled region -- `guard`, `unnamed_pattern` and `record_pattern`
+//! are the whole of java 21 pattern matching, absent from a quarter of a
+//! million files. Rust's is `yield_expression`, an unstable feature `syn`
+//! rejects anyway, and `shebang`, which is one line. TypeScript's is seven
+//! unrelated corners at already-98.8% coverage. Steering concentrates the
+//! budget, and concentration only pays when the region is both untested
+//! and large enough to hold bugs; otherwise it costs the diversity that
+//! finds them.
+//!
+//! **The original reasoning.** The sweep is only as good as the code
 //! it reads: a construct no corpus file contains is one the oracle has
 //! never been asked about, so a bug there is invisible to every check that
 //! starts from real source. `treebank kinds` measures exactly that, and if
@@ -1007,6 +1024,7 @@ pub fn run(
     iterations: usize,
     seed: u64,
     unguided: bool,
+    rare: bool,
     out_path: &Path,
 ) -> Result<()> {
     let mut g = Grammar::load(&grammar_dir.join("src/grammar.json"))?;
@@ -1014,7 +1032,9 @@ pub fn run(
 
     // `treebank kinds` writes this. Absent, the steering is simply off.
     let kinds_path = PathBuf::from(format!("corpus/{lang}/reports/kinds.json"));
-    let rare_kinds: std::collections::HashSet<String> =
+    let rare_kinds: std::collections::HashSet<String> = if !rare {
+        Default::default()
+    } else {
         match std::fs::read_to_string(&kinds_path) {
             Ok(text) => {
                 let v: serde_json::Value = serde_json::from_str(&text)?;
@@ -1029,7 +1049,8 @@ pub fn run(
                     .collect()
             }
             Err(_) => Default::default(),
-        };
+        }
+    };
     if !rare_kinds.is_empty() {
         g.mark_rare(&rare_kinds);
         println!(
@@ -1081,7 +1102,7 @@ pub fn run(
             // Keep exploring: seeking alone would walk the same frontier.
             rng.tape(64)
         } else if i % 3 == 1 || corpus.is_empty() {
-            seek_tape(&g, lang, &seen, i % 6 == 1, &mut rng)
+            seek_tape(&g, lang, &seen, rare && i % 6 == 1, &mut rng)
         } else {
             let pick = (rng.next() as usize) % corpus.len();
             mutate_tape(&corpus[pick], &mut rng)

@@ -82,10 +82,27 @@ def parses(path: str) -> bool:
         return False
 
 
+# A batch ends at EOF (the sweep, one launch over hundreds of thousands of
+# files) or at this line (fuzz, which asks about one program at a time and
+# again at every shrink step). Interpreter startup is ~30ms and a parse is
+# well under 1ms, so a fuzz run that launches per question spends its life
+# starting python.
+SENTINEL = "\x00--end--"
+
+
 def main() -> None:
     out = sys.stdout
-    for line in sys.stdin:
+    # `iter(readline, '')` rather than `for line in sys.stdin`: the file
+    # iterator reads ahead by a block, so a persistent oracle blocks until
+    # its caller sends enough data or closes the pipe -- which is exactly
+    # what a sentinel protocol must not require. python2's read-ahead is
+    # the larger, but neither is safe here.
+    for line in iter(sys.stdin.readline, ''):
         path = line.strip()
+        if path == SENTINEL:
+            out.write(SENTINEL + "\n")
+            out.flush()
+            continue
         if not path:
             continue
         out.write(f"{path}\t{'valid' if parses(path) else 'invalid'}\n")

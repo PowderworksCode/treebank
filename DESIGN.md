@@ -817,6 +817,34 @@ guidance adds are ones where the grammar happens to be right. The coverage
 number and the uncovered list are worth having; the guidance is worth about
 a thousand iterations of budget, and no more than that on this evidence.
 
+**Steering at what the corpus never shows** (`treebank kinds`, then
+`fuzz --rare`) is off by default, because it was measured across four
+languages and helps exactly one.
+
+A construct no corpus file contains is one no oracle has ever been asked
+about, so a bug there survives the sweep, `mutate`, `roundtrip` and
+`reformat` alike — every check that starts from real source. That argument
+is sound, and it is not enough:
+
+| | rare kinds | findings | paired |
+|---|---|---|---|
+| java | 2 never, 2 thin | **+17.9%** | 25 wins of 30 |
+| rust | 2 never, 2 thin | −21.1% | 0 wins of 8 |
+| typescript | 7 never, 11 thin | −18.7% | 0 wins of 8 |
+| python | **none** | — | 297,612 files exercise all 104 kinds |
+
+What decides it is what the rare set *is*. Java's is a coherent
+under-modelled region: `guard`, `unnamed_pattern` and `record_pattern` are
+the whole of java 21 pattern matching, absent from a quarter of a million
+files. Rust's is `yield_expression`, an unstable feature `syn` rejects
+anyway, and `shebang`, which is one line. TypeScript's is seven unrelated
+corners at already-98.8% coverage.
+
+Steering concentrates the budget, and concentration pays only when the
+region is both untested and large enough to hold bugs. Otherwise it costs
+the diversity that finds them. Python's row is the cleanest evidence that
+the corpus can simply be complete: there is nothing to steer toward.
+
 **Declared widenings.** Some over-acceptance is deliberate: python's grammar
 is 2.7 ∪ 3.x by design, so `print x` is a widening against py3's parser and
 is meant to be one. Left undeclared, that single decision dominates every
