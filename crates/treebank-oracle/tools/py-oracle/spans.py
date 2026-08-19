@@ -53,6 +53,158 @@ def edge_span(node, starts, size):
     return start, end
 
 
+# Four `ast` classes carry no position at all: `comprehension`, `withitem`,
+# `match_case` and `arguments`. That is not an oversight in CPython -- they
+# are joint nodes whose extent is implied by their children rather than
+# recorded. We build a node for three of them, so a boundary check that
+# skips them is blind to exactly the joins.
+#
+# The extent can be recovered as the HULL of the positioned children, but
+# only the first of these is honest on its own:
+#
+#   withitem      `a as b`         -- the `with` belongs to the STATEMENT,
+#                                     so the hull is already exact
+#   match_case    `case P: body`   -- hull starts at the pattern, one `case`
+#                                     keyword short
+#   comprehension `for x in y`     -- hull starts at the target, one `for`
+#                                     (or `async for`) short
+#
+# `arguments` is not recoverable: `def f():` has an empty one with no
+# children to take a hull of, and our `parameters` includes the parens the
+# hull can never see. It stays skipped.
+# Per kind: the leading keyword the hull cannot see, and which fields to
+# take the hull OVER. `comprehension` needs the second: CPython hangs the
+# conditions off the same node (`ifs`), while we build a separate
+# `if_clause` beside the `for_in_clause`. Including them would compare our
+# node against a span that is deliberately a different node, so the hull is
+# taken over the clause HEAD -- which is exactly what our node is.
+HULL_KINDS = {
+    "withitem": ((), None),
+    "match_case": ((b"case",), None),
+    "comprehension": ((b"for",), ("target", "iter")),
+}
+
+
+def extend_left(data, start, words):
+    """Move `start` back over whitespace to swallow a leading keyword.
+
+    Returns None rather than guessing: a hull we cannot complete is not a
+    boundary claim we are entitled to make.
+    """
+    i = start
+    while i > 0 and data[i - 1 : i] in (b" ", b"\t", b"\n", b"\r", b"\\"):
+        i -= 1
+    for w in words:
+        if not data[:i].endswith(w):
+            continue
+        j = i - len(w)
+        # A word boundary, or `for` matches the tail of `endfor`.
+        if j > 0:
+            prev = data[j - 1 : j]
+            if prev.isalnum() or prev == b"_":
+                return None
+        # `async for` -- the comprehension owns the `async` too.
+        k = j
+        while k > 0 and data[k - 1 : k] in (b" ", b"\t", b"\n", b"\r", b"\\"):
+            k -= 1
+        if data[:k].endswith(b"async"):
+            a = k - 5
+            if a == 0 or not (data[a - 1 : a].isalnum() or data[a - 1 : a] == b"_"):
+                return a
+        return j
+    return None
+
+
+def bracket_pairs(data, starts, text_lines):
+    """`{open_offset: close_offset}` and its inverse, from the TOKEN stream.
+
+    A hull cannot see enclosing brackets, because CPython records no
+    position for them -- `with (yield from pool) as conn` gives a
+    `context_expr` spanning `yield from pool`, so the hull stops one byte
+    inside the paren on each side and the boundary never matches ours.
+
+    Balancing fixes it, but only if the brackets are real: a `)` inside a
+    string literal is not one. The tokenizer already tells us which is
+    which, so take the pairs from there rather than scanning bytes.
+    """
+    def at(row, col):
+        line = text_lines[row] if row < len(text_lines) else ""
+        return starts[row] + len(line[:col].encode("utf-8"))
+
+    opens, closes, stack = {}, {}, []
+    try:
+        for t in tokenize.tokenize(io.BytesIO(data).readline):
+            if t.type != tokenize.OP or t.string not in "()[]{}":
+                continue
+            if t.start[0] >= len(starts):
+                continue
+            off = at(t.start[0], t.start[1])
+            if t.string in "([{":
+                stack.append((t.string, off))
+            elif stack and stack[-1][0] == "([{"[")]}".index(t.string)]:
+                _, o = stack.pop()
+                opens[o] = off
+                closes[off] = o
+    except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
+        return {}, {}
+    return opens, closes
+
+
+def balance(data, lo, hi, opens, closes):
+    """Widen a hull over brackets that open before it or close after it."""
+    for _ in range(64):
+        depth, unmatched_close, unmatched_open = 0, None, None
+        i = lo
+        while i < hi:
+            if i in opens:
+                if opens[i] >= hi:
+                    unmatched_open = i
+                    break
+                i = opens[i]
+                continue
+            if i in closes and closes[i] < lo:
+                unmatched_close = i
+                break
+            i += 1
+        if unmatched_close is not None:
+            lo = closes[unmatched_close]
+        elif unmatched_open is not None:
+            hi = opens[unmatched_open] + 1
+        else:
+            return lo, hi
+    return lo, hi
+
+
+def hull_span(node, data, starts, size, opens, closes):
+    """Span of a positionless joint node, from its positioned children."""
+    spec = HULL_KINDS.get(type(node).__name__)
+    if spec is None:
+        return None
+    words, fields = spec
+    if fields is None:
+        roots = [node]
+    else:
+        roots = [getattr(node, f, None) for f in fields]
+    lo, hi = size + 1, -1
+    for root in roots:
+        if not isinstance(root, ast.AST):
+            continue
+        for child in ast.walk(root):
+            span = edge_span(child, starts, size)
+            if span is None:
+                continue
+            lo, hi = min(lo, span[0]), max(hi, span[1])
+    if hi < 0:
+        return None
+    lo, hi = balance(data, lo, hi, opens, closes)
+    if words:
+        lo2 = extend_left(data, lo, words)
+        if lo2 is None:
+            return None
+        lo = lo2
+    return (lo, hi) if 0 <= lo < hi <= size else None
+
+
 def edges_of(tree, starts, size):
     """Labelled parent -> child edges: [pstart, pend, pkind, field, cstart, cend].
 
@@ -115,14 +267,18 @@ def tokens_of(data, starts, size, text_lines):
     return out
 
 
-def spans_of(tree, starts, size):
+def spans_of(tree, starts, size, data, opens, closes):
     out = []
     for node in ast.walk(tree):
         lineno = getattr(node, "lineno", None)
         end_lineno = getattr(node, "end_lineno", None)
         if lineno is None or end_lineno is None:
             # Contexts (Load/Store), operators and a few others carry no
-            # position. They have no boundary to compare.
+            # position. They have no boundary to compare -- except the
+            # joint nodes, whose extent their children imply.
+            hull = hull_span(node, data, starts, size, opens, closes)
+            if hull is not None:
+                out.append([hull[0], hull[1], type(node).__name__])
             continue
         if lineno >= len(starts) or end_lineno >= len(starts):
             continue
@@ -190,7 +346,9 @@ def main():
         else:
             try:
                 starts = line_starts(data)
-                record["spans"] = spans_of(tree, starts, len(data))
+                text_lines0 = [""] + data.decode("utf-8", "replace").split("\n")
+                opens, closes = bracket_pairs(data, starts, text_lines0)
+                record["spans"] = spans_of(tree, starts, len(data), data, opens, closes)
                 record["edges"] = edges_of(tree, starts, len(data))
                 # Split on "\n" ONLY, and 1-index to match `starts`.
                 # `splitlines()` also breaks on \r\n, \x0c and \u2028, while

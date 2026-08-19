@@ -2,93 +2,29 @@
   "rule": "What each CPython `ast` node kind is expected to be in our tree. A boundary comparison asks whether we have a node at these bytes; this asks whether it is the RIGHT node, which is the half a boundary check cannot see -- `foo();` parsed as a bodyless function declaration occupies exactly the bytes of the call it should be.",
   "semantics": "Several of our nodes can cover one span (a chain like `expression_statement > call_expression > identifier`), so an oracle node passes when ANY of our kinds at its span is listed. That is why only the CORE kind needs an entry and wrappers do not: `Call` lists `call_expression`, and the `expression_statement` around it comes along free. It also means the mapping is not required to be one-to-one -- what it is required to be is TOTAL and DECLARED. Every oracle kind the corpus produces has an entry, and anything not listed is reported rather than assumed.",
   "map": {
+    "AnnAssign": [
+      "assignment"
+    ],
     "Assert": [
       "assert_statement"
     ],
     "Assign": [
       "assignment"
     ],
-    "AnnAssign": [
-      "assignment"
-    ],
-    "AugAssign": [
-      "augmented_assignment"
-    ],
-    "Break": [
-      "break_statement"
-    ],
-    "Continue": [
-      "continue_statement"
-    ],
-    "Delete": [
-      "delete_statement"
-    ],
-    "Global": [
-      "global_statement"
-    ],
-    "Nonlocal": [
-      "nonlocal_statement"
-    ],
-    "Pass": [
-      "pass_statement"
-    ],
-    "Raise": [
-      "raise_statement"
-    ],
-    "Return": [
-      "return_statement"
-    ],
-    "Import": [
-      "import_statement"
-    ],
-    "ImportFrom": [
-      "import_from_statement"
-    ],
-    "While": [
-      "while_statement"
-    ],
-    "With": [
-      "with_statement"
-    ],
-    "AsyncWith": [
-      "with_statement"
-    ],
-    "For": [
-      "for_statement"
-    ],
     "AsyncFor": [
       "for_statement"
-    ],
-    "Try": [
-      "try_statement"
-    ],
-    "TryStar": [
-      "try_statement"
-    ],
-    "ExceptHandler": [
-      "except_clause"
-    ],
-    "ClassDef": [
-      "class_definition"
-    ],
-    "FunctionDef": [
-      "function_definition"
     ],
     "AsyncFunctionDef": [
       "function_definition"
     ],
-    "TypeAlias": [
-      "type_alias_statement"
-    ],
-    "If": [
-      "if_statement",
-      "elif_clause"
-    ],
-    "Expr": [
-      "expression_statement"
+    "AsyncWith": [
+      "with_statement"
     ],
     "Attribute": [
       "member_expression"
+    ],
+    "AugAssign": [
+      "augmented_assignment"
     ],
     "Await": [
       "await_expression"
@@ -99,70 +35,17 @@
     "BoolOp": [
       "binary_expression"
     ],
+    "Break": [
+      "break_statement"
+    ],
     "Call": [
       "call_expression"
     ],
+    "ClassDef": [
+      "class_definition"
+    ],
     "Compare": [
       "comparison_expression"
-    ],
-    "IfExp": [
-      "conditional_expression"
-    ],
-    "Lambda": [
-      "lambda"
-    ],
-    "NamedExpr": [
-      "named_expression"
-    ],
-    "Subscript": [
-      "subscript_expression"
-    ],
-    "UnaryOp": [
-      "unary_expression"
-    ],
-    "Slice": [
-      "slice"
-    ],
-    "Dict": [
-      "dictionary"
-    ],
-    "Set": [
-      "set"
-    ],
-    "List": [
-      "list",
-      "list_pattern"
-    ],
-    "ListComp": [
-      "list_comprehension"
-    ],
-    "SetComp": [
-      "set_comprehension"
-    ],
-    "DictComp": [
-      "dictionary_comprehension"
-    ],
-    "GeneratorExp": [
-      "generator_expression",
-      "arguments"
-    ],
-    "Yield": [
-      "yield_expression"
-    ],
-    "YieldFrom": [
-      "yield_expression"
-    ],
-    "Starred": [
-      "starred_expression",
-      "star_pattern"
-    ],
-    "FormattedValue": [
-      "interpolation"
-    ],
-    "JoinedStr": [
-      "string",
-      "concatenated_string",
-      "format_specifier"
     ],
     "Constant": [
       "string",
@@ -176,32 +59,67 @@
       "false",
       "ellipsis"
     ],
-    "Tuple": [
-      "tuple",
-      "pattern_list",
-      "tuple_pattern"
+    "Continue": [
+      "continue_statement"
     ],
-    "Name": [
-      "identifier",
-      "type",
-      "print",
-      "exec",
-      "match",
-      "case"
+    "Delete": [
+      "delete_statement"
     ],
-    "arg": [
-      "parameter",
-      "identifier"
+    "Dict": [
+      "dictionary"
     ],
-    "keyword": [
-      "keyword_argument",
-      "splat_argument"
+    "DictComp": [
+      "dictionary_comprehension"
     ],
-    "alias": [
-      "dotted_name",
-      "identifier",
-      "aliased_import",
-      "wildcard_import"
+    "ExceptHandler": [
+      "except_clause"
+    ],
+    "Expr": [
+      "expression_statement"
+    ],
+    "For": [
+      "for_statement"
+    ],
+    "FormattedValue": [
+      "interpolation"
+    ],
+    "FunctionDef": [
+      "function_definition"
+    ],
+    "GeneratorExp": [
+      "generator_expression",
+      "arguments"
+    ],
+    "Global": [
+      "global_statement"
+    ],
+    "If": [
+      "if_statement",
+      "elif_clause"
+    ],
+    "IfExp": [
+      "conditional_expression"
+    ],
+    "Import": [
+      "import_statement"
+    ],
+    "ImportFrom": [
+      "import_from_statement"
+    ],
+    "JoinedStr": [
+      "string",
+      "concatenated_string",
+      "format_specifier"
+    ],
+    "Lambda": [
+      "lambda"
+    ],
+    "List": [
+      "list",
+      "list_pattern"
+    ],
+    "ListComp": [
+      "list_comprehension"
     ],
     "Match": [
       "match_statement"
@@ -219,9 +137,6 @@
     "MatchOr": [
       "or_pattern"
     ],
-    "MatchStar": [
-      "star_pattern"
-    ],
     "MatchSequence": [
       "list_pattern",
       "tuple_pattern"
@@ -230,6 +145,9 @@
       "none",
       "true",
       "false"
+    ],
+    "MatchStar": [
+      "star_pattern"
     ],
     "MatchValue": [
       "integer",
@@ -240,6 +158,62 @@
       "unary_expression",
       "binary_expression"
     ],
+    "Name": [
+      "identifier",
+      "type",
+      "print",
+      "exec",
+      "match",
+      "case"
+    ],
+    "NamedExpr": [
+      "named_expression"
+    ],
+    "Nonlocal": [
+      "nonlocal_statement"
+    ],
+    "ParamSpec": [
+      "type_parameter"
+    ],
+    "Pass": [
+      "pass_statement"
+    ],
+    "Raise": [
+      "raise_statement"
+    ],
+    "Return": [
+      "return_statement"
+    ],
+    "Set": [
+      "set"
+    ],
+    "SetComp": [
+      "set_comprehension"
+    ],
+    "Slice": [
+      "slice"
+    ],
+    "Starred": [
+      "starred_expression",
+      "star_pattern"
+    ],
+    "Subscript": [
+      "subscript_expression"
+    ],
+    "Try": [
+      "try_statement"
+    ],
+    "TryStar": [
+      "try_statement"
+    ],
+    "Tuple": [
+      "tuple",
+      "pattern_list",
+      "tuple_pattern"
+    ],
+    "TypeAlias": [
+      "type_alias_statement"
+    ],
     "TypeVar": [
       "type_parameter",
       "identifier"
@@ -247,8 +221,43 @@
     "TypeVarTuple": [
       "type_parameter"
     ],
-    "ParamSpec": [
-      "type_parameter"
+    "UnaryOp": [
+      "unary_expression"
+    ],
+    "While": [
+      "while_statement"
+    ],
+    "With": [
+      "with_statement"
+    ],
+    "Yield": [
+      "yield_expression"
+    ],
+    "YieldFrom": [
+      "yield_expression"
+    ],
+    "alias": [
+      "dotted_name",
+      "identifier",
+      "aliased_import",
+      "wildcard_import"
+    ],
+    "arg": [
+      "parameter",
+      "identifier"
+    ],
+    "comprehension": [
+      "for_in_clause"
+    ],
+    "keyword": [
+      "keyword_argument",
+      "splat_argument"
+    ],
+    "match_case": [
+      "case_clause"
+    ],
+    "withitem": [
+      "with_item"
     ]
   }
 }
