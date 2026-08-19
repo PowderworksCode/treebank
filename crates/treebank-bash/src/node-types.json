@@ -480,6 +480,10 @@
         {
           "type": "case_item",
           "named": true
+        },
+        {
+          "type": "redirect",
+          "named": true
         }
       ]
     }
@@ -789,6 +793,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -913,6 +927,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1322,6 +1346,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1416,6 +1450,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {

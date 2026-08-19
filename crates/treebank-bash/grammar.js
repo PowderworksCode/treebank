@@ -155,7 +155,7 @@ module.exports = grammar({
 
     _branch: $ => choice($.if_statement, $.case_statement),
 
-    if_statement: $ => seq(
+    if_statement: $ => prec.left(seq(
       'if',
       field('condition', $._statements),
       'then',
@@ -163,12 +163,13 @@ module.exports = grammar({
       repeat(field('alternative', $.elif_clause)),
       optional(field('alternative', $.else_clause)),
       'fi',
-    ),
+      repeat($.redirect),
+    )),
 
     elif_clause: $ => seq('elif', $._statements, 'then', optional($._statements)),
     else_clause: $ => seq('else', optional($._statements)),
 
-    case_statement: $ => seq(
+    case_statement: $ => prec.left(seq(
       'case',
       field('value', $._word_like),
       repeat('\n'),
@@ -182,7 +183,8 @@ module.exports = grammar({
       // still needed, so a case wanted two of them and no real file had one.
       optional(alias($._case_item_last, $.case_item)),
       'esac',
-    ),
+      repeat($.redirect),
+    )),
 
     _case_item_last: $ => seq(
       optional('('),
@@ -213,13 +215,14 @@ module.exports = grammar({
 
     _loop: $ => choice($.for_statement, $.c_style_for_statement, $.while_statement, $.until_statement),
 
-    for_statement: $ => seq(
+    for_statement: $ => prec.left(seq(
       choice('for', 'select'),
       field('variable', alias($.word, $.variable_name)),
       optional(seq('in', field('value', repeat1($._word_like)))),
       $._terminator,
       field('body', $._body),
-    ),
+      repeat($.redirect),
+    )),
 
     c_style_for_statement: $ => seq(
       'for',
@@ -234,8 +237,8 @@ module.exports = grammar({
       field('body', choice($._body, $._statement)),
     ),
 
-    while_statement: $ => seq('while', field('condition', $._statements), field('body', $.do_group)),
-    until_statement: $ => seq('until', field('condition', $._statements), field('body', $.do_group)),
+    while_statement: $ => prec.left(seq('while', field('condition', $._statements), field('body', $.do_group), repeat($.redirect))),
+    until_statement: $ => prec.left(seq('until', field('condition', $._statements), field('body', $.do_group), repeat($.redirect))),
 
     _jump: $ => choice($.return_statement, $.break_statement, $.continue_statement),
 
