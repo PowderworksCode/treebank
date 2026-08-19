@@ -208,9 +208,18 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   // arguments a space separated.
   if (valid[CONCAT] && !valid[HEREDOC_BODY]) {
     int32_t c = lexer->lookahead;
+    // `}` cannot join: the word class excludes it, so nothing BEFORE a
+    // closing brace continues past it -- and with `}` counted as joining,
+    // every `${x:-/tmp}` and `${y//a/b}` ended in a zero-width CONCAT
+    // demanding a word that could not exist: the 5,041-file
+    // `concatenation > MISSING word` cluster. `{` stays joining, because
+    // `a{b,c}d` really is one word and the brace_expression is its middle.
+    // Concatenation ACROSS a closing brace -- `${a}tail` -- is unaffected:
+    // that CONCAT decision happens after the `}` token, where the
+    // lookahead is the continuation itself.
     bool joins = c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != 0 &&
                  c != ';' && c != '&' && c != '|' && c != ')' && c != '(' &&
-                 c != '<' && c != '>';
+                 c != '<' && c != '>' && c != '}';
     if (joins) {
       lexer->result_symbol = CONCAT;
       lexer->mark_end(lexer);
