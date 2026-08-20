@@ -4974,18 +4974,6 @@
             "value": "instanceof"
           },
           {
-            "type": "CHOICE",
-            "members": [
-              {
-                "type": "STRING",
-                "value": "final"
-              },
-              {
-                "type": "BLANK"
-              }
-            ]
-          },
-          {
             "type": "FIELD",
             "name": "right",
             "content": {
@@ -5789,20 +5777,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "REPEAT",
-          "content": {
-            "type": "CHOICE",
-            "members": [
-              {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "ALIAS",
+              "content": {
                 "type": "SYMBOL",
-                "name": "_attribute"
+                "name": "_local_modifiers"
               },
-              {
-                "type": "SYMBOL",
-                "name": "final_modifier"
-              }
-            ]
-          }
+              "named": true,
+              "value": "modifiers"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
         },
         {
           "type": "FIELD",
@@ -6440,6 +6429,10 @@
     [
       "lambda",
       "_name"
+    ],
+    [
+      "annotated_type",
+      "catch_parameter"
     ],
     [
       "annotated_type",

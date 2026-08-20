@@ -83,6 +83,7 @@ module.exports = grammar({
     [$.field_declaration, $._type],
     [$.modifiers, $.annotated_type],
     [$.lambda, $._name],
+    [$.annotated_type, $.catch_parameter],
     [$.annotated_type, $.type_pattern],
     [$.module_declaration, $.package_declaration, $.modifiers],
     [$.module_declaration, $.modifiers],
@@ -855,7 +856,10 @@ module.exports = grammar({
     instanceof_expression: $ => prec(PREC.relational, seq(
       field('left', $._no_lambda),
       'instanceof',
-      optional('final'),
+      // No bare `optional('final')` here: the modifier belongs to the
+      // PATTERN (javac's BINDING_PATTERN spans `final Ctx c`), and eating
+      // it at this level left our type_pattern starting after it -- a
+      // boundary javac has and we could not.
       field('right', choice($._type, $._pattern)),
     )),
 
@@ -975,7 +979,7 @@ module.exports = grammar({
     _pattern: $ => choice($.type_pattern, $.record_pattern),
 
     type_pattern: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       field('name', $.identifier),
     ),
