@@ -26,6 +26,9 @@ pub enum LangName {
     #[serde(rename = "bash")]
     #[value(name = "bash")]
     Bash,
+    #[serde(rename = "zig")]
+    #[value(name = "zig")]
+    Zig,
 }
 
 impl LangName {
@@ -37,6 +40,7 @@ impl LangName {
             LangName::Javascript => "javascript",
             LangName::Java => "java",
             LangName::Bash => "bash",
+            LangName::Zig => "zig",
         }
     }
 }

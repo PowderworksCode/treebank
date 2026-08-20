@@ -1239,6 +1239,7 @@ fn extensions(lang: LangName) -> &'static [&'static str] {
         }
         LangName::Java => &["java"],
         LangName::Bash => &["sh", "bash"],
+        LangName::Zig => &["zig"],
     }
 }
 

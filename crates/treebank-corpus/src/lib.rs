@@ -17,6 +17,7 @@ mod npm;
 mod python;
 mod rust;
 mod typescript;
+mod zig;
 
 use std::path::Path;
 
@@ -97,6 +98,7 @@ pub fn get(name: LangName) -> &'static dyn Ecosystem {
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
     static BASH: bash::Bash = bash::Bash;
+    static ZIG: zig::Zig = zig::Zig;
     match name {
         LangName::Python => &PYTHON,
         LangName::Rust => &RUST,
@@ -104,5 +106,6 @@ pub fn get(name: LangName) -> &'static dyn Ecosystem {
         LangName::Javascript => &JAVASCRIPT,
         LangName::Java => &JAVA,
         LangName::Bash => &BASH,
+        LangName::Zig => &ZIG,
     }
 }

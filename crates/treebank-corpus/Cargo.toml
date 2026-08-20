@@ -17,5 +17,13 @@ serde_json = "1"
 sha2 = "0.10"
 tar = "0.4"
 treebank-lang = { path = "../treebank-lang" }
-ureq = { version = "2", features = ["json"] }
+# `native-certs` and `proxy-from-env` are not optional extras here: without
+# them this crate is the only thing in the repository that cannot fetch from
+# behind a TLS-inspecting or proxied network. ureq's default agent trusts a
+# BAKED-IN root list and ignores HTTPS_PROXY, so on any machine where the
+# egress is re-terminated -- a corporate proxy, a CI sandbox -- every rank and
+# fetch dies with `invalid peer certificate: UnknownIssuer` while git, cargo
+# and curl on the same machine work. Reading the platform trust store and the
+# proxy environment is what every other tool here already does.
+ureq = { version = "2", features = ["json", "native-certs", "proxy-from-env"] }
 zip = { version = "2", default-features = false, features = ["deflate"] }

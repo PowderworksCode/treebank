@@ -1,0 +1,110 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {
+    "_modifier": "Zig orders its modifiers rather than pooling them: `pub` precedes a declaration, `export`/`extern` follow it, `threadlocal` sits between that and `var`, `comptime`/`noalias` belong to a parameter, and `const`/`volatile`/`allowzero` to a pointer. One alternation across all of them accepts `threadlocal pub extern const x` and every other permutation of a list the language fixes. Each member is a concrete node type occurring nowhere but a modifier slot, so facet membership selects exactly the nodes the supertype would have.",
+    "_parameter": "The C-variadic `...` is only ever the last parameter, which one alternation repeated by commas cannot say — it would accept `extern fn printf(fmt: [*:0]const u8, ..., n: c_int)`, and extern C declarations are precisely where that would go unnoticed. Both members are concrete node types occurring nowhere but a parameter list, so facet membership selects the same nodes."
+  },
+  "facets": {
+    "_binding": [
+      "container_field",
+      "function_declaration",
+      "parameter",
+      "payload",
+      "variable_declaration"
+    ],
+    "_callable": [
+      "function_declaration",
+      "function_type",
+      "test_declaration"
+    ],
+    "_clause": [
+      "else_clause",
+      "switch_case"
+    ],
+    "_comment": [
+      "container_doc_comment",
+      "doc_comment",
+      "line_comment"
+    ],
+    "_identifier": [
+      "builtin_identifier",
+      "identifier"
+    ],
+    "_modifier": [
+      "addrspace_qualifier",
+      "align_qualifier",
+      "asm_volatile",
+      "calling_convention",
+      "comptime_modifier",
+      "container_layout",
+      "inline_modifier",
+      "link_section",
+      "linkage_modifier",
+      "noalias_modifier",
+      "pointer_qualifier",
+      "threadlocal_modifier",
+      "visibility_modifier"
+    ],
+    "_parameter": [
+      "parameter",
+      "variadic_parameter"
+    ],
+    "_scope": [
+      "block",
+      "container_declaration",
+      "function_declaration",
+      "source_file",
+      "test_declaration"
+    ],
+    "_string": [
+      "multiline_string",
+      "string"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "arguments",
+      "reason": "the parenthesised list itself; its elements carry `_argument`"
+    },
+    {
+      "node": "parameters",
+      "reason": "the parenthesised list itself; its elements carry `_parameter`"
+    },
+    {
+      "node": "container_body",
+      "reason": "the braces around a container's members; its elements carry `_member`"
+    },
+    {
+      "node": "initializer_list",
+      "reason": "the braces of a `T{ … }`; the initializer_expression around it is the expression"
+    },
+    {
+      "node": "field_initializer",
+      "reason": "`.name = value` inside an initializer list — a position in a literal, not a declaration of the field"
+    },
+    {
+      "node": "block_label",
+      "reason": "the `blk:` a labelled block or loop carries, so a `break :blk` can name it"
+    },
+    {
+      "node": "loop_label",
+      "reason": "the `:blk` on a `break` or `continue`, naming which construct it leaves"
+    },
+    {
+      "node": "switch_range",
+      "reason": "`1...5` as a switch prong's value; a range of case values rather than an expression Zig can evaluate anywhere"
+    },
+    {
+      "node": "inferred_enum_tag",
+      "reason": "the `enum` in `union(enum)`: it names a tag type the compiler synthesises, so it declares nothing and is not a container declaration"
+    },
+    {
+      "node": "asm_operand",
+      "reason": "`[ret] \"={eax}\" (-> u32)` — a binding between a register constraint and an expression, in a sublanguage the vocabulary does not reach into"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "a backslash escape inside a double-quoted string"
+    }
+  ]
+}
