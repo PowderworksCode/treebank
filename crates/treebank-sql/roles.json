@@ -1,7 +1,7 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
-    "_modifier": "SQL partitions it. Every modifier here is bound to one construct — `DISTINCT` only after SELECT, `TEMPORARY` only after CREATE, `ASC` only in an ordering term, `NOT NULL` only in a column definition — so one alternation reachable from all of those positions accepts `SELECT TEMPORARY`, `CREATE DISTINCT TABLE` and `ORDER BY x PRIMARY KEY`. All seventeen members are concrete node types occurring nowhere else, so facet membership selects exactly the nodes the supertype would have."
+    "_modifier": "SQL partitions it. Every modifier here is bound to one construct — `DISTINCT` only after SELECT, `TEMPORARY` only after CREATE, `ASC` only in an ordering term, `NOT NULL` only in a column definition — so one alternation reachable from all of those positions accepts `SELECT TEMPORARY`, `CREATE DISTINCT TABLE` and `ORDER BY x PRIMARY KEY`. All eighteen members are concrete node types occurring nowhere else, so facet membership selects exactly the nodes the supertype would have."
   },
   "facets": {
     "_binding": [
@@ -18,6 +18,7 @@
     ],
     "_clause": [
       "add_clause",
+      "check_option_clause",
       "common_table_expression",
       "compound_select",
       "conflict_clause",
@@ -61,7 +62,8 @@
     "_identifier": [
       "identifier",
       "qualified_name",
-      "quoted_identifier"
+      "quoted_identifier",
+      "user_name"
     ],
     "_modifier": [
       "all_modifier",
@@ -80,6 +82,7 @@
       "recursive_modifier",
       "temporary_modifier",
       "unique_modifier",
+      "view_attribute",
       "virtual_modifier"
     ],
     "_scope": [

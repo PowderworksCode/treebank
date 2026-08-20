@@ -34,15 +34,17 @@ Two blind spots, declared rather than filtered. Files that are `.sql` but are re
 [corpus.sweep]
 files = 4854
 packages = 41
-passed = 1025
-failed = 3829
-gap_files = 48
-noise_files = 3781
-pass_rate = '21.1%'
+passed = 1124
+failed = 3730
+gap_files = 265
+noise_files = 3465
+pass_rate = '23.2%'
 note = '''
-1,025 of 4,854 files parse; of the 3,829 that do not, SQLite rejects 3,781 as well, so the sweep found 48 adjudicated gaps and could say nothing at all about the rest.
+1,124 of 4,854 files parse; of the 3,730 that do not, neither SQLite nor MySQL accepts 3,465, so the sweep found 265 adjudicated gaps.
 
-That distance between 19.6% and "122 gaps" is the ONE-DIALECT ORACLE, and it is the number to read this ledger for. The corpus is dominated by engines' and browsers' own test suites -- virtuoso 1,127 files (23%), postgresql 806 (17%), chromium 646 (13%), postgis 499 (10%), qt6-webengine 424 (9%) -- and those files are written in the dialect of the thing that ships them. Chromium's and qt's are PerfettoSQL, a trace-query language with SQL's syntax and its own module system. SQLite rejects all of it, so it books as corpus noise whether or not the grammar was right to reject it too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
+THE GAP COUNT IS THE NUMBER TO READ, and it moved for a reason that had nothing to do with the grammar. With SQLite alone it was 48. Adding MySQL as a second oracle took it to 364 in a single sweep -- 316 files that had been booked as corpus noise turned out to be valid SQL the grammar rejects, and nothing about the grammar changed to make that true. It had always been true and had been invisible. Closing the largest of the newly visible clusters brought it to 265.
+
+That is what a second oracle buys, and it is worth being precise about the direction: a missing oracle does not make a grammar look worse, it makes it look FINISHED. Every file only one dialect can vouch for is quietly filed as somebody else's problem. What remains as noise is dominated by engines' and browsers' own test suites -- virtuoso 1,127 files (23%), postgresql 806 (17%), chromium 646 (13%), postgis 499 (10%), qt6-webengine 424 (9%) -- and those files are written in the dialect of the thing that ships them. Chromium's and qt's are PerfettoSQL, a trace-query language with SQL's syntax and its own module system. SQLite rejects all of it, so it books as corpus noise whether or not the grammar was right to reject it too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
 
 The pass rate FELL from 22.2% to 19.6% when the corpus grew, and that was the corpus getting more honest rather than the grammar getting worse: the five packages the artifact cap used to skip are browsers and a database engine, so they brought 1,360 files of the least standard SQL in Debian with them. Gaps found rose from 36 to 122 on the same change, which is what a corpus is for; three rounds of grinding then took them to 57, and fixing the oracle bug below took them to 48 by moving 9 files it should never have certified into noise. The rate is 21.1%.
 
@@ -79,7 +81,7 @@ family = 'sqlite'
 tool = 'SQLite via python3 -m sqlite3, through tools/sql-oracle/check.py'
 version = 'SQLite 3.45.1 (the version bundled with the CPython running the oracle)'
 role = '''
-primary and only, and the "only" is the ceiling on what a SQL sweep can mean. Statements are split with `sqlite3.complete_statement` (sqlite3_complete, which knows that the `;` inside a trigger body does not end a statement) and each is prepared under `EXPLAIN`, which compiles it to a VDBE program and returns the listing instead of running it -- so no corpus file ever executes.
+first of two, and no longer the ceiling it was. Statements are split with `sqlite3.complete_statement` (sqlite3_complete, which knows that the `;` inside a trigger body does not end a statement) and each is prepared under `EXPLAIN`, which compiles it to a VDBE program and returns the listing instead of running it -- so no corpus file ever executes.
 
 The syntax/semantics line is drawn on the ERROR MESSAGE rather than the error class, because preparing resolves names: `SELECT * FROM t` against an empty database fails with "no such table", and a file that is perfectly good SQL must not be booked as noise for it. SQLite's parser emits a short closed set of messages (near "X": syntax error / unrecognized token / incomplete input / parser stack overflow); everything else it can say is about a schema this oracle deliberately does not have.
 
@@ -89,7 +91,31 @@ Note which direction that runs. The docstring's warning, and every other oracle'
 
 The rule now: a fragment sqlite did not terminate must PREPARE CLEANLY to count as valid, because that is the only case where sqlite demonstrably consumed all of it. A multi-statement warning means it was several; a name error on such a fragment is ambiguous -- one statement with an unresolvable name, or the first of several, and nothing here can tell -- and both answer invalid. Measured cost: 30 files across the corpus flip from valid to noise, which hides whatever gaps they carry. That is the safe direction. A `;`-terminated statement is untouched.
 
-THE LIMIT: this is a one-dialect oracle for a dialect-union grammar. PostgreSQL's parser lives inside the server or inside libpg_query (a C library to build) and MySQL's inside mysqld; SQLite's is the only one reachable with nothing installed. So postgres-only and mysql-only syntax is never contradicted, and a file that fails BOTH the grammar and SQLite is booked as corpus noise rather than as the gap it may be. That direction is the safe one -- the sweep can miss a grammar bug, it can never invent one -- and adding libpg_query as a second oracle is the single highest-value thing anyone can do for this language's numbers.'''
+What it cannot see on its own is every other dialect, which is why there is a second entry below.'''
+
+[[oracles]]
+family = 'mysql'
+tool = "MySQL 8.0's own parser, through PREPARE, via tools/mysql-oracle/check.py"
+version = 'MySQL 8.0.46 (Ubuntu mysql-server-core-8.0)'
+role = '''
+second of two, and the reason the gap count means anything. MySQL ships no standalone parser -- the parser is the server's -- so this starts a mysqld on a throwaway datadir with `--skip-networking` and puts each statement to it as `PREPARE stmt FROM '…'`, which parses and prepares without running. Nothing is ever executed and the datadir never holds corpus data.
+
+THE VERDICT IS AN ERROR CODE, not a message, and that is a cleaner line than SQLite's. MySQL numbers its errors: 1064 (ER_PARSE_ERROR) and 1149 (ER_SYNTAX_ERROR) are the parser's, and everything else it can say -- 1046 no database selected, 1049 unknown database, 1146 no such table, 1054 unknown column -- is about a schema this oracle deliberately does not have. 1295 (ER_UNSUPPORTED_PS) is the interesting one: it means the statement PARSED and the prepared-statement protocol will not carry it, which is a fact about the protocol rather than the text.
+
+WHAT IT BOUGHT, measured in one sweep: gaps 48 -> 364. `ON DUPLICATE KEY UPDATE`, `SET @v = 1`, backquoted identifiers, `group_concat(x SEPARATOR ',')`, MySQL's view attributes and its whole sys_schema were all invisible to SQLite, so every file carrying them was corpus noise. None of that was a grammar change. It had always been true.
+
+REQUIRED, not optional, for the reason python2 is required for python: a union grammar swept with half its oracle books the other half's files as noise and reports a grammar more finished than it is. If mysqld cannot be started the oracle errors loudly rather than degrading.
+
+Two limits. It is MySQL 8.0 and the corpus carries mysql 9.7's own test suite, so syntax newer than 8.0 is judged invalid here -- the same knob the python oracle documents about its interpreter, and the same honest answer. And a statement over 4 MB, or an unterminated tail over 64 KB, is not put to the server at all: max_allowed_packet would refuse it and a refusal is not a verdict, so those book as noise.
+
+Its own splitter is MySQL's lexical rules written out -- `'`, `"` and backquote quoting with backslash escapes, `--` only before whitespace, `#`, `/* */`, `/*!…*/` version comments whose contents ARE SQL, and `DELIMITER`. That is the part most likely to be wrong, and it already was once: testing "am I at the start of a statement" by joining the buffer made it quadratic in statement length, so the 67 MB dump (158 lines of about a megabyte each) pinned python at 100% CPU for twenty minutes while the server it was driving idled at 1%. Third time this grammar has been slowed by an accident rather than a rule, and the third time the fix was found by asking which process was actually busy.'''
+
+[[oracles]]
+family = 'postgresql'
+tool = '(not built)'
+version = '(none)'
+role = '''
+THE REMAINING HOLE, named so it is not mistaken for coverage. PostgreSQL's parser lives inside the server or inside libpg_query, a C library that must be built; neither is reachable the way SQLite's stdlib module and mysqld's package are. So a postgres-only construct that neither SQLite nor MySQL accepts is still booked as corpus noise rather than as the gap it may be, and postgres is 806 files of this corpus. That direction is the safe one -- the sweep can miss a grammar bug, it can never invent one -- and it is now the LAST such hole rather than two thirds of the union. libpg_query would also close the missing span oracle, since it returns postgres's parse tree with node locations.'''
 
 [[deviations]]
 what = 'reserved words'
@@ -129,7 +155,7 @@ Postgres's `$$ … $$` and `$tag$ … $tag$` need an external scanner -- the clo
 [[gaps]]
 what = 'MySQL `SET @var = …`'
 detail = '''
-`SET @x = 1` does not parse: `@x` lexes as a bind parameter and the assignment rule takes a name on the left. Widening the shared `assignment` node would also accept `UPDATE t SET @x = 1`, which is invalid, so the fix is a MySQL-specific left-hand side rather than a loosened one. Worth doing when a corpus says how much MySQL dump traffic there is.'''
+`SET @x = 1` does not parse: `@x` lexes as a bind parameter and the assignment rule takes a name on the left. Widening the shared `assignment` node would also accept `UPDATE t SET @x = 1`, which is invalid, so the fix is a MySQL-specific left-hand side rather than a loosened one. The MySQL oracle now adjudicates it, so the next sweep can say what it is worth instead of guessing.'''
 
 [[gaps]]
 what = 'row values on the left of IN'
@@ -137,7 +163,19 @@ detail = '''
 `WHERE (a, b) IN (SELECT c, d FROM u)` does not parse. `(a, b)` in expression position is a row constructor, and `(a)` would then be both a row of one and a parenthesised expression with nothing to settle them. The row form is supported where it is unambiguous -- `UPDATE t SET (a, b) = (1, 2)`, where only a row is legal -- and the general case needs a dynamic precedence rather than a rule.'''
 
 [[gaps]]
-what = 'DCL and the special function forms'
+what = 'MySQL view attributes -- CLOSED, and what closing it showed'
+detail = '''
+`CREATE ALGORITHM = TEMPTABLE DEFINER = \'root\'@\'localhost\' SQL SECURITY INVOKER VIEW …` was 96 files, every one of them mysql's own sys_schema, and it was the LARGEST cluster in the corpus the moment a MySQL oracle existed to see it. Closing it moved 99 files. It had been invisible for every sweep before that, because SQLite rejects those files too and they booked as noise.
+
+Kept as an entry rather than deleted because the lesson is not about views. A grammar's gap list is bounded by its oracles, and a construct no oracle can vouch for looks exactly like a construct nobody writes.'''
+
+[[gaps]]
+what = 'DCL, now measured'
+detail = '''
+`DROP USER IF EXISTS \'u\'@\'%\'` is 53 files and `GRANT`/`REVOKE` a further handful -- numbers that did not exist before the MySQL oracle, since SQLite has no DCL at all. `user_name` is now a node (view definers need it), so the remaining work is the statements themselves rather than the user syntax.'''
+
+[[gaps]]
+what = 'the special function forms'
 detail = '''
 `GRANT`/`REVOKE`, `COMMENT ON`, `SUBSTRING(x FROM 1 FOR 2)`, `TRIM(BOTH ' ' FROM x)`, `POSITION(x IN y)`, MySQL's `group_concat(… SEPARATOR ',')` and `= ALL (subquery)` are all unparsed. `EXTRACT(field FROM source)` IS supported, as the one member of that family common enough to justify reserving its keyword. The rest are listed together because they are one decision, not five: each needs a keyword reserved in a position where an ordinary function call is also legal, and a corpus is what should decide whether that trade is worth making.'''
 

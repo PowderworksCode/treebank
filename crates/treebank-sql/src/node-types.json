@@ -776,6 +776,11 @@
     "fields": {}
   },
   {
+    "type": "check_option_clause",
+    "named": true,
+    "fields": {}
+  },
+  {
     "type": "collate_expression",
     "named": true,
     "fields": {
@@ -1311,6 +1316,10 @@
       "required": false,
       "types": [
         {
+          "type": "check_option_clause",
+          "named": true
+        },
+        {
           "type": "column_name_list",
           "named": true
         },
@@ -1324,6 +1333,10 @@
         },
         {
           "type": "temporary_modifier",
+          "named": true
+        },
+        {
+          "type": "view_attribute",
           "named": true
         }
       ]
@@ -3084,6 +3097,40 @@
     }
   },
   {
+    "type": "user_name",
+    "named": true,
+    "fields": {
+      "host": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          },
+          {
+            "type": "string",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "using_clause",
     "named": true,
     "fields": {},
@@ -3126,6 +3173,42 @@
           "named": true
         }
       ]
+    }
+  },
+  {
+    "type": "view_attribute",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "DEFINER",
+            "named": false
+          },
+          {
+            "type": "INVOKER",
+            "named": false
+          },
+          {
+            "type": "MERGE",
+            "named": false
+          },
+          {
+            "type": "TEMPTABLE",
+            "named": false
+          },
+          {
+            "type": "UNDEFINED",
+            "named": false
+          },
+          {
+            "type": "user_name",
+            "named": true
+          }
+        ]
+      }
     }
   },
   {
@@ -3359,6 +3442,10 @@
     "named": false
   },
   {
+    "type": "@",
+    "named": false
+  },
+  {
     "type": "ABORT",
     "named": false
   },
@@ -3372,6 +3459,10 @@
   },
   {
     "type": "AFTER",
+    "named": false
+  },
+  {
+    "type": "ALGORITHM",
     "named": false
   },
   {
@@ -3443,6 +3534,10 @@
     "named": false
   },
   {
+    "type": "CASCADED",
+    "named": false
+  },
+  {
     "type": "CASE",
     "named": false
   },
@@ -3487,6 +3582,10 @@
     "named": false
   },
   {
+    "type": "CURRENT_USER",
+    "named": false
+  },
+  {
     "type": "DATABASE",
     "named": false
   },
@@ -3496,6 +3595,10 @@
   },
   {
     "type": "DEFERRED",
+    "named": false
+  },
+  {
+    "type": "DEFINER",
     "named": false
   },
   {
@@ -3663,6 +3766,10 @@
     "named": false
   },
   {
+    "type": "INVOKER",
+    "named": false
+  },
+  {
     "type": "IS",
     "named": false
   },
@@ -3711,6 +3818,10 @@
     "named": false
   },
   {
+    "type": "MERGE",
+    "named": false
+  },
+  {
     "type": "NATURAL",
     "named": false
   },
@@ -3752,6 +3863,10 @@
   },
   {
     "type": "ON",
+    "named": false
+  },
+  {
+    "type": "OPTION",
     "named": false
   },
   {
@@ -3863,6 +3978,10 @@
     "named": false
   },
   {
+    "type": "SECURITY",
+    "named": false
+  },
+  {
     "type": "SELECT",
     "named": false
   },
@@ -3891,6 +4010,10 @@
     "named": false
   },
   {
+    "type": "SQL",
+    "named": false
+  },
+  {
     "type": "START",
     "named": false
   },
@@ -3912,6 +4035,10 @@
   },
   {
     "type": "TEMPORARY",
+    "named": false
+  },
+  {
+    "type": "TEMPTABLE",
     "named": false
   },
   {
@@ -3952,6 +4079,10 @@
   },
   {
     "type": "UNBOUNDED",
+    "named": false
+  },
+  {
+    "type": "UNDEFINED",
     "named": false
   },
   {

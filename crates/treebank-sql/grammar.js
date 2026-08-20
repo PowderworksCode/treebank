@@ -698,12 +698,43 @@ module.exports = grammar({
       kw('CREATE'),
       optional($.or_replace_modifier),
       optional($.temporary_modifier),
+      // MySQL's view attributes, and the largest cluster the MySQL oracle
+      // made visible at 96 files -- the whole of mysql's own sys_schema is
+      // written with them. They were invisible before because SQLite
+      // rejects the files too, so every one of them booked as noise.
+      repeat($.view_attribute),
       kw('VIEW'),
       optional($.if_not_exists_modifier),
       field('name', choice($._name, $.qualified_name)),
       optional($.column_name_list),
       kw('AS'),
       field('value', $.select_statement),
+      optional($.check_option_clause),
+    ),
+
+    view_attribute: $ => choice(
+      seq(kw('ALGORITHM'), '=', field('value', choice(kw('UNDEFINED'), kw('MERGE'), kw('TEMPTABLE')))),
+      seq(kw('DEFINER'), '=', field('value', $.user_name)),
+      seq(kw('SQL'), kw('SECURITY'), field('value', choice(kw('DEFINER'), kw('INVOKER')))),
+    ),
+
+    // `'root'@'localhost'`, `root@localhost`, or `CURRENT_USER`. The `@` is
+    // a plain token here and does not collide with a bind parameter:
+    // `bind_parameter` requires a letter straight after the `@`, so
+    // `@'localhost'` cannot match it.
+    user_name: $ => choice(
+      seq(
+        field('name', choice($.string, $._name)),
+        optional(seq('@', field('host', choice($.string, $._name)))),
+      ),
+      kw('CURRENT_USER'),
+    ),
+
+    check_option_clause: $ => seq(
+      kw('WITH'),
+      optional(choice(kw('CASCADED'), kw('LOCAL'))),
+      kw('CHECK'),
+      kw('OPTION'),
     ),
 
     create_index_statement: $ => seq(
