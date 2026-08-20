@@ -56,30 +56,14 @@ pub trait Unparser: Sync {
 }
 
 /// `None` where the language's toolchain has no printer we can drive.
+/// Declared in [`crate::capabilities`], with the reason for each `None`.
 pub fn get(name: LangName) -> Option<&'static dyn Unparser> {
-    static PY: PythonUnparser = PythonUnparser;
-    static TS: TypeScriptUnparser = TypeScriptUnparser;
-    static RS: RustUnparser = RustUnparser;
-    match name {
-        LangName::Python => Some(&PY),
-        LangName::Typescript | LangName::Javascript => Some(&TS),
-        LangName::Rust => Some(&RS),
-        // javac's `Pretty` printer is an internal API behind
-        // --add-exports, and it is lossy in ways that would read as our
-        // failures. Left out until it is worth the argument.
-        LangName::Java => None,
-        // bash has no printer; nothing renders a script back from a tree.
-        LangName::Bash => None,
-        // Zig has `std.zig.render`, which is what `zig fmt` is built on, so
-        // an unparser is reachable through a small program the way the node
-        // and python ones are. Not built yet.
-        LangName::Zig => None,
-    }
+    crate::capabilities::get(name).unparse
 }
 
-struct PythonUnparser;
-struct TypeScriptUnparser;
-struct RustUnparser;
+pub(crate) struct PythonUnparser;
+pub(crate) struct TypeScriptUnparser;
+pub(crate) struct RustUnparser;
 
 #[derive(Deserialize)]
 struct RawRendered {

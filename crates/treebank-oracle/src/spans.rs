@@ -93,34 +93,21 @@ pub trait SpanOracle: Sync {
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>>;
 }
 
-/// The languages whose oracle can report boundaries. Every one of them has
-/// one now; the `Option` stays because the next language added will not,
-/// and `None` is an honest answer where a silent no-op would not be.
+/// The languages whose oracle can report boundaries. Every one of them
+/// has one now; the `Option` stays because the next language added will
+/// not, and `None` is an honest answer where a silent no-op would not be.
+///
+/// Which languages those are is declared in [`crate::capabilities`],
+/// alongside the other two things a toolchain may or may not be able to
+/// do, so that a new language answers all three in one place.
 pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
-    static TS: TypeScriptSpans = TypeScriptSpans;
-    static PY: PythonSpans = PythonSpans;
-    static RS: crate::rust_spans::RustSpans = crate::rust_spans::RustSpans;
-    static JAVA: JavaSpans = JavaSpans;
-    static BASH: BashSpans = BashSpans;
-    match name {
-        LangName::Typescript | LangName::Javascript => Some(&TS),
-        LangName::Python => Some(&PY),
-        LangName::Rust => Some(&RS),
-        LangName::Java => Some(&JAVA),
-        LangName::Bash => Some(&BASH),
-        // Zig is the language the comment above was written for. `zig fmt`
-        // reports a verdict and a diagnostic, not a tree; the compiler can
-        // dump one (`std.zig.Ast` from a small program of our own, the way
-        // the java and bash oracles were built), and that is not built yet.
-        // Saying so beats a `shape` run that compares against nothing.
-        LangName::Zig => None,
-    }
+    crate::capabilities::get(name).spans
 }
 
-struct TypeScriptSpans;
-struct PythonSpans;
-struct JavaSpans;
-struct BashSpans;
+pub(crate) struct TypeScriptSpans;
+pub(crate) struct PythonSpans;
+pub(crate) struct JavaSpans;
+pub(crate) struct BashSpans;
 
 #[derive(Deserialize)]
 struct RawFile {

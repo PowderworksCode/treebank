@@ -1,16 +1,8 @@
 [workspace]
-members = [
-    "crates/treebank-cli",
-    "crates/treebank-core",
-    "crates/treebank-corpus",
-    "crates/treebank-bash",
-    "crates/treebank-java",
-    "crates/treebank-lang",
-    "crates/treebank-oracle",
-    "crates/treebank-preprocessing",
-    "crates/treebank-python",
-    "crates/treebank-rust",
-    "crates/treebank-typescript",
-    "crates/treebank-zig",
-]
+# A glob, so a new crate is a member the moment its directory exists. The
+# explicit list this replaced was a twelfth line to remember, with no
+# decision in it: every directory under crates/ is a workspace member, and
+# a grammar left out of the list would have been silently unbuilt and
+# untested rather than loudly missing.
+members = ["crates/*"]
 resolver = "2"

@@ -115,7 +115,10 @@ fn releases(k: usize) -> Result<Vec<RankedCrate>> {
     });
     versions.truncate(k);
 
-    anyhow::ensure!(!versions.is_empty(), "no released zig versions in the index");
+    anyhow::ensure!(
+        !versions.is_empty(),
+        "no released zig versions in the index"
+    );
     Ok(versions
         .into_iter()
         .enumerate()

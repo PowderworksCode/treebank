@@ -5,7 +5,8 @@
       "camelcase": "Python",
       "scope": "source.python",
       "file-types": [
-        "py"
+        "py",
+        "pyi"
       ],
       "injection-regex": "python"
     }

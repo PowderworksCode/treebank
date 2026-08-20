@@ -594,7 +594,10 @@ pub fn run(
     let (corpus_src, files, dialect) = match dir {
         Some(d) => {
             let mut files = Vec::new();
-            collect(d, d, extensions(lang), &mut files)?;
+            // The whole grammar's extensions, not just this language's: a
+            // fixture directory for `treebank-typescript` may hold the
+            // `.js` files it also parses.
+            collect(d, d, &lang.grammar_extensions(), &mut files)?;
             files.sort();
             anyhow::ensure!(!files.is_empty(), "no source files under {}", d.display());
             let dialect = files
@@ -1227,20 +1230,6 @@ pub fn run(
         println!("shape: {} <= baseline {}", report.missed_nodes, max);
     }
     Ok(())
-}
-
-/// The source extensions a language's fixture directory may hold.
-fn extensions(lang: LangName) -> &'static [&'static str] {
-    match lang {
-        LangName::Python => &["py", "pyi"],
-        LangName::Rust => &["rs"],
-        LangName::Typescript | LangName::Javascript => {
-            &["ts", "tsx", "mts", "cts", "js", "jsx", "mjs", "cjs"]
-        }
-        LangName::Java => &["java"],
-        LangName::Bash => &["sh", "bash"],
-        LangName::Zig => &["zig"],
-    }
 }
 
 /// Source files under a fixture directory, as paths relative to it.
