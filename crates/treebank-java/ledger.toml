@@ -21,11 +21,11 @@ Sources jars, so anything that ships no `-sources.jar` is absent: 111 of the top
 
 [corpus.sweep]
 files = 243573
-passed = 242762
-failed = 811
-gap_files = 811
+passed = 243406
+failed = 167
+gap_files = 167
 noise_files = 0
-pass_rate = '99.67%'
+pass_rate = '99.93%'
 
 [[oracles]]
 family = 'java'

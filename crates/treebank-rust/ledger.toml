@@ -41,13 +41,11 @@ the same corpus swept with while_expression deleted from _loop reports 2,323 gap
 
 [corpus.sweep]
 files = 61801
-passed = 27511
-failed = 15
-gap_files = 2
-noise_files = 13
+passed = 61772
+failed = 29
+gap_files = 12
+noise_files = 17
 pass_rate = '99.95%'
-noise_note = '''
-all 13 verified by inspection: derivative's doc/ fragments, cxx and pin-project trybuild ui fixtures (invalid by design), disabled/ source, one non-rust script'''
 
 [[oracles]]
 family = 'rust'

@@ -19,13 +19,12 @@ Stars, which is attention rather than use, and the weakest popularity metric in 
 
 [corpus.sweep]
 files = 76830
-passed = 33624
-failed = 43206
-gap_files = 42580
-noise_files = 626
-pass_rate = '43.8%'
-note = '''
-FIRST PASS, and the number says so. This grammar is at the stage java was seven sweeps ago. Three fixes have moved it so far -- 6% to 37% when `_statements` learned to start with a newline, which is what a function body written over more than one line needs, and 37% to 43.8% when arrays and the `|`/`&&` operators learned the same. Shell is a harder grammar than any other here and the remaining 42,580 are not yet clustered into causes.'''
+passed = 75288
+failed = 1542
+gap_files = 953
+noise_files = 589
+pass_rate = '97.99%'
+
 [[oracles]]
 family = 'bash'
 tool = 'bash -n, via tools/bash-oracle/check.sh'

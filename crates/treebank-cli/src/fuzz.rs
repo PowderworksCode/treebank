@@ -827,6 +827,12 @@ pub struct FuzzReport {
     pub built_kinds: usize,
     pub built_tokens: usize,
     pub built_edges: usize,
+    /// Programs our parser AND the reference parser both accept, that the
+    /// full language then rejects (python: compile()'s symtable checks).
+    /// The parse-only oracle cannot see these by design; this measures what
+    /// it is not seeing. Zero where no parse-only mode exists.
+    pub post_parse_rejections: usize,
+    pub post_parse_sample: Vec<(String, usize)>,
     pub built_kind_names: Vec<String>,
     pub built_token_names: Vec<String>,
     pub built_edge_names: Vec<String>,
@@ -1136,6 +1142,10 @@ pub fn run(
     let mut we_rejected = 0usize;
     let mut agreed = 0usize;
     let mut by_program: BTreeMap<String, usize> = BTreeMap::new();
+    // Programs the PARSER accepts and the full language rejects afterwards
+    // -- placement rules, mostly. Not widenings a grammar can fix; counted
+    // so the parse-only oracle's blind spot has a number on it.
+    let mut post_parse: BTreeMap<String, usize> = BTreeMap::new();
 
     // AFL's shape, with the tape as the input and grammar alternatives as
     // the edge map. The tape is what makes this cheap: generation is
@@ -1188,6 +1198,22 @@ pub fn run(
         crate::kinds::count_edges(tree.root_node(), &mut built_edges);
         if judge.accepts(&text)? {
             agreed += 1;
+            // The parser said yes -- but where the oracle can separate
+            // parser from compiler, ask the compiler too. This is the gap
+            // the parse-only choice above deliberately leaves: `return` at
+            // top level is not a syntax error, a tree-sitter grammar has no
+            // business tracking loop nesting, and yet the language DOES
+            // reject the program. Recorded in its own bucket rather than as
+            // a finding, so the blindness is measured instead of silent
+            // (issue #156) and the findings stay parser-level.
+            if syntax_mode && agreed <= 400 {
+                let name = format!("pp{agreed}.py");
+                std::fs::write(tmp.join(&name), &text)?;
+                let v = judge.oracle.validate(&tmp, &[name.clone()])?;
+                if v.get(&name).copied() == Some(false) {
+                    *post_parse.entry(text.trim_end().to_string()).or_insert(0) += 1;
+                }
+            }
             continue;
         }
         let small = shrink(&g, &mut parser, &judge, &tape)?;
@@ -1242,6 +1268,13 @@ pub fn run(
             .filter(|k| !language.node_kind_is_named(**k))
             .filter_map(|k| language.node_kind_for_id(*k).map(str::to_string))
             .collect(),
+        post_parse_rejections: post_parse.values().sum(),
+        post_parse_sample: {
+            let mut v: Vec<(String, usize)> = post_parse.into_iter().collect();
+            v.sort_by_key(|(_, n)| std::cmp::Reverse(*n));
+            v.truncate(12);
+            v
+        },
         built_edge_names: built_edges
             .keys()
             .map(|(pa, f, c)| {

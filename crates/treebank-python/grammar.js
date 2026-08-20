@@ -80,6 +80,8 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._augmented_target, $._pattern, $._access],
+    [$._augmented_target, $._name, $._pattern],
     [$._comma_expressions],
     [$._no_conditional_expression, $.conditional_expression],
     [$._patterns_comma, $._closed_pattern],
@@ -242,8 +244,15 @@ module.exports = grammar({
       alias($._soft_keyword, $.identifier),
       $.member_expression,
       $.subscript_expression,
-      $.parenthesized_expression,
+      // Parens recurse through the TARGET, not through expression:
+      // `(o.a) += v` and `((a)) += 1` are valid, but `( yield ) += x` and
+      // `( a if b else c ) += x` are `illegal expression for augmented
+      // assignment` -- the full parenthesized_expression here was 10 fuzz
+      // seeds of exactly those.
+      alias($._paren_augmented_target, $.parenthesized_expression),
     ),
+
+    _paren_augmented_target: $ => seq('(', $._augmented_target, ')'),
 
     _right_hand_side: $ => choice(
       $._expression,

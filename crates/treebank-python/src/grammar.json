@@ -387,8 +387,30 @@
           "name": "subscript_expression"
         },
         {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_paren_augmented_target"
+          },
+          "named": true,
+          "value": "parenthesized_expression"
+        }
+      ]
+    },
+    "_paren_augmented_target": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "STRING",
+          "value": "("
+        },
+        {
           "type": "SYMBOL",
-          "name": "parenthesized_expression"
+          "name": "_augmented_target"
+        },
+        {
+          "type": "STRING",
+          "value": ")"
         }
       ]
     },
@@ -7678,6 +7700,16 @@
     }
   ],
   "conflicts": [
+    [
+      "_augmented_target",
+      "_pattern",
+      "_access"
+    ],
+    [
+      "_augmented_target",
+      "_name",
+      "_pattern"
+    ],
     [
       "_comma_expressions"
     ],
