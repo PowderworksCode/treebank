@@ -2379,6 +2379,14 @@
                 },
                 {
                   "type": "PATTERN",
+                  "value": "\\{\\{+"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "\\}\\}+"
+                },
+                {
+                  "type": "PATTERN",
                   "value": "[?*+@!]\\([^()\\s]*\\)"
                 }
               ]
@@ -2411,6 +2419,14 @@
                   {
                     "type": "PATTERN",
                     "value": "\\{[^{}\\s,.]*\\}"
+                  },
+                  {
+                    "type": "PATTERN",
+                    "value": "\\{\\{+"
+                  },
+                  {
+                    "type": "PATTERN",
+                    "value": "\\}\\}+"
                   },
                   {
                     "type": "PATTERN",
