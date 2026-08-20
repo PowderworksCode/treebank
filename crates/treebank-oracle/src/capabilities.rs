@@ -44,6 +44,7 @@ static PY_SPANS: spans::PythonSpans = spans::PythonSpans;
 static RS_SPANS: rust_spans::RustSpans = rust_spans::RustSpans;
 static JAVA_SPANS: spans::JavaSpans = spans::JavaSpans;
 static BASH_SPANS: spans::BashSpans = spans::BashSpans;
+static RB_SPANS: spans::RubySpans = spans::RubySpans;
 
 static RUSTFMT: reformat::RustFmt = reformat::RustFmt;
 static BLACK: reformat::BlackFmt = reformat::BlackFmt;
@@ -97,11 +98,11 @@ pub(crate) fn get(name: LangName) -> Capabilities {
         },
 
         LangName::Ruby => Capabilities {
-            // CRuby can give one: RubyVM::AbstractSyntaxTree nodes carry
-            // first/last line and column, so a span oracle is reachable
-            // the same way python's was. Not built yet, and saying so
-            // beats a `shape` run that silently compares against nothing.
-            spans: None,
+            // CRuby's own AST, the same parser `validate` asks:
+            // RubyVM::AbstractSyntaxTree nodes carry first/last line and
+            // column. Ripper rides along as the lexical oracle, the role
+            // `tokenize` plays for python.
+            spans: Some(&RB_SPANS),
             // rubocop and standardrb are gems, not part of the
             // interpreter, and neither is installed. Stated rather than
             // faked.

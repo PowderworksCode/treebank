@@ -145,6 +145,12 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._arg, $.member_expression, $.call_expression],
+    [$.do_block_call, $.command_call],
+    [$._do_or_terminator],
+    [$.call_expression, $.do_block_call],
+    [$._arg, $.member_expression, $.call_expression, $.do_block_call],
+    [$._arg, $.call_expression, $.do_block_call],
     [$._primary, $._command_callee, $._block_callee],
     [$._primary, $._block_callee],
     [$._command_callee, $._block_callee],
@@ -315,6 +321,7 @@ module.exports = grammar({
     _expression: $ => choice(
       $._arg,
       alias($.command_call, $.call_expression),
+      alias($.do_block_call, $.call_expression),
       alias($._and_or, $.binary_expression),
       alias($.not_expression, $.unary_expression),
       alias($.bang_command, $.unary_expression),
@@ -379,6 +386,7 @@ module.exports = grammar({
     _jump_value: $ => choice(
       $._arg,
       alias($.command_call, $.call_expression),
+      alias($.do_block_call, $.call_expression),
       alias($._bare_list, $.array),
       $.splat_argument,
     ),
@@ -406,6 +414,7 @@ module.exports = grammar({
     _right_hand_side: $ => choice(
       $._arg,
       alias($.command_call, $.call_expression),
+      alias($.do_block_call, $.call_expression),
       alias($._bare_list, $.array),
       $.splat_argument,
       $._jump,
@@ -545,7 +554,17 @@ module.exports = grammar({
       prec(PREC.unary_not, seq(field('operator', alias($._unary_plus, '+')), field('operand', $._arg))),
     ),
 
+    // The bare form keeps the low precedence: `defined? x.y` takes the
+    // whole chain. The paren form is a PRIMARY in parse.y (`keyword_defined
+    // opt_nl '(' expr rparen`), so it lives in `_primary` as
+    // `_defined_paren` — `defined?(x) && y` tests x, not the conjunction,
+    // and `defined?(x).nil?` chains. Found by the shape gate: the operand
+    // here was swallowing everything to the right of the parens.
     defined_expression: $ => prec(PREC.defined, seq('defined?', $._arg)),
+
+    _defined_paren: $ => seq(
+      'defined?', token.immediate('('), $._expression, ')',
+    ),
 
     // ── primaries ────────────────────────────────────────────────────
     _primary: $ => choice(
@@ -553,6 +572,7 @@ module.exports = grammar({
       $._variable,
       $.self,
       $.super,
+      alias($._defined_paren, $.defined_expression),
       $._literal,
       $.string,
       $.concatenated_string,
@@ -675,15 +695,28 @@ module.exports = grammar({
         field('arguments', $.argument_list),
         optional(field('block', $.brace_block)),
       )),
+      // The do-forms exist here too, WEIGHTED DOWN: this route reaches
+      // every operand position (`a << b.collect do … end` embeds one as
+      // a binary right side, a paren'd pair value may hold one), while
+      // the unweighted expression-tier route (do_block_call) carries the
+      // same reading wherever a steal is possible. Identical trees merge;
+      // where the readings differ — `create_table :a, id: pkt do … end` —
+      // the unweighted command attachment now outscores this route at the
+      // cull instead of tying with it, which is the bug the extraction
+      // fixed (found by the shape gate).
       prec(PREC.do_block, prec.dynamic(-1, seq(
         field('function', $._primary),
         field('arguments', $.argument_list),
         field('block', $.do_block),
       ))),
-      // foo { } / obj.foo do end — no arguments; the block is what makes
-      // this a call rather than a bare name or member read. The function
-      // here is `_block_callee`, NOT the full _primary: with _primary,
-      // `File.open(path) do … end` also read as a block hung on the
+      prec(PREC.do_block, prec.dynamic(-1, seq(
+        field('function', $._block_callee),
+        field('block', $.do_block),
+      ))),
+      // foo { } — no arguments; the block is what makes this a call
+      // rather than a bare name or member read. The function here is
+      // `_block_callee`, NOT the full _primary: with _primary,
+      // `File.open(path) { … }` also read as a block hung on the
       // completed call — a call of a call — and no weighting fixed the tie
       // without poisoning unrelated culls (a dynamic weight accrues at
       // reduce time, so penalising a construct that CORRECT parses contain
@@ -694,28 +727,46 @@ module.exports = grammar({
         field('function', $._block_callee),
         field('block', $.brace_block),
       )),
-      prec(PREC.do_block, prec.dynamic(-1, seq(
-        field('function', $._block_callee),
-        field('block', $.do_block),
-      ))),
       // `callable.(args)` — call with the method name omitted, sugar for
       // .call. The dot is what distinguishes it from a plain paren call.
       prec(PREC.member, seq(
         field('function', $._primary),
         choice('.', '&.'),
         field('arguments', $.argument_list),
-        optional(field('block', choice($.brace_block, $.do_block))),
+        optional(field('block', $.brace_block)),
       )),
+      prec(PREC.do_block, prec.dynamic(-1, seq(
+        field('function', $._primary),
+        choice('.', '&.'),
+        field('arguments', $.argument_list),
+        field('block', $.do_block),
+      ))),
       // obj.foo= v is an assignment, handled there; obj.foo v is a command,
-      // aliased into this node from _expression.
+      // aliased into this node from _expression. NO do-block form in this
+      // rule: `do` attaches at the EXPRESSION tier only (do_block_call),
+      // because in parse.y an `arg` can never carry a do-block — braces
+      // bind to the nearest call, `do` to the outermost command. When the
+      // do-forms lived here, every argument position admitted them, and
+      // `create_table :a, id: pkt do … end` hung the block on the pair's
+      // VALUE (found by the shape gate as a clean parse with the wrong
+      // tree).
     ),
 
+    // The command's own do-block — the ONLY spelling this rule carries.
+    // Value readings that compete for the same `do` (a pair value, an
+    // argument, a binary operand) all reach their do-form through
+    // _primary, where the route carries a dynamic -1; this route carries
+    // none, so ruby's rule — `do` binds to the outermost command — falls
+    // out of the scores at the cull. Keeping the two routes DISJOINT also
+    // keeps them from doubling the live version count through every
+    // ordinary block, which is what let an overflow cull pick the steal
+    // again in longer files.
+    do_block_call: $ => prec.right(PREC.do_block, seq(
+      field('function', $._command_callee),
+      field('arguments', alias($.command_argument_list, $.argument_list)),
+      field('block', $.do_block),
+    )),
 
-
-    // A paren-less call with arguments: `puts x, y`, `attr_reader :a, :b`,
-    // `obj.write data`. Only legal at the expression level — an argument
-    // cannot itself be a bare command — which is the entire reason the
-    // expression/arg split exists in ruby's own grammar.
     command_call: $ => choice(
       prec.right(PREC.command, seq(
         field('function', $._command_callee),
@@ -727,6 +778,8 @@ module.exports = grammar({
         field('block', $.do_block),
       ))),
     ),
+
+
 
     // Only a name-shaped thing may start a paren-less call (`"a" b` must
     // stay a syntax error, and `"a" "b"` a concatenation), but the callee
@@ -754,7 +807,10 @@ module.exports = grammar({
 
     // A parenthesised list may hold ONE command — `new(sanitize_exception
     // e)` — which is ruby's own rule: command_args reach args only through
-    // parens or as the whole list.
+    // parens or as the whole list. A method-form do-block call rides the
+    // same slot (`f(obj.map do … end)` is valid to CRuby; the command
+    // spelling with a do-block is not, an over-acceptance the ledger
+    // records).
     argument_list: $ => prec(PREC.member, seq(
       token.immediate('('),
       optional(choice(

@@ -1997,6 +1997,10 @@
             "named": true
           },
           {
+            "type": "defined_expression",
+            "named": true
+          },
+          {
             "type": "global_variable",
             "named": true
           },
@@ -2737,135 +2741,7 @@
       "required": true,
       "types": [
         {
-          "type": "_access",
-          "named": true
-        },
-        {
-          "type": "_assignment",
-          "named": true
-        },
-        {
-          "type": "_branch",
-          "named": true
-        },
-        {
-          "type": "_declaration",
-          "named": true
-        },
-        {
-          "type": "_invocation",
-          "named": true
-        },
-        {
-          "type": "_literal",
-          "named": true
-        },
-        {
-          "type": "_loop",
-          "named": true
-        },
-        {
-          "type": "_name",
-          "named": true
-        },
-        {
-          "type": "array",
-          "named": true
-        },
-        {
-          "type": "begin_statement",
-          "named": true
-        },
-        {
-          "type": "binary_expression",
-          "named": true
-        },
-        {
-          "type": "class_variable",
-          "named": true
-        },
-        {
-          "type": "concatenated_string",
-          "named": true
-        },
-        {
-          "type": "conditional_expression",
-          "named": true
-        },
-        {
-          "type": "defined_expression",
-          "named": true
-        },
-        {
-          "type": "global_variable",
-          "named": true
-        },
-        {
-          "type": "hash",
-          "named": true
-        },
-        {
-          "type": "heredoc_beginning",
-          "named": true
-        },
-        {
-          "type": "instance_variable",
-          "named": true
-        },
-        {
-          "type": "lambda",
-          "named": true
-        },
-        {
-          "type": "parenthesized_expression",
-          "named": true
-        },
-        {
-          "type": "quoted_symbol",
-          "named": true
-        },
-        {
-          "type": "range_expression",
-          "named": true
-        },
-        {
-          "type": "regex",
-          "named": true
-        },
-        {
-          "type": "rescue_modifier",
-          "named": true
-        },
-        {
-          "type": "self",
-          "named": true
-        },
-        {
-          "type": "string",
-          "named": true
-        },
-        {
-          "type": "string_array",
-          "named": true
-        },
-        {
-          "type": "subshell",
-          "named": true
-        },
-        {
-          "type": "super",
-          "named": true
-        },
-        {
-          "type": "symbol_array",
-          "named": true
-        },
-        {
-          "type": "unary_expression",
-          "named": true
-        },
-        {
-          "type": "yield_expression",
+          "type": "_expression",
           "named": true
         }
       ]
@@ -4165,6 +4041,10 @@
           },
           {
             "type": "concatenated_string",
+            "named": true
+          },
+          {
+            "type": "defined_expression",
             "named": true
           },
           {
@@ -6332,6 +6212,10 @@
           },
           {
             "type": "concatenated_string",
+            "named": true
+          },
+          {
+            "type": "defined_expression",
             "named": true
           },
           {

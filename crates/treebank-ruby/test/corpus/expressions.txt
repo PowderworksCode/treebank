@@ -370,3 +370,76 @@ end
       (simple_symbol)
       (block
         (integer)))))
+
+================================================================================
+do binds to the command, not the last value
+================================================================================
+
+create_table :a, id: pkt do |t|
+  t.integer :status
+end
+x = obj.each do |i| i end
+
+--------------------------------------------------------------------------------
+
+(program
+  (call_expression
+    (identifier)
+    (argument_list
+      (simple_symbol)
+      (pair
+        (hash_key_symbol)
+        (identifier)))
+    (do_block
+      (block_parameters
+        (parameter
+          (identifier)))
+      (block
+        (call_expression
+          (member_expression
+            (identifier)
+            (identifier))
+          (argument_list
+            (simple_symbol))))))
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (identifier)
+        (identifier))
+      (do_block
+        (block_parameters
+          (parameter
+            (identifier)))
+        (block
+          (identifier))))))
+
+================================================================================
+defined? binds its immediate parens like a call
+================================================================================
+
+a = defined?(x) && y
+b = defined? x.y
+c = defined?(m).nil?
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (binary_expression
+      (defined_expression
+        (identifier))
+      (identifier)))
+  (assignment
+    (identifier)
+    (defined_expression
+      (member_expression
+        (identifier)
+        (identifier))))
+  (assignment
+    (identifier)
+    (member_expression
+      (defined_expression
+        (identifier))
+      (identifier))))

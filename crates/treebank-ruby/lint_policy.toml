@@ -11,8 +11,10 @@
 # factored away (§1) and must not return. Four declarations generation no
 # longer needed were pruned (the member_block family and
 # _statements/function_definition), each removal re-validated against
-# both corpora.
-declared_conflicts = 54
+# both corpora; the do-attachment split then declared its own family
+# (do_block_call against the value readings), the fork the sixth dynamic
+# weight below resolves.
+declared_conflicts = 60
 
 # Conflicts whose members include a supertype: parallel-tier early
 # commits. The remaining ones are the pattern/expression shared shapes;
@@ -24,8 +26,14 @@ early_commit_conflicts = 18
 # vs member `::`, match_pattern vs hash rocket. A weight on a construct
 # CORRECT parses contain re-ranks whole versions at the cull (measured:
 # one such weight took the stdlib sweep from 3 failures to 49), so new
-# weights need that analysis first.
-dynamic_weights = 5
+# weights need that analysis first. The sixth weight is part of the
+# do-attachment design: every VALUE route to a do-block call (paren,
+# bare, dot-sugar) carries -1 while the command attachment carries none,
+# so ruby's own rule — `do` binds to the outermost command — falls out
+# of the cull scores instead of tying (the tie was a shape bug the shape
+# gate caught: `create_table :a, id: pkt do … end` hung the block on the
+# pair value).
+dynamic_weights = 6
 
 # One spelling, two tokens (§4): `(` `[` `:` `=`. All four are the
 # adjacency-is-the-syntax cases — call parens vs spaced argument,
@@ -43,5 +51,7 @@ unreserved_keywords = 5
 # inflate the table faster than factoring does (upstream ruby parses with
 # 5,989 states; the gap is the cost of the conflicts above). The drop from
 # 9,900 came almost entirely from one static resolution: the pair rocket
-# outranking `_argument`'s reduce collapsed a swath of ambiguous cells.
-state_count = 7285
+# outranking `_argument`'s reduce collapsed a swath of ambiguous cells;
+# the later do-attachment split (command route vs weighted value routes)
+# bought its correctness back for ~100 states.
+state_count = 7394

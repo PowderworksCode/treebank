@@ -1,0 +1,220 @@
+# Declared exceptions for `treebank shape`, ruby edition. Every entry names
+# WHY, and every one was reproduced on a minimal file before it was written
+# down — nothing goes in here to make a number go down. The oracle is CRuby
+# itself (RubyVM::AbstractSyntaxTree for nodes, Ripper for tokens), which
+# means most entries document CRuby's PACKAGING nodes: spans the compiler
+# builds for its own bookkeeping that no faithful syntax tree would draw.
+
+rule = '''
+Boundaries `treebank shape` may ignore, as `"<CRubyKind> <- <our_kind>"` pairs — the oracle kind and the node of OURS that straddles the span it reported. Pairs rather than bare kinds, so forgiving LIST-the-argument-packaging cannot also silence a real LIST disagreement inside an array literal, where the spans do align and stay checked.'''
+
+lex_note = '''
+The token check compares against Ripper, CRuby's own lexer. One-directional as always: Ripper's boundaries must be a subset of ours — finer is fine, coarser means we glued together things the language keeps apart. The one declared coarseness is symbols: Ripper spells `:name` as a `:` operator token plus an identifier, we keep one `simple_symbol` token because the two characters are one lexeme with one meaning and no interior structure worth a boundary.'''
+
+[[ignore]]
+signature = 'LIST <- argument_list'
+why = '''
+CRuby's argument LIST excludes the call's parentheses (`f(1, 2)` — LIST is `1, 2`); our `argument_list` owns them, the way python's `parameters` owns its parens against CPython's `arg`. Minimal: `f(1, 2)`.'''
+
+[[ignore]]
+signature = 'ARGSCAT <- argument_list'
+why = 'The splatted spelling of `LIST <- argument_list` (`f(a, *b)`); same parens.'
+
+[[ignore]]
+signature = 'ARGSPUSH <- argument_list'
+why = 'Another splat-position spelling of `LIST <- argument_list`; same parens.'
+
+[[ignore]]
+signature = 'BLOCK_PASS <- argument_list'
+why = '''
+`f(1, &b)` — CRuby wraps the whole argument run in a BLOCK_PASS whose span is the parenless argument text. The `&b` is an ordinary `block_argument` child of our `argument_list`; the wrapper is compiler packaging.'''
+
+[[ignore]]
+signature = 'HASH <- argument_list'
+why = '''
+`f(x, k: 1)` — CRuby collects trailing keyword arguments into an invisible HASH spanning `k: 1`. Our `pair`s are direct children of the `argument_list`, because the braces-less hash is an artifact of the calling convention, not of the syntax.'''
+
+[[ignore]]
+signature = 'LIST <- hash'
+why = '''
+`{ a: 1, b: 2 }` — the interior LIST excludes the braces our `hash` owns. The pairs themselves align and stay checked.'''
+
+[[ignore]]
+signature = 'ARGS <- parameters'
+why = '''
+CRuby's ARGS excludes the parentheses our `parameters` owns (`def m(a, b)` — ARGS is `a, b`), and for an endless method it spans from the `def` keyword through the name, which is not a boundary any syntax tree should draw. python's ledger has the identical entry for CPython's `arg`.'''
+
+[[ignore]]
+signature = 'ARGS <- block_parameters'
+why = 'See `ARGS <- parameters`; the pipes of `|a, b|` are ours, not part of ARGS.'
+
+[[ignore]]
+signature = 'ARGS <- lambda_parameters'
+why = 'See `ARGS <- parameters`, for `->(a, b)`.'
+
+[[ignore]]
+signature = 'ARGS <- function_definition'
+why = '''
+The endless-method case of `ARGS <- parameters` when the definition has no parameter list at all for the span to straddle: `def self.make = new` gets an ARGS spanning `def self.make`.'''
+
+[[ignore]]
+signature = 'FCALL <- call_expression'
+why = '''
+`f(1) { |x| x }` — CRuby splits a block call into ITER wrapping [FCALL, block], so FCALL spans `f(1)` alone. We attach the block INSIDE the `call_expression`, which is why there is no separate node covering just the callee-plus-arguments. The blockless `f(1)` aligns exactly and stays checked.'''
+
+[[ignore]]
+signature = 'CALL <- call_expression'
+why = 'See `FCALL <- call_expression`, for calls with receivers: `obj.m(1) { }`.'
+
+[[ignore]]
+signature = 'SCOPE <- lambda'
+why = '''
+A lambda's SCOPE spans from inside the parameter parens to the end of the body (`->(m) { m }` — SCOPE is `m) { m }`-shaped), crossing a bracket boundary no tree of ours could cross. The `lambda` node itself aligns and stays checked.'''
+
+[[ignore]]
+signature = 'LIST <- assignment'
+why = '''
+`a[i] = v` — the ATTRASGN argument LIST spans from the subscript through the assigned value (`i] = v`), crossing the `]` and the `=`. Compiler packaging for the `[]=` call it will become; not a syntactic boundary.'''
+
+[[ignore]]
+signature = 'WHEN <- case_statement'
+why = '''
+CRuby nests each WHEN's successors inside it, so a WHEN's span runs from its own keyword to the end of the LAST clause of the case. We keep the clauses flat as `when_clause` siblings — the same flat-vs-nested choice python's ledger records for CPython's elif chain (`If <- if_statement`).'''
+
+[[ignore]]
+signature = 'RESCUE <- function_definition'
+why = '''
+`def m; body; rescue E; handler; end` — CRuby joins body and handlers in a RESCUE node spanning both. Our `rescue_clause`s sit flat inside the definition (the join has no spelling in the source), so the joined span has no node to land on. The clause bodies themselves align.'''
+
+[[ignore]]
+signature = 'RESCUE <- begin_statement'
+why = 'See `RESCUE <- function_definition`, inside `begin` blocks.'
+
+[[ignore]]
+signature = 'RESCUE <- block'
+why = 'See `RESCUE <- function_definition`, inside `do` blocks that carry rescue clauses.'
+
+[[ignore]]
+signature = 'BLOCK <- rescue_clause'
+why = '''
+The handler-body BLOCK CRuby builds starts at the exception capture (`=> e␤ body`), gluing the binding to the body. Ours puts the capture in the clause head and the body under it, split where the source splits them.'''
+
+[[ignore]]
+signature = 'ERRINFO <- rescue_clause'
+why = '''
+ERRINFO is the implicit read of `$!` that a `rescue E => e` compiles to, and CRuby stamps it with the span of `=> e`. There is no expression at those bytes; the node exists only in the compiler's account of the rescue.'''
+
+[[ignore]]
+signature = 'LASGN <- rescue_clause'
+why = '''
+The assignment TO the capture variable in `rescue E => e`, stamped across `=> e` — the write the rescue performs, not a construct in the source. Same bytes as the ERRINFO entry, same reasoning.'''
+
+[[ignore]]
+signature = 'DASGN <- rescue_clause'
+why = 'The block-local spelling of `LASGN <- rescue_clause` (a capture inside a block).'
+
+[[ignore]]
+signature = 'RESCUE <- do_block'
+why = 'See `RESCUE <- function_definition`, for `do … rescue … end` blocks.'
+
+[[ignore]]
+signature = 'RESBODY <- function_definition'
+why = '''
+CRuby chains rescue clauses by nesting each RESBODY's successor inside it, so the first clause's span runs to the end of the last — the WHEN/elsif nesting again, for handlers. Our `rescue_clause`s are flat siblings.'''
+
+[[ignore]]
+signature = 'RESBODY <- begin_statement'
+why = 'See `RESBODY <- function_definition`.'
+
+[[ignore]]
+signature = 'RESBODY <- do_block'
+why = 'See `RESBODY <- function_definition`.'
+
+[[ignore]]
+signature = 'ENSURE <- function_definition'
+why = '''
+The body-plus-ensure join, spanning from the first body statement through the ensure handler: the same invisible seam as `RESCUE <- function_definition`, one clause further out.'''
+
+[[ignore]]
+signature = 'ENSURE <- begin_statement'
+why = 'See `ENSURE <- function_definition`.'
+
+[[ignore]]
+signature = 'ENSURE <- do_block'
+why = 'See `ENSURE <- function_definition`.'
+
+[[ignore]]
+signature = 'STR <- string'
+why = '''
+Inside an interpolated string CRuby fuses an escape sequence with the text that follows it into one STR piece (`"\nNo message"` — one node from the backslash to the last letter). We keep `escape_sequence` as its own node beside `string_content`, so the fused span has no single node. The pieces WITHOUT escapes align and stay checked.'''
+
+[[ignore]]
+signature = 'LIST <- string'
+why = 'The packaging LIST CRuby wraps those fused pieces in; same bytes as `STR <- string`.'
+
+[[ignore]]
+signature = 'IF <- if_statement'
+why = '''
+CRuby has no elsif node: it nests a fresh IF inside the previous branch, spanning from the `elsif` keyword to the end of the whole tail. We keep the chain flat as `elsif_clause` siblings — the identical entry, for the identical reason, as python's `If <- if_statement`.'''
+
+[[ignore]]
+signature = 'KW_ARG <- parameters'
+why = '''
+`def m(a: nil, b: true)` — CRuby nests each keyword parameter's successors inside it, so the first KW_ARG spans the whole run. Our `keyword_parameter`s are flat siblings; each one's own span aligns and stays checked.'''
+
+[[ignore]]
+signature = 'OPT_ARG <- parameters'
+why = 'The optional-parameter spelling of `KW_ARG <- parameters` (`def m(c = 1, d = 2)`).'
+
+[[ignore]]
+signature = 'KW_ARG <- block_parameters'
+why = 'See `KW_ARG <- parameters`, inside `|…|`.'
+
+[[ignore]]
+signature = 'OPT_ARG <- block_parameters'
+why = 'See `OPT_ARG <- parameters`, inside `|…|`.'
+
+[[ignore]]
+signature = 'KW_ARG <- lambda_parameters'
+why = 'See `KW_ARG <- parameters`, for `->(…)`.'
+
+[[ignore]]
+signature = 'OPT_ARG <- lambda_parameters'
+why = 'See `OPT_ARG <- parameters`, for `->(…)`.'
+
+[[ignore]]
+signature = 'DVAR <- parameters'
+why = '''
+Alongside the KW_ARG chain CRuby records a DVAR — its own read of the parameter variable during default evaluation — stamped across the same multi-parameter span. Compiler bookkeeping on bytes where no single construct sits.'''
+
+[[ignore]]
+signature = 'DVAR <- block_parameters'
+why = 'See `DVAR <- parameters`.'
+
+[[ignore]]
+signature = 'LIST <- tuple_parameter'
+why = '''
+`|(address, mailbox_name)|` — the destructuring list without the parens our `tuple_parameter` owns. The `ARGS <- parameters` story one level down.'''
+
+[[ignore]]
+signature = 'MASGN <- tuple_parameter'
+why = 'The multiple-assignment node CRuby compiles that destructuring to, same parenless span.'
+
+[[ignore]]
+signature = 'RESBODY <- rescue_modifier'
+why = '''
+`x rescue nil` — CRuby builds a clause node spanning `rescue nil`. Our `rescue_modifier` is body-plus-handler in one node, because the modifier spelling HAS no clause: there is nothing to attach a `when`-style head to.'''
+
+[[ignore]]
+signature = 'LIST <- when_clause'
+why = '''
+`when String, Symbol` — the LIST packaging the comparison values spans them without the `when` our clause owns. The values themselves align individually.'''
+
+[[lex_ignore]]
+signature = 'token start inside `simple_symbol`'
+why = '''
+Ripper spells `:name` as `:` plus an identifier token; our `simple_symbol` is one token, because the scanner has to read the pair as a unit anyway to tell `:sym` from the ternary colon. Declared coarseness, the python f-string precedent.'''
+
+[[lex_ignore]]
+signature = 'token end inside `simple_symbol`'
+why = 'The other edge of `token start inside `simple_symbol``.'

@@ -108,6 +108,7 @@ pub(crate) struct TypeScriptSpans;
 pub(crate) struct PythonSpans;
 pub(crate) struct JavaSpans;
 pub(crate) struct BashSpans;
+pub(crate) struct RubySpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -134,6 +135,22 @@ impl SpanOracle for TypeScriptSpans {
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
         let lines =
             stdin_oracle::node_lines(&crate::tool("ts-oracle"), "spans.mjs", &[], srcroot, paths)?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
+impl SpanOracle for RubySpans {
+    /// CRuby's own AST, the same parser `validate` asks. Ripper rides along
+    /// as the lexical oracle, the role `tokenize` plays for python.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        let script = crate::tool("rb-oracle/spans.rb");
+        let lines = stdin_oracle::run_lines(
+            "ruby",
+            &[script.to_string_lossy().as_ref()],
+            "ruby tools/rb-oracle/spans.rb — is ruby installed?",
+            srcroot,
+            paths,
+        )?;
         parse_jsonl(&lines, srcroot)
     }
 }
