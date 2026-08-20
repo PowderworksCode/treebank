@@ -218,3 +218,28 @@ Ripper spells `:name` as `:` plus an identifier token; our `simple_symbol` is on
 [[lex_ignore]]
 signature = 'token end inside `simple_symbol`'
 why = 'The other edge of `token start inside `simple_symbol``.'
+
+[[ignore]]
+signature = 'STR <- heredoc_content'
+why = """
+Inside a `<<~` heredoc CRuby's string pieces are per-line and start AFTER
+the indentation the squiggly form will strip — semantic dedent
+bookkeeping stamped into spans. Our `heredoc_content` keeps the text as
+written; the stripping is the reader's transformation, not a boundary in
+the source."""
+
+[[ignore]]
+signature = 'LIST <- heredoc_content'
+why = 'The packaging LIST over those dedented pieces; same bytes, same reasoning.'
+
+[[lex_ignore]]
+signature = 'token start inside `heredoc_content`'
+why = """
+Ripper's heredoc content tokens carry the `<<~` dedent split (per line,
+after the indentation to strip); ours span the text as written. The
+python f-string precedent: a declared coarseness at a place the
+reference lexer encodes a TRANSFORMATION, not a boundary."""
+
+[[lex_ignore]]
+signature = 'token end inside `heredoc_content`'
+why = 'The other edge of the same dedent split.'

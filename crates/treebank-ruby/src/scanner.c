@@ -59,6 +59,11 @@ enum TokenType {
   UNARY_PLUS,
   BLOCK_COMMENT,
   SIMPLE_SYMBOL,
+  COLON2,
+  COLON3,
+  DOT2,
+  DOT3,
+  SHORT_INTERPOLATION,
   ERROR_SENTINEL,
 };
 
@@ -80,6 +85,11 @@ typedef struct {
   uint8_t open;     // 0 when the delimiter pair is not nestable
   uint8_t close;
   uint8_t nesting;
+  // Regex character-class depth: `/` inside `[...]` is literal, and the
+  // depth (not a flag) is what keeps POSIX brackets (`[[:alpha:]]`)
+  // balanced. Lives here, not in the scan loop, so it survives the
+  // escape- and interpolation-token boundaries that split content.
+  uint8_t class_depth;
   bool interpolates;
 } Literal;
 
@@ -93,11 +103,16 @@ typedef struct {
 } Heredoc;
 
 typedef struct {
+  // One token of memory: `..`/`...` was the previous token, so a glued
+  // `-`/`+` is UNARY (CRuby's lexer is in BEG state after a range op).
+  bool after_range;
   uint8_t literal_count;
   Literal literals[MAX_LITERALS];
   uint8_t heredoc_count;
   Heredoc heredocs[MAX_HEREDOCS];
 } Scanner;
+
+static bool emit(TSLexer *lexer, uint16_t symbol);
 
 static inline void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
 static inline void skip(TSLexer *lexer) { lexer->advance(lexer, true); }
@@ -220,6 +235,7 @@ static bool push_literal(Scanner *s, TSLexer *lexer, uint8_t kind,
   l->open = (uint8_t)(open > 0 && open < 128 ? open : 0);
   l->close = (uint8_t)close;
   l->nesting = 0;
+  l->class_depth = 0;
   l->interpolates = interpolates;
   lexer->mark_end(lexer);
   lexer->result_symbol = literal_start_symbol(kind);
@@ -300,26 +316,65 @@ static bool scan_literal_body(Scanner *s, TSLexer *lexer, const bool *valid) {
     if (l->interpolates && c == '#') {
       advance(lexer);
       if (lexer->lookahead == '{') {
-        // Content ends before the `#`; the grammar's token.immediate
-        // `#{` opens the interpolation.
+        // Content ends before the `#`; the grammar's prec'd `#{` opens
+        // the interpolation.
         if (has_content && valid[STRING_CONTENT]) {
           lexer->result_symbol = STRING_CONTENT;
           return true;
         }
         return false;
       }
+      if ((lexer->lookahead == '@' || lexer->lookahead == '$') &&
+          valid[SHORT_INTERPOLATION]) {
+        // `#@ivar` / `#$gvar` — the shorthand interpolation. Content ends
+        // before the `#`; with none pending, the `#` itself is the token
+        // and the variable follows as its ordinary self. Only an
+        // IDENTIFIER-shaped variable counts (`#$%` is literal text, the
+        // way CRuby's lexer reads it), which one peek past the sigil
+        // settles.
+        if (has_content && valid[STRING_CONTENT]) {
+          lexer->result_symbol = STRING_CONTENT;
+          return true;
+        }
+        int32_t sigil = lexer->lookahead;
+        lexer->mark_end(lexer);
+        advance(lexer);
+        if (sigil == '@' && lexer->lookahead == '@') advance(lexer);
+        if (is_ident_start(lexer->lookahead)) {
+          lexer->result_symbol = SHORT_INTERPOLATION;
+          return true;
+        }
+        lexer->mark_end(lexer);
+        has_content = true;
+        continue;
+      }
       lexer->mark_end(lexer);
       has_content = true;
       continue;
     }
-    if (l->open != 0 && c == l->open) {
+    if (l->open != 0 && c == l->open &&
+        !(l->kind == LIT_REGEX && l->class_depth > 0)) {
       l->nesting++;
       advance(lexer);
       lexer->mark_end(lexer);
       has_content = true;
       continue;
     }
-    if (c == l->close) {
+    if (l->kind == LIT_REGEX && c == '[') {
+      if (l->class_depth < 255) l->class_depth++;
+      advance(lexer);
+      lexer->mark_end(lexer);
+      has_content = true;
+      continue;
+    }
+    if (l->kind == LIT_REGEX && c == ']' && l->class_depth > 0) {
+      l->class_depth--;
+      advance(lexer);
+      lexer->mark_end(lexer);
+      has_content = true;
+      continue;
+    }
+    if (c == l->close && !(l->kind == LIT_REGEX && l->class_depth > 0)) {
       if (l->nesting > 0) {
         l->nesting--;
         advance(lexer);
@@ -366,7 +421,7 @@ static bool scan_literal_body(Scanner *s, TSLexer *lexer, const bool *valid) {
 // uppercase (or underscore) first letter: `a <<b` is a shift whose right
 // operand is b in almost all real code, and the lexical state ruby uses to
 // know better is not visible from here. Ledgered.
-static bool scan_heredoc_beginning(Scanner *s, TSLexer *lexer) {
+static bool scan_heredoc_beginning(Scanner *s, TSLexer *lexer, bool ws_before) {
   if (s->heredoc_count >= MAX_HEREDOCS) return false;
   advance(lexer);
   if (lexer->lookahead != '<') return false;
@@ -406,7 +461,11 @@ static bool scan_heredoc_beginning(Scanner *s, TSLexer *lexer) {
     int32_t first = lexer->lookahead;
     if (!is_ident_start(first)) return false;
     if (require_upper && !((first >= 'A' && first <= 'Z') || first == '_')) {
-      return false;
+      // A bare LOWERCASE id (`<<eos`) is a heredoc only when whitespace
+      // precedes the `<<` — `a <<b` starts one (CRuby agrees, warning
+      // aside), `a<<b` stays the shift it looks like. Uppercase ids keep
+      // the wider acceptance they always had.
+      if (!ws_before) return false;
     }
     while (is_ident_char(lexer->lookahead) && len < MAX_HEREDOC_ID) {
       id[len++] = (char)lexer->lookahead;
@@ -481,6 +540,26 @@ static bool scan_heredoc_body(Scanner *s, TSLexer *lexer, const bool *valid) {
     }
     if (h->interpolates && c == '#') {
       advance(lexer);
+      if ((lexer->lookahead == '@' || lexer->lookahead == '$') &&
+          valid[SHORT_INTERPOLATION]) {
+        if (has_content && valid[HEREDOC_CONTENT]) {
+          h->at_line_start = false;
+          lexer->result_symbol = HEREDOC_CONTENT;
+          return true;
+        }
+        int32_t sigil = lexer->lookahead;
+        lexer->mark_end(lexer);
+        advance(lexer);
+        if (sigil == '@' && lexer->lookahead == '@') advance(lexer);
+        if (is_ident_start(lexer->lookahead)) {
+          h->at_line_start = false;
+          lexer->result_symbol = SHORT_INTERPOLATION;
+          return true;
+        }
+        lexer->mark_end(lexer);
+        has_content = true;
+        continue;
+      }
       if (lexer->lookahead == '{') {
         if (has_content && valid[HEREDOC_CONTENT]) {
           h->at_line_start = false;
@@ -719,6 +798,10 @@ bool tree_sitter_ruby_external_scanner_scan(void *payload, TSLexer *lexer,
     return false;
   }
 
+  // The range-op memory lives for exactly one token: read it, clear it.
+  bool after_range = s->after_range;
+  s->after_range = false;
+
   // `foo?` / `foo!` — one token with the identifier, but only when glued to
   // it (this runs before any whitespace is skipped) and only when not
   // really `!=` (`foo!=bar` is a comparison; `foo!==bar` is a call compared
@@ -826,7 +909,7 @@ bool tree_sitter_ruby_external_scanner_scan(void *payload, TSLexer *lexer,
       return false;
 
     case '<':
-      if (valid[HEREDOC_BEGINNING]) return scan_heredoc_beginning(s, lexer);
+      if (valid[HEREDOC_BEGINNING]) return scan_heredoc_beginning(s, lexer, ws_before);
       return false;
 
     case '"':
@@ -844,10 +927,41 @@ bool tree_sitter_ruby_external_scanner_scan(void *payload, TSLexer *lexer,
       advance(lexer);
       return push_literal(s, lexer, LIT_SUBSHELL, 0, '`', true);
 
-    case ':':
-      if (!valid[SYMBOL_START] && !valid[SIMPLE_SYMBOL]) return false;
+    case '.':
+      // `..` / `...` — from here so the scanner can set its one-token
+      // memory. A single `.` stays internal.
+      if (!valid[DOT2] && !valid[DOT3]) return false;
       advance(lexer);
-      if (lexer->lookahead == ':') return false; // scope resolution
+      if (lexer->lookahead != '.') return false;
+      advance(lexer);
+      if (lexer->lookahead == '.') {
+        advance(lexer);
+        if (!valid[DOT3]) return false;
+        s->after_range = true;
+        return emit(lexer, DOT3);
+      }
+      if (!valid[DOT2]) return false;
+      s->after_range = true;
+      return emit(lexer, DOT2);
+
+    case ':':
+      if (!valid[SYMBOL_START] && !valid[SIMPLE_SYMBOL] &&
+          !valid[COLON2] && !valid[COLON3]) {
+        return false;
+      }
+      advance(lexer);
+      if (lexer->lookahead == ':') {
+        // `::` — CRuby's lexer splits this by context: glued to a value it
+        // continues the chain (tCOLON2); spaced, or at a beginning
+        // position, it opens the global scope (tCOLON3). valid_symbols IS
+        // the value-context test: the chain token is only ever expected
+        // after one.
+        advance(lexer);
+        if (!ws_before && valid[COLON2]) return emit(lexer, COLON2);
+        if (valid[COLON3]) return emit(lexer, COLON3);
+        return false;
+      }
+      if (!valid[SYMBOL_START] && !valid[SIMPLE_SYMBOL]) return false;
       if (valid[SYMBOL_START] && lexer->lookahead == '"') {
         advance(lexer);
         return push_literal(s, lexer, LIT_SYMBOL, 0, '"', true);
@@ -913,12 +1027,14 @@ bool tree_sitter_ruby_external_scanner_scan(void *payload, TSLexer *lexer,
       if (lexer->lookahead == '=' || lexer->lookahead == '>') {
         return false; // -= and the -> of a lambda
       }
+      if (after_range && valid[UNARY_MINUS]) return emit(lexer, UNARY_MINUS);
       return scan_op_pair(lexer, valid, ws_before, BINARY_MINUS, UNARY_MINUS);
 
     case '+':
       if (!(valid[BINARY_PLUS] || valid[UNARY_PLUS])) return false;
       advance(lexer);
       if (lexer->lookahead == '=') return false; // +=
+      if (after_range && valid[UNARY_PLUS]) return emit(lexer, UNARY_PLUS);
       return scan_op_pair(lexer, valid, ws_before, BINARY_PLUS, UNARY_PLUS);
 
     default:
@@ -943,6 +1059,7 @@ unsigned tree_sitter_ruby_external_scanner_serialize(void *payload,
                                                      char *buffer) {
   Scanner *s = (Scanner *)payload;
   unsigned i = 0;
+  buffer[i++] = (char)(s->after_range ? 1 : 0);
   buffer[i++] = (char)s->literal_count;
   for (uint8_t k = 0; k < s->literal_count; k++) {
     Literal *l = &s->literals[k];
@@ -950,6 +1067,7 @@ unsigned tree_sitter_ruby_external_scanner_serialize(void *payload,
     buffer[i++] = (char)l->open;
     buffer[i++] = (char)l->close;
     buffer[i++] = (char)l->nesting;
+    buffer[i++] = (char)l->class_depth;
     buffer[i++] = (char)l->interpolates;
   }
   buffer[i++] = (char)s->heredoc_count;
@@ -971,6 +1089,7 @@ void tree_sitter_ruby_external_scanner_deserialize(void *payload,
   memset(s, 0, sizeof(Scanner));
   if (length == 0) return;
   unsigned i = 0;
+  s->after_range = buffer[i++] != 0;
   s->literal_count = (uint8_t)buffer[i++];
   for (uint8_t k = 0; k < s->literal_count; k++) {
     Literal *l = &s->literals[k];
@@ -978,6 +1097,7 @@ void tree_sitter_ruby_external_scanner_deserialize(void *payload,
     l->open = (uint8_t)buffer[i++];
     l->close = (uint8_t)buffer[i++];
     l->nesting = (uint8_t)buffer[i++];
+    l->class_depth = (uint8_t)buffer[i++];
     l->interpolates = buffer[i++] != 0;
   }
   s->heredoc_count = (uint8_t)buffer[i++];

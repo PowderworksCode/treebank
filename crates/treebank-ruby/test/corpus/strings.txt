@@ -138,3 +138,62 @@ r = %r{^/users/(\d+)$}x
       (escape_sequence)
       (string_content)
       (string_end))))
+
+================================================================================
+short interpolation, lowercase heredocs, regex classes
+================================================================================
+
+s = "hi #@name and #$stdout, #@@count"
+t = "literal #$% stays text"
+puts <<eos
+  body #@ivar
+eos
+r = /[/]/
+p = /[[:alpha:]]+[{}]/
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (string_content)
+      (interpolation
+        (instance_variable))
+      (string_content)
+      (interpolation
+        (global_variable))
+      (string_content)
+      (interpolation
+        (class_variable))
+      (string_end)))
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (string_content)
+      (string_content)
+      (string_end)))
+  (call_expression
+    (identifier)
+    (argument_list
+      (heredoc_beginning)))
+  (heredoc_body
+    (heredoc_content)
+    (interpolation
+      (instance_variable))
+    (heredoc_content)
+    (heredoc_end))
+  (assignment
+    (identifier)
+    (regex
+      (string_start)
+      (string_content)
+      (string_end)))
+  (assignment
+    (identifier)
+    (regex
+      (string_start)
+      (string_content)
+      (string_end))))

@@ -443,3 +443,67 @@ c = defined?(m).nil?
       (defined_expression
         (identifier))
       (identifier))))
+
+================================================================================
+scope chains stay chains, ranges keep their signs
+================================================================================
+
+ActionCable::Server::Worker.set_callback :work, prepend: true do |x|
+end
+y = file[a.size + 1..-"_helper.rb".size - 1]
+z = x..-1
+f(::File)
+
+--------------------------------------------------------------------------------
+
+(program
+  (call_expression
+    (member_expression
+      (scope_resolution
+        (scope_resolution
+          (constant)
+          (constant))
+        (constant))
+      (identifier))
+    (argument_list
+      (simple_symbol)
+      (pair
+        (hash_key_symbol)
+        (true)))
+    (do_block
+      (block_parameters
+        (parameter
+          (identifier)))
+      (block)))
+  (assignment
+    (identifier)
+    (subscript_expression
+      (identifier)
+      (range_expression
+        (binary_expression
+          (member_expression
+            (identifier)
+            (identifier))
+          (integer))
+        (binary_expression
+          (unary_expression
+            (member_expression
+              (string
+                (string_start)
+                (string_content)
+                (string_end))
+              (identifier)))
+          (integer)))))
+  (assignment
+    (identifier)
+    (call_expression
+      (identifier)
+      (argument_list
+        (range_expression
+          (unary_expression
+            (integer))))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (scope_resolution
+        (constant)))))

@@ -53,5 +53,8 @@ unreserved_keywords = 5
 # 9,900 came almost entirely from one static resolution: the pair rocket
 # outranking `_argument`'s reduce collapsed a swath of ambiguous cells;
 # the later do-attachment split (command route vs weighted value routes)
-# bought its correctness back for ~100 states.
-state_count = 7394
+# bought its correctness back for ~100 states, and the scanner round's
+# token splits (chain vs global-scope `::`, range operators with their
+# one-token memory, shorthand interpolation) another ~240 — each one a
+# fork the table no longer carries.
+state_count = 7635

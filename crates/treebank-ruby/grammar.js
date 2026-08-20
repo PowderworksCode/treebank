@@ -120,6 +120,11 @@ module.exports = grammar({
     $._unary_plus,
     $.block_comment,
     $.simple_symbol,
+    $._colon2,
+    $._colon3,
+    $._dot2,
+    $._dot3,
+    $._short_interpolation,
     $._error_sentinel,
   ],
 
@@ -508,9 +513,14 @@ module.exports = grammar({
       field('alternative', choice($._arg, $._jump)),
     )),
 
+    // The operators come from the scanner so it can remember them for one
+    // token: after `..` a glued minus is UNARY (CRuby's lexer is in BEG
+    // state there), which is what keeps `a.size + 1..-"x".size - 1` a
+    // range with a negated right side instead of an endless range being
+    // subtracted from (a mis-parse the shape gate caught).
     range_expression: $ => prec.left(PREC.range, seq(
       field('left', optional($._arg)),
-      field('operator', choice('..', '...')),
+      field('operator', choice(alias($._dot2, '..'), alias($._dot3, '...'))),
       field('right', optional($._arg)),
     )),
 
@@ -622,10 +632,20 @@ module.exports = grammar({
     // entirely — with a constant on the left the parser could never reduce
     // toward a lowercase property. GLR keeps both; the weight makes `A::B`
     // a scope_resolution where both complete.
-    scope_resolution: $ => prec.left(prec.dynamic(1, seq(
-      optional(field('scope', choice($.constant, $.scope_resolution, $.self))),
-      '::',
-      field('name', $.constant),
+    // The `::` is two tokens from the scanner, split the way CRuby's own
+    // lexer splits it: glued to a value it continues the chain (tCOLON2),
+    // spaced or at a beginning position it opens the global scope
+    // (tCOLON3). valid_symbols is the value-context test — the chain
+    // token is only ever expected after one — so `A::B::C` extends
+    // deterministically and never forks into `A::B(::C...)`, the steal
+    // the shape gate held visible.
+    scope_resolution: $ => prec.left(prec.dynamic(1, choice(
+      seq(
+        field('scope', choice($.constant, $.scope_resolution, $.self)),
+        alias($._colon2, '::'),
+        field('name', $.constant),
+      ),
+      seq(alias($._colon3, '::'), field('name', $.constant)),
     ))),
 
     parenthesized_expression: $ => prec(PREC.member, seq(
@@ -654,7 +674,7 @@ module.exports = grammar({
       ),
       seq(
         field('object', $._primary),
-        field('operator', '::'),
+        field('operator', alias($._colon2, '::')),
         // A constant property is allowed — `typeclass::TypeValue` reads a
         // constant off a computed receiver — and where the whole chain is
         // constants, scope_resolution's dynamic weight wins instead.
@@ -849,7 +869,7 @@ module.exports = grammar({
 
     block_argument: $ => prec.right(seq(alias($._block_amp, '&'), optional($._arg))),
 
-    forward_argument: _ => '...',
+    forward_argument: $ => alias($._dot3, '...'),
 
     // prec.LEFT for the jump-keyword reason (FIELD_GUIDE.md §6): at
     // `yield • unless` the bare yield must reduce so the `unless` becomes
@@ -988,7 +1008,7 @@ module.exports = grammar({
       optional(field('value', $._arg)),
     )),
 
-    forward_parameter: _ => '...',
+    forward_parameter: $ => alias($._dot3, '...'),
 
     tuple_parameter: $ => seq(
       '(',
@@ -1016,7 +1036,7 @@ module.exports = grammar({
           $.self, $.identifier, $.constant, $._variable,
           $.parenthesized_expression,
         )),
-        choice('.', '::'),
+        choice('.', alias($._colon2, '::')),
       )),
       field('name', choice(
         $._name,
@@ -1271,7 +1291,7 @@ module.exports = grammar({
 
     pattern_range: $ => prec.left(PREC.range, seq(
       field('left', optional($._pattern_value)),
-      field('operator', choice('..', '...')),
+      field('operator', choice(alias($._dot2, '..'), alias($._dot3, '...'))),
       field('right', optional($._pattern_value)),
     )),
 
@@ -1494,10 +1514,21 @@ module.exports = grammar({
     // beats the comment regex wherever `#{` is valid, and immediacy would
     // reject `%W[a #{v}]`, where a word-array separator space legitimately
     // precedes a whole-word interpolation.
-    interpolation: $ => seq(
-      token(prec(1, '#{')),
-      optional(field('expression', $._statements)),
-      '}',
+    interpolation: $ => choice(
+      seq(
+        token(prec(1, '#{')),
+        optional(field('expression', $._statements)),
+        '}',
+      ),
+      // `#@ivar`, `#@@cvar`, `#$gvar` — the shorthand. The `#` comes from
+      // the scanner, which stops string content in front of it only when a
+      // variable sigil follows; the variable is its ordinary token.
+      seq(
+        alias($._short_interpolation, '#'),
+        field('expression', choice(
+          $.instance_variable, $.class_variable, $.global_variable,
+        )),
+      ),
     ),
 
     heredoc_body: $ => seq(

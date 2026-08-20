@@ -90,7 +90,11 @@ it:
 
 1. **Write the grammar.** `crates/treebank-<lang>/` — `grammar.js`,
    `tree-sitter.json`, `roles.json`, `ledger.toml`, `build.rs`, the Rust
-   bindings, and `test/corpus` + `test/negative`.
+   bindings, and `test/corpus` + `test/negative`. `lint_policy.toml` and
+   `shape_policy.toml` are optional and arrive later: the first ratchets
+   the FIELD_GUIDE.md smells once the grammar has settled, the second
+   declares where the reference parser groups the tree differently on
+   purpose. Both are advisory until written.
 2. **Register the language.** One line in the `languages!` block in
    [`crates/treebank-lang/src/lib.rs`](crates/treebank-lang/src/lib.rs):
    canonical name, source extensions, and which grammar parses it.

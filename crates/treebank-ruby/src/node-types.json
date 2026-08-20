@@ -3566,6 +3566,18 @@
           {
             "type": "_statement",
             "named": true
+          },
+          {
+            "type": "class_variable",
+            "named": true
+          },
+          {
+            "type": "global_variable",
+            "named": true
+          },
+          {
+            "type": "instance_variable",
+            "named": true
           }
         ]
       }
@@ -6845,6 +6857,10 @@
   },
   {
     "type": "!~",
+    "named": false
+  },
+  {
+    "type": "#",
     "named": false
   },
   {
