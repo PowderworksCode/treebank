@@ -70,6 +70,10 @@ pub fn get(name: LangName) -> Option<&'static dyn Unparser> {
         LangName::Java => None,
         // bash has no printer; nothing renders a script back from a tree.
         LangName::Bash => None,
+        // Zig has `std.zig.render`, which is what `zig fmt` is built on, so
+        // an unparser is reachable through a small program the way the node
+        // and python ones are. Not built yet.
+        LangName::Zig => None,
         // Nothing renders SQL back from sqlite's parse: it is freed during
         // prepare, and the VDBE program the oracle can see is not the
         // statement.

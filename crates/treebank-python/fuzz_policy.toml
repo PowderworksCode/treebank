@@ -13,3 +13,8 @@ py2 print statement. This grammar is 2.7 ∪ 3.x by design (ledger.versions), so
 [[declared]]
 starts_with = 'exec '
 why = 'py2 exec statement; same union decision as `print`.'
+
+[[declared]]
+starts_with = 'lambda ('
+why = '''
+py2 tuple parameters: `lambda (x, y): x` destructures its argument in 2.7 and is `Lambda expression parameters cannot be parenthesized` in 3.x. Same union decision as `print` (ledger.versions); the fuzzer judges against the py3 parser, so the py2-only form reports as a widening and is meant to.'''

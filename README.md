@@ -18,8 +18,9 @@ grammar policy, the testing invariants, and the crate layout. Start there.
 | `crates/treebank-python` | Python 2.7 ∪ 3.x in one grammar |
 | `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
 | `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |
-| `crates/treebank-java` | Java in one grammar |
+| `crates/treebank-java` | Java 8 through 21 in one grammar |
 | `crates/treebank-bash` | GNU bash 5.x in one grammar |
+| `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-sql` | SQLite ∪ PostgreSQL ∪ MySQL in one grammar — the dialect union, which is what "one grammar per language across versions" means for SQL |
 | `crates/treebank-core` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |

@@ -1,0 +1,152 @@
+# Declared exceptions for `treebank shape`. Every entry names WHY, and a
+# reason nobody can read is a reason nobody re-examines. Same contract as
+# the python policy: pairs, not bare oracle kinds, and nothing goes in here
+# to make a number go down.
+
+rule = '''
+Boundaries `treebank shape` may ignore, as `"<javac Tree.Kind> <- <our_kind>"` pairs. Each is a place our tree groups the code DIFFERENTLY from javac's on purpose, not a place we disagree about the code. Every entry was read and confirmed by hand on corpus examples.'''
+baseline_missed = 0
+baseline_note = '''
+Zero, over the FULL corpus: 116,920,180 oracle nodes across 243,385 files, after the declared granularity differences. The road there ran 28,719 -> 2,641 -> 430 -> 15 -> 0, and every step was either a grammar fix or a hand-read declaration: the modifier-wrap unification (parameters, patterns, enum constants, for-heads, locals), the pattern owning its `final`, and the JLS-15.16 cast split that caught bouncycastle's `(s1_2 & U32) + x` parsed as an intersection-type cast. The oracle's first 500 files found `++last == maxSize` and the compact-constructor GLR tie; the full corpus found the rest. Raising this number is a decision that belongs in a commit message.'''
+
+[[ignore]]
+signature = 'MEMBER_SELECT <- method_invocation'
+why = '''
+javac wraps the receiver-dot-name of every call -- `bean.getClass` inside `bean.getClass()` -- as a MEMBER_SELECT node. Our method_invocation is flat, holding `object:` and `name:` fields directly, so no node spans exactly the select. The fields carry the same information; upstream tree-sitter-java flattens identically. By far the largest cluster: 7,222 of the first run's 7,574 misses.'''
+
+[[ignore]]
+signature = 'MEMBER_SELECT <- import_declaration'
+why = '''
+`import a.b.*;` -- javac's MEMBER_SELECT spans `a.b.*` with the asterisk as its member. Ours is a scoped_identifier for `a.b` with the `*` a separate token of the import, so the dotted-name node stops before the star.'''
+
+[[ignore]]
+signature = 'VARIABLE <- enhanced_for_statement'
+why = '''
+javac wraps the loop variable of `for (Method m : ms)` as a VARIABLE spanning `Method m`. Our enhanced_for_statement holds `type:` and `name:` fields directly. Same flattening as method_invocation's select.'''
+
+[[ignore]]
+signature = 'CASE <- switch_label_group'
+why = '''
+javac's CASE spans `case L:` INCLUDING the colon. Our case_label excludes it -- the group owns the colon, because the same case_label is shared with the arrow form where a colon never exists. One byte of disagreement about who owns a separator.'''
+
+[[ignore]]
+signature = 'CASE <- switch_rule'
+why = 'The arrow form of the entry above, where javac CASE spans differ from our shared label the same way.'
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- spread_parameter'
+why = '''
+Varargs: javac types `String... args` as an ARRAY_TYPE spanning `String...`. Ours keeps the element type and the `...` as siblings in spread_parameter, because the dots are parameter syntax, not type syntax.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- local_variable_declaration'
+why = '''
+C-style declarators: in `String args[]`, javac reports an ARRAY_TYPE whose span runs from `String` THROUGH the identifier to the `]` -- a range covering a node that is not a subtree in any concrete syntax. No tree we could build has that boundary.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- field_declaration'
+why = 'The field form of the entry above.'
+
+[[ignore]]
+signature = 'VARIABLE <- field_declaration'
+why = '''
+Multi-declarator fields: javac splits `int a, b;` into one VARIABLE per declarator, each spanning from the MODIFIERS through its own name -- so the second's span overlaps the first's and includes a trailing comma. Ours is one field_declaration with two declarators, which is what the file says.'''
+
+[[ignore]]
+signature = 'VARIABLE <- local_variable_declaration'
+why = 'The local form of the entry above.'
+
+[[ignore]]
+signature = 'UNION_TYPE <- catch_parameter'
+why = '''
+`catch (A | B e)` -- javac wraps `A | B` as a UNION_TYPE node. Our catch_parameter lists the alternatives directly. A union node may be worth adding for the `_type` vocabulary some day; until that decision is made this is a declared difference, not an accident.'''
+
+[[ignore]]
+signature = 'MODIFIERS <- annotation_type_declaration'
+why = '''
+javac's MODIFIERS on `@interface` ends AFTER the declaration's own `@` -- `public @` -- because internally the annotation-type flag lives in the modifier set and the `@` token's extent is folded into it. No tree whose `@interface` belongs to the declaration can put a node boundary there.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- array_creation_expression'
+why = '''
+`new int[N][]` -- javac types the whole creation as an ARRAY_TYPE spanning `int[N][]`, dimensions and their expressions included. Ours keeps `type:` as the element type and the dimensions as siblings, because `N` is a value, not part of a type.'''
+
+[[ignore]]
+signature = 'INTERSECTION_TYPE <- cast_expression'
+why = '''
+`(Function<A,B> & Serializable) x` -- javac wraps `A & B` as an INTERSECTION_TYPE node. Our cast lists the `&`-joined types directly. Same standing decision as UNION_TYPE in catches.'''
+
+[[ignore]]
+signature = 'NEW_CLASS <- enum_constant'
+why = '''
+An enum constant with a body -- `FOO() { ... }` -- is internally a NEW_CLASS (anonymous class instantiation) to javac, spanning from the arguments through the body. Ours is an enum_constant with `arguments:` and `body:` fields, which is what the file says it is.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- parameter'
+why = 'The parameter form of `ARRAY_TYPE <- local_variable_declaration`: C-style `float copyFrom[]`, where javac reports a type span crossing the identifier.'
+
+[[ignore]]
+signature = 'ANNOTATED_TYPE <- spread_parameter'
+why = '''
+`Object @Nullable ...` -- a type-use annotation on the varargs dimension. javac wraps base type and trailing annotation as one ANNOTATED_TYPE; ours keeps the annotation a sibling between type and `...`, because it annotates the dimension the parameter owns, not the element type.'''
+
+[[ignore]]
+signature = 'IDENTIFIER <- spread_parameter'
+why = 'javac endpos artifact of the entry above: the IDENTIFIER for the base type reports an end past the trailing annotation.'
+
+[[ignore]]
+signature = 'PRIMITIVE_TYPE <- spread_parameter'
+why = 'See `IDENTIFIER <- spread_parameter`.'
+
+[[ignore]]
+signature = 'PARAMETERIZED_TYPE <- spread_parameter'
+why = 'See `IDENTIFIER <- spread_parameter`.'
+
+[[ignore]]
+signature = 'ANNOTATED_TYPE <- annotated_type'
+why = '''
+Nested type-use annotations inside generics: javac builds an ANNOTATED_TYPE per annotated component with spans that include the enclosing type arguments; ours annotates the component in place. Boundary difference in where the wrapper sits, confirmed against caffeine's `@Nullable CompletableFuture` fields.'''
+
+[[ignore]]
+signature = 'ANNOTATED_TYPE <- array_creation_expression'
+why = 'The array-creation face of the type-use annotation family: `new @Nullable Object[n]`.'
+
+[[ignore]]
+signature = 'EXTENDS_WILDCARD <- wildcard'
+why = '''
+`<@NonNull ? extends X>` -- our wildcard owns its annotations (repeat($._attribute) at the front, the same decision as python's decorators), so it starts at the `@`; javac's EXTENDS_WILDCARD starts at the `?` and hangs the annotation elsewhere. A deliberate difference in where the construct begins.'''
+
+[[ignore]]
+signature = 'SUPER_WILDCARD <- wildcard'
+why = 'See `EXTENDS_WILDCARD <- wildcard`.'
+
+[[ignore]]
+signature = 'ENUM <- enum_constant'
+why = '''
+An enum constant with a body is internally an anonymous class to javac -- an ENUM/NEW_CLASS pair whose spans run from the arguments through the body. Same family as the declared `NEW_CLASS <- enum_constant`.'''
+
+[[ignore]]
+signature = 'MEMBER_SELECT <- explicit_constructor_invocation'
+why = '''
+Qualified super: `outer.super(...)`. javac wraps `outer.super` as a MEMBER_SELECT; ours holds the qualifier and `super` as fields of the invocation, the same flattening as every method call's receiver.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- enhanced_for_statement'
+why = 'The for-head form of the C-style declarator family: `for (Object objs[] : ...)`.'
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- method_declaration'
+why = 'The return-type form of the C-style family: `byte getBytes()[]`, where javac reports a type span crossing the parameter list.'
+
+[[ignore]]
+signature = 'ANNOTATED_TYPE <- object_creation_expression'
+why = 'The `new` face of the type-use annotation family: `new @Namespace(...) Key<>()`, where javac wraps annotation and type as one node and ours keeps the annotation a child of the creation.'
+
+[[ignore]]
+signature = 'PARAMETERIZED_TYPE <- object_creation_expression'
+why = 'See `ANNOTATED_TYPE <- object_creation_expression`: javac reports the parameterized type spanning back across the annotation.'
+
+[[ignore]]
+signature = 'MODULE <- program'
+why = '''
+`open module m { ... }` -- javac's MODULE starts at the `module` keyword, with `open` living in its modifier flags; our module_declaration starts at `open`, which it owns. Same family as MODIFIERS on `@interface`.'''

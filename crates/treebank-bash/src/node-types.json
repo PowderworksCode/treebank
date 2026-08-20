@@ -22,6 +22,10 @@
         "named": true
       },
       {
+        "type": "brace_expression",
+        "named": true
+      },
+      {
         "type": "concatenation",
         "named": true
       },
@@ -232,6 +236,10 @@
         "named": true
       },
       {
+        "type": "command",
+        "named": true
+      },
+      {
         "type": "compound_statement",
         "named": true
       },
@@ -258,6 +266,10 @@
       {
         "type": "test_command",
         "named": true
+      },
+      {
+        "type": "variable_assignments",
+        "named": true
       }
     ]
   },
@@ -274,11 +286,11 @@
           "named": true
         },
         {
-          "type": "concatenation",
+          "type": "number",
           "named": true
         },
         {
-          "type": "word",
+          "type": "variable_name",
           "named": true
         }
       ]
@@ -297,11 +309,11 @@
           "named": true
         },
         {
-          "type": "concatenation",
+          "type": "number",
           "named": true
         },
         {
-          "type": "word",
+          "type": "variable_name",
           "named": true
         }
       ]
@@ -320,7 +332,34 @@
           "named": true
         },
         {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
           "type": "concatenation",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "brace_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
           "named": true
         },
         {
@@ -343,7 +382,15 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
+            "named": true
+          },
+          {
+            "type": "number",
             "named": true
           },
           {
@@ -352,6 +399,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -382,11 +439,11 @@
           "named": true
         },
         {
-          "type": "concatenation",
+          "type": "number",
           "named": true
         },
         {
-          "type": "word",
+          "type": "variable_name",
           "named": true
         }
       ]
@@ -402,6 +459,10 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -443,6 +504,10 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
             "named": true
           },
@@ -459,6 +524,10 @@
       "types": [
         {
           "type": "case_item",
+          "named": true
+        },
+        {
+          "type": "redirect",
           "named": true
         }
       ]
@@ -480,10 +549,14 @@
       },
       "name": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "brace_expression",
             "named": true
           },
           {
@@ -501,6 +574,10 @@
       "multiple": true,
       "required": false,
       "types": [
+        {
+          "type": "redirect",
+          "named": true
+        },
         {
           "type": "variable_assignment",
           "named": true
@@ -534,6 +611,10 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "redirect",
+          "named": true
         }
       ]
     }
@@ -548,6 +629,10 @@
       "types": [
         {
           "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
           "named": true
         },
         {
@@ -570,7 +655,15 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
+            "named": true
+          },
+          {
+            "type": "number",
             "named": true
           },
           {
@@ -579,6 +672,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -594,7 +697,15 @@
           "named": true
         },
         {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
           "type": "concatenation",
+          "named": true
+        },
+        {
+          "type": "redirect",
           "named": true
         },
         {
@@ -685,6 +796,10 @@
           "named": true
         },
         {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
           "type": "concatenation",
           "named": true
         },
@@ -694,11 +809,6 @@
         }
       ]
     }
-  },
-  {
-    "type": "file_descriptor",
-    "named": true,
-    "fields": {}
   },
   {
     "type": "for_statement",
@@ -723,6 +833,10 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
             "named": true
           },
@@ -742,6 +856,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -866,6 +990,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -922,11 +1056,6 @@
         }
       ]
     }
-  },
-  {
-    "type": "number",
-    "named": true,
-    "fields": {}
   },
   {
     "type": "pipeline",
@@ -1022,6 +1151,10 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
             "named": true
           },
@@ -1049,6 +1182,10 @@
           },
           {
             "type": "<&",
+            "named": false
+          },
+          {
+            "type": "<<<",
             "named": false
           },
           {
@@ -1098,7 +1235,15 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
+            "named": true
+          },
+          {
+            "type": "number",
             "named": true
           },
           {
@@ -1107,6 +1252,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1197,6 +1352,10 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "redirect",
+          "named": true
         }
       ]
     }
@@ -1214,7 +1373,19 @@
           "named": true
         },
         {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
           "type": "concatenation",
+          "named": true
+        },
+        {
+          "type": "redirect",
+          "named": true
+        },
+        {
+          "type": "regex",
           "named": true
         },
         {
@@ -1260,12 +1431,36 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
     "type": "variable_assignment",
     "named": true,
     "fields": {
+      "index": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "word",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,
@@ -1289,6 +1484,10 @@
             "named": true
           },
           {
+            "type": "brace_expression",
+            "named": true
+          },
+          {
             "type": "concatenation",
             "named": true
           },
@@ -1298,6 +1497,21 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "variable_assignments",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "variable_assignment",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1336,6 +1550,16 @@
           }
         ]
       }
+    },
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "redirect",
+          "named": true
+        }
+      ]
     }
   },
   {
@@ -1368,6 +1592,10 @@
   },
   {
     "type": "$((",
+    "named": false
+  },
+  {
+    "type": "$[",
     "named": false
   },
   {
@@ -1511,6 +1739,10 @@
     "named": false
   },
   {
+    "type": "<<<",
+    "named": false
+  },
+  {
     "type": "<=",
     "named": false
   },
@@ -1587,6 +1819,10 @@
     "named": false
   },
   {
+    "type": "alias",
+    "named": false
+  },
+  {
     "type": "ansi_c_string",
     "named": true
   },
@@ -1636,12 +1872,20 @@
     "named": true
   },
   {
+    "type": "eval",
+    "named": false
+  },
+  {
     "type": "export",
     "named": false
   },
   {
     "type": "fi",
     "named": false
+  },
+  {
+    "type": "file_descriptor",
+    "named": true
   },
   {
     "type": "for",
@@ -1672,8 +1916,16 @@
     "named": false
   },
   {
+    "type": "let",
+    "named": false
+  },
+  {
     "type": "local",
     "named": false
+  },
+  {
+    "type": "number",
+    "named": true
   },
   {
     "type": "raw_string",
@@ -1682,6 +1934,10 @@
   {
     "type": "readonly",
     "named": false
+  },
+  {
+    "type": "regex",
+    "named": true
   },
   {
     "type": "return",

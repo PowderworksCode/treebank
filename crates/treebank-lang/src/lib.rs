@@ -26,6 +26,9 @@ pub enum LangName {
     #[serde(rename = "bash")]
     #[value(name = "bash")]
     Bash,
+    #[serde(rename = "zig")]
+    #[value(name = "zig")]
+    Zig,
     /// One grammar for the dialect union, the way every other language
     /// here gets one grammar for its version union: SQLite, PostgreSQL and
     /// MySQL are to SQL what editions are to Rust.
@@ -43,6 +46,7 @@ impl LangName {
             LangName::Javascript => "javascript",
             LangName::Java => "java",
             LangName::Bash => "bash",
+            LangName::Zig => "zig",
             LangName::Sql => "sql",
         }
     }

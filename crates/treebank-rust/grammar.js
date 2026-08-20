@@ -40,6 +40,19 @@ module.exports = grammar({
 
   word: $ => $.identifier,
 
+  // The `reserved` word set the _soft_keyword comment said `box` really
+  // wanted: the lexer stops offering `identifier` for these even where the
+  // keyword itself is not valid, which is what `#![box]`, `union box { }`
+  // and `extern crate box` were slipping through. Both words are reserved
+  // in EVERY edition, so the version-union grammar (DESIGN.md §4.2) loses
+  // no 2015 code by refusing them. `try` and `dyn` stay identifiers -- they
+  // are exactly that in edition 2015 -- and the other reserved-but-unused
+  // words (`abstract`, `priv`, ...) cannot join: tree-sitter only reserves
+  // tokens the grammar uses, and no rule speaks them.
+  reserved: {
+    global: $ => ['box', 'yield'],
+  },
+
   extras: $ => [
     /\s/,
     $.line_comment,
@@ -290,8 +303,18 @@ module.exports = grammar({
     function_definition: $ => seq(
       repeat($._attribute),
       optional($.visibility_modifier),
-      repeat(choice('default', 'const', 'async', 'unsafe', 'safe',
-        seq('extern', optional(alias($._abi, $.string))))),
+      // Ordered, once each -- rust's FunctionQualifiers are `const? async?
+      // unsafe? extern?` (`default` is an impl prefix, `safe` a foreign-item
+      // qualifier). The bare `repeat(choice(...))` before this accepted
+      // `safe safe fn` and `unsafe const fn`: 20 fuzz seeds of doubled and
+      // misordered qualifiers. `safe` outside an extern block is still
+      // accepted -- restricting it needs the extern body split from the
+      // shared declaration_list; fuzz_policy.toml declares it meanwhile.
+      optional('default'),
+      optional('const'),
+      optional('async'),
+      optional(choice('unsafe', 'safe')),
+      optional(seq('extern', optional(alias($._abi, $.string)))),
       'fn',
       field('name', $._name),
       field('type_parameters', optional($.type_parameters)),
@@ -1225,7 +1248,7 @@ module.exports = grammar({
     // matter what this list says. The same sentence explains python
     // accepting `return yield` and typescript accepting `function ( ) ;`.
     // All three want `reserved` word sets, which is one change, not three.
-    _soft_keyword: _ => choice('raw', 'default', 'auto', 'union', 'macro_rules', 'safe', 'box'),
+    _soft_keyword: _ => choice('raw', 'default', 'auto', 'union', 'macro_rules', 'safe'),
 
     identifier: _ => /r#?[_\p{XID_Start}][_\p{XID_Continue}]*|[_\p{XID_Start}][_\p{XID_Continue}]*/,
 

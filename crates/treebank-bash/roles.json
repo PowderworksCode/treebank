@@ -52,20 +52,24 @@
       "reason": "the digit before a redirection operator"
     },
     {
-      "node": "heredoc_start",
-      "reason": "the delimiter word after `<<`; the scanner captures it to find the end"
-    },
-    {
       "node": "heredoc_end",
       "reason": "the line that closes a heredoc"
     },
     {
-      "node": "subscript",
-      "reason": "`x[i]` inside an expansion"
-    },
-    {
       "node": "heredoc_redirect",
       "reason": "the `<<` form of the same"
+    },
+    {
+      "node": "heredoc_start",
+      "reason": "the delimiter word after `<<`; the scanner captures it to find the end"
+    },
+    {
+      "node": "regex",
+      "reason": "the right side of `=~` inside [[ ]]; a foreign syntax (POSIX ERE) carried as one token, the same standing as string content"
+    },
+    {
+      "node": "subscript",
+      "reason": "`x[i]` inside an expansion"
     }
   ]
 }

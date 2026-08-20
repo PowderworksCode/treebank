@@ -62,6 +62,11 @@ pub fn get(name: LangName) -> Option<&'static dyn Reformatter> {
         LangName::Java => None,
         // shfmt is the candidate and is not installed.
         LangName::Bash => None,
+        // `zig fmt` is the obvious candidate and is a real reformatter
+        // shipped with the compiler. Not wired yet: the reformat gate wants
+        // the tool pinned alongside the oracle, and the oracle's own
+        // version pin is the thing to settle first.
+        LangName::Zig => None,
         // sqlformat and pg_format are the candidates and neither is
         // installed; SQLite ships no formatter of its own.
         LangName::Sql => None,

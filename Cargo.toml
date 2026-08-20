@@ -12,5 +12,6 @@ members = [
     "crates/treebank-rust",
     "crates/treebank-sql",
     "crates/treebank-typescript",
+    "crates/treebank-zig",
 ]
 resolver = "2"

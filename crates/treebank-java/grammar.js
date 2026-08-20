@@ -83,20 +83,31 @@ module.exports = grammar({
     [$.field_declaration, $._type],
     [$.modifiers, $.annotated_type],
     [$.lambda, $._name],
+    [$.annotated_type, $.catch_parameter],
+    [$.annotated_type, $.type_pattern],
     [$.module_declaration, $.package_declaration, $.modifiers],
     [$.module_declaration, $.modifiers],
     [$.annotation_type_element, $.parameters],
     [$.switch_label_group],
     [$.switch_statement, $.switch_expression],
+    [$._statement_expression, $._primary],
+    [$._statement_expression, $._no_lambda],
+    [$.switch_block, $._switch_block_expr],
+    [$.switch_rule, $._switch_rule_expr],
+    [$.switch_label_group],
     [$._unannotated_type, $.generic_type],
     [$._type_id, $.inferred_parameters, $._name],
+    [$.arguments, $._record_pattern_body],
+    [$._type_id, $._name],
     [$.annotation_type_body, $._member],
     [$.modifiers, $.local_variable_declaration],
+    [$.local_variable_declaration, $.enhanced_for_statement],
     [$._modifier, $.local_variable_declaration],
     [$.array_type],
     [$._primary, $.scoped_identifier],
     [$._unannotated_type, $.scoped_type_identifier],
     [$.element_value_pair, $._name],
+    [$.arguments, $._record_pattern_body],
     [$._type_id, $._name],
     [$.parameter, $.spread_parameter, $.receiver_parameter],
     [$.modifiers],
@@ -210,7 +221,7 @@ module.exports = grammar({
     ),
 
     enum_constant: $ => seq(
-      repeat($._attribute),
+      optional(alias($._enum_constant_modifiers, $.modifiers)),
       field('name', $.identifier),
       field('arguments', optional($.arguments)),
       field('body', optional($.class_body)),
@@ -226,13 +237,26 @@ module.exports = grammar({
       field('body', $.class_body),
     ),
 
-    annotation_type_declaration: $ => seq(
+    // The dynamic precedence breaks a GLR tie. `public @interface C { }`
+    // as a class member has a second complete reading: a compact
+    // constructor named C whose modifiers include an annotation named
+    // `interface` -- keyword extraction only prefers the keyword within
+    // one branch, and a GLR split keeps both alive. With an empty body
+    // nothing downstream kills the wrong branch, and the tie broke toward
+    // the compact constructor: zero errors, entirely wrong tree, found by
+    // the javac span oracle in args4j. A real annotation-type declaration
+    // beats a constructor conjured from `@interface`.
+    //
+    // The deeper looseness -- compact constructors are RECORD-only members
+    // (JLS 8.10.4) and `_member` offers them in every class body -- is a
+    // declared widening, not fixable here without splitting `_member`.
+    annotation_type_declaration: $ => prec.dynamic(1, seq(
       optional($.modifiers),
       '@',
       'interface',
       field('name', $.identifier),
       field('body', $.annotation_type_body),
-    ),
+    )),
 
     annotation_type_body: $ => seq('{', repeat(choice($._member, $.annotation_type_element, ';')), '}'),
 
@@ -355,7 +379,13 @@ module.exports = grammar({
     // ── types ────────────────────────────────────────────────────────
     _type: $ => choice($._unannotated_type, $.annotated_type),
 
-    annotated_type: $ => seq(repeat1($._attribute), $._unannotated_type),
+    // The negative dynamic precedence loses GLR ties on purpose: at
+    // `@SuppressWarnings("x") @Override R call();` both readings complete --
+    // annotations on the DECLARATION (javac's MODIFIERS) or a java-8
+    // annotated TYPE `@A @B R`. javac attributes leading annotations to the
+    // declaration, and so do we; annotated_type still wins wherever it is
+    // the only reading, e.g. `List<@NonNull String>`.
+    annotated_type: $ => prec.dynamic(-1, seq(repeat1($._attribute), $._unannotated_type)),
 
     _type_id: $ => alias($.identifier, $.type_identifier),
 
@@ -436,15 +466,19 @@ module.exports = grammar({
 
     _parameter: $ => choice($.parameter, $.spread_parameter, $.receiver_parameter),
 
+    // `modifiers`-wrapped like every other declaration -- the full-corpus
+    // javac span run found 23,283 MODIFIERS boundaries at parameters with
+    // no node of ours, the same inconsistency the 2k sample caught on
+    // locals. One construct, one shape, everywhere.
     parameter: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       field('name', $.identifier),
       optional($._dims),
     ),
 
     spread_parameter: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       repeat($._attribute),
       '...',
@@ -475,7 +509,21 @@ module.exports = grammar({
 
     block: $ => seq('{', repeat($._statement), '}'),
     empty_statement: _ => ';',
-    expression_statement: $ => seq($._expression, ';'),
+    // JLS 14.8: an expression STATEMENT is an assignment, an increment or
+    // decrement, an invocation, or an instance creation -- never `1 + 2;`
+    // or a bare name. The same list serves the arrow-switch rule body,
+    // because `case A -> 1;` is only legal where the switch is an
+    // EXPRESSION; as a statement its arrow body must be one of these (or a
+    // block or throw). javac's span oracle flagged the switch half; the
+    // expression_statement half is the same rule enforced at its source.
+    expression_statement: $ => seq($._statement_expression, ';'),
+
+    _statement_expression: $ => choice(
+      $._assignment,
+      $.update_expression,
+      $._invocation,
+      $.object_creation_expression,
+    ),
 
     labeled_statement: $ => seq(field('label', $.identifier), ':', $._statement),
 
@@ -492,14 +540,25 @@ module.exports = grammar({
       ';',
     ),
 
+    // `modifiers`-wrapped, like every other declaration. This used to be a
+    // bare repeat, which gave the SAME construct two tree shapes -- a field
+    // wraps its annotations in `modifiers`, a local scattered them as
+    // direct children -- and any consumer querying modifiers had to know
+    // which position it was standing in. The javac span oracle surfaced it:
+    // MODIFIERS had a boundary at every annotated local and we had no node.
+    // Only what a local may carry goes in (JLS 14.4: annotations and
+    // `final`), so `public int x;` in a block stays an error.
     local_variable_declaration: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       $._declarator_list,
       ';',
     ),
 
     _declarator_list: $ => seq($.variable_declarator, repeat(seq(',', $.variable_declarator))),
+
+    _local_modifiers: $ => repeat1(choice($._attribute, $.final_modifier)),
+    _enum_constant_modifiers: $ => repeat1($._attribute),
 
     variable_declarator: $ => seq(
       field('name', $.identifier),
@@ -540,10 +599,28 @@ module.exports = grammar({
     switch_block: $ => seq('{', choice(repeat($.switch_rule), repeat($.switch_label_group)), '}'),
 
     // Java 14 arrow form: `case A -> expr;`
+    // The STATEMENT form: an arrow body here must be a statement
+    // expression (JLS 14.11.1) -- `case A -> 1;` is only legal where the
+    // switch is an expression. The expression form below stays lax.
     switch_rule: $ => seq(
       $._switch_label,
       '->',
+      choice(field('body', $.block), $.throw_statement, $.expression_statement),
+    ),
+
+    _switch_rule_expr: $ => seq(
+      $._switch_label,
+      '->',
       choice(field('body', $.block), $.throw_statement, seq($._expression, ';')),
+    ),
+
+    _switch_block_expr: $ => seq(
+      '{',
+      choice(
+        repeat(alias($._switch_rule_expr, $.switch_rule)),
+        repeat($.switch_label_group),
+      ),
+      '}',
     ),
 
     // The colon form, whose statements belong to the label until the next.
@@ -590,7 +667,7 @@ module.exports = grammar({
     enhanced_for_statement: $ => seq(
       'for',
       '(',
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       field('name', $.identifier),
       optional($._dims),
@@ -747,30 +824,62 @@ module.exports = grammar({
       field('operand', $._no_lambda),
     )),
 
+    // The prefix operand is `_no_lambda`, NOT `_expression`, and the
+    // alternative is prec.LEFT. Both matter. With the full `_expression`
+    // there, `++last == maxSize` parsed as `++(last == maxSize)` -- the
+    // operand slot admitted a binary_expression and right-associativity
+    // told the conflict to keep extending it. javac reads it as
+    // `(++last) == maxSize`, which the shape oracle caught on real code
+    // (logback's CyclicBuffer) after the sweep had passed the file: the
+    // wrong tree parses cleanly.
     update_expression: $ => choice(
-      prec.right(PREC.unary, seq(choice('++', '--'), $._expression)),
-      prec.left(PREC.postfix, seq($._expression, choice('++', '--'))),
+      prec.left(PREC.unary, seq(choice('++', '--'), $._no_lambda)),
+      prec.left(PREC.postfix, seq($._no_lambda, choice('++', '--'))),
     ),
 
-    cast_expression: $ => prec(PREC.cast, seq(
-      '(',
-      field('type', $._type),
-      repeat(seq('&', $._type)),
-      ')',
-      field('value', $._expression),
-    )),
+    // Two forms with different strengths, which is the JLS's own
+    // disambiguation (15.16): a PRIMITIVE cast takes a full unary operand,
+    // `(byte) -1`; a REFERENCE cast takes UnaryExpressionNotPlusMinus, so
+    // `(s1_2 & U32) + x` is the parenthesized expression PLUS x, never a
+    // cast to an intersection type with a unary-plus operand -- which is
+    // exactly how the full-corpus javac span run caught bouncycastle's
+    // field arithmetic mis-parsed. The reference form loses GLR ties to
+    // the parenthesized reading; a genuine cast survives because the
+    // parenthesized reading has no way to continue past `(Foo) bar`.
+    //
+    // The operand is an inline choice rather than `$._expression`: the
+    // hidden rule's unit reduction broke the precedence contest (see the
+    // `++last == maxSize` commit).
+    cast_expression: $ => choice(
+      prec(PREC.cast, seq(
+        '(',
+        field('type', $.primitive_type),
+        ')',
+        field('value', choice($.lambda, $._no_lambda)),
+      )),
+      prec.dynamic(-1, prec(PREC.cast, seq(
+        '(',
+        field('type', $._type),
+        repeat(seq('&', $._type)),
+        ')',
+        field('value', choice($.lambda, $._no_lambda)),
+      ))),
+    ),
 
     instanceof_expression: $ => prec(PREC.relational, seq(
       field('left', $._no_lambda),
       'instanceof',
-      optional('final'),
+      // No bare `optional('final')` here: the modifier belongs to the
+      // PATTERN (javac's BINDING_PATTERN spans `final Ctx c`), and eating
+      // it at this level left our type_pattern starting after it -- a
+      // boundary javac has and we could not.
       field('right', choice($._type, $._pattern)),
     )),
 
     switch_expression: $ => seq(
       'switch',
       field('condition', $.parenthesized_expression),
-      field('body', $.switch_block),
+      field('body', alias($._switch_block_expr, $.switch_block)),
     ),
 
     lambda: $ => seq(
@@ -883,13 +992,27 @@ module.exports = grammar({
     _pattern: $ => choice($.type_pattern, $.record_pattern),
 
     type_pattern: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       field('name', $.identifier),
     ),
 
+    // The type is a RAW identifier, aliased -- not `$._type_id`. Going
+    // through _type_id needs a reduce at the `(`, and method_invocation's
+    // static prec resolves that shift/reduce silently before GLR can fork,
+    // so `case Point(int x, int y)` committed to an invocation and the
+    // pattern reading was never explored (the [lambda, _name] lesson
+    // again). With the identifier raw, both readings shift the same tokens
+    // and diverge INSIDE the parens, where [$.arguments,
+    // $._record_pattern_body] is a declarable conflict -- upstream
+    // resolves it with exactly that pair. `int x` then kills the
+    // invocation branch and the pattern survives.
     record_pattern: $ => seq(
-      field('type', choice($._type_id, $.scoped_type_identifier, $.generic_type)),
+      field('type', choice(alias($.identifier, $.type_identifier), $.scoped_type_identifier, $.generic_type)),
+      $._record_pattern_body,
+    ),
+
+    _record_pattern_body: $ => seq(
       '(',
       optional(seq($._pattern_component, repeat(seq(',', $._pattern_component)))),
       ')',

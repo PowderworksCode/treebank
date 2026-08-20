@@ -31,7 +31,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        grammar: [python, rust, typescript, java, sql]
+        grammar: [python, rust, typescript, java, zig, sql]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -85,12 +85,17 @@ jobs:
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
       - name: shape (tree agrees with the reference parser)
-        # java and sql have no span oracle. javac can report node
-        # boundaries through Trees.getSourcePositions() and libpg_query
-        # returns postgres's parse tree with node locations, but neither
-        # oracle is built, and `shape` says so and exits rather than
+        # Three grammars skip this step, for two different reasons.
+        # java's span oracle exists now (java-oracle/Spans.java) but
+        # `crates/treebank-java/test/shape` does not, so the step would
+        # fail on the missing directory with no fixture to guard. zig and
+        # sql have no span oracle at all: `zig fmt` reports a verdict
+        # rather than a tree and the `std.zig.Ast` program that would give
+        # one is not built, and sqlite frees its parse tree during prepare
+        # and reports opcodes, so libpg_query is what a SQL span oracle
+        # would have to be built on. `shape` says so and exits rather than
         # comparing against nothing.
-        if: matrix.grammar != 'java' && matrix.grammar != 'sql'
+        if: matrix.grammar != 'java' && matrix.grammar != 'zig' && matrix.grammar != 'sql'
         run: ./target/debug/treebank shape
           --lang ${{ matrix.grammar }}
           --grammar crates/treebank-${{ matrix.grammar }}
@@ -116,10 +121,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # java and sql are not in the wasm matrix yet: the pack build has
-        # not been exercised for either, and claiming a published artifact
-        # that has never been built is worse than shipping one language
-        # later.
+        # java, bash, zig and sql are not in the wasm matrix yet: the pack
+        # build has not been exercised for them, and claiming a published
+        # artifact that has never been built is worse than shipping one
+        # language later. Zig has the best odds of the four — it ships no
+        # scanner.c, so there is nothing but parser.c to cross.
         grammar: [python, rust, typescript]
     steps:
       - uses: actions/checkout@v4

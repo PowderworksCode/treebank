@@ -3292,6 +3292,10 @@
           "named": true
         },
         {
+          "type": "subscript_expression",
+          "named": true
+        },
+        {
           "type": "tuple_pattern",
           "named": true
         },

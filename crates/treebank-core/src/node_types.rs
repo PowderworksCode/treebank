@@ -15,6 +15,8 @@ struct RawEntry {
     named: bool,
     #[serde(default)]
     subtypes: Vec<RawRef>,
+    #[serde(default)]
+    fields: BTreeMap<String, serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -30,6 +32,15 @@ pub struct NodeTypes {
     pub named: BTreeSet<String>,
     /// Supertype name -> direct named subtypes.
     pub supertypes: BTreeMap<String, Vec<String>>,
+    /// Node type -> field name -> the types that field may hold. Facet
+    /// expansion uses this to drop members a field-constrained pattern
+    /// cannot match: `(_declaration body: (_body))` must not conjure a
+    /// `body` onto `import_alias`, nor keep `class_definition` whose body
+    /// is a `class_body` no `_body` subtype covers -- either way the
+    /// expanded query is an impossible pattern and refuses to compile.
+    /// This mirrors what tree-sitter itself checks for a NATIVE supertype
+    /// pattern, where any one subtype satisfying the constraint keeps it.
+    pub fields: BTreeMap<String, BTreeMap<String, BTreeSet<String>>>,
 }
 
 impl NodeTypes {
@@ -37,11 +48,25 @@ impl NodeTypes {
         let raw: Vec<RawEntry> = serde_json::from_str(json).context("parse node-types.json")?;
         let mut named = BTreeSet::new();
         let mut supertypes = BTreeMap::new();
+        let mut fields: BTreeMap<String, BTreeMap<String, BTreeSet<String>>> = BTreeMap::new();
         for e in &raw {
             if !e.named {
                 continue;
             }
             named.insert(e.type_name.clone());
+            let mut per_field: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+            for (fname, fval) in &e.fields {
+                let mut types = BTreeSet::new();
+                if let Some(ts) = fval.get("types").and_then(|v| v.as_array()) {
+                    for t in ts {
+                        if let Some(n) = t.get("type").and_then(|v| v.as_str()) {
+                            types.insert(n.to_string());
+                        }
+                    }
+                }
+                per_field.insert(fname.clone(), types);
+            }
+            fields.insert(e.type_name.clone(), per_field);
             if !e.subtypes.is_empty() {
                 supertypes.insert(
                     e.type_name.clone(),
@@ -53,7 +78,7 @@ impl NodeTypes {
                 );
             }
         }
-        Ok(NodeTypes { named, supertypes })
+        Ok(NodeTypes { named, supertypes, fields })
     }
 
     pub fn load(path: &Path) -> Result<NodeTypes> {

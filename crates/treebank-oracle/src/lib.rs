@@ -32,6 +32,7 @@ mod sql;
 mod stdin_oracle;
 mod typescript;
 mod unparse;
+mod zig;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -105,6 +106,7 @@ pub fn get(name: LangName) -> &'static dyn Oracle {
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
     static BASH: bash::Bash = bash::Bash;
+    static ZIG: zig::Zig = zig::Zig;
     static SQL: sql::Sql = sql::Sql;
     match name {
         LangName::Python => &PYTHON,
@@ -113,6 +115,7 @@ pub fn get(name: LangName) -> &'static dyn Oracle {
         LangName::Javascript => &JAVASCRIPT,
         LangName::Java => &JAVA,
         LangName::Bash => &BASH,
+        LangName::Zig => &ZIG,
         LangName::Sql => &SQL,
     }
 }

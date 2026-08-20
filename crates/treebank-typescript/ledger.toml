@@ -44,7 +44,7 @@ passed = 11976
 failed = 12
 gap_files = 6
 noise_files = 6
-pass_rate = '99.95%'
+pass_rate = '99.90%'
 
 [corpus.javascript_sweep]
 files = 25297

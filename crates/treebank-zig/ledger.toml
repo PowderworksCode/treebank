@@ -1,0 +1,99 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'zig'
+versions = '''
+Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar.
+
+The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+parser_note = '''
+`src/parser.c` is 20 MB, the largest in this repository by a factor of two over typescript's 11 MB, and it is worth saying why rather than letting a reader assume the grammar is careless. Zig's expression grammar is a four-deep chain of categories -- `_expression`, `_type_operand`, `_init_type`, `_suffix_expression` -- that exists because a type IS an expression here and the `{` of an initializer has to be told apart from the `{` of a body at every one of those positions. The precedences that separate them force the generator to keep states distinct that a language with a separate type grammar would merge. It costs generate time (40 s in CI against 2 s for the other grammars) and nothing at parse time; the sweep runs 17,168 files through it in under a minute.'''
+roles_note = '''
+19 of 22 table-tier terms are threaded, and the three that are not are facts about Zig.
+
+`_pattern` has no member. Zig has no pattern syntax: a `switch` prong holds VALUES and ranges (`.red`, `1...5`), not patterns, and a capture `|x|` binds names with no structure to destructure. Destructuring assignment is the nearest thing and is an assignment, not a pattern language.
+
+`_attribute` has no member. Zig has no annotation syntax at all -- no decorators, no `#[…]`, no `@interface`. The `@`-prefixed things that look like one are builtin CALLS and are `_invocation`.
+
+`_interpolation` has no member. Zig strings do not interpolate; `std.fmt` reads its `{}` at run time from an ordinary string, which is not syntax.
+
+`_parameter` and `_modifier` are DEMOTED to the facet tier rather than omitted; the reasons are in roles.json and are the same shape as rust's.
+
+Three threadings are worth stating because a reader would otherwise assume the opposite.
+
+`_type` is nested INSIDE `_expression` (`_expression -> _type -> pointer_type | …`) instead of beside it, because in Zig a type is a value and a sibling `_type` would put every type occurrence in two supertypes at one position -- which generate rejects outright.
+
+`_type` holds the type OPERATORS and not the container declarations. `struct { … }` and `error{ … }` are primaries here, alongside `identifier` and the literals, and the corpus is what settled it: they occur wherever a value may, and `struct { fn lessThan(…) … }.lessThan` is an everyday argument in this language. With them in `_type` as well, every one of those was a choice between a type position and a suffix chain. So `(_type)` means pointer, slice, array, optional, error-union, `anyframe` and `anytype` syntax.
+
+And `unreachable` is a `_jump`, not a literal: it transfers control out of the function and yields nothing, which is Zig's `raise`.'''
+
+[corpus]
+source = 'the released source tarballs from ziglang.org, one per MINOR version from 0.11 to 0.16 (fetched 2026-08-19): 0.16.0, 0.15.2, 0.14.1, 0.13.0, 0.12.1, 0.11.0'
+files = 17168
+packages = 6
+ranking_note = '''
+Zig has a package manager and NO registry: `build.zig.zon` names a dependency by URL and content hash, so there is no index to rank, no download count to sort by, and the "Zig package index" sites that exist are themselves GitHub scrapes. The ecosystem therefore supports two artifact corpora and says what each biases toward, the way bash does.
+
+This number is from `upstream`: the language's own released source, which is the standard library, the self-hosted compiler, the behaviour test suite and the langref examples. It is ONE project, and that is the bias -- it is core-team Zig, heavy on comptime and low-level code, with no application code and no third-party idioms in it at all. What it is unusually good at is the version union: six releases spanning every syntax change the grammar claims, which is the property a version-union grammar most needs measured and which no single-version corpus can show. Only the newest patch of each minor is taken, because 0.14.0 and 0.14.1 ship nearly identical standard libraries and taking both doubles that release's weight.
+
+`TREEBANK_ZIG_CORPUS=github` selects the other: top repositories by stars, a broader population and a weaker metric (attention rather than use; a star costs nothing and never decays). It is the default, and it is NOT what this number came from, because building it needs the GitHub search API. A pass rate over one is not a pass rate over the other.'''
+blind_to = '''
+Application code, and third-party libraries entirely. Everything measured here was written by the people who wrote the compiler, so idioms the ecosystem uses and the core team does not are unrepresented -- and so is anything a build system generates.
+
+`test/cases/` cuts the other way and is worth naming: it is a corpus of code that is deliberately WRONG, and `zig fmt` accepts most of it because the errors are semantic. 32 of the 54 remaining gap files are in it. They are real disagreements with the reference parser and they are counted as such, but they are not code anyone would write.'''
+
+[corpus.sweep]
+files = 17168
+passed = 16997
+failed = 171
+gap_files = 4
+noise_files = 167
+pass_rate = '99.00%'
+note = '''
+Six sweeps: 88.11% -> 96.93% -> 98.12% -> 98.71% -> 98.98% -> 99.00%, and every step was the corpus naming a construct rather than a guess about one.
+
+The first sweep's four largest clusters were, in order, `comptime var` as a statement (336 files), a capture list of more than two elements (232), a type chosen at comptime by an `if` or a `switch` (220) and destructuring assignment (230) -- none of them exotic, all of them things a grammar written without a corpus simply does not think of. The second sweep's largest was the labelled switch and its `continue :sw value` dispatch (58), which is Zig 0.14 syntax the standard library now writes state machines in.
+
+Two of the rounds were about being too STRICT rather than too permissive. Zig's tokenizer emits one permissive `number_literal` token and leaves `0x`, `1_x0.0` and `0x1.0p1ab1` to AstGen, and it takes a whole `'…'` without validating the escape; a grammar that validated either reported gaps on files the reference PARSER accepts. Both tokens are now as permissive as Zig's, with the `integer`/`float` split kept because a query wants it and Zig's single token does not give it.
+
+The last two rounds were the tail, and both were shapes a first pass would not invent. A LABELLED BLOCK is a type expression -- `pub fn remap(…) t: { … break :t T; }` is how `std.mem.Allocator` declares its return type -- and closing it needed the labelled and unlabelled forms split into separate RULES, because one rule carrying `optional(label)` makes any second rule admitting `label { … }` a duplicate derivation the table cannot choose between. An error set can be COMPUTED by a `switch` on an argument's type, which is how `std.zig.llvm` writes its formatters. And Zig's parser accepts a prototype with the name in the wrong place -- `fn () void {}`, `const aFunc = fn someFunc(x: i32) void;` -- reporting it afterwards, so `zig fmt` calls those files valid and they were ours to parse; the anonymous form is admitted at container level only, where the function TYPE is unreachable and the name can be dropped without ambiguity.
+
+4 files remain, all one construct, and it is a version conflict rather than a gap: see known_gaps.'''
+
+[[oracles]]
+family = 'zig'
+tool = 'zig fmt --stdin, via tools/zig-oracle/check.sh'
+version = 'zig 0.16.0 (current) and zig 0.11.0 (legacy), as `zig` and `zig-0.11` on PATH'
+role = '''
+The union oracle for a union grammar (DESIGN.md §4.3): a file is valid Zig if ANY version family accepts it. The current release judges every file and whatever it rejects is re-judged by 0.11.
+
+The second family is REQUIRED, not a nicety, and Zig needs it more than any other language here, because Zig REMOVES syntax. `usingnamespace` was deleted in 0.15 and `async`/`await`/`suspend` have not compiled since 0.11, so a sweep run with only the current oracle books every file using one of those as noise -- which is precisely the half of the version union that would then go unmeasured. Measured on this corpus: over the 2,558 files of the 0.11.0 tree, the current oracle rejects 125 and the 0.11 oracle rejects 38, so the union rescues 87 files a current-only sweep would have booked as noise -- 87 files whose gaps would never have been counted.
+
+`zig fmt --stdin` is the compiler's own tokenizer and parser: it builds a `std.zig.Ast`, renders it back out, and fails exactly when the source does not parse. It follows no `@import`, resolves no declaration and needs no `build.zig`, so a file is judged on its own text.
+
+`zig ast-check` is the obvious candidate and is deliberately NOT used. An `invalid` verdict books a file the grammar failed as corpus NOISE, so the readier an oracle is to say it, the more flawless the grammar looks -- and `ast-check` runs AstGen as well as the parser, rejecting files that parse perfectly well (an unused local, a discard of something already void). Every one of those would excuse a real gap. Here the stricter tool is the dangerous one, which is the opposite of the intuition, and it is written down so the swap is not made later as an "improvement".'''
+
+[[known_gaps]]
+construct = '`async` and `await` used as identifiers'
+files = 4
+note = '''
+`.async = async,` and `.await = await,` in `std.Io.Dispatch`, `Kqueue`, `Threaded` and `Uring`. Zig REMOVED `async`/`await` from the language, so in 0.15 and later they are ordinary identifiers -- and in 0.11 through 0.14 they are prefix operators. Both readings are in this corpus and the grammar cannot have both, because keyword extraction is a LEXER decision: wherever `async_expression` is a valid parse, the token is the keyword and never the identifier.
+
+DESIGN.md §4.2 says the latest version wins when two conflict, and that rule is deliberately NOT applied here. Measured over the corpus: 116 files use `async`/`await` as a prefix operator (37 in 0.11.0, 76 across 0.12-0.14, 3 later) and 54 use them as identifiers (all in 0.15 and 0.16). Applying §4.2 would trade 116 passing files for these 4 -- most of the 54 identifier uses are field NAMES after a `.`, where the keyword is not valid and already lex as identifiers. The four that fail are the ones where the identifier is a VALUE.
+
+Tried and rejected: making `async_expression`'s operand optional. It parses all four, and it is a lie -- the file means the identifier `async` and the tree would say `async_expression`. That is precisely the silent mis-parse the `shape` gate exists to catch, so it is not worth 4 files.'''
+
+[[deviations]]
+what = '''
+`Foo{}.bar` and `Foo{}(x)` need parentheses: `(Foo{}).bar`. An initializer is not admitted as the operand of a `.`, a `[` or a `(`. With it admitted, an initializer becomes reachable from inside every type position through `a.b` and `f()`, and `*[3]u8{ 1, 2 }` turns into a choice between a pointer to an initialised array and an initialised pointer type -- at every `{` in the language. The narrowing is what makes `[_]u8{ 1, 2 }` and `fn f() void {` parse at all. No corpus file needed the form.'''
+
+[[deviations]]
+what = '''
+Destructuring is not admitted as the one-line body of an `if`, a `while`, a `for` or a switch prong. `a, b = c` and `a` followed by a comma are the same three tokens, so a body that could destructure eats the comma that ends a prong and the one that continues an outer destructuring. Zig's own parser is greedy and takes the destructuring; the parse table cannot be. No corpus file writes it.'''
+
+[[deviations]]
+what = '''
+A container body accepts a member that Zig's own grammar orders more tightly: fields and declarations may interleave freely here, and a `fn` declaration is accepted inside a function body although Zig has no nested function declarations. Both are WIDENINGS -- they accept code Zig rejects -- so no corpus of real source can reveal them and the negative corpus is where they would be caught. Neither has a negative fixture yet; they are recorded here so that absence is deliberate rather than unnoticed.'''

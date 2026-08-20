@@ -312,6 +312,57 @@ fn resolve_splits(
     (Some(current), resolved)
 }
 
+/// Rewrite the grammar's `[corpus.sweep]` block from THIS run. The ledger
+/// is the evidence file, and transcribing measurements into it by hand is
+/// how java's sat at 811 while the truth was 167 (issue #145). Only the
+/// numbers move; everything else in the ledger stays prose, and a grammar
+/// dir without a ledger (an upstream checkout under comparison) is left
+/// alone.
+fn write_ledger_block(grammar_dir: &Path, lang: treebank_lang::LangName, r: &Report) -> Result<()> {
+    let path = grammar_dir.join("ledger.toml");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(());
+    };
+    let block_body = format!(
+        "\nfiles = {}\npassed = {}\nfailed = {}\ngap_files = {}\nnoise_files = {}\npass_rate = '{:.2}%'\n",
+        r.files,
+        r.passed,
+        r.failed,
+        r.gap_files,
+        r.noise_files,
+        100.0 * r.passed as f64 / r.files.max(1) as f64,
+    );
+    // One grammar may carry several corpora (typescript also sweeps the
+    // javascript corpus), so a per-language block name is tried first.
+    let per_lang = format!("[corpus.{lang}_sweep]");
+    let (header, start) = if let Some(i) = text.find(per_lang.as_str()) {
+        (per_lang.as_str(), i)
+    } else if let Some(i) = text.find("[corpus.sweep]") {
+        ("[corpus.sweep]", i)
+    } else {
+        return Ok(()); // no block declared; not ours to invent
+    };
+    // The block ends at the next section header or EOF.
+    let after = &text[start + 1..];
+    let end = after
+        .find("\n[")
+        .map(|i| start + 1 + i + 1)
+        .unwrap_or(text.len());
+    let mut new = String::new();
+    new.push_str(&text[..start]);
+    new.push_str(header);
+    new.push_str(&block_body);
+    if end < text.len() {
+        new.push('\n');
+        new.push_str(&text[end..]);
+    }
+    if new != text {
+        std::fs::write(&path, new)?;
+        println!("sweep: ledger {header} updated at {}", path.display());
+    }
+    Ok(())
+}
+
 pub fn run(
     lang: treebank_lang::LangName,
     grammar_dir: &Path,
@@ -739,6 +790,7 @@ pub fn run(
     };
     std::fs::create_dir_all(out.parent().unwrap_or(Path::new(".")))?;
     std::fs::write(out, serde_json::to_string_pretty(&report)?)?;
+    write_ledger_block(grammar_dir, lang, &report)?;
     let report_md = out.with_file_name("REPORT.md");
     std::fs::write(&report_md, markdown(&report, corpus_root))?;
 

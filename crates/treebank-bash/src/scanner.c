@@ -20,10 +20,16 @@
 
 enum TokenType {
   HEREDOC_START,
+  HEREDOC_START_DASH,
   HEREDOC_BODY,
   HEREDOC_END,
   CONCAT,
   ASSIGNMENT_NAME,
+  FILE_DESCRIPTOR,
+  BACKTICK_OPEN,
+  BACKTICK_CLOSE,
+  DOLLAR_LITERAL,
+  BRACE_EXPR_START,
   ERROR_SENTINEL,
 };
 
@@ -34,6 +40,7 @@ typedef struct {
   unsigned length;
   bool allows_indent;   // `<<-` strips leading tabs from the terminator
   bool started;         // the body has been consumed; the end is next
+  bool in_backtick;     // between the opening backtick and its close
 } Scanner;
 
 void *tree_sitter_bash_external_scanner_create(void) {
@@ -49,6 +56,7 @@ unsigned tree_sitter_bash_external_scanner_serialize(void *payload, char *buffer
   buffer[n++] = (char)s->length;
   buffer[n++] = (char)s->allows_indent;
   buffer[n++] = (char)s->started;
+  buffer[n++] = (char)s->in_backtick;
   memcpy(buffer + n, s->delimiter, s->length);
   n += s->length;
   return n;
@@ -63,6 +71,7 @@ void tree_sitter_bash_external_scanner_deserialize(void *payload, const char *bu
   s->length = (unsigned char)buffer[n++];
   s->allows_indent = buffer[n++];
   s->started = buffer[n++];
+  s->in_backtick = buffer[n++];
   if (s->length > MAX_DELIM) s->length = MAX_DELIM;
   memcpy(s->delimiter, buffer + n, s->length);
 }
@@ -77,7 +86,7 @@ static bool is_word_char(int32_t c) {
 // `<<EOF`, `<<-EOF`, `<<"EOF"`, `<<'EOF'`. Only the NAME is captured; the
 // quoting decides whether the body expands, which the grammar does not
 // model yet.
-static bool scan_heredoc_start(Scanner *s, TSLexer *lexer) {
+static bool scan_heredoc_start(Scanner *s, TSLexer *lexer, bool dash) {
   while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
   int32_t quote = 0;
   if (lexer->lookahead == '"' || lexer->lookahead == '\'') {
@@ -97,7 +106,8 @@ static bool scan_heredoc_start(Scanner *s, TSLexer *lexer) {
   }
   if (s->length == 0) return false;
   s->started = false;
-  lexer->result_symbol = HEREDOC_START;
+  s->allows_indent = dash;
+  lexer->result_symbol = dash ? HEREDOC_START_DASH : HEREDOC_START;
   return true;
 }
 
@@ -164,9 +174,28 @@ static bool scan_assignment_name(TSLexer *lexer) {
   while (iswalnum(lexer->lookahead) || lexer->lookahead == '_') advance(lexer);
   lexer->mark_end(lexer);
   // An array subscript may sit between the name and the `=`: `a[0]=1`.
-  if (lexer->lookahead == '[') return false;
+  // The token is still just the NAME -- mark_end already fenced it -- but
+  // the lookahead must walk the brackets to see whether an `=` really
+  // follows, or `a[0]=1` lexes as one word and becomes a command named
+  // `a[0]=1`: the wrong tree with no error, invisible to the sweep and
+  // found by the mvdan/sh span oracle (issue #143).
+  if (lexer->lookahead == '[') {
+    int depth = 0;
+    while (lexer->lookahead != 0 && lexer->lookahead != '\n') {
+      if (lexer->lookahead == '[') depth++;
+      else if (lexer->lookahead == ']') {
+        depth--;
+        if (depth == 0) { advance(lexer); break; }
+      }
+      advance(lexer);
+    }
+    if (depth != 0) return false;
+  }
   if (lexer->lookahead == '+') advance(lexer);
   if (lexer->lookahead != '=') return false;
+  // `==` inside `[[ a == b ]]` must not read as an assignment to `a=`.
+  advance(lexer);
+  if (lexer->lookahead == '=') return false;
   lexer->result_symbol = ASSIGNMENT_NAME;
   return true;
 }
@@ -181,26 +210,164 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   // on one file. Decline the scanner there and let ordinary recovery run.
   if (valid[ERROR_SENTINEL]) return false;
 
-  if (valid[ASSIGNMENT_NAME] && !valid[HEREDOC_BODY]) {
-    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
-    if (scan_assignment_name(lexer)) return true;
-  }
-
-  // CONCAT is zero-width and must be decided before anything is consumed:
-  // it says only that the previous token ended exactly where this one
-  // begins.
+  // CONCAT is zero-width and judged on the RAW lookahead -- it says only
+  // that the previous token ended exactly where this one begins -- so it
+  // must be decided before ANY block that skips whitespace runs. It fell
+  // after such a block once, saw the post-skip character, and glued two
+  // arguments a space separated.
   if (valid[CONCAT] && !valid[HEREDOC_BODY]) {
     int32_t c = lexer->lookahead;
+    // `}` cannot join: the word class excludes it, so nothing BEFORE a
+    // closing brace continues past it -- and with `}` counted as joining,
+    // every `${x:-/tmp}` and `${y//a/b}` ended in a zero-width CONCAT
+    // demanding a word that could not exist: the 5,041-file
+    // `concatenation > MISSING word` cluster. `{` stays joining, because
+    // `a{b,c}d` really is one word and the brace_expression is its middle.
+    // Concatenation ACROSS a closing brace -- `${a}tail` -- is unaffected:
+    // that CONCAT decision happens after the `}` token, where the
+    // lookahead is the continuation itself.
     bool joins = c != ' ' && c != '\t' && c != '\n' && c != '\r' && c != 0 &&
                  c != ';' && c != '&' && c != '|' && c != ')' && c != '(' &&
-                 c != '<' && c != '>';
+                 c != '<' && c != '>' && c != '}' &&
+                 // A backtick joins a concatenation OUTSIDE a substitution
+                 // (`a\`date\`b` is one word) and CLOSES one inside --
+                 // the parity bit is the difference.
+                 (c != '`' || !s->in_backtick);
     if (joins) {
       lexer->result_symbol = CONCAT;
       lexer->mark_end(lexer);
       return true;
     }
+    // Not a join: fall through rather than return, because a redirect's
+    // file descriptor may legitimately start after this very whitespace.
+  }
+
+  // Zero-width gate for brace expansion. bash expands `{a,b}` only when
+  // an UNQUOTED comma sits inside the matching braces with no whitespace
+  // anywhere -- `{ :; }` is a compound statement, `{x}` a literal word.
+  // The grammar cannot look ahead to the close, and the first attempt at
+  // a nested rule died in the LALR state both readings share: the element
+  // token out-lexed the word that the compound reading needed (#168).
+  // Deciding HERE, before the `{` is even shifted, keeps the two worlds in
+  // separate states and the conflict never forms.
+  if (valid[BRACE_EXPR_START]) {
+    // Self-skips whitespace: the external scanner runs BEFORE the extras
+    // skip and is not called again after it, so a gate that only checks
+    // the raw lookahead never sees a `{` that follows a space.
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    if (lexer->lookahead != '{') goto not_brace;
+    lexer->mark_end(lexer);
+    int depth = 0;
+    bool comma = false;
+    unsigned n = 0;
+    int32_t c = lexer->lookahead;
+    while (c != 0 && n < 4096) {
+      if (c == '{') depth++;
+      else if (c == '}') {
+        depth--;
+        if (depth == 0) break;
+      } else if (c == ',' && depth >= 1) comma = true;
+      else if (c == ' ' || c == '\t' || c == '\n' || c == '\r') { depth = -1; break; }
+      advance(lexer);
+      c = lexer->lookahead;
+      n++;
+    }
+    if (depth == 0 && comma) {
+      lexer->result_symbol = BRACE_EXPR_START;
+      return true;
+    }
     return false;
   }
+not_brace:;
+
+  // A digit run is a file descriptor ONLY when a redirect operator abuts
+  // it: `echo 2> f` redirects fd 2, `echo 2 > f` passes an argument. Both
+  // `number` and this token match the same characters, the internal lexer
+  // must pick one per state, and whichever it picks the other reading is
+  // gone -- the same shape as ASSIGNMENT_NAME below, resolved the same
+  // way: look past the digits, emit only when the operator is really
+  // there.
+  // A `$` that no expansion can follow is literal string content:
+  // `"$"`, `"v$/x"`. One character of lookahead settles it -- everything
+  // that CAN start an expansion after `$` is listed, and anything else
+  // (a quote, a slash, a space) means the dollar is just a dollar.
+  if (valid[DOLLAR_LITERAL] && lexer->lookahead == '$') {
+    advance(lexer);
+    lexer->mark_end(lexer);
+    int32_t c = lexer->lookahead;
+    bool expandable = iswalnum(c) || c == '_' || c == '{' || c == '(' ||
+                      c == '!' || c == '#' || c == '?' || c == '@' ||
+                      c == '*' || c == '-' || c == '$' || c == '\'';
+    if (!expandable) {
+      lexer->result_symbol = DOLLAR_LITERAL;
+      return true;
+    }
+    return false;
+  }
+
+  // Backticks close on the FIRST unescaped backtick -- bash's own rule,
+  // and the reason the old-style substitution cannot nest. A parity bit is
+  // all it takes, and it is lexer state, which is exactly what the grammar
+  // cannot express: at the closing backtick the parser would otherwise
+  // happily open a nested substitution and run to EOF.
+  if ((valid[BACKTICK_OPEN] || valid[BACKTICK_CLOSE])) {
+    int32_t c = lexer->lookahead;
+    while (c == ' ' || c == '\t') { skip(lexer); c = lexer->lookahead; }
+    if (c == '`') {
+      if (!s->in_backtick && valid[BACKTICK_OPEN]) {
+        advance(lexer);
+        lexer->mark_end(lexer);
+        s->in_backtick = true;
+        lexer->result_symbol = BACKTICK_OPEN;
+        return true;
+      }
+      if (s->in_backtick && valid[BACKTICK_CLOSE]) {
+        advance(lexer);
+        lexer->mark_end(lexer);
+        s->in_backtick = false;
+        lexer->result_symbol = BACKTICK_CLOSE;
+        return true;
+      }
+      return false;
+    }
+  }
+
+  if (valid[FILE_DESCRIPTOR] && !valid[HEREDOC_BODY]) {
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    // `exec {lock_fd}> file`: bash allocates a descriptor into the named
+    // variable. Same adjacency contract as the numeric form, same peek --
+    // and as a grammar token this ate `echo {x}`, where nothing follows.
+    if (lexer->lookahead == '{') {
+      advance(lexer);
+      if (!(iswalpha(lexer->lookahead) || lexer->lookahead == '_')) return false;
+      while (iswalnum(lexer->lookahead) || lexer->lookahead == '_') advance(lexer);
+      if (lexer->lookahead != '}') return false;
+      advance(lexer);
+      lexer->mark_end(lexer);
+      if (lexer->lookahead == '<' || lexer->lookahead == '>') {
+        lexer->result_symbol = FILE_DESCRIPTOR;
+        return true;
+      }
+      return false;
+    }
+    if (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
+      while (lexer->lookahead >= '0' && lexer->lookahead <= '9') advance(lexer);
+      lexer->mark_end(lexer);
+      if (lexer->lookahead == '<' || lexer->lookahead == '>') {
+        lexer->result_symbol = FILE_DESCRIPTOR;
+        return true;
+      }
+      // Digits not followed by an operator can be nothing else we scan
+      // for; let the internal lexer have them back.
+      return false;
+    }
+  }
+
+  if (valid[ASSIGNMENT_NAME] && !valid[HEREDOC_BODY]) {
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    if (scan_assignment_name(lexer)) return true;
+  }
+
 
   if (valid[HEREDOC_END] && s->length > 0 && s->started) {
     if (scan_heredoc_end(s, lexer)) return true;
@@ -215,8 +382,8 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   if (valid[HEREDOC_END] && s->length > 0) {
     if (scan_heredoc_end(s, lexer)) return true;
   }
-  if (valid[HEREDOC_START]) {
-    return scan_heredoc_start(s, lexer);
+  if (valid[HEREDOC_START] || valid[HEREDOC_START_DASH]) {
+    return scan_heredoc_start(s, lexer, valid[HEREDOC_START_DASH]);
   }
   return false;
 }
