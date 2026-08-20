@@ -55,25 +55,54 @@ SYNTAX_MARKERS = (
 
 
 def statements(text: str):
-    """Split a script the way sqlite3_complete() does.
+    """Split a script the way sqlite3_complete() does, flagging the tail.
 
     Accumulates lines until the buffer is a complete statement, so a `;`
-    inside a trigger body or a quoted string does not split it. A trailing
-    fragment that never completes is yielded as-is: it is either an
-    incomplete statement (which the parser will call invalid, correctly) or
-    a comment tail (which is empty after stripping and is skipped).
+    inside a trigger body or a quoted string does not split it. Yields
+    `(text, terminated)`, and the flag matters: `terminated` says sqlite
+    found a statement boundary, so what came before it is exactly one
+    statement. A trailing fragment carries False, and `parses` judges it by
+    a stricter rule -- see there.
     """
     buf = ""
     for line in text.splitlines(keepends=True):
         buf += line
         if sqlite3.complete_statement(buf):
-            yield buf
+            yield buf, True
             buf = ""
     if buf.strip():
-        yield buf
+        yield buf, False
 
 
-def parses(conn: sqlite3.Connection, sql: str) -> bool:
+def parses(conn: sqlite3.Connection, sql: str, terminated: bool) -> bool:
+    """Is this fragment something sqlite's parser accepts?
+
+    `terminated` is the whole reason this takes an argument, and it is a
+    correctness fix rather than a nicety. sqlite3_complete is purely
+    LEXICAL: it looks for a `;` outside strings, comments and BEGIN…END. A
+    script that separates its statements some other way -- T-SQL's `GO`, or
+    a file with no `;` at all -- therefore arrives here as ONE fragment
+    containing many statements, and `sqlite3_prepare` reads only the first
+    of them. If that first one fails on a NAME, the old code answered
+    `valid` for a file sqlite had never finished reading, which does not
+    hide gaps (the failure mode the module docstring warns about) but
+    MANUFACTURES them: a grammar failure on such a file was booked as an
+    adjudicated gap the oracle was never entitled to certify. Measured on
+    the Debian corpus, 9 of 57 reported gaps were this.
+
+    So a fragment sqlite did not terminate gets the stricter rule: only a
+    clean prepare proves it was one statement, because that is the case
+    where sqlite demonstrably consumed all of it. A multi-statement Warning
+    means several, and a name error is AMBIGUOUS -- one statement with an
+    unresolvable name, or the first of several -- and there is no way from
+    here to tell which. Both answer `invalid`, which books the file as
+    corpus noise. That is the safe direction the module docstring names:
+    the sweep may miss a grammar bug, it may never invent one.
+
+    A `;`-terminated statement is unaffected: sqlite found its boundary, so
+    a name error there really is a fact about the schema and not about the
+    text.
+    """
     stripped = sql.strip().rstrip(";").strip()
     if not stripped:
         return True
@@ -85,12 +114,14 @@ def parses(conn: sqlite3.Connection, sql: str) -> bool:
         conn.execute(prefix + stripped)
         return True
     except sqlite3.Warning:
-        # "You can only execute one statement at a time" -- the splitter
-        # handed over something it should not have. Not a verdict.
-        return True
+        # "You can only execute one statement at a time." Whatever this is,
+        # it is not one statement, so nothing here is a verdict on it.
+        return False
     except sqlite3.Error as e:
         message = str(e).lower()
-        return not any(m in message for m in SYNTAX_MARKERS)
+        if any(m in message for m in SYNTAX_MARKERS):
+            return False
+        return terminated
 
 
 def valid(path: str) -> bool:
@@ -123,7 +154,7 @@ def valid(path: str) -> bool:
         return False
     conn = sqlite3.connect(":memory:")
     try:
-        return all(parses(conn, s) for s in statements(text))
+        return all(parses(conn, body, done) for body, done in statements(text))
     finally:
         conn.close()
 

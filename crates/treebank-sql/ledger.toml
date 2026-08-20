@@ -36,17 +36,17 @@ files = 4854
 packages = 41
 passed = 1025
 failed = 3829
-gap_files = 57
-noise_files = 3772
+gap_files = 48
+noise_files = 3781
 pass_rate = '21.1%'
 note = '''
-1,025 of 4,854 files parse; of the 3,829 that do not, SQLite rejects 3,772 as well, so the sweep found 57 adjudicated gaps and could say nothing at all about the rest.
+1,025 of 4,854 files parse; of the 3,829 that do not, SQLite rejects 3,781 as well, so the sweep found 48 adjudicated gaps and could say nothing at all about the rest.
 
 That distance between 19.6% and "122 gaps" is the ONE-DIALECT ORACLE, and it is the number to read this ledger for. The corpus is dominated by engines' and browsers' own test suites -- virtuoso 1,127 files (23%), postgresql 806 (17%), chromium 646 (13%), postgis 499 (10%), qt6-webengine 424 (9%) -- and those files are written in the dialect of the thing that ships them. Chromium's and qt's are PerfettoSQL, a trace-query language with SQL's syntax and its own module system. SQLite rejects all of it, so it books as corpus noise whether or not the grammar was right to reject it too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
 
-The pass rate FELL from 22.2% to 19.6% when the corpus grew, and that was the corpus getting more honest rather than the grammar getting worse: the five packages the artifact cap used to skip are browsers and a database engine, so they brought 1,360 files of the least standard SQL in Debian with them. Gaps found rose from 36 to 122 on the same change, which is what a corpus is for; three rounds of grinding then took them to 57 and the rate to 21.1%.
+The pass rate FELL from 22.2% to 19.6% when the corpus grew, and that was the corpus getting more honest rather than the grammar getting worse: the five packages the artifact cap used to skip are browsers and a database engine, so they brought 1,360 files of the least standard SQL in Debian with them. Gaps found rose from 36 to 122 on the same change, which is what a corpus is for; three rounds of grinding then took them to 57, and fixing the oracle bug below took them to 48 by moving 9 files it should never have certified into noise. The rate is 21.1%.
 
-WHAT IS LEFT is mostly not gettable, and saying which is the point of counting it. 17 of the 57 are PerfettoSQL and 12 are the optional comma between table members, both refused on purpose and both entered below. 2 are the reserved-word cost -- perfetto aliases a table `end`, which CASE needs. The rest is a tail of singletons, no two alike.
+WHAT IS LEFT is mostly not gettable, and saying which is the point of counting it. 18 of the 48 are PerfettoSQL and 12 are the optional comma between table members, both refused on purpose and both entered below. 2 are the reserved-word cost -- perfetto aliases a table `end`, which CASE needs. The rest is a tail of singletons, no two alike.
 '''
 grind = '''
 Both ends of the grind are recorded. The first sweep, over the 36-package corpus, was 734 passed and 63 gaps. Seven fixes took it to 774/36: `DEFAULT '' NOT NULL` (a default is a literal position, not an expression position -- with a full expression the parser reads `'' NOT LIKE …` and never reaches the NOT NULL); `CREATE VIRTUAL TABLE … USING fts5(…)`; T-SQL's `[bracketed]` identifiers, which turned out not to collide with the array subscript because the lexer is state-aware; `ALTER TABLE … ADD CONSTRAINT`, now taking a `_member`; SQLite's `ON CONFLICT REPLACE`; a VALUES-seeded recursive CTE; and `timestamp(2) without time zone`. `SHOW` was added after the second sweep made it the largest single cluster at 72 occurrences.
@@ -83,6 +83,12 @@ primary and only, and the "only" is the ceiling on what a SQL sweep can mean. St
 
 The syntax/semantics line is drawn on the ERROR MESSAGE rather than the error class, because preparing resolves names: `SELECT * FROM t` against an empty database fails with "no such table", and a file that is perfectly good SQL must not be booked as noise for it. SQLite's parser emits a short closed set of messages (near "X": syntax error / unrecognized token / incomplete input / parser stack overflow); everything else it can say is about a schema this oracle deliberately does not have.
 
+A BUG THIS ORACLE HAD, kept because it is the failure mode nobody looks for. `sqlite3_complete` is purely LEXICAL -- it finds a `;` outside strings, comments and BEGIN…END -- so a script that separates statements some other way, T-SQL's `GO` or no separator at all, arrives as ONE fragment holding many statements, and `sqlite3_prepare` reads only the first. When that first statement failed on a NAME, the oracle answered `valid` for a file sqlite had never finished reading.
+
+Note which direction that runs. The docstring's warning, and every other oracle's, is about answering `invalid` too readily: that books real gaps as noise and reports a flawless grammar. This was the mirror image -- it MANUFACTURED gaps, certifying files the oracle had no standing to certify, and 9 of 57 reported gaps turned out to be it. Both directions are wrong; only one of them is the one people watch for.
+
+The rule now: a fragment sqlite did not terminate must PREPARE CLEANLY to count as valid, because that is the only case where sqlite demonstrably consumed all of it. A multi-statement warning means it was several; a name error on such a fragment is ambiguous -- one statement with an unresolvable name, or the first of several, and nothing here can tell -- and both answer invalid. Measured cost: 30 files across the corpus flip from valid to noise, which hides whatever gaps they carry. That is the safe direction. A `;`-terminated statement is untouched.
+
 THE LIMIT: this is a one-dialect oracle for a dialect-union grammar. PostgreSQL's parser lives inside the server or inside libpg_query (a C library to build) and MySQL's inside mysqld; SQLite's is the only one reachable with nothing installed. So postgres-only and mysql-only syntax is never contradicted, and a file that fails BOTH the grammar and SQLite is booked as corpus noise rather than as the gap it may be. That direction is the safe one -- the sweep can miss a grammar bug, it can never invent one -- and adding libpg_query as a second oracle is the single highest-value thing anyone can do for this language's numbers.'''
 
 [[deviations]]
@@ -93,6 +99,15 @@ why = '''
 The set is small on purpose. tree-sitter offers a token only where the parse state could accept it, so SQL's enormous keyword list mostly costs nothing -- a column called `key`, `text` or `value` lexes as an identifier everywhere those words are not tokens the parser could take next. The exception is the position where both readings are live: after `SELECT` an identifier is expected, so before this list existed `SELECT FROM users` parsed as one column named FROM aliased `users`, and the grammar accepted a statement no engine will.
 
 `ON` is deliberately NOT reserved even though all three dialects reserve it: `PRAGMA foreign_keys = ON` puts it in value position and that form is real. The cost is that `SELECT on FROM t` parses. Every word left off the list is a word a column may be named after, which is the safe direction for a union grammar.'''
+
+[[deviations]]
+what = 'a T-SQL fringe that no oracle backs'
+why = '''
+The declared union is SQLite, PostgreSQL and MySQL. T-SQL is NOT in it, and yet this grammar accepts a fringe of it: `[bracketed]` identifiers, `GO` as a batch separator, `ALTER TABLE … WITH NOCHECK`, and `ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]` filegroup placement. That is worth stating plainly rather than leaving to be inferred from the rules.
+
+They are there because mssql migration scripts ship in the same directories as the mysql and postgres ones -- roundcube keeps all three -- so a corpus of "SQL that ships inside installed packages" contains them whether or not the union claims them. Each is unambiguous against the rest of the grammar, which is why they cost nothing to accept.
+
+WHAT THEY LACK IS EVIDENCE. SQLite cannot adjudicate a T-SQL file, so none of this is oracle-backed, and until the oracle bug above was fixed it LOOKED backed: the roundcube mssql scripts have no `;` in them at all, so they arrived as one fragment, failed on a name, and were certified valid. They are corpus noise now, which is the honest classification. The constructs stay -- they are real T-SQL and reading the files they appear in is worth more than the purity of the union statement -- but they rest on documentation, not on measurement, and a second oracle will not change that. Only a T-SQL parser would.'''
 
 [[deviations]]
 what = 'one node for every dotted name'
