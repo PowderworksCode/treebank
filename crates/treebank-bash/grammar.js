@@ -397,8 +397,16 @@ module.exports = grammar({
       $._expression,
       '+', '-', '*', '/', '%', '**', '=', '+=', '-=', '*=', '/=', '%=',
       '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!', '~', '^', '&', '|',
-      '<<', '>>', '++', '--', '?', ':', ',', '(', ')',
+      '<<', '>>', '++', '--', '?', ':', ',',
+      // Parens NEST as a rule rather than appearing as flat elements. Flat,
+      // the lexer at `${#c})))` could take `))` (the arithmetic's closer)
+      // one paren early, because a flat repeat cannot count brackets --
+      // inside a nested group only `)` is valid and the choice never
+      // arises.
+      $._arith_group,
     )),
+
+    _arith_group: $ => seq('(', optional($._arithmetic), ')'),
 
     // ── words and expansions ─────────────────────────────────────────
     // Everything in shell is a word. `_word_like` is the one place that
