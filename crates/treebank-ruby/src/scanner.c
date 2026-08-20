@@ -534,6 +534,14 @@ static bool scan_simple_symbol(TSLexer *lexer) {
       while (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
         advance(lexer); // :$0, :$1 …
       }
+    } else if (c == '$' && lexer->lookahead > 0 && lexer->lookahead < 128 &&
+               strchr("~&`'+*$?!@/\\;,.=:<>\"", (char)lexer->lookahead)) {
+      advance(lexer); // :$/, :$;, :$~ … — the special globals, same set
+                      // as the global_variable token's regex
+    } else if (c == '$' && lexer->lookahead == '-') {
+      advance(lexer); // :$-w, :$-0
+      if (!is_ident_char(lexer->lookahead)) return false;
+      advance(lexer);
     } else {
       if (!is_ident_start(lexer->lookahead)) return false;
       while (is_ident_char(lexer->lookahead)) advance(lexer);

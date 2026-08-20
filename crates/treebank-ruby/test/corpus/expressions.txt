@@ -274,3 +274,99 @@ op = :<=>
   (assignment
     (identifier)
     (simple_symbol)))
+
+================================================================================
+a rocket in command arguments is a pair, even under assignment
+================================================================================
+
+x = y.merge "a" => b.value
+server = Server.new :Port => @port
+x = 1 => Integer
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (identifier)
+        (identifier))
+      (argument_list
+        (pair
+          (string
+            (string_start)
+            (string_content)
+            (string_end))
+          (member_expression
+            (identifier)
+            (identifier))))))
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (constant)
+        (identifier))
+      (argument_list
+        (pair
+          (simple_symbol)
+          (instance_variable)))))
+  (match_pattern
+    (assignment
+      (identifier)
+      (integer))
+    (constant)))
+
+================================================================================
+keyword-plus-suffix names are plain identifiers
+================================================================================
+
+x = module? ? "module" : "class"
+puts nil?
+kind = class!
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (conditional_expression
+      (identifier)
+      (string
+        (string_start)
+        (string_content)
+        (string_end))
+      (string
+        (string_start)
+        (string_content)
+        (string_end))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (identifier)))
+  (assignment
+    (identifier)
+    (identifier)))
+
+================================================================================
+symbols of special global variables
+================================================================================
+
+case var
+when :$/, :$;, :$0, :$stdout, :$-w
+  1
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (case_statement
+    (identifier)
+    (when_clause
+      (simple_symbol)
+      (simple_symbol)
+      (simple_symbol)
+      (simple_symbol)
+      (simple_symbol)
+      (block
+        (integer)))))

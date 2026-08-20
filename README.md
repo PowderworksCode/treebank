@@ -10,6 +10,9 @@ TypeScript grammar also parses JavaScript), **Java, Ruby, Bash** and
 **[`DESIGN.md`](DESIGN.md) is the authoritative document** — the vocabulary,
 its two tiers and the measurements that forced them, the version-union
 grammar policy, the testing invariants, and the crate layout. Start there.
+**[`FIELD_GUIDE.md`](FIELD_GUIDE.md)** is its companion for grammar
+authors: what to do and what not to do when writing a parser, each rule
+paid for by a measured incident, enforced mechanically by `treebank lint`.
 
 ## What is in this repo
 
@@ -68,6 +71,7 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | negative corpus | accepts-invalid-code — the direction optimizing a pass rate drifts toward, and the one no corpus of real source can reveal |
 | `treebank roles` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
 | `treebank rosetta` | a role threaded in one grammar and forgotten in another (supertype matching is derivation-based, so a missed thread is otherwise silent) |
+| `treebank lint` | the FIELD_GUIDE.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 
 Corpus sweeps are not in CI: the corpora are gigabytes and gitignored.

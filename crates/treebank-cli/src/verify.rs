@@ -80,6 +80,16 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         }
     }
 
+    // 4b. The FIELD_GUIDE.md smell detector, enforced where the grammar
+    //     has written its lint_policy.toml ratchets, advisory otherwise.
+    match crate::lint::run(grammar_dir) {
+        Ok(()) => println!("  lint          ok"),
+        Err(e) => {
+            println!("  lint          FAIL: {e}");
+            failed.push("lint");
+        }
+    }
+
     // 5. The cross-language gate. A role threaded in one grammar and
     //    forgotten in another is silent everywhere else, because supertype
     //    matching is derivation-based.

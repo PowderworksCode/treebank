@@ -1,0 +1,47 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+
+[baselines]
+# Each declared conflict is a GLR fork site (FIELD_GUIDE.md §2). Most of
+# these are the case/in pattern tier sharing spellings with expressions
+# and the keyword-method-name family; the identifier/callee family was
+# factored away (§1) and must not return. Four declarations generation no
+# longer needed were pruned (the member_block family and
+# _statements/function_definition), each removal re-validated against
+# both corpora.
+declared_conflicts = 54
+
+# Conflicts whose members include a supertype: parallel-tier early
+# commits. The remaining ones are the pattern/expression shared shapes;
+# each is a factoring candidate.
+early_commit_conflicts = 18
+
+# prec.dynamic sites. Weights are the tool of last resort and each one
+# here is documented at its rule: do-block-vs-loop `do`, scope_resolution
+# vs member `::`, match_pattern vs hash rocket. A weight on a construct
+# CORRECT parses contain re-ranks whole versions at the cull (measured:
+# one such weight took the stdlib sweep from 3 failures to 49), so new
+# weights need that analysis first.
+dynamic_weights = 5
+
+# One spelling, two tokens (§4): `(` `[` `:` `=`. All four are the
+# adjacency-is-the-syntax cases — call parens vs spaced argument,
+# subscript vs array argument, string-key colon vs ternary, setter `=`
+# vs assignment — where the two sides are disjoint by construction.
+same_text_tokens = 4
+
+# Keyword-shaped tokens outside the reserved sets: __FILE__ / __LINE__ /
+# __ENCODING__ / __END__ (keyword-literals that read fine as names where
+# invalid) and `new`, which is deliberately NOT a ruby keyword — it is an
+# ordinary method name that also appears in the keyword-method list.
+unreserved_keywords = 5
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does (upstream ruby parses with
+# 5,989 states; the gap is the cost of the conflicts above). The drop from
+# 9,900 came almost entirely from one static resolution: the pair rocket
+# outranking `_argument`'s reduce collapsed a swath of ambiguous cells.
+state_count = 7285

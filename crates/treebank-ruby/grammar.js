@@ -21,6 +21,18 @@
 
 const tb = require('../treebank-core/vocabulary/supertypes.js');
 
+// Ruby's hard keywords (parse.y's reserved words, the lowercase ones).
+// Shared between the reserved-word declaration and the suffixed-name
+// token (`module?` is an identifier, because the tokenizer takes the
+// suffix before the keyword lookup ever happens).
+const RESERVED_WORDS = [
+  'alias', 'and', 'begin', 'break', 'case', 'class', 'def', 'do',
+  'else', 'elsif', 'end', 'ensure', 'false', 'for', 'if', 'in',
+  'module', 'next', 'nil', 'not', 'or', 'redo', 'rescue', 'retry',
+  'return', 'self', 'super', 'then', 'true', 'undef', 'unless',
+  'until', 'when', 'while', 'yield',
+];
+
 // Ruby's own operator ladder (parse.y), tightest first.
 const PREC = {
   member: 40,       // a.b a[i] calls
@@ -60,13 +72,7 @@ module.exports = grammar({
   // genuinely admit keywords as names (`x.class`, `def if`) list them
   // explicitly and are unaffected.
   reserved: {
-    global: $ => [
-      'alias', 'and', 'begin', 'break', 'case', 'class', 'def', 'do',
-      'else', 'elsif', 'end', 'ensure', 'false', 'for', 'if', 'in',
-      'module', 'next', 'nil', 'not', 'or', 'redo', 'rescue', 'retry',
-      'return', 'self', 'super', 'then', 'true', 'undef', 'unless',
-      'until', 'when', 'while', 'yield',
-    ],
+    global: $ => RESERVED_WORDS,
   },
 
   extras: $ => [
@@ -139,13 +145,19 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._primary, $._command_callee, $._block_callee],
+    [$._primary, $._block_callee],
+    [$._command_callee, $._block_callee],
+    [$._arg, $.call_expression],
+    [$._access, $._command_callee],
+    [$._primary, $._command_callee],
     [$.scope_resolution],
-    [$.singleton_class, $.member_block],
+
     [$.range_expression],
-    [$._statements, $.function_definition],
+
     [$.call_expression],
-    [$.module_definition, $.member_block],
-    [$.class_definition, $.member_block],
+
+
     [$._statements, $.do_block],
     [$._pattern, $._name, $._pattern_value],
     [$._pattern, $._access],
@@ -153,12 +165,9 @@ module.exports = grammar({
     [$._pattern, $._name],
     [$._name, $.scope_resolution],
     [$._primary, $.scope_resolution],
-    [$._name, $.scope_resolution, $._callee],
     [$._primary, $.concatenated_string],
     [$._name, $.module_definition],
-    [$._callee, $.module_definition],
     [$._name, $.class_definition],
-    [$._callee, $.class_definition],
     [$._keyword_method_name, $.module_definition],
     [$.function_definition, $._keyword_method_name],
     [$.super, $._keyword_method_name],
@@ -173,10 +182,7 @@ module.exports = grammar({
     [$.range_expression, $.forward_argument, $.pattern_range],
     [$.splat_argument, $.pattern_double_splat],
     [$.splat_argument, $.pattern_splat],
-    [$._callee, $.array_pattern, $.hash_pattern],
-    [$._name, $._callee, $._pattern_value],
     [$._name, $._pattern_value],
-    [$._callee, $.array_pattern],
     [$._pattern, $._pattern_value],
     [$.range_expression, $.pattern_range],
     [$.star_pattern, $.pattern_splat],
@@ -184,7 +190,6 @@ module.exports = grammar({
     [$.pattern_double_splat, $.hash_splat],
     [$.pattern_pair, $.pair],
     [$._right_hand_side, $._bare_list],
-    [$._callee, $.hash_pattern],
     [$._parameter, $.tuple_parameter],
     [$._argument, $.pair],
     [$._primary, $.function_definition],
@@ -198,9 +203,7 @@ module.exports = grammar({
     [$._keyword_method_name, $.while_statement],
     [$._keyword_method_name, $.unless_statement],
     [$._keyword_method_name, $.if_statement],
-    [$._access, $._callee],
-    [$._primary, $._callee],
-    [$._name, $._callee],],
+  ],
 
   rules: {
     program: $ => seq(
@@ -314,6 +317,7 @@ module.exports = grammar({
       alias($.command_call, $.call_expression),
       alias($._and_or, $.binary_expression),
       alias($.not_expression, $.unary_expression),
+      alias($.bang_command, $.unary_expression),
       $._jump,
       alias($.multiple_assignment, $.assignment),
       $.match_pattern,
@@ -342,6 +346,12 @@ module.exports = grammar({
     not_expression: $ => prec(PREC.not, seq(
       field('operator', 'not'),
       field('operand', $._expression),
+    )),
+
+    // parse.y's `'!' command_call`: `!text.kind_of? Text`.
+    bang_command: $ => prec(PREC.not, seq(
+      field('operator', '!'),
+      field('operand', alias($.command_call, $.call_expression)),
     )),
 
     // ── jumps ────────────────────────────────────────────────────────
@@ -478,15 +488,15 @@ module.exports = grammar({
     arg_rescue_modifier: $ => prec.left(PREC.rescue_mod, seq(
       field('body', $._arg),
       'rescue',
-      field('handler', $._arg),
+      field('handler', choice($._arg, $._jump)),
     )),
 
     conditional_expression: $ => prec.right(PREC.ternary, seq(
       field('condition', $._arg),
       '?',
-      field('consequence', $._arg),
+      field('consequence', choice($._arg, $._jump)),
       ':',
-      field('alternative', $._arg),
+      field('alternative', choice($._arg, $._jump)),
     )),
 
     range_expression: $ => prec.left(PREC.range, seq(
@@ -498,6 +508,9 @@ module.exports = grammar({
     binary_expression: $ => {
       const table = [
         ['||', PREC.or], ['&&', PREC.and],
+        // `(x) || break` and `cond && next` — the short-circuit operators
+        // are the one binary family whose right side CRuby lets be a jump.
+
         ['==', PREC.equality], ['!=', PREC.equality], ['===', PREC.equality],
         ['=~', PREC.equality], ['!~', PREC.equality], ['<=>', PREC.equality],
         ['<', PREC.compare], ['<=', PREC.compare],
@@ -521,6 +534,8 @@ module.exports = grammar({
         prec.left(PREC.plus, seq(field('left', $._arg), field('operator', alias($._binary_minus, '-')), field('right', $._arg))),
         prec.left(PREC.bitand, seq(field('left', $._arg), field('operator', alias($._binary_amp, '&')), field('right', $._arg))),
         prec.right(PREC.power, seq(field('left', $._arg), field('operator', alias($._binary_star_star, '**')), field('right', $._arg))),
+        prec.left(PREC.or, seq(field('left', $._arg), field('operator', '||'), field('right', $._jump))),
+        prec.left(PREC.and, seq(field('left', $._arg), field('operator', '&&'), field('right', $._jump))),
       );
     },
 
@@ -650,24 +665,37 @@ module.exports = grammar({
     // header never see the conflict (`do` follows nothing else there).
     call_expression: $ => choice(
       // foo(args) / obj.foo(args) — parentheses, then optionally a block.
+      // The function is the full _primary tier, exactly as python's
+      // call_expression takes _primary_expression: an identifier then
+      // reduces the same way whether a value or a callee follows, so the
+      // parser never forks on the question. The cost is accepting `5(x)`,
+      // which python's grammar also accepts and both ledgers record.
       prec(PREC.member, seq(
-        field('function', $._callee),
+        field('function', $._primary),
         field('arguments', $.argument_list),
         optional(field('block', $.brace_block)),
       )),
       prec(PREC.do_block, prec.dynamic(-1, seq(
-        field('function', $._callee),
+        field('function', $._primary),
         field('arguments', $.argument_list),
         field('block', $.do_block),
       ))),
       // foo { } / obj.foo do end — no arguments; the block is what makes
-      // this a call rather than a bare name or member read.
+      // this a call rather than a bare name or member read. The function
+      // here is `_block_callee`, NOT the full _primary: with _primary,
+      // `File.open(path) do … end` also read as a block hung on the
+      // completed call — a call of a call — and no weighting fixed the tie
+      // without poisoning unrelated culls (a dynamic weight accrues at
+      // reduce time, so penalising a construct that CORRECT parses contain
+      // re-ranks whole versions; one such weight took the stdlib sweep
+      // from 3 failures to 49). Excluding invocations structurally removes
+      // the nested reading instead of out-weighing it.
       prec(PREC.member, seq(
-        field('function', $._callee),
+        field('function', $._block_callee),
         field('block', $.brace_block),
       )),
       prec(PREC.do_block, prec.dynamic(-1, seq(
-        field('function', $._callee),
+        field('function', $._block_callee),
         field('block', $.do_block),
       ))),
       // `callable.(args)` — call with the method name omitted, sugar for
@@ -682,13 +710,7 @@ module.exports = grammar({
       // aliased into this node from _expression.
     ),
 
-    _callee: $ => choice(
-      $.identifier,
-      $.constant,
-      $.member_expression,
-      $.scope_resolution,
-      $.super,
-    ),
+
 
     // A paren-less call with arguments: `puts x, y`, `attr_reader :a, :b`,
     // `obj.write data`. Only legal at the expression level — an argument
@@ -696,14 +718,38 @@ module.exports = grammar({
     // expression/arg split exists in ruby's own grammar.
     command_call: $ => choice(
       prec.right(PREC.command, seq(
-        field('function', $._callee),
+        field('function', $._command_callee),
         field('arguments', alias($.command_argument_list, $.argument_list)),
       )),
       prec.right(PREC.do_block, prec.dynamic(-1, seq(
-        field('function', $._callee),
+        field('function', $._command_callee),
         field('arguments', alias($.command_argument_list, $.argument_list)),
         field('block', $.do_block),
       ))),
+    ),
+
+    // Only a name-shaped thing may start a paren-less call (`"a" b` must
+    // stay a syntax error, and `"a" "b"` a concatenation), but the callee
+    // is spelled with the SAME rules the value reading reduces through —
+    // _name, member_expression — so the parser shares the derivation
+    // instead of forking on a reduce/reduce between parallel tiers.
+    _command_callee: $ => choice(
+      $._name,
+      $.member_expression,
+      $.super,
+    ),
+
+    // What a block-only call may hang its block on: everything a receiver
+    // can be EXCEPT a completed invocation (that reading is the args-form's
+    // job, flat). Built from the same shared tiers as _command_callee, for
+    // the same no-parallel-reduce reason.
+    _block_callee: $ => choice(
+      $._name,
+      $._variable,
+      $._access,
+      $.self,
+      $.super,
+      $.parenthesized_expression,
     ),
 
     // A parenthesised list may hold ONE command — `new(sanitize_exception
@@ -749,7 +795,12 @@ module.exports = grammar({
 
     forward_argument: _ => '...',
 
-    yield_expression: $ => prec.right(seq(
+    // prec.LEFT for the jump-keyword reason (FIELD_GUIDE.md §6): at
+    // `yield • unless` the bare yield must reduce so the `unless` becomes
+    // a modifier. prec.right shifted it into the arguments, and the
+    // swallowed modifier's body then ate the enclosing `end` — one wrong
+    // associativity, a whole cluster of module-wrapped files.
+    yield_expression: $ => prec.left(seq(
       'yield',
       optional(choice(
         field('arguments', $.argument_list),
@@ -758,11 +809,15 @@ module.exports = grammar({
     )),
 
     // ── blocks ───────────────────────────────────────────────────────
-    // The parameters may sit on their own line below the opener.
+    // The parameters may sit on their own line below the opener; the
+    // pre-parameter terminator is tied to them so it can never also read
+    // as the body's first item (one owner per newline, FIELD_GUIDE.md §7).
     do_block: $ => seq(
       'do',
-      optional($._terminator),
-      optional(field('parameters', $.block_parameters)),
+      optional(choice(
+        seq($._terminator, field('parameters', $.block_parameters)),
+        field('parameters', $.block_parameters),
+      )),
       optional(field('body', $._body)),
       repeat($.rescue_clause),
       optional($.else_clause),
@@ -772,18 +827,44 @@ module.exports = grammar({
 
     brace_block: $ => prec(PREC.member, seq(
       '{',
-      optional($._terminator),
-      optional(field('parameters', $.block_parameters)),
+      optional(choice(
+        seq($._terminator, field('parameters', $.block_parameters)),
+        field('parameters', $.block_parameters),
+      )),
       optional(field('body', $._body)),
       '}',
     )),
 
+    // A block parameter's default is a PRIMARY, not an arg — parse.y's own
+    // f_opt/f_block_opt distinction — so `{|mode = "CBC"| … }` closes at
+    // the second `|` instead of reading it as bitwise-or.
     block_parameters: $ => seq(
       '|',
-      optional(seq(commaSep1($._parameter), optional(','))),
+      optional(seq(commaSep1($._block_parameter), optional(','))),
       optional(seq(';', commaSep1(alias($.identifier, $.parameter)))),
       '|',
     ),
+
+    _block_parameter: $ => choice(
+      $.parameter,
+      alias($.block_optional_parameter, $.parameter),
+      $.star_parameter,
+      $.double_star_parameter,
+      $.block_parameter,
+      alias($.block_keyword_parameter, $.keyword_parameter),
+      $.tuple_parameter,
+    ),
+
+    block_optional_parameter: $ => prec(1, seq(
+      field('name', $.identifier),
+      '=',
+      field('value', $._primary),
+    )),
+
+    block_keyword_parameter: $ => prec.right(seq(
+      field('name', alias($._hash_key, $.hash_key_symbol)),
+      optional(field('value', $._primary)),
+    )),
 
     lambda: $ => seq(
       '->',
@@ -873,7 +954,12 @@ module.exports = grammar({
     function_definition: $ => seq(
       'def',
       optional(seq(
-        field('object', choice($.self, $.identifier, $.constant, $._variable)),
+        // parse.y's singleton: a var_ref or `'(' expr ')'` — httpclient
+        // defines `def (o = self.content).content` on a fresh receiver.
+        field('object', choice(
+          $.self, $.identifier, $.constant, $._variable,
+          $.parenthesized_expression,
+        )),
         choice('.', '::'),
       )),
       field('name', choice(
@@ -888,10 +974,7 @@ module.exports = grammar({
         // are not, so the bare and empty forms keep the requirement.
         seq(
           choice(
-            seq(
-              field('parameters', alias($.lambda_parameters, $.parameters)),
-              optional($._terminator),
-            ),
+            field('parameters', alias($.lambda_parameters, $.parameters)),
             seq(
               field('parameters', optional(alias($.def_bare_parameters, $.parameters))),
               $._terminator,
@@ -921,7 +1004,7 @@ module.exports = grammar({
     _operator_token: _ => choice(
       '+', '-', '*', '/', '%', '**', '==', '===', '!=', '<', '<=', '>', '>=',
       '<=>', '=~', '!~', '<<', '>>', '&', '|', '^', '!', '~', '+@', '-@',
-      '[]', '[]=', '`',
+      '~@', '!@', '[]', '[]=', '`',
     ),
 
     // Ruby lets every keyword be a method name after `def` or `.`, and the
@@ -944,17 +1027,27 @@ module.exports = grammar({
     class_definition: $ => seq(
       'class',
       field('name', choice($.constant, $.scope_resolution)),
-      optional(seq('<', field('superclass', $._arg))),
-      optional($._terminator),
+      // parse.y: `superclass: '<' expr_value term` — the expression tier,
+      // so a paren-less command is legal: `class Attribute < Struct.new
+      // :relation, :name`.
+      optional(seq('<', field('superclass', choice(
+        $._arg,
+        alias($.command_call, $.call_expression),
+      )))),
       optional(field('body', alias($.member_block, $.block))),
+      repeat($.rescue_clause),
+      optional($.else_clause),
+      optional($.ensure_clause),
       'end',
     ),
 
     module_definition: $ => seq(
       'module',
       field('name', choice($.constant, $.scope_resolution)),
-      optional($._terminator),
       optional(field('body', alias($.member_block, $.block))),
+      repeat($.rescue_clause),
+      optional($.else_clause),
+      optional($.ensure_clause),
       'end',
     ),
 
@@ -963,8 +1056,10 @@ module.exports = grammar({
       'class',
       '<<',
       field('value', $._arg),
-      optional($._terminator),
       optional(field('body', alias($.member_block, $.block))),
+      repeat($.rescue_clause),
+      optional($.else_clause),
+      optional($.ensure_clause),
       'end',
     ),
 
@@ -1339,8 +1434,12 @@ module.exports = grammar({
 
     _interpolation: $ => choice($.interpolation),
 
+    // token(prec(1)), NOT token.immediate: the lexical precedence is what
+    // beats the comment regex wherever `#{` is valid, and immediacy would
+    // reject `%W[a #{v}]`, where a word-array separator space legitimately
+    // precedes a whole-word interpolation.
     interpolation: $ => seq(
-      token.immediate(prec(1, '#{')),
+      token(prec(1, '#{')),
       optional(field('expression', $._statements)),
       '}',
     ),
@@ -1374,7 +1473,14 @@ module.exports = grammar({
     hash_splat: $ => seq(alias($._splat_star_star, '**'), optional($._arg)),
 
     pair: $ => choice(
-      seq(field('key', $._arg), '=>', field('value', $._arg)),
+      // The rocket outranks `_argument`'s reduce (prec.left, level 0): a
+      // `=>` after an in-progress command argument ALWAYS begins a pair,
+      // because parse.y's match value is an `arg` and a command is not an
+      // arg — the match reading is impossible there. At equal precedence
+      // the left-associativity resolved the cell reduce-first, the pair
+      // fork never formed, and `x = y.merge "a" => b.value` closed the
+      // assignment early so match_pattern could steal the rocket.
+      prec(1, seq(field('key', $._arg), '=>', field('value', $._arg))),
       prec.right(seq(
         field('key', alias($._hash_key, $.hash_key_symbol)),
         optional(field('value', $._arg)),
@@ -1387,14 +1493,27 @@ module.exports = grammar({
     ),
 
     // ── names ────────────────────────────────────────────────────────
-    identifier: $ => seq(
-      $._identifier_token,
-      optional($._identifier_suffix),
+    identifier: $ => choice(
+      seq($._identifier_token, optional($._identifier_suffix)),
+      // parse.y's tokenizer consumes a trailing ?/! into the identifier
+      // BEFORE keyword lookup, so bare `module?` is an ordinary method
+      // call. Spelled as literal tokens, maximal munch picks `module?`
+      // over the keyword `module` wherever both are valid — a lexical
+      // decision, no fork and no parser state behind it.
+      $._reserved_suffix_name,
     ),
+
+    _reserved_suffix_name: _ => token(choice(
+      ...RESERVED_WORDS.flatMap(w => [w + '?', w + '!']),
+    )),
 
     _identifier_token: _ => token(/[_a-z\u{0080}-\u{10FFFF}][_a-zA-Z0-9\u{0080}-\u{10FFFF}]*/u),
 
-    constant: _ => token(/[A-Z][_a-zA-Z0-9\u{0080}-\u{10FFFF}]*/u),
+    // Mirrors identifier: the suffix external lets `def PermaLink?` and
+    // `Const.exist?`-style names keep the whole spelling in one node.
+    constant: $ => seq($._constant_token, optional($._identifier_suffix)),
+
+    _constant_token: _ => token(/[A-Z][_a-zA-Z0-9\u{0080}-\u{10FFFF}]*/u),
 
     instance_variable: _ => token(/@[_a-zA-Z\u{0080}-\u{10FFFF}][_a-zA-Z0-9\u{0080}-\u{10FFFF}]*/u),
 
