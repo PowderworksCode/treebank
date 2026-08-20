@@ -74,6 +74,11 @@ module.exports = grammar(C, {
   ),
 
   conflicts: ($, previous) => previous.concat([
+    // C dropped this one when `macro_modifier` subsumed it there. C++
+    // still needs it: `unexpanded_macro` is reachable from a namespace
+    // body here, so `namespace { X signed …` has the two readings C no
+    // longer has.
+    [$.unexpanded_macro, $._sizeable_type],
     [$.unexpanded_macro, $._expression],
     [$.unexpanded_macro, $._type, $._expression],
     [$.unexpanded_macro, $.namespace_definition],
@@ -116,6 +121,65 @@ module.exports = grammar(C, {
   ]),
 
   rules: {
+    // ── the declaration specifiers ────────────────────────────────────
+    // Written out to restore C's SYMMETRIC form: the same repetition
+    // before the type and after it. C's own rule admits a `macro_modifier`
+    // in the leading repetition only — `ZEND_API void f(void);` — which
+    // makes the two repetitions different symbols, and a parser that has
+    // just reduced a modifier can no longer tell which of them it is in.
+    //
+    // C absorbs that with six declared conflicts and thirty kilobytes of
+    // table. C++ does not: the same change asks for a conflict on
+    // `_out_of_line_definition`, then on the two member forms, then on
+    // `macro_modifier` against `_expression` in four widening combinations
+    // — the runaway shape DESIGN.md §8.1 records, where each conflict
+    // spawns the next. The rule is worth less here for the reason
+    // `_top_level_item` gives above: a C++ header's declarations open with
+    // `template`, `namespace` and access labels far more often than with a
+    // visibility macro.
+    //
+    // Everything else C added for unexpanded macros is inherited and does
+    // generate: the macro after a declarator, beside a pointer's
+    // qualifiers, on an enumerator and inside a typedef.
+    _declaration_specifiers: $ => seq(
+      repeat($._declaration_modifiers),
+      field('type', $._type),
+      repeat($._declaration_modifiers),
+    ),
+
+    // Without C's leading `macro_modifier` alternative, for the same
+    // reason: `( identifier • *` is `(a * b)` here as readily as it is a
+    // declarator, and the macro reading is a third one on top of that.
+    parenthesized_declarator: $ => prec.dynamic(-10, seq(
+      '(',
+      $._declarator,
+      ')',
+    )),
+
+    // And the same for the pointer's qualifier run: `* identifier •  (` is
+    // a multiplication here too.
+    pointer_declarator: $ => prec.dynamic(1, prec.right(seq(
+      '*',
+      repeat($._type_qualifier_or_attribute),
+      field('declarator', $._declarator),
+    ))),
+
+    // The suffix form only. C's rule has a second alternative that opens
+    // with the macro — `ZEND_API void ZEND_FASTCALL f(…)` — which puts
+    // `macro_modifier` at the START of a declarator, and a declarator
+    // begins in far more states here than in C: a lambda's init-capture is
+    // one, and `_Static_assert(([x](…)…` is where the table said so. The
+    // macro after the declarator costs nothing and is kept.
+    macro_attributed_declarator: $ => prec.right(seq(
+      field('declarator', choice(
+        $.function_declarator,
+        $.array_declarator,
+        $.parenthesized_declarator,
+        $.attributed_declarator,
+      )),
+      repeat1(field('attribute', $.macro_attribute)),
+    )),
+
     // ── what a translation unit may hold ──────────────────────────────
     // Written out rather than extended, in order to LEAVE OUT
     // `unexpanded_macro`. C admits a bare `__BEGIN_DECLS` at file scope

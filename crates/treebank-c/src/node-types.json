@@ -2630,7 +2630,7 @@
     "fields": {
       "attribute": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "macro_attribute",
@@ -2647,7 +2647,25 @@
             "named": true
           },
           {
+            "type": "attributed_declarator",
+            "named": true
+          },
+          {
             "type": "function_declarator",
+            "named": true
+          },
+          {
+            "type": "parenthesized_declarator",
+            "named": true
+          }
+        ]
+      },
+      "modifier": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "macro_modifier",
             "named": true
           }
         ]
@@ -2714,6 +2732,10 @@
       "multiple": false,
       "required": true,
       "types": [
+        {
+          "type": "call_expression",
+          "named": true
+        },
         {
           "type": "identifier",
           "named": true
@@ -3942,7 +3964,7 @@
     "fields": {
       "declarator": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "array_declarator",

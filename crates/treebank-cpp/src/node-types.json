@@ -986,6 +986,10 @@
           "named": true
         },
         {
+          "type": "conditional_expression",
+          "named": true
+        },
+        {
           "type": "identifier",
           "named": true
         },
@@ -1038,6 +1042,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -1394,6 +1402,10 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "macro_attributed_declarator",
           "named": true
         },
         {
@@ -2040,6 +2052,30 @@
           {
             "type": "_expression",
             "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "char_literal",
+            "named": true
+          },
+          {
+            "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "preproc_defined",
+            "named": true
+          },
+          {
+            "type": "preproc_has_include",
+            "named": true
+          },
+          {
+            "type": "string_literal",
+            "named": true
           }
         ]
       },
@@ -2049,6 +2085,30 @@
         "types": [
           {
             "type": "_expression",
+            "named": true
+          },
+          {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "char_literal",
+            "named": true
+          },
+          {
+            "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "preproc_defined",
+            "named": true
+          },
+          {
+            "type": "preproc_has_include",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -2062,7 +2122,31 @@
             "named": true
           },
           {
+            "type": "call_expression",
+            "named": true
+          },
+          {
+            "type": "char_literal",
+            "named": true
+          },
+          {
             "type": "comma_expression",
+            "named": true
+          },
+          {
+            "type": "number_literal",
+            "named": true
+          },
+          {
+            "type": "preproc_defined",
+            "named": true
+          },
+          {
+            "type": "preproc_has_include",
+            "named": true
+          },
+          {
+            "type": "string_literal",
             "named": true
           }
         ]
@@ -2100,6 +2184,10 @@
           },
           {
             "type": "init_declarator",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -2390,6 +2478,10 @@
         {
           "type": "_attribute",
           "named": true
+        },
+        {
+          "type": "macro_modifier",
+          "named": true
         }
       ]
     }
@@ -2512,6 +2604,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -2729,6 +2825,10 @@
             "named": true
           },
           {
+            "type": "macro_attributed_declarator",
+            "named": true
+          },
+          {
             "type": "operator_name",
             "named": true
           },
@@ -2918,6 +3018,10 @@
             "named": true
           },
           {
+            "type": "macro_attributed_declarator",
+            "named": true
+          },
+          {
             "type": "operator_name",
             "named": true
           },
@@ -3021,6 +3125,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -3229,6 +3337,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -3490,6 +3602,86 @@
     }
   },
   {
+    "type": "macro_attribute",
+    "named": true,
+    "fields": {
+      "arguments": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "argument_list",
+            "named": true
+          }
+        ]
+      },
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "macro_attributed_declarator",
+    "named": true,
+    "fields": {
+      "attribute": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "macro_attribute",
+            "named": true
+          }
+        ]
+      },
+      "declarator": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "array_declarator",
+            "named": true
+          },
+          {
+            "type": "attributed_declarator",
+            "named": true
+          },
+          {
+            "type": "function_declarator",
+            "named": true
+          },
+          {
+            "type": "parenthesized_declarator",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "macro_modifier",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "identifier",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "ms_declspec_modifier",
     "named": true,
     "fields": {},
@@ -3497,6 +3689,10 @@
       "multiple": false,
       "required": true,
       "types": [
+        {
+          "type": "call_expression",
+          "named": true
+        },
         {
           "type": "identifier",
           "named": true
@@ -3712,6 +3908,10 @@
             "named": true
           },
           {
+            "type": "macro_attributed_declarator",
+            "named": true
+          },
+          {
             "type": "operator_name",
             "named": true
           },
@@ -3814,6 +4014,10 @@
             "named": true
           },
           {
+            "type": "macro_attributed_declarator",
+            "named": true
+          },
+          {
             "type": "operator_name",
             "named": true
           },
@@ -3878,6 +4082,10 @@
           "named": true
         },
         {
+          "type": "parameter_list",
+          "named": true
+        },
+        {
           "type": "variadic_parameter",
           "named": true
         },
@@ -3930,6 +4138,10 @@
         },
         {
           "type": "identifier",
+          "named": true
+        },
+        {
+          "type": "macro_attributed_declarator",
           "named": true
         },
         {
@@ -4054,6 +4266,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -4227,6 +4443,10 @@
           },
           {
             "type": "char_literal",
+            "named": true
+          },
+          {
+            "type": "conditional_expression",
             "named": true
           },
           {
@@ -4485,6 +4705,10 @@
           },
           {
             "type": "char_literal",
+            "named": true
+          },
+          {
+            "type": "conditional_expression",
             "named": true
           },
           {
@@ -4761,6 +4985,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -5450,7 +5678,7 @@
     "fields": {
       "declarator": {
         "multiple": true,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "array_declarator",
@@ -5466,6 +5694,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {
@@ -5511,6 +5743,10 @@
         },
         {
           "type": "extension_specifier",
+          "named": true
+        },
+        {
+          "type": "macro_modifier",
           "named": true
         }
       ]
@@ -5852,6 +6088,10 @@
           },
           {
             "type": "identifier",
+            "named": true
+          },
+          {
+            "type": "macro_attributed_declarator",
             "named": true
           },
           {

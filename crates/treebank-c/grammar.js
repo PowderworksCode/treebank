@@ -106,8 +106,13 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$._declaration_specifiers, $.parenthesized_declarator, $.macro_attributed_declarator],
+    [$.macro_modifier, $._type, $.macro_type_specifier, $._declarator],
+    [$.macro_attributed_declarator],
+    [$.pointer_declarator, $.macro_attributed_declarator],
+    [$.parenthesized_declarator, $.macro_attributed_declarator],
+    [$.type_definition, $.macro_attributed_declarator],
     [$.pointer_declarator, $.abstract_pointer_declarator],
-    [$._declaration_specifiers, $.parenthesized_declarator],
     [$.macro_modifier, $._declarator],
     [$.macro_modifier, $._type, $._declarator],
     [$.macro_modifier, $._sizeable_type],
@@ -121,7 +126,6 @@ module.exports = grammar({
     [$.case_clause],
     [$.default_clause],
     [$._literal, $.concatenated_string],
-    [$._type, $.macro_type_specifier, $._declarator],
     [$.attributed_statement],
     [$._declaration_modifiers, $.attributed_statement],
     [$._type, $.identifier_list],
@@ -417,7 +421,11 @@ module.exports = grammar({
       'typedef',
       $._declaration_specifiers,
       repeat($.macro_modifier),
-      commaSep1(field('declarator', $._declarator)),
+      // Empty-able for the same reason `declaration`'s list is: a typedef
+      // written as one macro call — `typedef PNG_CALLBACK(void,
+      // *png_error_ptr, (png_structp, png_const_charp));` — has its name
+      // inside the macro's arguments, so the specifier is the whole of it.
+      commaSep(field('declarator', $._declarator)),
       ';',
     ),
 
@@ -542,11 +550,17 @@ module.exports = grammar({
     // C23's `[[nodiscard]]`, and the GNU/C++ spelling long before it.
     attribute_declaration: $ => seq('[[', commaSep1($.attribute), ']]'),
 
-    ms_declspec_modifier: $ => seq(
-      choice('__declspec', '__attribute__'),
-      '(',
-      $.identifier,
-      ')',
+    // `__declspec(dllexport)` and `__declspec(align(8))`: the contents are
+    // a name or a call of one, so they are taken as an expression for the
+    // reason `attribute_specifier` gives — `align(8)` is a call in every
+    // respect the syntax can see.
+    ms_declspec_modifier: $ => choice(
+      seq('__declspec', '(', choice($.identifier, $.call_expression), ')'),
+      // The single-parenthesis `__attribute__` spelling keeps its bare
+      // name: the doubled form beside it is `attribute_specifier`, whose
+      // contents are already expressions, and offering a call here as well
+      // gives `__attribute__((f(1)))` two readings.
+      seq('__attribute__', '(', $.identifier, ')'),
     ),
 
     // ── types ────────────────────────────────────────────────────────
@@ -933,12 +947,37 @@ module.exports = grammar({
     // `int a[3] g;`, and the ledger declares them. That is the whole cost,
     // and it is the same shape and the same size as the over-acceptance
     // `unexpanded_macro` already carries at file scope.
-    macro_attributed_declarator: $ => prec.right(seq(
-      field('declarator', choice(
-        $.function_declarator,
-        $.array_declarator,
-      )),
-      repeat1(field('attribute', $.macro_attribute)),
+    macro_attributed_declarator: $ => prec.right(choice(
+      seq(
+        field('declarator', choice(
+          $.function_declarator,
+          $.array_declarator,
+          // `int (*close) __P((struct __db *));` — the K&R portability
+          // macro on a parenthesised declarator, which ends in `)` like
+          // the two above it.
+          $.parenthesized_declarator,
+          // And an already-attributed one, which is how glibc interleaves
+          // them: `int abs (int) __THROW __attribute__ ((__const__)) __wur;`
+          // is this rule around an `attributed_declarator` around this rule.
+          $.attributed_declarator,
+        )),
+        repeat1(field('attribute', $.macro_attribute)),
+      ),
+      // And the prefix form, which is the calling convention between the
+      // type and the name: `ZEND_API void ZEND_FASTCALL zend_ast_ref_destroy
+      // (zend_ast_ref *ast);`. The macro is after the type, which is the one
+      // place `_declaration_specifiers` must not admit it — that repetition
+      // is shared with every declaration, and a macro there is exactly the
+      // rule that makes `int x y;` parse.
+      //
+      // Here it cannot, because what follows the macro has to be a FUNCTION
+      // declarator. `int x y;` needs `y` to carry a parameter list and it
+      // does not. `int x y();` does parse, and that is the whole cost.
+      seq(
+        repeat1(field('modifier', $.macro_modifier)),
+        field('declarator', $.function_declarator),
+        repeat(field('attribute', $.macro_attribute)),
+      ),
     )),
 
     // The macro itself, with the arguments it may carry: `__nonnull ((1))`

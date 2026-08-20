@@ -59,7 +59,7 @@
   "uncategorised": [
     {
       "node": "abstract_array_declarator",
-      "reason": "the declarator spine of a type with no name in it \u2014 the `[]` of `char (*)[8]`"
+      "reason": "the declarator spine of a type with no name in it — the `[]` of `char (*)[8]`"
     },
     {
       "node": "abstract_function_declarator",
@@ -83,7 +83,7 @@
     },
     {
       "node": "asm_label",
-      "reason": "GCC's assembler name on a declarator \u2014 `extern int errno __asm__(\"__errno_location\");`. It is not an `_attribute`: an attribute is valid in half a dozen positions, one of which starts a statement, and admitting this there would give `__asm__(\"nop\");` a second reading as an attribute plus an empty statement"
+      "reason": "GCC's assembler name on a declarator — `extern int errno __asm__(\"__errno_location\");`. It is not an `_attribute`: an attribute is valid in half a dozen positions, one of which starts a statement, and admitting this there would give `__asm__(\"nop\");` a second reading as an attribute plus an empty statement"
     },
     {
       "node": "asm_qualifier",
@@ -99,7 +99,7 @@
     },
     {
       "node": "comma_expression",
-      "reason": "the comma operator. Not a member of `_expression`, and C's own grammar draws the same line \u2014 it splits `expression` from `assignment-expression` because a comma inside an argument list separates arguments. Admitting it into `_expression` would make `f(a, b)` ambiguous with `f((a, b))` at every call in the corpus"
+      "reason": "the comma operator. Not a member of `_expression`, and C's own grammar draws the same line — it splits `expression` from `assignment-expression` because a comma inside an argument list separates arguments. Admitting it into `_expression` would make `f(a, b)` ambiguous with `f((a, b))` at every call in the corpus"
     },
     {
       "node": "empty_declaration",
@@ -127,7 +127,7 @@
     },
     {
       "node": "identifier_list",
-      "reason": "the K&R parameter-name list, `f(a, b)` before the declarations that type them \u2014 names in a list, not parameters yet"
+      "reason": "the K&R parameter-name list, `f(a, b)` before the declarations that type them — names in a list, not parameters yet"
     },
     {
       "node": "initializer_list",
@@ -135,7 +135,19 @@
     },
     {
       "node": "initializer_pair",
-      "reason": "`.field = v` \u2014 a designator and a value. It binds a POSITION, not a name, so it is not a `_binding`"
+      "reason": "`.field = v` — a designator and a value. It binds a POSITION, not a name, so it is not a `_binding`"
+    },
+    {
+      "node": "macro_attribute",
+      "reason": "a macro sitting where an attribute sits, after a declarator that ends in `)` or `]` — `__THROW`, `__nonnull ((1))`, `__ul_attribute__((warn_unused_result))`. NOT an `_attribute`, and the reason is `asm_label`'s: `_attribute` is admitted at the start of a statement, so a bare identifier admitted through it would give every expression statement a second reading. It is the hole the preprocessor would have filled, in the one position that could hold it safely."
+    },
+    {
+      "node": "macro_attributed_declarator",
+      "reason": "the declarator that carries one — the wrapper, not the annotation, exactly as `attributed_declarator` is the wrapper for `_attribute`. The name inside it is the `_name` and the wrapper declares nothing on its own."
+    },
+    {
+      "node": "macro_modifier",
+      "reason": "a macro standing in the declaration specifiers before the type, beside a pointer's qualifiers, on an enumerator or inside a typedef — `ZEND_API`, `ZEND_FASTCALL`, `PNG_RESTRICT`, `GLIB_AVAILABLE_ENUMERATOR_IN_2_74`. It is what `_modifier` describes and it is deliberately NOT one: `_modifier` is admitted inside an array declarator's brackets, where a bare identifier would make the size of `a[n]` a modifier instead. The supertype is a position, and this node cannot occupy all of that position's sites."
     },
     {
       "node": "parameter_list",
@@ -151,11 +163,11 @@
     },
     {
       "node": "preproc_arg",
-      "reason": "the raw tail of a directive, taken as one token because its content is not C \u2014 a macro body is text until it is expanded"
+      "reason": "the raw tail of a directive, taken as one token because its content is not C — a macro body is text until it is expanded"
     },
     {
       "node": "preproc_defined",
-      "reason": "the `defined X` operator, which exists only in a conditional's condition and is not an expression of the language \u2014 its operand is a macro name, and an undefined one is legal here and nowhere else"
+      "reason": "the `defined X` operator, which exists only in a conditional's condition and is not an expression of the language — its operand is a macro name, and an undefined one is legal here and nowhere else"
     },
     {
       "node": "preproc_directive",
@@ -167,7 +179,7 @@
     },
     {
       "node": "preproc_params",
-      "reason": "a function-like macro's parameter list, which is not a `_parameter` position of the language \u2014 the names it binds are text, not values"
+      "reason": "a function-like macro's parameter list, which is not a `_parameter` position of the language — the names it binds are text, not values"
     },
     {
       "node": "subscript_designator",
@@ -175,7 +187,7 @@
     },
     {
       "node": "unexpanded_macro",
-      "reason": "a macro standing alone at file scope \u2014 `__BEGIN_DECLS`, `BEGIN_EXTERN_C()`. It is not a declaration, not a statement, and not a directive: it is the hole the preprocessor would have filled. See the declared deviation in ledger.toml"
+      "reason": "a macro standing alone at file scope — `__BEGIN_DECLS`, `BEGIN_EXTERN_C()`. It is not a declaration, not a statement, and not a directive: it is the hole the preprocessor would have filled. See the declared deviation in ledger.toml"
     }
   ]
 }
