@@ -87,6 +87,9 @@ module.exports = grammar({
     [$.expansion],
     [$.variable_assignment],
     [$.command, $.variable_assignments],
+    [$.continue_statement, $._literal],
+    [$.break_statement, $._literal],
+    [$.return_statement, $._literal],
     [$.command, $._redirect_statement],],
 
   rules: {
@@ -263,9 +266,13 @@ module.exports = grammar({
     // These are builtins, not keywords, so they are recognised by name and
     // only where a command may start. `return 1` in a function and
     // `break 2` in a loop are the shapes that matter.
-    return_statement: $ => seq('return', optional(field('value', $._word_like))),
-    break_statement: $ => seq('break', optional(field('value', $._word_like))),
-    continue_statement: $ => seq('continue', optional(field('value', $._word_like))),
+    // All three take trailing redirects -- `return 0 2>/dev/null` is the
+    // standard am-I-being-sourced probe -- and the number token outranks
+    // word, so the value slot must speak number too or `return 0` reads
+    // the digit as the start of a file descriptor.
+    return_statement: $ => prec.left(seq('return', optional(field('value', choice($._word_like, $.number))), repeat($.redirect))),
+    break_statement: $ => prec.left(seq('break', optional(field('value', choice($._word_like, $.number))), repeat($.redirect))),
+    continue_statement: $ => prec.left(seq('continue', optional(field('value', choice($._word_like, $.number))), repeat($.redirect))),
 
     // ── functions ────────────────────────────────────────────────────
     // The body may open on its own line -- `clean()\n{ ... }` is the
