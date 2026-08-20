@@ -453,7 +453,9 @@ module.exports = grammar({
         /\]/,
       ),
       repeat(choice(
-        /[^\s'"<>{}()$`|&;!\\\[\]]/,
+        // `!` continues a word -- `-x!y` is one argument -- though it
+        // stays an operator where a word STARTS.
+        /[^\s'"<>{}()$`|&;\\\[\]]/,
         /\\[^\r\n]/,
         /\[[^\]\s]*\]/,
         /\[/,
@@ -488,6 +490,9 @@ module.exports = grammar({
       repeat(choice(
         $._expansion_like,
         $.escape_sequence,
+        // A backslash-newline continues the line inside a double-quoted
+        // string just as it does outside one.
+        token.immediate(/\\\r?\n/),
         token.immediate(prec(1, /[^"$`\\]+/)),
         // A `$` followed by anything that cannot start an expansion is a
         // literal dollar sign: `"$"`, `"v$/x"`. One character of lookahead
@@ -541,7 +546,10 @@ module.exports = grammar({
       )),
     ),
 
-    special_variable: _ => token.immediate(/[0-9*@#?$!_-]/),
+    // prec 2: `number` sits at prec 1 (its contest with `word`), and
+    // inside `${1#x}` the positional must win the digit or the expansion
+    // reads `${ number` and dies.
+    special_variable: _ => token.immediate(prec(2, /[0-9*@#?$!_-]/)),
 
     // `${x}`, `${x:-d}`, `${x[@]}`, `${#x}`, `${x@Q}`
     expansion: $ => seq(
@@ -552,7 +560,7 @@ module.exports = grammar({
         $.special_variable,
         // `${10}`, `${12%x}`: multi-digit positionals only spell inside
         // braces; the single-char special_variable cannot carry them.
-        alias(token.immediate(/[0-9]+/), $.special_variable),
+        alias(token.immediate(prec(2, /[0-9]+/)), $.special_variable),
         $.subscript,
       ))),
       optional($._expansion_tail),

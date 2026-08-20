@@ -2264,7 +2264,7 @@
                 "members": [
                   {
                     "type": "PATTERN",
-                    "value": "[^\\s'\"<>{}()$`|&;!\\\\\\[\\]]"
+                    "value": "[^\\s'\"<>{}()$`|&;\\\\\\[\\]]"
                   },
                   {
                     "type": "PATTERN",
@@ -2371,6 +2371,13 @@
               {
                 "type": "SYMBOL",
                 "name": "escape_sequence"
+              },
+              {
+                "type": "IMMEDIATE_TOKEN",
+                "content": {
+                  "type": "PATTERN",
+                  "value": "\\\\\\r?\\n"
+                }
               },
               {
                 "type": "IMMEDIATE_TOKEN",
@@ -2544,8 +2551,12 @@
     "special_variable": {
       "type": "IMMEDIATE_TOKEN",
       "content": {
-        "type": "PATTERN",
-        "value": "[0-9*@#?$!_-]"
+        "type": "PREC",
+        "value": 2,
+        "content": {
+          "type": "PATTERN",
+          "value": "[0-9*@#?$!_-]"
+        }
       }
     },
     "expansion": {
@@ -2598,8 +2609,12 @@
                     "content": {
                       "type": "IMMEDIATE_TOKEN",
                       "content": {
-                        "type": "PATTERN",
-                        "value": "[0-9]+"
+                        "type": "PREC",
+                        "value": 2,
+                        "content": {
+                          "type": "PATTERN",
+                          "value": "[0-9]+"
+                        }
                       }
                     },
                     "named": true,
