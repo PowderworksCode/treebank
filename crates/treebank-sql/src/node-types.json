@@ -102,6 +102,10 @@
         "named": true
       },
       {
+        "type": "show_statement",
+        "named": true
+      },
+      {
         "type": "use_statement",
         "named": true
       }
@@ -2533,6 +2537,26 @@
     }
   },
   {
+    "type": "show_statement",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": true,
+        "required": true,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          },
+          {
+            "type": "qualified_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "signed_number",
     "named": true,
     "fields": {},
@@ -3636,6 +3660,10 @@
   },
   {
     "type": "SHARE",
+    "named": false
+  },
+  {
+    "type": "SHOW",
     "named": false
   },
   {

@@ -80,14 +80,28 @@ impl Ecosystem for Sql {
             .then_some(None)
     }
 
-    /// The same 250 MB cap bash sets, for the same reason and with the same
-    /// consequence: a guest language's artifact size is decided by its host,
-    /// and a handful of Debian sources carry two-thirds of the bytes for a
-    /// fiftieth of the corpus. Every skip is logged by the fetch driver and
-    /// the cap is recorded in ledger.toml next to the package count it
-    /// produced, because it is a real change to the population — a package
-    /// excluded for its size may still have been carrying SQL.
+    /// **No cap, and the contrast with bash is the whole reason.**
+    ///
+    /// Bash caps artifacts at 250 MB because its giants are incidental: the
+    /// top-500 Debian sources come to 11.5 GB of which 7.6 GB is eight
+    /// packages -- texlive, chromium, libreoffice -- that carry shell as
+    /// build glue and are 1.6% of the corpus. Two-thirds of the bytes for
+    /// one part in sixty, so capping costs almost nothing.
+    ///
+    /// For SQL the giants ARE the population. The same cap was tried here
+    /// first and skipped five sources carrying 190,189 lines of SQL between
+    /// them -- `mysql-9.7` alone has 87,855, second only to postgres in the
+    /// entire ranking, and it is the only first-party MySQL in a corpus for
+    /// a grammar whose whole claim is a dialect UNION. chromium and
+    /// qt6-webengine are next, at 50,041 and 44,944, because a browser
+    /// vendors sqlite and its test suite with it.
+    ///
+    /// So the artifact size is uncorrelated with how much SQL a package
+    /// carries, and capping on it is sampling by download convenience. The
+    /// cost is real and is stated rather than hidden: the corpus is ~3.3 GB
+    /// larger to fetch. That is a price paid once per refresh, against a
+    /// blind spot that would have been permanent.
     fn max_artifact_bytes(&self) -> Option<u64> {
-        Some(250_000_000)
+        None
     }
 }

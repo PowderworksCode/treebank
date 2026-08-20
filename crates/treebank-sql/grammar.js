@@ -148,6 +148,11 @@ module.exports = grammar({
     // SQLite allows, or the column-name list of a `CREATE TABLE … AS
     // SELECT`. Nothing before the closing paren tells them apart; the `AS`
     // after it does.
+    //
+    // Suspected once of making the parser fork at every `INSERT INTO t (a,
+    // b)` and measured innocent: removing it left a 5.5 MB mysql script at
+    // exactly the same 45+ seconds. The cost was error recovery over a
+    // string the grammar could not lex (see `string` below), not this.
     [$.column_name_list, $.column_definition],
   ],
 
@@ -200,6 +205,7 @@ module.exports = grammar({
       $.pragma_statement,
       $.set_statement,
       $.use_statement,
+      $.show_statement,
     ),
 
     // ── select ───────────────────────────────────────────────────────
@@ -539,6 +545,15 @@ module.exports = grammar({
     // `CREATE VIEW v (a INTEGER)` parse.
     _body: $ => $.table_body,
 
+    // The comma is REQUIRED here even though SQLite makes it optional --
+    // its grammar spells the separator as a rule that may be empty, and
+    // chromium's generated schemas use that: `…, PRIMARY KEY(a, b) FOREIGN
+    // KEY(c) REFERENCES t(d))`. Allowing it costs an ambiguity in the
+    // commonest position in the language: with no comma to end a column
+    // definition, `a CONSTRAINT …` is both a column with a named constraint
+    // and a column followed by a table constraint, at every column of every
+    // CREATE TABLE. Ten occurrences of generated schema is not worth that;
+    // ledger.toml's gaps records it.
     table_body: $ => seq('(', commaSep1($._member), ')'),
 
     _member: $ => choice($.column_definition, $.table_constraint),
@@ -743,6 +758,13 @@ module.exports = grammar({
     ),
 
     use_statement: $ => seq(kw('USE'), field('name', $._name)),
+
+    // `SHOW block_size`, `SHOW ALL`, `SHOW TIME ZONE`. Postgres's and
+    // MySQL's way of reading a setting, and the largest single gap cluster
+    // in the sweep at 72 occurrences -- which is the evidence the earlier
+    // ledger entry said it was waiting for before picking members out of an
+    // open-ended list of utility statements.
+    show_statement: $ => seq(kw('SHOW'), field('name', repeat1(choice($._name, $.qualified_name)))),
 
     begin_statement: $ => seq(
       choice(kw('BEGIN'), seq(kw('START'), kw('TRANSACTION'))),
@@ -1098,10 +1120,29 @@ module.exports = grammar({
       /0[xX][0-9a-fA-F]+/,
     )),
 
-    // Single quotes, doubled to escape. SQL strings interpolate nothing, so
-    // every instance of this rule is fully determined by its own text and
-    // the `_literal` test in DESIGN.md §3.2 is satisfied for all of them.
-    string: _ => token(seq("'", repeat(choice(/[^']/, "''")), "'")),
+    // Single quotes. Two escapes: the standard's doubled `''`, and MySQL's
+    // backslash form, which PostgreSQL also accepts with
+    // standard_conforming_strings off.
+    //
+    // The backslash was not here at first, and the cost of leaving it out
+    // was not a rejected file -- it was TIME. `UNIT["Clarke\'s link"]`
+    // inside mysql's own `mysql_system_tables_data_fix.sql` closed the
+    // string early, and the rest of the 5.5 MB file went through error
+    // recovery: over 45 seconds for 5,237 statements, against 10 seconds
+    // for a 67 MB dump with no apostrophe in it. Error recovery is what a
+    // wrong lexer costs, and it does not look like a lexer bug from the
+    // outside.
+    //
+    // What it widens, stated because it is a real dialect divergence:
+    // backslash is NOT an escape in the standard, in SQLite, or in modern
+    // postgres, so `'C:\'` is a complete string there and an unterminated
+    // one here. Measured on the corpus, that trade is worth taking; the
+    // reverse costs every mysql dump carrying an apostrophe.
+    //
+    // Interpolation is still absent either way, so every instance of this
+    // rule is fully determined by its own text and the `_literal` test in
+    // DESIGN.md §3.2 is satisfied for all of them.
+    string: _ => token(seq("'", repeat(choice(/[^'\\]/, "''", /\\./)), "'")),
 
     blob: _ => token(seq(/[xX]/, "'", repeat(/[^']/), "'")),
 

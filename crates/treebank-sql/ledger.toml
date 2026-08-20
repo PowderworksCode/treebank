@@ -27,36 +27,39 @@ SQL is a guest language and more completely so than shell: no package is written
 
 popcon attributes installs to the PACKAGE, not to its SQL, so what this ranks is "SQL that ships inside software people install". That is the honest reading and it is not the same as "popular SQL". The population it selects is database engines and their test suites (postgresql-18 alone carries 130,141 lines), ORM and driver packages, web applications with a migration history, and a long tail of packages with one schema.sql -- so dialect is skewed toward whatever engine is shipping, which in Debian means postgres first.
 
-Two blind spots, declared rather than filtered. Files that are `.sql` but are really TEMPLATES -- a `${schema}` or a `@table@` inside an otherwise ordinary script -- are in the corpus, because no cheap rule separates them from SQL that merely mentions a brace, and they will be counted as gaps. And the 250 MB artifact cap excludes a handful of very large sources that may carry SQL; every skip is logged by the fetch driver.'''
+Two blind spots, declared rather than filtered. Files that are `.sql` but are really TEMPLATES -- a `${schema}` or a `@table@` inside an otherwise ordinary script -- are in the corpus, because no cheap rule separates them from SQL that merely mentions a brace, and they will be counted as gaps. There is deliberately NO artifact-size cap, unlike bash: see `max_artifact_bytes` in treebank-corpus's sql.rs. A 250 MB cap was tried first, copied from bash, and it skipped five sources carrying 190,189 lines of SQL between them -- mysql-9.7 among them, at 87,855 lines and the only first-party MySQL available to a grammar whose whole claim is a dialect union. Artifact size is uncorrelated with how much SQL a package carries, so capping on it is sampling by download convenience.'''
 
 [corpus.sweep]
-files = 3494
-packages = 36
-passed = 774
-failed = 2720
-gap_files = 36
-noise_files = 2684
-pass_rate = '22.2%'
+files = 4854
+packages = 41
+passed = 953
+failed = 3901
+gap_files = 122
+noise_files = 3779
+pass_rate = '19.6%'
 note = '''
-FIRST PASS, and the pass rate is the least interesting number in it. 774 of 3,494 files parse; of the 2,720 that do not, SQLite rejects 2,684 as well, and only 36 are files the oracle calls valid SQL. So the sweep found 36 adjudicated gaps and could say nothing at all about the other 2,684.
+FIRST PASS, and the pass rate is the least interesting number in it. 953 of 4,854 files parse; of the 3,901 that do not, SQLite rejects 3,779 as well, so the sweep found 122 adjudicated gaps and could say nothing at all about the rest.
 
-That gap between 22.2% and "36 gaps" is the ONE-DIALECT ORACLE, and it is the number to read this ledger for. The corpus is dominated by three engines' own test suites -- virtuoso 1,127 files (32%), postgresql 806 (23%), postgis 499 (14%) -- and those files are written in the dialect of the engine that ships them. SQLite rejects them, so they book as corpus noise whether or not the grammar was right to reject them too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
+That distance between 19.6% and "122 gaps" is the ONE-DIALECT ORACLE, and it is the number to read this ledger for. The corpus is dominated by engines' and browsers' own test suites -- virtuoso 1,127 files (23%), postgresql 806 (17%), chromium 646 (13%), postgis 499 (10%), qt6-webengine 424 (9%) -- and those files are written in the dialect of the thing that ships them. Chromium's and qt's are PerfettoSQL, a trace-query language with SQL's syntax and its own module system. SQLite rejects all of it, so it books as corpus noise whether or not the grammar was right to reject it too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
 
-Seven fixes were made against that first sweep and both ends are recorded so the grind is visible: 734 passed and 63 gaps before, 774 and 36 after. The fixes were `DEFAULT '' NOT NULL` (the default value is a literal position, not an expression position -- with a full expression the parser reads `'' NOT LIKE …` and never reaches the NOT NULL); `CREATE VIRTUAL TABLE … USING fts5(…)`; T-SQL's `[bracketed]` identifiers, which turned out not to collide with the array subscript after all because the lexer is state-aware; `ALTER TABLE … ADD CONSTRAINT`, which now takes a `_member` rather than a column definition; SQLite's `ON CONFLICT REPLACE` on a column constraint; a VALUES-seeded recursive CTE; and `timestamp(2) without time zone`.
+The pass rate FELL from 22.2% when the corpus grew, and that is the corpus getting more honest rather than the grammar getting worse: the five packages the artifact cap used to skip are browsers and a database engine, so they brought 1,360 files of the least standard SQL in Debian with them. Gaps found rose from 36 to 122 on the same change, which is what a corpus is for.
+'''
+grind = '''
+Both ends of the grind are recorded. The first sweep, over the 36-package corpus, was 734 passed and 63 gaps. Seven fixes took it to 774/36: `DEFAULT '' NOT NULL` (a default is a literal position, not an expression position -- with a full expression the parser reads `'' NOT LIKE …` and never reaches the NOT NULL); `CREATE VIRTUAL TABLE … USING fts5(…)`; T-SQL's `[bracketed]` identifiers, which turned out not to collide with the array subscript because the lexer is state-aware; `ALTER TABLE … ADD CONSTRAINT`, now taking a `_member`; SQLite's `ON CONFLICT REPLACE`; a VALUES-seeded recursive CTE; and `timestamp(2) without time zone`. `SHOW` was added after the second sweep made it the largest single cluster at 72 occurrences.
 
-The last two fixes moved no file count -- the files carrying `timestamp(2) without time zone` fail for other reasons as well -- and are kept because a cluster that disappears is still a construct that now parses.
+THE ONE WORTH READING is the mysql string escape, because of how it presented. `mysql_system_tables_data_fix.sql` -- 5.5 MB, 5,237 one-line REPLACE statements -- did not fail, it HUNG: over 45 seconds, while a 67 MB dump in the same package parsed in 10. Every hypothesis about why was wrong. It was not the declared `column_name_list`/`column_definition` conflict forking at each `INSERT INTO t (a, b)`: removing it left the time unchanged, and it was put back. It was not statement count, string length or file size: 200 copies of one of those statements parsed in 17 ms, 200 DIFFERENT ones took 854. It was one statement in the middle, carrying `UNIT["Clarke\'s link"]` -- a backslash-escaped apostrophe, which is MySQL's escape and not the standard's. The string token closed early, and the remaining 5 MB went through error recovery.
 
-One fix made things WORSE before it was corrected, and it is worth naming because it is the shape of mistake a corpus catches and a test suite does not. MySQL table options were first spelled `name [=] value` with the `=` optional, as MySQL allows. `name value` matches any two words, so a `CREATE TABLE …)` followed by an unterminated `alter table foo add` -- which is how the mssql scripts in openldap are written, with `GO` rather than `;` as the separator -- had its next statement eaten as an option, and a `table_option > ERROR(ALTER TABLE)` cluster appeared in the second sweep that was not in the first. Requiring the `=` costs a form nobody writes and removed it.
+So the cost of a lexer that is wrong about one escape is not a rejected file. It is TIME, and it does not look like a lexer bug from the outside. 45,000 ms to 266 ms, and the file went from ERROR to a clean parse.
+
+Two fixes were REJECTED on measurement, and both are the same shape -- a form one dialect allows, costing an ambiguity in a position every file uses. MySQL's `) ENGINE InnoDB` without the `=` made `name value` match any two words, so a `CREATE TABLE …)` followed by an unterminated `alter table foo add` -- openldap's mssql scripts, which separate on `GO` rather than `;` -- had its next statement eaten as an option. And SQLite's optional comma between table constraints (`PRIMARY KEY(a, b) FOREIGN KEY(c)`, 10 occurrences in chromium's generated schemas) makes `a CONSTRAINT …` both a column with a named constraint and a column followed by a table constraint, at every column of every CREATE TABLE.
 '''
 composition = '''
-36 packages, 3,494 files, from a walk of the top 6,000 popcon sources (41 carried >= 500 lines of SQL; 5 of those 41 were skipped by the 250 MB artifact cap). Largest contributors: virtuoso-opensource 1,127 files, postgresql-18 806, postgis 499, roundcube 152, ceph 107.
-
-**mysql-9.7 is one of the five the cap skipped**, at 429 MB, and so are chromium, firefox, qt6-webengine and qtwebengine. That is a real hole in a dialect-union corpus: the MySQL third of the union is represented only by what other packages ship for it (roundcube's and freeradius's mysql schemas), not by MySQL's own test suite. Raising the cap for this language is the cheapest single improvement to the corpus after adding a second oracle.
+41 packages, 4,854 files, 167 MB, from a walk of the top 6,000 popcon sources; every source the walk found carrying >= 500 lines of SQL is in it. Largest contributors: virtuoso-opensource 1,127 files, postgresql-18 806, chromium 646, postgis 499, qt6-webengine 424, mysql-9.7 213, roundcube 152.
 
 The walk was bounded at 6,000 popcon entries rather than run to exhaustion, so this is "SQL inside the 6,000 most-installed Debian sources", not "SQL inside Debian". A longer walk is more packages, not different ones.
 '''
 methodology_note = '''
-The ranking and fetch were run with the methodology `treebank_corpus::debian` implements -- popcon order, sources.debian.org's sloc census, the >= 500-line floor, the 250 MB cap, one leading path component stripped -- but through curl rather than through the crate, because the machine reaches deb.debian.org and popcon.debian.org only via a TLS-terminating proxy whose CA `ureq` (which bundles its own root store) does not see. The sweep itself, the oracle and the report are the real ones: `treebank sweep --lang sql --grammar crates/treebank-sql` over the manifest that produced. Anyone re-running this on a machine with ordinary network access should use `treebank rank --lang sql` and `treebank fetch --lang sql` and expect the same corpus.
+The ranking and fetch were run with the methodology `treebank_corpus::debian` implements -- popcon order, sources.debian.org's sloc census, the >= 500-line floor, one leading path component stripped -- but through curl rather than through the crate, because the machine reaches deb.debian.org and popcon.debian.org only via a TLS-terminating proxy whose CA `ureq` (which bundles its own root store) does not see. The sweep itself, the oracle and the report are the real ones: `treebank sweep --lang sql --grammar crates/treebank-sql` over the manifest that produced. Anyone re-running this on a machine with ordinary network access should use `treebank rank --lang sql` and `treebank fetch --lang sql` and expect the same corpus.
 '''
 
 [[oracles]]
@@ -117,7 +120,17 @@ Measured on the first sweep and still open: `CREATE TYPE`, `CREATE FUNCTION`, `C
 [[gaps]]
 what = "postgres's utility statements"
 detail = '''
-`SHOW`, `CHECKPOINT`, `VACUUM`, `ANALYZE`, `CLUSTER`, `REINDEX`, `DISCARD`, `RESET` (17 occurrences). Each is two or three tokens and none is hard; they are listed rather than added because adding a few arbitrary members of an open-ended list is how a grammar starts lying about what it covers. The corpus should decide which, and a corpus with a postgres oracle behind it would say.'''
+`SHOW` is now supported: the enlarged corpus made it the largest single cluster at 72 occurrences, which is the evidence this entry previously said it was waiting for. `CHECKPOINT`, `VACUUM`, `ANALYZE`, `CLUSTER`, `REINDEX`, `DISCARD` and `RESET` are still unparsed and stay listed rather than added, for the same reason as before -- adding arbitrary members of an open-ended list is how a grammar starts lying about what it covers, and none of them cleared the bar SHOW did.'''
+
+[[gaps]]
+what = 'PerfettoSQL'
+detail = '''
+Chromium and qt6-webengine ship 1,070 files (22% of the corpus) of PerfettoSQL -- a trace-query language with SQL's syntax, its own module system (`INCLUDE PERFETTO MODULE`), and its own table-function syntax (`CREATE PERFETTO TABLE`, `… PARTITIONED hashed_rail_name`). It is to SQL roughly what PL/pgSQL is: the same tokens, a different language. Not in scope, not adjudicable by the SQLite oracle either, and named here so that a future sweep does not rediscover it as 1,070 mystery failures.'''
+
+[[gaps]]
+what = 'the optional comma between table constraints'
+detail = '''
+SQLite lets `PRIMARY KEY(a, b) FOREIGN KEY(c) REFERENCES t(d)` run on without a comma; chromium's generated schemas do (10 occurrences). REJECTED rather than open: with no comma to end a column definition, `a CONSTRAINT …` is both a column with a named constraint and a column followed by a table constraint, at every column of every CREATE TABLE. See `corpus.sweep.grind`.'''
 
 [[gaps]]
 what = "T-SQL's filegroup clause"

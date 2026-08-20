@@ -152,6 +152,10 @@
         {
           "type": "SYMBOL",
           "name": "use_statement"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "show_statement"
         }
       ]
     },
@@ -5789,6 +5793,47 @@
         }
       ]
     },
+    "show_statement": {
+      "type": "SEQ",
+      "members": [
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "TOKEN",
+            "content": {
+              "type": "PREC",
+              "value": 1,
+              "content": {
+                "type": "PATTERN",
+                "value": "[sS][hH][oO][wW]"
+              }
+            }
+          },
+          "named": false,
+          "value": "SHOW"
+        },
+        {
+          "type": "FIELD",
+          "name": "name",
+          "content": {
+            "type": "REPEAT1",
+            "content": {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_name"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "qualified_name"
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "begin_statement": {
       "type": "SEQ",
       "members": [
@@ -9034,11 +9079,15 @@
               "members": [
                 {
                   "type": "PATTERN",
-                  "value": "[^']"
+                  "value": "[^'\\\\]"
                 },
                 {
                   "type": "STRING",
                   "value": "''"
+                },
+                {
+                  "type": "PATTERN",
+                  "value": "\\\\."
                 }
               ]
             }
