@@ -7,7 +7,7 @@ rule = '''
 Boundaries `treebank shape` may ignore, as `"<javac Tree.Kind> <- <our_kind>"` pairs. Each is a place our tree groups the code DIFFERENTLY from javac's on purpose, not a place we disagree about the code. Every entry was read and confirmed by hand on corpus examples.'''
 baseline_missed = 0
 baseline_note = '''
-Zero over the first 500 corpus files after the declared granularity differences; the full-corpus number belongs in ledger.toml once measured. The first run of this oracle found two real bugs the sweep had passed -- `++last == maxSize` parsed as `++(last == maxSize)`, and `public @interface C { }` as a class member parsed as a compact constructor -- so the ceiling stays zero on purpose.'''
+Zero, over the FULL corpus: 116,920,180 oracle nodes across 243,385 files, after the declared granularity differences. The road there ran 28,719 -> 2,641 -> 430 -> 15 -> 0, and every step was either a grammar fix or a hand-read declaration: the modifier-wrap unification (parameters, patterns, enum constants, for-heads, locals), the pattern owning its `final`, and the JLS-15.16 cast split that caught bouncycastle's `(s1_2 & U32) + x` parsed as an intersection-type cast. The oracle's first 500 files found `++last == maxSize` and the compact-constructor GLR tie; the full corpus found the rest. Raising this number is a decision that belongs in a commit message.'''
 
 [[ignore]]
 signature = 'MEMBER_SELECT <- method_invocation'
@@ -137,3 +137,16 @@ why = 'The for-head form of the C-style declarator family: `for (Object objs[] :
 [[ignore]]
 signature = 'ARRAY_TYPE <- method_declaration'
 why = 'The return-type form of the C-style family: `byte getBytes()[]`, where javac reports a type span crossing the parameter list.'
+
+[[ignore]]
+signature = 'ANNOTATED_TYPE <- object_creation_expression'
+why = 'The `new` face of the type-use annotation family: `new @Namespace(...) Key<>()`, where javac wraps annotation and type as one node and ours keeps the annotation a child of the creation.'
+
+[[ignore]]
+signature = 'PARAMETERIZED_TYPE <- object_creation_expression'
+why = 'See `ANNOTATED_TYPE <- object_creation_expression`: javac reports the parameterized type spanning back across the annotation.'
+
+[[ignore]]
+signature = 'MODULE <- program'
+why = '''
+`open module m { ... }` -- javac's MODULE starts at the `module` keyword, with `open` living in its modifier flags; our module_declaration starts at `open`, which it owns. Same family as MODIFIERS on `@interface`.'''
