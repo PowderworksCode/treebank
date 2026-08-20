@@ -332,8 +332,13 @@ module.exports = grammar({
 
     // `local`, `declare`, `export` and friends take assignments as well as
     // words, which no ordinary command does.
+    // `eval`, `alias` and `let` join the declaration builtins: bash's
+    // parser recognises assignment-words -- including array values,
+    // `eval my_dir=( ... )` -- after exactly these commands, and rejects
+    // the same after an ordinary command (`foo x=( y )` is a syntax
+    // error; measured against bash -n directly).
     declaration_command: $ => prec.left(seq(
-      choice('declare', 'typeset', 'export', 'readonly', 'local'),
+      choice('declare', 'typeset', 'export', 'readonly', 'local', 'eval', 'alias', 'let'),
       // Redirects too: `declare -p X &> /dev/null` is how scripts probe
       // for a variable's existence.
       repeat(choice($.variable_assignment, $._word_like, $.redirect)),

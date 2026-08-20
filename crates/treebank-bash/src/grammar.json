@@ -1563,6 +1563,18 @@
               {
                 "type": "STRING",
                 "value": "local"
+              },
+              {
+                "type": "STRING",
+                "value": "eval"
+              },
+              {
+                "type": "STRING",
+                "value": "alias"
+              },
+              {
+                "type": "STRING",
+                "value": "let"
               }
             ]
           },

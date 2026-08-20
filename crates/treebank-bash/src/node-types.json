@@ -1819,6 +1819,10 @@
     "named": false
   },
   {
+    "type": "alias",
+    "named": false
+  },
+  {
     "type": "ansi_c_string",
     "named": true
   },
@@ -1868,6 +1872,10 @@
     "named": true
   },
   {
+    "type": "eval",
+    "named": false
+  },
+  {
     "type": "export",
     "named": false
   },
@@ -1905,6 +1913,10 @@
   },
   {
     "type": "in",
+    "named": false
+  },
+  {
+    "type": "let",
     "named": false
   },
   {
