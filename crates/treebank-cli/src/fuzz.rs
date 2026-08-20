@@ -1095,8 +1095,7 @@ pub fn run(
             }
         );
     }
-    let dirs = crate::routing::grammar_dirs(lang);
-    let (language, _) = crate::grammar::load(&grammar_dir.join(dirs[0]))?;
+    let (language, _) = crate::grammar::load(grammar_dir)?;
     let mut parser = Parser::new();
     parser.set_language(&language)?;
 

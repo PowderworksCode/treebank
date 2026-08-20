@@ -252,7 +252,7 @@ pub fn check_file(parser: &mut Parser, package: &str, rel: &str, src: &[u8]) -> 
 
 #[derive(Serialize, Deserialize, Default)]
 struct SweepCache {
-    /// Combined fingerprint of the compiled grammars this cache is valid for.
+    /// Fingerprint of the compiled grammar this cache is valid for.
     grammar: String,
     /// sha256 of every file that PASSED under that grammar. Failing files
     /// are always re-parsed (their diagnostics must stay fresh).
@@ -318,16 +318,7 @@ pub fn run(
     manifest_path: &Path,
     out: &Path,
 ) -> Result<()> {
-    let loaded: Vec<(tree_sitter::Language, String)> = crate::routing::grammar_dirs(lang)
-        .iter()
-        .map(|d| grammar::load(&grammar_dir.join(d)))
-        .collect::<Result<_>>()?;
-    let fingerprint = loaded
-        .iter()
-        .map(|(_, f)| f.as_str())
-        .collect::<Vec<_>>()
-        .join("+");
-    let languages: Vec<tree_sitter::Language> = loaded.into_iter().map(|(l, _)| l).collect();
+    let (language, fingerprint) = grammar::load(grammar_dir)?;
     let manifest = Manifest::load(manifest_path)?;
     let corpus_root = manifest_path.parent().unwrap();
     let corpus_src = corpus_root.join("src");
@@ -359,16 +350,12 @@ pub fn run(
         .par_iter()
         .map_init(
             || {
-                languages
-                    .iter()
-                    .map(|l| {
-                        let mut p = Parser::new();
-                        p.set_language(l).expect("language/runtime ABI mismatch");
-                        p
-                    })
-                    .collect::<Vec<_>>()
+                let mut p = Parser::new();
+                p.set_language(&language)
+                    .expect("language/runtime ABI mismatch");
+                p
             },
-            |parsers, f| {
+            |parser, f| {
                 let full = corpus_src.join(&f.pkgdir).join(&f.rel);
                 let Ok(src) = std::fs::read(&full) else {
                     return None;
@@ -379,7 +366,6 @@ pub fn run(
                     .last()
                     .unwrap_or(&f.pkgdir)
                     .to_string();
-                let parser = &mut parsers[crate::routing::route(lang, &f.dialect, &f.rel)];
                 let failure =
                     check_file(parser, &package, &format!("{}/{}", f.pkgdir, f.rel), &src);
                 Some((f.sha256.clone(), failure))
@@ -481,8 +467,7 @@ pub fn run(
                             return None;
                         }
                         let mut parser = Parser::new();
-                        let index = crate::routing::route(lang, &None, &f.path);
-                        parser.set_language(&languages[index]).ok()?;
+                        parser.set_language(&language).ok()?;
                         let tree = parser.parse(reduced.text.as_bytes(), None)?;
                         (!tree.root_node().has_error()).then(|| f.path.clone())
                     })
@@ -515,9 +500,7 @@ pub fn run(
             .filter_map(|f| {
                 let src = std::fs::read_to_string(corpus_src.join(&f.path)).ok()?;
                 let mut parser = Parser::new();
-                parser
-                    .set_language(&languages[crate::routing::route(lang, &None, &f.path)])
-                    .ok()?;
+                parser.set_language(&language).ok()?;
                 let (remaining, resolved) = resolve_splits(&mut parser, f, &src);
                 (resolved > 0).then(|| (f.path.clone(), remaining, resolved))
             })
@@ -582,9 +565,7 @@ pub fn run(
                         return None;
                     }
                     let mut parser = Parser::new();
-                    parser
-                        .set_language(&languages[crate::routing::route(lang, &None, &f.path)])
-                        .ok()?;
+                    parser.set_language(&language).ok()?;
                     let tree = parser.parse(e.text.as_bytes(), None)?;
                     if tree.root_node().has_error() {
                         return None;

@@ -591,7 +591,7 @@ pub fn run(
     // Two sources. The corpus is where findings come from; a committed
     // fixture directory is how they stay fixed, because CI has no corpus and
     // a check that only ever runs by hand is not a gate.
-    let (corpus_src, files, dialect) = match dir {
+    let (corpus_src, files) = match dir {
         Some(d) => {
             let mut files = Vec::new();
             // The whole grammar's extensions, not just this language's: a
@@ -600,11 +600,7 @@ pub fn run(
             collect(d, d, &lang.grammar_extensions(), &mut files)?;
             files.sort();
             anyhow::ensure!(!files.is_empty(), "no source files under {}", d.display());
-            let dialect = files
-                .iter()
-                .map(|f| (f.clone(), crate::routing::route(lang, &None, f)))
-                .collect();
-            (d.to_path_buf(), files, dialect)
+            (d.to_path_buf(), files)
         }
         None => {
             let manifest: treebank_corpus::fetch::Manifest = serde_json::from_str(
@@ -621,16 +617,7 @@ pub fn run(
                 .iter()
                 .map(|f| format!("{}/{}", f.pkgdir, f.rel))
                 .collect();
-            let dialect: HashMap<String, usize> = entries
-                .iter()
-                .map(|f| {
-                    (
-                        format!("{}/{}", f.pkgdir, f.rel),
-                        crate::routing::route(lang, &f.dialect, &f.rel),
-                    )
-                })
-                .collect();
-            (corpus_src, files, dialect)
+            (corpus_src, files)
         }
     };
 
@@ -638,11 +625,7 @@ pub fn run(
         load_policy(grammar_dir)?;
     let (node_map, has_map) = load_node_map(grammar_dir)?;
     let (field_map, has_field_map) = load_field_map(grammar_dir)?;
-    let dirs = crate::routing::grammar_dirs(lang);
-    let langs: Vec<(tree_sitter::Language, String)> = dirs
-        .iter()
-        .map(|d| grammar::load(&grammar_dir.join(d)))
-        .collect::<Result<_>>()?;
+    let (language, _) = grammar::load(grammar_dir)?;
 
     println!(
         "shape: {} files against {} ({} declared granularity difference(s))",
@@ -697,9 +680,8 @@ pub fn run(
                     return Ok(FileResult::skipped());
                 }
                 let src = std::fs::read(corpus_src.join(rel))?;
-                let idx = dialect.get(rel.as_str()).copied().unwrap_or(0);
                 let mut parser = Parser::new();
-                parser.set_language(&langs[idx].0)?;
+                parser.set_language(&language)?;
                 let Some(tree) = parser.parse(&src, None) else {
                     return Ok(FileResult::skipped());
                 };

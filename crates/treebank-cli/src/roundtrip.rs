@@ -84,11 +84,7 @@ pub fn run(
         entries.truncate(n);
     }
 
-    let dirs = crate::routing::grammar_dirs(lang);
-    let langs: Vec<tree_sitter::Language> = dirs
-        .iter()
-        .map(|d| grammar::load(&grammar_dir.join(d)).map(|(l, _)| l))
-        .collect::<Result<_>>()?;
+    let (language, _) = grammar::load(grammar_dir)?;
 
     println!(
         "roundtrip: {} files through the {lang} printer",
@@ -107,11 +103,10 @@ pub fn run(
             .map(|f| format!("{}/{}", f.pkgdir, f.rel))
             .collect();
         let out_map = printer.unparse(&corpus_src, &paths)?;
-        let results: Vec<(bool, bool, Option<(String, Failure)>, Option<String>)> = chunk
+        let results: Vec<(bool, bool, Option<(String, Failure)>, Option<String>)> = paths
             .par_iter()
-            .zip(&paths)
             .map(
-                |(f, rel)| -> Result<(bool, bool, Option<(String, Failure)>, Option<String>)> {
+                |rel| -> Result<(bool, bool, Option<(String, Failure)>, Option<String>)> {
                     let Some(r) = out_map.get(rel) else {
                         return Ok((
                             false,
@@ -124,9 +119,8 @@ pub fn run(
                         let why = r.skipped.clone().unwrap_or_else(|| "unstated".into());
                         return Ok((false, false, None, Some(skip_kind(&why))));
                     };
-                    let idx = crate::routing::route(lang, &f.dialect, &f.rel);
                     let mut parser = Parser::new();
-                    parser.set_language(&langs[idx])?;
+                    parser.set_language(&language)?;
                     let Some(tree) = parser.parse(text.as_bytes(), None) else {
                         return Ok((true, false, None, None));
                     };
