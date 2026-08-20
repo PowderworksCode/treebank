@@ -6,7 +6,9 @@ language = 'sql'
 versions = '''
 SQL is the first target here whose "versions" (DESIGN.md §4.2) are DIALECTS rather than releases, and the union policy applies to them unchanged: one grammar accepts SQLite, PostgreSQL and MySQL, and a construct only one of them has is accepted everywhere. The shared core is SQL:2016's data-manipulation and data-definition syntax -- SELECT with CTEs, set operations, joins, window functions and FILTER; INSERT/UPDATE/DELETE with RETURNING; CREATE/ALTER/DROP for tables, views, indexes and schemas; transactions -- plus each dialect's cheap divergences: `REPLACE INTO`, `ON DUPLICATE KEY UPDATE`, backquoted identifiers and `#` comments from MySQL; `::` casts, `ARRAY[…]`, `DISTINCT FROM`, `FOR UPDATE` and `DELETE … USING` from PostgreSQL; `PRAGMA`, `OR REPLACE`-style conflict clauses and typeless columns from SQLite.
 
-What is deliberately outside the union is the PROCEDURAL half: PL/pgSQL, Oracle PL/SQL, T-SQL batches, MySQL routine bodies and `CREATE TRIGGER … BEGIN … END`. Those are a different language wearing SQL syntax -- they have their own statement grammar, their own control flow and their own delimiters -- and taking them on is a second grammar's worth of work, not a widening of this one. It is also why `_loop`, `_jump` and `_parameter` are not threaded: SQL as scoped here has no loop, no non-local transfer and no formal parameter list.'''
+What is deliberately outside the union is the PROCEDURAL half: PL/pgSQL, Oracle PL/SQL and stored routine bodies. Those are a different language wearing SQL syntax -- they have their own statement grammar, their own control flow and their own delimiters -- and taking them on is a second grammar's worth of work, not a widening of this one. It is also why `_loop`, `_jump` and `_parameter` are not threaded: SQL as scoped here has no loop, no non-local transfer and no formal parameter list.
+
+A TRIGGER IS NOT THAT, and this document said it was until the corpus disagreed. `CREATE TRIGGER … BEGIN stmt; stmt; END` in SQLite, MySQL's simple form and the standard is a plain statement list -- no control flow, no variables, no declarations -- and it is supported. What stays out is the routine BODY: PL/pgSQL's `DO $$ … $$` and a `CREATE FUNCTION` written in it. `test/negative/plpgsql-block.sql` and `test/negative/mysql-delimiter.sql` still pin that boundary.'''
 generate_cli = '0.26.12'
 vocabulary = '0.1.0'
 roles_note = '''
@@ -32,20 +34,30 @@ Two blind spots, declared rather than filtered. Files that are `.sql` but are re
 [corpus.sweep]
 files = 4854
 packages = 41
-passed = 953
-failed = 3901
-gap_files = 122
-noise_files = 3779
-pass_rate = '19.6%'
+passed = 1025
+failed = 3829
+gap_files = 57
+noise_files = 3772
+pass_rate = '21.1%'
 note = '''
-FIRST PASS, and the pass rate is the least interesting number in it. 953 of 4,854 files parse; of the 3,901 that do not, SQLite rejects 3,779 as well, so the sweep found 122 adjudicated gaps and could say nothing at all about the rest.
+1,025 of 4,854 files parse; of the 3,829 that do not, SQLite rejects 3,772 as well, so the sweep found 57 adjudicated gaps and could say nothing at all about the rest.
 
 That distance between 19.6% and "122 gaps" is the ONE-DIALECT ORACLE, and it is the number to read this ledger for. The corpus is dominated by engines' and browsers' own test suites -- virtuoso 1,127 files (23%), postgresql 806 (17%), chromium 646 (13%), postgis 499 (10%), qt6-webengine 424 (9%) -- and those files are written in the dialect of the thing that ships them. Chromium's and qt's are PerfettoSQL, a trace-query language with SQL's syntax and its own module system. SQLite rejects all of it, so it books as corpus noise whether or not the grammar was right to reject it too. A second oracle is not an improvement to this number; it is the only thing that can make it mean anything.
 
-The pass rate FELL from 22.2% when the corpus grew, and that is the corpus getting more honest rather than the grammar getting worse: the five packages the artifact cap used to skip are browsers and a database engine, so they brought 1,360 files of the least standard SQL in Debian with them. Gaps found rose from 36 to 122 on the same change, which is what a corpus is for.
+The pass rate FELL from 22.2% to 19.6% when the corpus grew, and that was the corpus getting more honest rather than the grammar getting worse: the five packages the artifact cap used to skip are browsers and a database engine, so they brought 1,360 files of the least standard SQL in Debian with them. Gaps found rose from 36 to 122 on the same change, which is what a corpus is for; three rounds of grinding then took them to 57 and the rate to 21.1%.
+
+WHAT IS LEFT is mostly not gettable, and saying which is the point of counting it. 17 of the 57 are PerfettoSQL and 12 are the optional comma between table members, both refused on purpose and both entered below. 2 are the reserved-word cost -- perfetto aliases a table `end`, which CASE needs. The rest is a tail of singletons, no two alike.
 '''
 grind = '''
 Both ends of the grind are recorded. The first sweep, over the 36-package corpus, was 734 passed and 63 gaps. Seven fixes took it to 774/36: `DEFAULT '' NOT NULL` (a default is a literal position, not an expression position -- with a full expression the parser reads `'' NOT LIKE …` and never reaches the NOT NULL); `CREATE VIRTUAL TABLE … USING fts5(…)`; T-SQL's `[bracketed]` identifiers, which turned out not to collide with the array subscript because the lexer is state-aware; `ALTER TABLE … ADD CONSTRAINT`, now taking a `_member`; SQLite's `ON CONFLICT REPLACE`; a VALUES-seeded recursive CTE; and `timestamp(2) without time zone`. `SHOW` was added after the second sweep made it the largest single cluster at 72 occurrences.
+
+THE THIRD GRIND, over the 41-package corpus, took 953/122 to 1,025/57 in three rounds. `WITHOUT ROWID` was the largest cluster at 56 files and is a table option that takes no value, so it needed no `=` to tell it from a following statement; `STRICT` and T-SQL's `ON [PRIMARY] TEXTIMAGE_ON [PRIMARY]` went in beside it, and the same node then closed the `CREATE INDEX … ON [PRIMARY]` cluster too. `GO`, T-SQL's batch separator, is accepted where `;` is. `ALTER TABLE … WITH NOCHECK`, `DROP TRIGGER`, and SQLite's postfix `x NOT NULL` and `x ISNULL` predicates followed.
+
+`CREATE TRIGGER` is now supported, and the ledger was wrong to have ruled it out. It said the procedural half was out of scope and listed `CREATE TRIGGER … BEGIN … END` under it, which conflated two things: a PL/pgSQL routine body is a different language, but a SQLite or standard trigger body is a plain statement list -- no control flow, no variables, no declarations -- and belongs to a DDL grammar. Three clusters, 16 files. The body admits a RESTRICTED statement set, and that is what keeps it parseable: `commit_statement` is spelled `COMMIT` or `END`, so admitting every statement would make the `END` that closes the body indistinguishable from a transaction statement inside it.
+
+The join fix is the subtle one. `INSERT INTO t (a, b) SELECT … JOIN u ON u.id = o.id` left the join's condition stranded outside the statement, because `prec.left` on `join_clause` made the reduce beat shifting the `ON` -- invisible in a plain SELECT, where the `ON` has nowhere else to go and recovery lands on the right tree anyway, and fatal here because the insert's own `ON CONFLICT` gives the reduce somewhere to go. `prec.right` fixes it and does NOT make joins nest right: `a JOIN b ON p JOIN c ON q` still comes out `((a JOIN b ON p) JOIN c ON q)`, because the recursion direction is decided by the fields.
+
+Two smaller lessons from the same round. `NOT NULL` in expression position had to become ONE token, whitespace included, because as two it is ambiguous with everything else `NOT` starts there; and that token needed `prec(2)`, above the 1 every keyword carries, because tree-sitter's lexer compares precedence before length and the three-character `NOT` was beating the eight-character `NOT NULL`. `NOTNULL`, the one-word spelling, resisted the same treatment and was DROPPED rather than shipped unproven: 12 corpus occurrences, zero gap files, and a rule that cannot be demonstrated is worse than an absent one.
 
 THE ONE WORTH READING is the mysql string escape, because of how it presented. `mysql_system_tables_data_fix.sql` -- 5.5 MB, 5,237 one-line REPLACE statements -- did not fail, it HUNG: over 45 seconds, while a 67 MB dump in the same package parsed in 10. Every hypothesis about why was wrong. It was not the declared `column_name_list`/`column_definition` conflict forking at each `INSERT INTO t (a, b)`: removing it left the time unchanged, and it was put back. It was not statement count, string length or file size: 200 copies of one of those statements parsed in 17 ms, 200 DIFFERENT ones took 854. It was one statement in the middle, carrying `UNIT["Clarke\'s link"]` -- a backslash-escaped apostrophe, which is MySQL's escape and not the standard's. The string token closed early, and the remaining 5 MB went through error recovery.
 
@@ -90,7 +102,9 @@ why = '''
 [[gaps]]
 what = 'the procedural dialects'
 detail = '''
-PL/pgSQL, PL/SQL, T-SQL and MySQL routine bodies do not parse, by design (see `versions`). `test/negative/plpgsql-block.sql` and `test/negative/mysql-delimiter.sql` pin that: a `DO $$ … $$` block and a `DELIMITER //` script must be REJECTED, so the day someone adds them it is a deliberate change with its own evidence rather than a drift.'''
+PL/pgSQL, PL/SQL, T-SQL batches and MySQL routine bodies do not parse, by design (see `versions`). `test/negative/plpgsql-block.sql` and `test/negative/mysql-delimiter.sql` pin that: a `DO $$ … $$` block and a `DELIMITER //` script must be REJECTED, so the day someone adds them it is a deliberate change with its own evidence rather than a drift.
+
+Narrowed once already: this entry used to claim `CREATE TRIGGER … BEGIN … END` as well, which was wrong. A trigger body is a statement list, not a procedural block, and it is supported now.'''
 
 [[gaps]]
 what = 'dollar-quoted strings'
@@ -118,6 +132,11 @@ detail = '''
 Measured on the first sweep and still open: `CREATE TYPE`, `CREATE FUNCTION`, `CREATE DOMAIN`, `CREATE OPERATOR`, `CREATE CAST` (118 occurrences, largely postgres's own regression suite) and `CREATE USER`/`CREATE ROLE` (40, DCL). They are one decision rather than several: each is a statement whose tail is a small language of its own, and `CREATE FUNCTION` in particular is the procedural gap above wearing a different hat. Whether they are worth having depends on how much of a real corpus is a database engine's test suite -- in THIS corpus it is 70%, which is a fact about Debian more than about SQL.'''
 
 [[gaps]]
+what = 'the reserved-word cost, measured'
+detail = '''
+Two files fail because perfetto aliases a table `end` (`SELECT end.ts AS end_ts …`), and `END` is one of the 29 reserved words -- CASE needs it. That is the whole measured cost of the reserved list over 4,854 files, which is the number the `deviations` entry is really claiming and now has evidence for.'''
+
+[[gaps]]
 what = "postgres's utility statements"
 detail = '''
 `SHOW` is now supported: the enlarged corpus made it the largest single cluster at 72 occurrences, which is the evidence this entry previously said it was waiting for. `CHECKPOINT`, `VACUUM`, `ANALYZE`, `CLUSTER`, `REINDEX`, `DISCARD` and `RESET` are still unparsed and stay listed rather than added, for the same reason as before -- adding arbitrary members of an open-ended list is how a grammar starts lying about what it covers, and none of them cleared the bar SHOW did.'''
@@ -128,9 +147,9 @@ detail = '''
 Chromium and qt6-webengine ship 1,070 files (22% of the corpus) of PerfettoSQL -- a trace-query language with SQL's syntax, its own module system (`INCLUDE PERFETTO MODULE`), and its own table-function syntax (`CREATE PERFETTO TABLE`, `… PARTITIONED hashed_rail_name`). It is to SQL roughly what PL/pgSQL is: the same tokens, a different language. Not in scope, not adjudicable by the SQLite oracle either, and named here so that a future sweep does not rediscover it as 1,070 mystery failures.'''
 
 [[gaps]]
-what = 'the optional comma between table constraints'
+what = 'the optional comma between table members'
 detail = '''
-SQLite lets `PRIMARY KEY(a, b) FOREIGN KEY(c) REFERENCES t(d)` run on without a comma; chromium's generated schemas do (10 occurrences). REJECTED rather than open: with no comma to end a column definition, `a CONSTRAINT …` is both a column with a named constraint and a column followed by a table constraint, at every column of every CREATE TABLE. See `corpus.sweep.grind`.'''
+SQLite lets `PRIMARY KEY(a, b) FOREIGN KEY(c) REFERENCES t(d)` and `CHECK(…) CHECK(…) FOREIGN KEY(…)` run on without commas; chromium's generated schemas and firefox's places tests do, 12 files between them. REJECTED TWICE, and the second refusal is on better grounds than the first. The first was that a fork at every column of every CREATE TABLE would be ruinous -- and the mysql escape later showed that forking is not what costs time here, so that reason was wrong. The real one is that the ambiguity is GENUINE: with no comma to end a column definition, `a INT CONSTRAINT c PRIMARY KEY` is both a column carrying a named constraint and a column followed by a table constraint, and nothing in the text decides. A tree that varies on every named column constraint in the corpus is worse than twelve generated files that do not parse.'''
 
 [[gaps]]
 what = "T-SQL's filegroup clause"

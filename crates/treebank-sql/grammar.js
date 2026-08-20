@@ -162,8 +162,17 @@ module.exports = grammar({
     // because half the corpus writes it and half does not.
     program: $ => seq(
       optional($._statement),
-      repeat(seq(';', optional($._statement))),
+      repeat(seq($._separator, optional($._statement))),
     ),
+
+    // `;` everywhere, plus T-SQL's `GO`. `GO` is not SQL -- it is the batch
+    // separator sqlcmd and SSMS understand, and no server ever sees it --
+    // but it is what mssql `.sql` files are written with, and a grammar
+    // that already takes `[bracketed]` identifiers should read the files
+    // those identifiers come in.
+    _separator: $ => choice(';', $.batch_separator),
+
+    batch_separator: $ => kw('GO'),
 
     // ── statements ───────────────────────────────────────────────────
     _statement: $ => choice(
@@ -195,6 +204,7 @@ module.exports = grammar({
       $.create_table_statement,
       $.create_view_statement,
       $.create_index_statement,
+      $.create_trigger_statement,
       $.create_schema_statement,
     ),
 
@@ -297,7 +307,17 @@ module.exports = grammar({
 
     parenthesized_relation: $ => seq('(', $._relation, ')'),
 
-    join_clause: $ => prec.left(seq(
+    // `prec.right`, and the reason is the trailing condition. With
+    // `prec.left` the reduce of the join won over shifting the `ON`, which
+    // is invisible in a plain SELECT -- the `ON` has nowhere else to go, so
+    // recovery lands on the right tree anyway -- and fatal inside `INSERT
+    // INTO t (a, b) SELECT … JOIN u ON …`, where the insert's own `ON
+    // CONFLICT` gives the reduce somewhere to go and the join's condition
+    // is then left stranded outside the statement. Right nesting is not
+    // what this buys: `a JOIN b ON p JOIN c ON q` still comes out as
+    // `((a JOIN b ON p) JOIN c ON q)`, because the recursion direction is
+    // decided by the fields, not by this.
+    join_clause: $ => prec.right(seq(
       field('left', $._relation),
       optional($.join_type),
       kw('JOIN'),
@@ -533,10 +553,17 @@ module.exports = grammar({
     // option. Six files got worse for one form that nobody writes.
     table_options: $ => repeat1($.table_option),
 
-    table_option: $ => seq(
-      field('name', $._name),
-      '=',
-      field('value', choice($._literal, $._name)),
+    table_option: $ => choice(
+      seq(field('name', $._name), '=', field('value', choice($._literal, $._name))),
+      // SQLite's two, which take no value at all and so need no `=` to tell
+      // them from a following statement. `WITHOUT ROWID` was the largest
+      // gap cluster in the sweep at 56 files.
+      seq(kw('WITHOUT'), kw('ROWID')),
+      kw('STRICT'),
+      // T-SQL's filegroup placement: `) ON [PRIMARY] TEXTIMAGE_ON
+      // [PRIMARY]`. A keyword rather than an `=` separates these, which is
+      // why they are alternatives here rather than ordinary options.
+      seq(choice(kw('ON'), kw('TEXTIMAGE_ON')), field('value', choice($._name, $.qualified_name))),
     ),
 
     // The only body position SQL has. A view's defining query is a
@@ -554,6 +581,17 @@ module.exports = grammar({
     // and a column followed by a table constraint, at every column of every
     // CREATE TABLE. Ten occurrences of generated schema is not worth that;
     // ledger.toml's gaps records it.
+    // The comma is REQUIRED even though SQLite makes it optional, and
+    // chromium's generated schemas use the optional form (`PRIMARY KEY(a,
+    // b) FOREIGN KEY(c)`, 10 files). Tried twice and rejected both times,
+    // the second time on better grounds than the first: it is not the fork
+    // that costs -- the mysql escape showed forking was never the expense
+    // -- it is that the ambiguity is GENUINE. With no comma to end a column
+    // definition, `a INT CONSTRAINT c PRIMARY KEY` is both a column
+    // carrying a named constraint and a column followed by a table
+    // constraint, and nothing in the text decides. A tree that varies on
+    // every named column constraint in the corpus is worse than ten
+    // generated files that do not parse.
     table_body: $ => seq('(', commaSep1($._member), ')'),
 
     _member: $ => choice($.column_definition, $.table_constraint),
@@ -678,6 +716,59 @@ module.exports = grammar({
       field('value', choice($._name, $.qualified_name)),
       parenList1($.indexed_column),
       optional($.where_clause),
+      // T-SQL again: `CREATE INDEX i ON [dbo].[t]([c]) ON [PRIMARY]`. The
+      // same filegroup placement a table takes, reusing the same node.
+      optional($.table_options),
+    ),
+
+    // A trigger whose body is a plain statement list, which is SQLite's,
+    // MySQL's simple form and the standard's. This is NOT the procedural
+    // gap ledger.toml describes: there is no control flow, no variable and
+    // no declaration inside -- just INSERT/UPDATE/DELETE/SELECT, each
+    // terminated by `;`. PL/pgSQL's `DO $$ … $$` and a routine body remain
+    // out of scope and are still pinned by test/negative.
+    create_trigger_statement: $ => seq(
+      kw('CREATE'),
+      optional($.temporary_modifier),
+      kw('TRIGGER'),
+      optional($.if_not_exists_modifier),
+      field('name', choice($._name, $.qualified_name)),
+      optional(choice(kw('BEFORE'), kw('AFTER'), seq(kw('INSTEAD'), kw('OF')))),
+      field('event', $.trigger_event),
+      kw('ON'),
+      field('value', choice($._name, $.qualified_name)),
+      optional(seq(kw('FOR'), kw('EACH'), kw('ROW'))),
+      optional($.when_condition_clause),
+      field('body', $.trigger_body),
+    ),
+
+    trigger_event: $ => choice(
+      kw('DELETE'),
+      kw('INSERT'),
+      seq(kw('UPDATE'), optional(seq(kw('OF'), commaSep1($._name)))),
+    ),
+
+    // `WHEN <expr>` on a trigger. A different construct from CASE's
+    // `when_clause`, which carries a THEN, so it gets its own node rather
+    // than a looser shared one.
+    when_condition_clause: $ => seq(kw('WHEN'), field('condition', $._expression)),
+
+    // The body's statements are a RESTRICTED set, and that is what keeps
+    // `END` unambiguous: `commit_statement` is spelled `COMMIT` or `END`,
+    // so admitting every statement here would make the `END` that closes
+    // the body indistinguishable from a transaction statement inside it.
+    trigger_body: $ => seq(
+      kw('BEGIN'),
+      repeat1(seq($._trigger_statement, ';')),
+      kw('END'),
+    ),
+
+    _trigger_statement: $ => choice(
+      $.select_statement,
+      $.insert_statement,
+      $.update_statement,
+      $.delete_statement,
+      $.values_clause,
     ),
 
     create_schema_statement: $ => seq(
@@ -690,7 +781,7 @@ module.exports = grammar({
     // ── drop / alter / truncate ──────────────────────────────────────
     drop_statement: $ => seq(
       kw('DROP'),
-      choice(kw('TABLE'), kw('VIEW'), kw('INDEX'), kw('SCHEMA'), kw('DATABASE')),
+      choice(kw('TABLE'), kw('VIEW'), kw('INDEX'), kw('TRIGGER'), kw('SCHEMA'), kw('DATABASE')),
       optional($.if_exists_modifier),
       commaSep1(field('name', choice($._name, $.qualified_name))),
       optional(choice(kw('CASCADE'), kw('RESTRICT'))),
@@ -701,6 +792,9 @@ module.exports = grammar({
       kw('TABLE'),
       optional($.if_exists_modifier),
       field('name', choice($._name, $.qualified_name)),
+      // T-SQL's `ALTER TABLE t WITH NOCHECK ADD CONSTRAINT …`: whether to
+      // validate existing rows against the constraint being added.
+      optional($.check_modifier),
       commaSep1(choice($.add_clause, $.drop_column_clause, $.rename_clause)),
     ),
 
@@ -814,6 +908,7 @@ module.exports = grammar({
       $.between_expression,
       $.in_expression,
       $.is_expression,
+      $.null_test,
       $.exists_expression,
       $.cast_expression,
       $.collate_expression,
@@ -905,6 +1000,33 @@ module.exports = grammar({
     // `NOT EXISTS` is not spelled here: `NOT` is the unary operator it
     // already is everywhere else, and giving this rule its own optional one
     // made every `NOT EXISTS (…)` two readings of the same bytes.
+    // SQLite's postfix null predicates: `WHERE keyword NOT NULL` means `IS
+    // NOT NULL`, and `ISNULL`/`NOTNULL` are the one-word spellings of the
+    // same thing. Postfix rather than an `is_expression` because there is
+    // no right operand to give it.
+    // `NOT NULL` is ONE token here, whitespace included. As two it is
+    // ambiguous with everything else `NOT` starts in expression position --
+    // the unary operator, `NOT LIKE`, `NOT IN`, `NOT BETWEEN` -- and the
+    // generator says so. As one token the lexer settles it, and the
+    // column-constraint spelling is unaffected because the combined token
+    // is not valid in that state.
+    null_test: $ => prec.left(PREC.postfix, seq(
+      field('value', $._expression),
+      choice($._not_null, kw('ISNULL')),
+    )),
+
+    // prec 2, above the 1 every keyword token carries: tree-sitter's lexer
+    // compares precedence before length, so at default precedence the
+    // three-character `NOT` beat the eight-character `NOT NULL` and this
+    // rule never fired.
+    _not_null: _ => token(prec(2, seq(/[Nn][Oo][Tt]/, /[ \t\r\n]+/, /[Nn][Uu][Ll][Ll]/))),
+
+    // `NOTNULL`, the one-word spelling, is NOT here. It resisted the same
+    // token lift that made `NOT NULL` and `ISNULL` work, and at 12
+    // occurrences in the corpus and zero gap files it did not earn more
+    // digging. Shipping a rule that cannot be demonstrated is worse than
+    // omitting one.
+
     exists_expression: $ => seq(
       kw('EXISTS'),
       field('value', $.subquery),
@@ -1163,6 +1285,7 @@ module.exports = grammar({
     all_modifier: $ => kw('ALL'),
     unique_modifier: $ => kw('UNIQUE'),
     virtual_modifier: $ => kw('VIRTUAL'),
+    check_modifier: $ => seq(kw('WITH'), choice(kw('CHECK'), kw('NOCHECK'))),
     temporary_modifier: $ => choice(kw('TEMPORARY'), kw('TEMP')),
     recursive_modifier: $ => kw('RECURSIVE'),
     materialized_modifier: $ => seq(optional(kw('NOT')), kw('MATERIALIZED')),
