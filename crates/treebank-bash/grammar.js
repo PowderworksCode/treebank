@@ -487,11 +487,14 @@ module.exports = grammar({
         // expands `{a,b}` and `{1..5}` but passes `{x}` through -- so it
         // is word content, which is also what `\${GIT_COMMIT}` needs.
         /\{[^{}\s,.]*\}/,
-        // Brace RUNS are literal too -- ansible ships `{{{ jinja }}}`
-        // templates inside .sh files, and bash reads `{{{` as a word.
-        // Two-plus, so the single `{` stays the compound statement's.
+        // Opening brace RUNS are literal -- ansible ships `{{{ jinja }}}`
+        // templates in .sh files, and bash reads `{{{` as a word. The
+        // CLOSING run is deliberately absent: `/\}\}+/` out-lexed the
+        // single `}` token by length inside every nested expansion, so
+        // `${x:-${y}}` lost its two closers to one word and 330 files
+        // regressed. The jinja closer stays a gap until the scanner can
+        // tell "after a space" from "after an expansion".
         /\{\{+/,
-        /\}\}+/,
         // extglob patterns are one chunk: `@(dir|all)`, `?(a|b)` -- the
         // pipes and parens inside are pattern syntax, not shell operators.
         /[?*+@!]\([^()\s]*\)/,
@@ -506,7 +509,6 @@ module.exports = grammar({
         /\]/,
         /\{[^{}\s,.]*\}/,
         /\{\{+/,
-        /\}\}+/,
         /[?*+@!]\([^()\s]*\)/,
       )),
     ))),

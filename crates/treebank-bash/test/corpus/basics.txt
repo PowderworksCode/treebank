@@ -191,3 +191,25 @@ clean()
         (redirect
           (file_descriptor)
           (word))))))
+
+================================================================================
+nested expansion closers stay separate braces
+================================================================================
+
+y=${x:-${y:-${z}}}
+
+--------------------------------------------------------------------------------
+
+(program
+  (variable_assignment
+    (variable_name)
+    (expansion
+      (variable_name)
+      (concatenation
+        (word)
+        (expansion
+          (variable_name)
+          (concatenation
+            (word)
+            (expansion
+              (variable_name))))))))
