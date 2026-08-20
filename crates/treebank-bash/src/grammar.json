@@ -2263,6 +2263,15 @@
         {
           "type": "SYMBOL",
           "name": "brace_expression"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_dollar_literal"
+          },
+          "named": true,
+          "value": "word"
         }
       ]
     },
@@ -2309,6 +2318,15 @@
         {
           "type": "SYMBOL",
           "name": "brace_expression"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_dollar_literal"
+          },
+          "named": true,
+          "value": "word"
         }
       ]
     },
@@ -3004,6 +3022,15 @@
           {
             "type": "STRING",
             "value": "!"
+          },
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_dollar_literal"
+            },
+            "named": true,
+            "value": "word"
           }
         ]
       }
@@ -3210,6 +3237,10 @@
     [
       "command",
       "variable_assignments"
+    ],
+    [
+      "_word_like",
+      "expansion"
     ],
     [
       "continue_statement",

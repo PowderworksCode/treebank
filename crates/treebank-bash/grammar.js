@@ -88,6 +88,7 @@ module.exports = grammar({
     [$.expansion],
     [$.variable_assignment],
     [$.command, $.variable_assignments],
+    [$._word_like, $.expansion],
     [$.continue_statement, $._literal],
     [$.break_statement, $._literal],
     [$.return_statement, $._literal],
@@ -438,6 +439,7 @@ module.exports = grammar({
       $._expression,
       $.concatenation,
       $.brace_expression,
+      alias($._dollar_literal, $.word),
     ),
 
     concatenation: $ => prec(-1, seq(
@@ -445,7 +447,10 @@ module.exports = grammar({
       repeat1(seq($._concat, $._word_part)),
     )),
 
-    _word_part: $ => choice($.word, $._expression, $.brace_expression),
+    // The literal-dollar external joins words too: `^$` in a grep pattern,
+    // `s:.wav$::` in a sed script -- a `$` that no expansion can follow is
+    // just a character, exactly as inside strings.
+    _word_part: $ => choice($.word, $._expression, $.brace_expression, alias($._dollar_literal, $.word)),
 
     // A bare word: anything not special. The negated class is the grammar
     // — shell has no keyword list at the lexical level, only positions.
@@ -641,6 +646,7 @@ module.exports = grammar({
       // `${1:- (%s)}` never end at the semicolon or open a subshell.
       ':', '-', '=', '?', '+', '#', '%', '/', '^', ',', '@', '*', ';', '(', ')',
       '|', '&', '<', '>', '!',
+      alias($._dollar_literal, $.word),
     )),
 
     // The backtick form's delimiters are EXTERNAL: the first unescaped
