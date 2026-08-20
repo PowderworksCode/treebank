@@ -347,6 +347,29 @@
     }
   },
   {
+    "type": "brace_expression",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "brace_expression",
+          "named": true
+        },
+        {
+          "type": "word",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
     "type": "break_statement",
     "named": true,
     "fields": {
@@ -1797,10 +1820,6 @@
   },
   {
     "type": "ansi_c_string",
-    "named": true
-  },
-  {
-    "type": "brace_expression",
     "named": true
   },
   {

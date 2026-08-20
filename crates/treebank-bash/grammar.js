@@ -50,6 +50,7 @@ module.exports = grammar({
     $._backtick_open,
     $._backtick_close,
     $._dollar_literal,
+    $._brace_expr_start,
     $._error_sentinel,
   ],
 
@@ -497,13 +498,26 @@ module.exports = grammar({
     // this one loses the command reading permanently.
     variable_name: _ => token(prec(1, /[a-zA-Z_][a-zA-Z0-9_]*/)),
 
-    // `{a,b}` and `{1..5}`: one token, requiring the comma or the range,
-    // so a braceless `{x}` stays the plain word bash treats it as. Nested
-    // expansions are beyond a single token and stay a recorded gap.
-    brace_expression: _ => token(prec(1, choice(
-      /\{[^{}\s,]*,[^{}\s]*\}/,
-      /\{[^{}\s.]*\.\.[^{}\s]*\}/,
-    ))),
+    // The comma form is a real rule behind the scanner's zero-width gate
+    // (see BRACE_EXPR_START): elements nest, hold expansions, and never
+    // compete with the compound statement's `{`, because the gate decided
+    // before the brace was shifted. The `{1..5}` range stays one token.
+    brace_expression: $ => choice(
+      seq(
+        $._brace_expr_start,
+        '{',
+        optional($._brace_element),
+        repeat1(seq(',', optional($._brace_element))),
+        '}',
+      ),
+      token(prec(1, /\{[^{}\s.]*\.\.[^{}\s]*\}/)),
+    ),
+
+    _brace_element: $ => repeat1(choice(
+      alias(token(prec(1, /([^{},\s'"$`\\;&|<>()!]|\\[^\r\n])+/)), $.word),
+      $._expression,
+      $.brace_expression,
+    )),
 
     _literal: $ => choice($.string, $.raw_string, $.ansi_c_string, $.number),
 

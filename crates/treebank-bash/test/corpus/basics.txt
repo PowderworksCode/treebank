@@ -163,7 +163,9 @@ clean()
       (simple_expansion
         (variable_name))
       (word)
-      (brace_expression)))
+      (brace_expression
+        (word)
+        (word))))
   (command
     (word)
     (word)

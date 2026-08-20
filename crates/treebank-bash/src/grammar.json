@@ -2405,23 +2405,104 @@
       }
     },
     "brace_expression": {
-      "type": "TOKEN",
-      "content": {
-        "type": "PREC",
-        "value": 1,
-        "content": {
-          "type": "CHOICE",
+      "type": "CHOICE",
+      "members": [
+        {
+          "type": "SEQ",
           "members": [
             {
-              "type": "PATTERN",
-              "value": "\\{[^{}\\s,]*,[^{}\\s]*\\}"
+              "type": "SYMBOL",
+              "name": "_brace_expr_start"
             },
             {
+              "type": "STRING",
+              "value": "{"
+            },
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_brace_element"
+                },
+                {
+                  "type": "BLANK"
+                }
+              ]
+            },
+            {
+              "type": "REPEAT1",
+              "content": {
+                "type": "SEQ",
+                "members": [
+                  {
+                    "type": "STRING",
+                    "value": ","
+                  },
+                  {
+                    "type": "CHOICE",
+                    "members": [
+                      {
+                        "type": "SYMBOL",
+                        "name": "_brace_element"
+                      },
+                      {
+                        "type": "BLANK"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            {
+              "type": "STRING",
+              "value": "}"
+            }
+          ]
+        },
+        {
+          "type": "TOKEN",
+          "content": {
+            "type": "PREC",
+            "value": 1,
+            "content": {
               "type": "PATTERN",
               "value": "\\{[^{}\\s.]*\\.\\.[^{}\\s]*\\}"
             }
-          ]
+          }
         }
+      ]
+    },
+    "_brace_element": {
+      "type": "REPEAT1",
+      "content": {
+        "type": "CHOICE",
+        "members": [
+          {
+            "type": "ALIAS",
+            "content": {
+              "type": "TOKEN",
+              "content": {
+                "type": "PREC",
+                "value": 1,
+                "content": {
+                  "type": "PATTERN",
+                  "value": "([^{},\\s'\"$`\\\\;&|<>()!]|\\\\[^\\r\\n])+"
+                }
+              }
+            },
+            "named": true,
+            "value": "word"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "_expression"
+          },
+          {
+            "type": "SYMBOL",
+            "name": "brace_expression"
+          }
+        ]
       }
     },
     "_literal": {
@@ -3188,6 +3269,10 @@
     {
       "type": "SYMBOL",
       "name": "_dollar_literal"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_brace_expr_start"
     },
     {
       "type": "SYMBOL",

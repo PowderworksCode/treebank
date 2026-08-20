@@ -29,6 +29,7 @@ enum TokenType {
   BACKTICK_OPEN,
   BACKTICK_CLOSE,
   DOLLAR_LITERAL,
+  BRACE_EXPR_START,
   ERROR_SENTINEL,
 };
 
@@ -240,6 +241,44 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
     // Not a join: fall through rather than return, because a redirect's
     // file descriptor may legitimately start after this very whitespace.
   }
+
+  // Zero-width gate for brace expansion. bash expands `{a,b}` only when
+  // an UNQUOTED comma sits inside the matching braces with no whitespace
+  // anywhere -- `{ :; }` is a compound statement, `{x}` a literal word.
+  // The grammar cannot look ahead to the close, and the first attempt at
+  // a nested rule died in the LALR state both readings share: the element
+  // token out-lexed the word that the compound reading needed (#168).
+  // Deciding HERE, before the `{` is even shifted, keeps the two worlds in
+  // separate states and the conflict never forms.
+  if (valid[BRACE_EXPR_START]) {
+    // Self-skips whitespace: the external scanner runs BEFORE the extras
+    // skip and is not called again after it, so a gate that only checks
+    // the raw lookahead never sees a `{` that follows a space.
+    while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    if (lexer->lookahead != '{') goto not_brace;
+    lexer->mark_end(lexer);
+    int depth = 0;
+    bool comma = false;
+    unsigned n = 0;
+    int32_t c = lexer->lookahead;
+    while (c != 0 && n < 4096) {
+      if (c == '{') depth++;
+      else if (c == '}') {
+        depth--;
+        if (depth == 0) break;
+      } else if (c == ',' && depth >= 1) comma = true;
+      else if (c == ' ' || c == '\t' || c == '\n' || c == '\r') { depth = -1; break; }
+      advance(lexer);
+      c = lexer->lookahead;
+      n++;
+    }
+    if (depth == 0 && comma) {
+      lexer->result_symbol = BRACE_EXPR_START;
+      return true;
+    }
+    return false;
+  }
+not_brace:;
 
   // A digit run is a file descriptor ONLY when a redirect operator abuts
   // it: `echo 2> f` redirects fd 2, `echo 2 > f` passes an argument. Both
