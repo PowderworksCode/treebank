@@ -1,6 +1,7 @@
 {
   "$schema": "https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json",
   "name": "bash",
+  "word": "word",
   "rules": {
     "program": {
       "type": "CHOICE",
@@ -2140,7 +2141,7 @@
       "type": "TOKEN",
       "content": {
         "type": "PREC",
-        "value": -1,
+        "value": 0,
         "content": {
           "type": "SEQ",
           "members": [
@@ -2248,8 +2249,12 @@
     "number": {
       "type": "TOKEN",
       "content": {
-        "type": "PATTERN",
-        "value": "[0-9]+"
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[0-9]+"
+        }
       }
     },
     "string": {

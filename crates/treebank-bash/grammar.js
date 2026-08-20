@@ -30,6 +30,13 @@ module.exports = grammar({
 
   // Bash's own word boundary. `extras` deliberately does NOT include a
   // newline: a newline is a command terminator here, not whitespace.
+  // Keyword extraction: without this, every keyword token beats the word
+  // token on PRECEDENCE regardless of length -- `declared_files() {` lexed
+  // as `declare` + `d_files`, a declaration_command seven characters into
+  // an identifier. With it, a keyword only wins where the WHOLE word
+  // matches the keyword.
+  word: $ => $.word,
+
   extras: $ => [$.comment, /[ \t]/, /\\\r?\n/],
 
   externals: $ => [
@@ -413,7 +420,13 @@ module.exports = grammar({
     // business). The ledger records that raising the comment token's
     // precedence instead made the sweep WORSE, because that steals the
     // mid-word hashes too; the word-start restriction is bash's own rule.
-    word: _ => token(prec(-1, seq(
+    // prec 0, NOT -1: precedence beats length in the lexer, so at -1 every
+    // keyword token won even mid-identifier -- `iffy()` lexed as `if`+`fy`,
+    // `declared_files()` as `declare`+`d_files` -- and the keyword-
+    // extraction `word:` property only referees TIES. At equal precedence
+    // the longest match wins and extraction hands exact keyword matches to
+    // the keyword, which is the standard arrangement.
+    word: _ => token(prec(0, seq(
       choice(
         /[^\s'"<>{}()$`|&;!\\\[\]#]/,
         /\\[^\r\n]/,
@@ -444,7 +457,10 @@ module.exports = grammar({
 
     _literal: $ => choice($.string, $.raw_string, $.ansi_c_string, $.number),
 
-    number: _ => token(/[0-9]+/),
+    // Above word, so a pure digit run stays a number; `123abc` is still
+    // longest-matched as a word... no -- prec beats length: it splits, as
+    // it always has. The relative order with word is what this preserves.
+    number: _ => token(prec(1, /[0-9]+/)),
 
     // Double quotes: expansions happen inside, so the parts are real nodes.
     string: $ => seq(
