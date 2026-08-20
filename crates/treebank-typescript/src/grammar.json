@@ -10986,7 +10986,6 @@
   "supertypes": [
     "_statement",
     "_expression",
-    "_declaration",
     "_pattern",
     "_type",
     "_name",

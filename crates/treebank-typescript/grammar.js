@@ -68,7 +68,13 @@ module.exports = grammar({
   supertypes: $ => tb.assertTableTerms([
     '_statement',
     '_expression',
-    '_declaration',
+    // `_declaration` is demoted to the facet tier here; the method-form
+    // refactor made typescript PARTITION it -- a class method is a
+    // declaration reached only through `_member`, a function statement
+    // only through `_statement`, and one alternation reachable from both
+    // is exactly what let `foo() {}` parse as a top-level definition.
+    // Same §3.1.1 decision java made for fields and locals. See
+    // roles.json; the rosetta gate caught the split within a day.
     '_pattern',
     '_type',
     '_name',

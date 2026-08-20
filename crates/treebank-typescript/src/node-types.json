@@ -94,40 +94,6 @@
     ]
   },
   {
-    "type": "_declaration",
-    "named": true,
-    "subtypes": [
-      {
-        "type": "class_definition",
-        "named": true
-      },
-      {
-        "type": "enum_definition",
-        "named": true
-      },
-      {
-        "type": "function_definition",
-        "named": true
-      },
-      {
-        "type": "import_alias",
-        "named": true
-      },
-      {
-        "type": "interface_definition",
-        "named": true
-      },
-      {
-        "type": "namespace_definition",
-        "named": true
-      },
-      {
-        "type": "type_alias",
-        "named": true
-      }
-    ]
-  },
-  {
     "type": "_directive",
     "named": true,
     "subtypes": [
@@ -370,7 +336,11 @@
     "named": true,
     "subtypes": [
       {
-        "type": "_declaration",
+        "type": "class_definition",
+        "named": true
+      },
+      {
+        "type": "enum_definition",
         "named": true
       },
       {
@@ -382,11 +352,27 @@
         "named": true
       },
       {
+        "type": "import_alias",
+        "named": true
+      },
+      {
         "type": "index_signature",
         "named": true
       },
       {
+        "type": "interface_definition",
+        "named": true
+      },
+      {
+        "type": "namespace_definition",
+        "named": true
+      },
+      {
         "type": "static_block",
+        "named": true
+      },
+      {
+        "type": "type_alias",
         "named": true
       }
     ]
@@ -442,15 +428,15 @@
         "named": true
       },
       {
-        "type": "_declaration",
-        "named": true
-      },
-      {
         "type": "_directive",
         "named": true
       },
       {
         "type": "block",
+        "named": true
+      },
+      {
+        "type": "class_definition",
         "named": true
       },
       {
@@ -462,7 +448,23 @@
         "named": true
       },
       {
+        "type": "enum_definition",
+        "named": true
+      },
+      {
         "type": "expression_statement",
+        "named": true
+      },
+      {
+        "type": "function_definition",
+        "named": true
+      },
+      {
+        "type": "import_alias",
+        "named": true
+      },
+      {
+        "type": "interface_definition",
         "named": true
       },
       {
@@ -470,7 +472,15 @@
         "named": true
       },
       {
+        "type": "namespace_definition",
+        "named": true
+      },
+      {
         "type": "try_statement",
+        "named": true
+      },
+      {
+        "type": "type_alias",
         "named": true
       },
       {
@@ -1871,15 +1881,35 @@
       "required": false,
       "types": [
         {
-          "type": "_declaration",
-          "named": true
-        },
-        {
           "type": "_expression",
           "named": true
         },
         {
+          "type": "enum_definition",
+          "named": true
+        },
+        {
           "type": "export_clause",
+          "named": true
+        },
+        {
+          "type": "function_definition",
+          "named": true
+        },
+        {
+          "type": "import_alias",
+          "named": true
+        },
+        {
+          "type": "interface_definition",
+          "named": true
+        },
+        {
+          "type": "namespace_definition",
+          "named": true
+        },
+        {
+          "type": "type_alias",
           "named": true
         },
         {

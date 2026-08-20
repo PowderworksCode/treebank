@@ -15,7 +15,113 @@ use std::collections::BTreeMap;
 
 use anyhow::{bail, Result};
 
+/// The field constraints at DEPTH 0 of a pattern body: each is the field
+/// name plus the node type names its value pattern demands (empty means
+/// presence is enough -- an anonymous or wildcard value). Only depth-0
+/// fields bind to the facet member itself; `#`-predicates and strings are
+/// skipped, and `(#match? ...)` opens a paren so it is already depth 1.
+fn top_level_field_constraints(body: &str) -> Vec<(String, Vec<String>)> {
+    let mut out = Vec::new();
+    let bytes = body.as_bytes();
+    let mut depth = 0i32;
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'"' => i = skip_string(body, i).unwrap_or(body.len()),
+            b'(' | b'[' => {
+                depth += 1;
+                i += 1;
+            }
+            b')' | b']' => {
+                depth -= 1;
+                i += 1;
+            }
+            b'a'..=b'z' | b'_' if depth == 0 => {
+                let start = i;
+                while i < bytes.len()
+                    && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_')
+                {
+                    i += 1;
+                }
+                if bytes.get(i) == Some(&b':') {
+                    let field = body[start..i].to_string();
+                    i += 1;
+                    while i < bytes.len() && bytes[i].is_ascii_whitespace() {
+                        i += 1;
+                    }
+                    // The value pattern: `(name ...)` or an alternation
+                    // `[(a ...) (b ...)]` (a facet already expanded).
+                    let mut names = Vec::new();
+                    let mut j = i;
+                    let openers: &[u8] = if bytes.get(j) == Some(&b'[') {
+                        j += 1;
+                        b"("
+                    } else {
+                        b"("
+                    };
+                    let _ = openers;
+                    while j < bytes.len() {
+                        while j < bytes.len() && bytes[j].is_ascii_whitespace() {
+                            j += 1;
+                        }
+                        if bytes.get(j) != Some(&b'(') {
+                            break;
+                        }
+                        j += 1;
+                        let ns = j;
+                        while j < bytes.len()
+                            && (bytes[j].is_ascii_alphanumeric() || bytes[j] == b'_')
+                        {
+                            j += 1;
+                        }
+                        if j > ns {
+                            names.push(body[ns..j].to_string());
+                        }
+                        // Skip to this pattern's close so a bracketed
+                        // alternation yields every member name.
+                        let mut d = 1i32;
+                        while j < bytes.len() && d > 0 {
+                            match bytes[j] {
+                                b'(' => d += 1,
+                                b')' => d -= 1,
+                                b'"' => {
+                                    j = skip_string(body, j).unwrap_or(body.len());
+                                    continue;
+                                }
+                                _ => {}
+                            }
+                            j += 1;
+                        }
+                        if !body[i..].starts_with('[') {
+                            break;
+                        }
+                    }
+                    out.push((field, names));
+                }
+            }
+            _ => i += 1,
+        }
+    }
+    out
+}
+
 pub fn expand(query: &str, facets: &BTreeMap<String, Vec<String>>) -> Result<String> {
+    expand_with_types(query, facets, None)
+}
+
+/// Like [`expand`], but a member is DROPPED from the alternation when a
+/// depth-0 field constraint cannot hold for it: the member does not
+/// declare the field, or none of the field's declared types intersects
+/// the constraint's type (supertype closure included). This mirrors what
+/// tree-sitter itself checks for a NATIVE supertype pattern, where the
+/// pattern survives if any one subtype satisfies it. A member absent from
+/// node-types is kept, and an expansion that filters every member is an
+/// error, not an empty alternation.
+pub fn expand_with_types(
+    query: &str,
+    facets: &BTreeMap<String, Vec<String>>,
+    node_types: Option<&crate::node_types::NodeTypes>,
+) -> Result<String> {
     let mut out = String::with_capacity(query.len());
     let bytes = query.as_bytes();
     let mut i = 0;
@@ -43,9 +149,40 @@ pub fn expand(query: &str, facets: &BTreeMap<String, Vec<String>>) -> Result<Str
                         bail!("facet `{name}` has no members");
                     }
                     let close = matching_paren(query, i)?;
-                    let body = expand(&query[name_end..close], facets)?;
+                    let body = expand_with_types(&query[name_end..close], facets, node_types)?;
+                    let needed = top_level_field_constraints(&body);
+                    let compatible = |m: &str| -> bool {
+                        let Some(nt) = node_types else { return true };
+                        let Some(declared) = nt.fields.get(m) else { return true };
+                        needed.iter().all(|(f, want)| {
+                            let Some(have) = declared.get(f) else { return false };
+                            if want.is_empty() {
+                                return true;
+                            }
+                            // Derivation-based, DESIGN.md §2 fact 4: a
+                            // supertype pattern only matches where the
+                            // field DECLARES that supertype (the value
+                            // derives through it). `namespace_definition`'s
+                            // body declares concrete `block`, so `(_body)`
+                            // never matches there even though block is a
+                            // _body subtype -- the closure runs from what
+                            // is declared toward what is asked, never the
+                            // other way.
+                            want.iter().any(|w| {
+                                have.contains(w)
+                                    || have.iter().any(|h| nt.closure(h).contains(w))
+                            })
+                        })
+                    };
+                    let kept: Vec<&String> =
+                        members.iter().filter(|m| compatible(m)).collect();
+                    if kept.is_empty() {
+                        bail!(
+                            "facet `{name}`: no member satisfies the field constraint(s) {needed:?}"
+                        );
+                    }
                     out.push('[');
-                    for (k, m) in members.iter().enumerate() {
+                    for (k, m) in kept.iter().enumerate() {
                         if k > 0 {
                             out.push(' ');
                         }
