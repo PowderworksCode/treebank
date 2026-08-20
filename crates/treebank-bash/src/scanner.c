@@ -295,6 +295,22 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
 
   if (valid[FILE_DESCRIPTOR] && !valid[HEREDOC_BODY]) {
     while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
+    // `exec {lock_fd}> file`: bash allocates a descriptor into the named
+    // variable. Same adjacency contract as the numeric form, same peek --
+    // and as a grammar token this ate `echo {x}`, where nothing follows.
+    if (lexer->lookahead == '{') {
+      advance(lexer);
+      if (!(iswalpha(lexer->lookahead) || lexer->lookahead == '_')) return false;
+      while (iswalnum(lexer->lookahead) || lexer->lookahead == '_') advance(lexer);
+      if (lexer->lookahead != '}') return false;
+      advance(lexer);
+      lexer->mark_end(lexer);
+      if (lexer->lookahead == '<' || lexer->lookahead == '>') {
+        lexer->result_symbol = FILE_DESCRIPTOR;
+        return true;
+      }
+      return false;
+    }
     if (lexer->lookahead >= '0' && lexer->lookahead <= '9') {
       while (lexer->lookahead >= '0' && lexer->lookahead <= '9') advance(lexer);
       lexer->mark_end(lexer);

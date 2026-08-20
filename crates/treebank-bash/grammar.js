@@ -344,12 +344,7 @@ module.exports = grammar({
     // ── redirection ──────────────────────────────────────────────────
     redirect: $ => prec.left(PREC.redirect, choice(
       seq(
-        optional(field('descriptor', choice(
-          alias($._file_descriptor, $.file_descriptor),
-          // `exec {lock_fd}> file`: bash allocates a descriptor and puts
-          // its number in the named variable.
-          alias(token(/\{[a-zA-Z_][a-zA-Z0-9_]*\}/), $.file_descriptor),
-        ))),
+        optional(field('descriptor', alias($._file_descriptor, $.file_descriptor))),
         field('operator', choice('<', '>', '>>', '&>', '&>>', '<&', '>&', '>|', '<>')),
         field('destination', $._word_like),
       ),
@@ -475,6 +470,10 @@ module.exports = grammar({
         /\[[^\]\s]*\]/,
         /\[/,
         /\]/,
+        // A brace chunk with no comma and no range is LITERAL -- bash
+        // expands `{a,b}` and `{1..5}` but passes `{x}` through -- so it
+        // is word content, which is also what `\${GIT_COMMIT}` needs.
+        /\{[^{}\s,.]*\}/,
       ),
       repeat(choice(
         // `!` continues a word -- `-x!y` is one argument -- though it
@@ -484,6 +483,7 @@ module.exports = grammar({
         /\[[^\]\s]*\]/,
         /\[/,
         /\]/,
+        /\{[^{}\s,.]*\}/,
       )),
     ))),
 
