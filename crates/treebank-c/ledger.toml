@@ -34,28 +34,34 @@ The stand-in corpus above is blind to something else again, and it matters more:
 
 [corpus.sweep]
 files = 3662
-passed = 2623
-failed = 1039
-gap_files = 132
-config_files = 345
-noise_files = 562
-indeterminate_files = 521
-clusters = 99
-pass_rate = '71.6%'
+passed = 2648
+failed = 1014
+gap_files = 119
+noise_files = 547
+pass_rate = '72.31%'
+
+# The block above is written by `treebank sweep` itself — the numbers in a
+# ledger are the tool's to state, not a human's to transcribe. What the
+# writer does not carry is here, where it will survive the next run.
+[corpus.gaps]
+config_files = 348
+indeterminate_files = 506
+clusters = 91
+gap_clusters = 51
 note = """
-Adjudicated by the libclang oracle, not raw parse success, and the four buckets are the point. Of 1,039 failures: **132 are grammar gaps** — valid C this grammar rejects, the number to drive down — **345 are configuration-inherent**, valid C that cannot be represented as written because a preprocessor conditional splits a construct, and **562 are noise**, where the reference parser did not vouch for the file.
+The four buckets are the point. Of 1,014 failures: **119 are grammar gaps** — valid C this grammar rejects, the number to drive down — **348 are configuration-inherent**, valid C that cannot be represented as written because a preprocessor conditional splits a construct, and **547 are noise**, where the reference parser did not vouch for the file.
 
-The noise bucket is inflated and by how much is recorded: the oracle answered 477 valid, 41 invalid and **521 indeterminate** over the 1,039, and `Oracle::validate` collapses indeterminate to false so that no fix agent is ever aimed at a file whose validity nobody can vouch for. So 521 of the 562 noise files are "we could not tell", not "the reference rejected it". A C gap number quoted without its indeterminate count is not a claim this crate makes — and the sweep now says so itself, because more files are unadjudicable than are known-valid. That ratio inverted as the grammar improved rather than because anything changed about the oracle: the files that still fail are the ones a build system would have configured.
+The noise bucket is inflated and by how much is recorded: the oracle answered 467 valid, 41 invalid and **506 indeterminate** over the 1,014, and `Oracle::validate` collapses indeterminate to false so that no fix agent is ever aimed at a file whose validity nobody can vouch for. So 506 of the 547 noise files are "we could not tell" and only 41 are "the reference rejected it". A C gap number quoted without its indeterminate count is not a claim this crate makes — and the sweep now says so itself, because more files are unadjudicable than are known-valid. That ratio inverted as the grammar improved rather than because anything changed about the oracle: the files that still fail are the ones a build system would have configured.
 
-Read the other way: 2,623 + 345 = **2,968 of 3,662 files, 81.0%, are either parsed or accounted for**, and 132 are the queue.
+Read the other way: 2,648 + 348 = **2,996 of 3,662 files, 81.8%, are either parsed or accounted for**, and 119 are the queue.
 
 **Where these numbers came from.** The grammar as first shipped passed 2,184 and left 422 gaps in 157 clusters. Nearly every one of those clusters was the same thing — an unexpanded macro standing where the preprocessor would have put a keyword — and the ledger named three positions for it and refused all three, on the grounds that a bare identifier admitted after a declarator makes `int x y;` parse. That was true of the rule being refused and not of the rule: each position is now admitted only where the parse has already committed to something a juxtaposed pair of names cannot reach. The five negative files under `test/negative/` that pin those boundaries — `two-names-juxtaposed.c`, `two-names-juxtaposed-in-a-block.c`, `tag-with-two-names.c`, `macro-suffix-on-a-plain-name.c` and the older `two-expressions-juxtaposed.c` — are all still rejected, and clang rejects all of them too.
 
-Two contributions are worth separating out. Dead-branch elimination is load-bearing: 340 of the 345 configuration-inherent files are files that parse cleanly once the branches a C compiler would not take are removed, and the `extern \"C\" {` opened inside one `#ifdef __cplusplus` and closed inside another has no grammar fix at all — the token stream is not nested. And the sweep's macro census still explains 14 gap files outright: they parse once their package's own macros are expanded.
+**How the gaps below are counted, because the sweep cannot do it.** 42 of the 119 are reported by the sweep at an `extern \"C\" {` line, which is not what is wrong with them: the brace is opened inside one `#ifdef __cplusplus` and closed inside another, so it is the FIRST error in a file whose real gap is further down. The per-construct counts in `known_gaps` come from removing those branches by hand and re-reading the first error, which is a floor per class — a file with two gaps is counted under one of them. 22 of the 119 have nothing behind the brace and parse once it is removed.
 
-**How the gaps below are counted, because the sweep cannot do it.** 44 of the 132 are reported by the sweep at an `extern \"C\" {` line, which is not what is wrong with them: the brace is opened inside one `#ifdef __cplusplus` and closed inside another, so it is the FIRST error in a file whose real gap is further down. The per-construct counts in `known_gaps` come from removing those branches by hand and re-reading the first error, which is a floor per class — a file with two gaps is counted under one of them.
+Two contributions are worth separating out. Dead-branch elimination is load-bearing: 343 of the 348 configuration-inherent files parse cleanly once the branches a C compiler would not take are removed, and the split `extern \"C\" {` has no grammar fix at all — the token stream is not nested. And the sweep's macro census still explains 11 gap files outright: they parse once their package's own macros are expanded.
 
-For calibration on what 132 is worth: the patched upstream tree-sitter-c this grammar replaces passed 43,089 of 84,455 files on the real Debian corpus, 51%, with 13,826 gap files. The two are over different populations and must not be subtracted.
+For calibration on what 119 is worth: the patched upstream tree-sitter-c this grammar replaces passed 43,089 of 84,455 files on the real Debian corpus, 51%, with 13,826 gap files. The two are over different populations and must not be subtracted.
 """
 
 [corpus.recovery]

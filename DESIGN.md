@@ -1141,7 +1141,7 @@ about the position. Admitting the macro **after a declarator that ends in
 `)` or `]`**, and **before the type** where a keyword type cannot be, and
 inside a `{` that `struct` or `enum` has already opened, and after
 `typedef` — four contexts a juxtaposed pair of names cannot reach — took
-the same corpus to **2,623 files and 132 gaps**, with `int x y;` still
+the same corpus to **2,648 files and 119 gaps**, with `int x y;` still
 rejected in every position the negative corpus asks about.
 
 Three things generalise from that, and none of them is about C:
@@ -1152,8 +1152,8 @@ Three things generalise from that, and none of them is about C:
    grammar is what says whether such a context exists. For the macro that
    stands in for a whole parameter list — `void f BASE64_ENC_PARAMS { … }` —
    there is no such context, the tokens ARE `int x y;`, and it stays refused.
-2. **The corpus reclassifies as the grammar improves.** 44 of the remaining
-   132 gaps are reported at an `extern "C" {` line that no grammar can fix,
+2. **The corpus reclassifies as the grammar improves.** 42 of the remaining
+   119 gaps are reported at an `extern "C" {` line that no grammar can fix,
    because it is the file's FIRST error and its real gap is further down.
    A cluster report is a queue, not a diagnosis, and the top of the queue
    is the least reliable entry in it.
