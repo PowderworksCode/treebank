@@ -1634,13 +1634,30 @@
                     "type": "FIELD",
                     "name": "descriptor",
                     "content": {
-                      "type": "ALIAS",
-                      "content": {
-                        "type": "SYMBOL",
-                        "name": "_file_descriptor"
-                      },
-                      "named": true,
-                      "value": "file_descriptor"
+                      "type": "CHOICE",
+                      "members": [
+                        {
+                          "type": "ALIAS",
+                          "content": {
+                            "type": "SYMBOL",
+                            "name": "_file_descriptor"
+                          },
+                          "named": true,
+                          "value": "file_descriptor"
+                        },
+                        {
+                          "type": "ALIAS",
+                          "content": {
+                            "type": "TOKEN",
+                            "content": {
+                              "type": "PATTERN",
+                              "value": "\\{[a-zA-Z_][a-zA-Z0-9_]*\\}"
+                            }
+                          },
+                          "named": true,
+                          "value": "file_descriptor"
+                        }
+                      ]
                     }
                   },
                   {
@@ -1942,7 +1959,7 @@
                         "value": 1,
                         "content": {
                           "type": "PATTERN",
-                          "value": "([^\\s\\[\\]]|\\[([^\\]\\[]|\\[:[^\\]]*:\\])*\\])+"
+                          "value": "([^\\s\\[\\]\\\\]|\\\\.|\\[([^\\]\\[]|\\[:[^\\]]*:\\])*\\])+"
                         }
                       }
                     },
@@ -2210,6 +2227,10 @@
             "value": ","
           },
           {
+            "type": "STRING",
+            "value": "#"
+          },
+          {
             "type": "SYMBOL",
             "name": "_arith_group"
           }
@@ -2439,6 +2460,18 @@
     "string": {
       "type": "SEQ",
       "members": [
+        {
+          "type": "CHOICE",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "$"
+            },
+            {
+              "type": "BLANK"
+            }
+          ]
+        },
         {
           "type": "STRING",
           "value": "\""

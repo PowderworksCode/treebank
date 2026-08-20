@@ -344,7 +344,12 @@ module.exports = grammar({
     // ── redirection ──────────────────────────────────────────────────
     redirect: $ => prec.left(PREC.redirect, choice(
       seq(
-        optional(field('descriptor', alias($._file_descriptor, $.file_descriptor))),
+        optional(field('descriptor', choice(
+          alias($._file_descriptor, $.file_descriptor),
+          // `exec {lock_fd}> file`: bash allocates a descriptor and puts
+          // its number in the named variable.
+          alias(token(/\{[a-zA-Z_][a-zA-Z0-9_]*\}/), $.file_descriptor),
+        ))),
         field('operator', choice('<', '>', '>>', '&>', '&>>', '<&', '>&', '>|', '<>')),
         field('destination', $._word_like),
       ),
@@ -386,7 +391,7 @@ module.exports = grammar({
       // `^(pip|easy)[23]$` is one operand even though parens and pipes are
       // operators everywhere else. One token, bracket-groups kept whole so
       // a `]` inside a class does not end the conditional.
-      seq('=~', optional(alias(token(prec(1, /([^\s\[\]]|\[([^\]\[]|\[:[^\]]*:\])*\])+/)), $.regex))),
+      seq('=~', optional(alias(token(prec(1, /([^\s\[\]\\]|\\.|\[([^\]\[]|\[:[^\]]*:\])*\])+/)), $.regex))),
       '!', seq('&&', repeat('\n')), seq('||', repeat('\n')),
       '==', '!=', '<', '>', '-a', '-o', '(', ')',
     )),
@@ -414,6 +419,9 @@ module.exports = grammar({
       '+', '-', '*', '/', '%', '**', '=', '+=', '-=', '*=', '/=', '%=',
       '==', '!=', '<', '>', '<=', '>=', '&&', '||', '!', '~', '^', '&', '|',
       '<<', '>>', '++', '--', '?', ':', ',',
+      // The explicit-base separator when the digits come from an
+      // expansion: `10#$timeout`. Literal bases (`16#ff`) are one token.
+      '#',
       // Parens NEST as a rule rather than appearing as flat elements. Flat,
       // the lexer at `${#c})))` could take `))` (the arithmetic's closer)
       // one paren early, because a flat repeat cannot count brackets --
@@ -502,6 +510,9 @@ module.exports = grammar({
 
     // Double quotes: expansions happen inside, so the parts are real nodes.
     string: $ => seq(
+      // `$"..."` is bash's locale-translated string; the content behaves
+      // exactly like an ordinary double-quoted string.
+      optional('$'),
       '"',
       repeat(choice(
         $._expansion_like,
