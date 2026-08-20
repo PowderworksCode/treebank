@@ -173,11 +173,7 @@ pub fn run(
         entries.truncate(n);
     }
 
-    let dirs = crate::routing::grammar_dirs(lang);
-    let langs: Vec<tree_sitter::Language> = dirs
-        .iter()
-        .map(|d| grammar::load(&grammar_dir.join(d)).map(|(l, _)| l))
-        .collect::<Result<_>>()?;
+    let (language, _) = grammar::load(grammar_dir)?;
 
     println!(
         "recovery: {} files, up to {PER_FILE} single-token deletions each — how far does one missing token spread?",
@@ -194,9 +190,8 @@ pub fn run(
             if src.is_empty() {
                 return Ok((0, Vec::new()));
             }
-            let idx = crate::routing::route(lang, &f.dialect, &f.rel);
             let mut parser = Parser::new();
-            parser.set_language(&langs[idx])?;
+            parser.set_language(&language)?;
             let Some(tree) = parser.parse(&src, None) else {
                 return Ok((0, Vec::new()));
             };

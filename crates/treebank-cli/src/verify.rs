@@ -12,7 +12,8 @@
 use std::path::Path;
 use std::process::Command;
 
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
+use treebank_lang::LangName;
 
 pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<()> {
     let name = grammar_dir
@@ -20,6 +21,19 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
     let mut failed = Vec::new();
+
+    // 0. Registration. Everything below this asks whether the grammar is
+    //    GOOD; this asks whether the rest of the repository can find it at
+    //    all. A grammar whose directory name is not a language, or whose
+    //    tree-sitter.json disagrees with the registry about which files it
+    //    parses, builds and tests perfectly and is invisible to `--lang`.
+    match registered(grammar_dir) {
+        Ok(lang) => println!("  registered    {lang}"),
+        Err(e) => {
+            println!("  registered    FAIL: {e}");
+            failed.push("registered");
+        }
+    }
 
     // 1. Reproducible generation. Without this the parser that ships and the
     //    grammar you can read drift apart silently.
@@ -88,6 +102,66 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
     Ok(())
 }
 
+/// Is this grammar dir a language the registry knows, and does it claim
+/// the files the registry says it parses?
+///
+/// The second half is the one that catches something: file extensions get
+/// written down in `treebank-lang` (where the sweep and the fuzzer read
+/// them) and again in the crate's `tree-sitter.json` (where every editor
+/// and every `tree-sitter` invocation reads them), and nothing else
+/// compares the two. The check is one-directional — a grammar may claim
+/// extensions the registry does not list, the way bash claims `.ebuild` —
+/// because the failure that matters is the registry sending files at a
+/// grammar that does not admit to handling them.
+fn registered(grammar_dir: &Path) -> Result<LangName> {
+    let dir = grammar_dir
+        .canonicalize()
+        .unwrap_or_else(|_| grammar_dir.to_path_buf());
+    let dirname = dir
+        .file_name()
+        .and_then(|s| s.to_str())
+        .context("grammar dir has no name")?;
+    let suffix = dirname
+        .strip_prefix("treebank-")
+        .with_context(|| format!("{dirname} is not named treebank-<language>"))?;
+    let lang = LangName::from_name(suffix).with_context(|| {
+        format!("no language called {suffix}: add it to the registry in crates/treebank-lang")
+    })?;
+    if lang.grammar() != lang {
+        bail!(
+            "{lang} is declared as a dialect of {}, so this directory should not exist",
+            lang.grammar()
+        );
+    }
+
+    let manifest = dir.join("tree-sitter.json");
+    let text = std::fs::read_to_string(&manifest)
+        .with_context(|| format!("read {}", manifest.display()))?;
+    let json: serde_json::Value =
+        serde_json::from_str(&text).with_context(|| format!("parse {}", manifest.display()))?;
+    let grammars = json["grammars"]
+        .as_array()
+        .context("tree-sitter.json has no grammars")?;
+    let claimed: Vec<&str> = grammars
+        .iter()
+        .filter_map(|g| g["file-types"].as_array())
+        .flatten()
+        .filter_map(|t| t.as_str())
+        .collect();
+    let missing: Vec<&str> = lang
+        .grammar_extensions()
+        .into_iter()
+        .filter(|e| !claimed.contains(e))
+        .collect();
+    if !missing.is_empty() {
+        bail!(
+            "the registry routes .{} here but tree-sitter.json claims only {claimed:?}",
+            missing.join(", .")
+        );
+    }
+    Ok(lang)
+}
+
 /// Regenerate and compare against what is committed. Uses git rather than a
 /// hash of our own, so the answer is the same one CI's `git diff` gives.
 fn generation_is_reproducible(grammar_dir: &Path) -> Result<bool> {
@@ -108,4 +182,57 @@ fn run_tool(bin: &str, args: &[&str], dir: &Path) -> Result<bool> {
         .output()
         .map(|o| o.status.success())
         .unwrap_or(false))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{registered, Path};
+    use treebank_lang::LangName;
+
+    fn crates_dir() -> std::path::PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("..")
+            .canonicalize()
+            .unwrap()
+    }
+
+    /// The registry and the grammar crates say the same thing, in both
+    /// directions.
+    ///
+    /// This is the check that used to be a paragraph in a review comment.
+    /// Adding a language means writing a grammar and registering it, and
+    /// those two halves are in different files with nothing between them:
+    /// a crate nobody registered builds and tests and is unreachable from
+    /// `--lang`, and a registered language with no crate is a `--lang`
+    /// value that fails at the point of use.
+    #[test]
+    fn the_registry_and_the_grammar_crates_agree() {
+        let crates = crates_dir();
+
+        // Every grammar crate is a language, named the same way, claiming
+        // the extensions the registry routes to it.
+        let mut found = Vec::new();
+        for entry in std::fs::read_dir(&crates).unwrap() {
+            let dir = entry.unwrap().path();
+            if !dir.join("grammar.js").is_file() {
+                continue;
+            }
+            match registered(&dir) {
+                Ok(lang) => found.push(lang),
+                Err(e) => panic!("{}: {e:#}", dir.display()),
+            }
+        }
+
+        // And every language that is its own grammar has one.
+        for &lang in LangName::ALL {
+            if lang.grammar() != lang {
+                continue;
+            }
+            assert!(
+                found.contains(&lang),
+                "{lang} is registered as its own grammar but crates/{} has no grammar.js",
+                lang.grammar_crate(),
+            );
+        }
+    }
 }

@@ -73,11 +73,7 @@ pub fn run(
         entries.truncate(n);
     }
 
-    let dirs = crate::routing::grammar_dirs(lang);
-    let langs: Vec<tree_sitter::Language> = dirs
-        .iter()
-        .map(|d| grammar::load(&grammar_dir.join(d)).map(|(l, _)| l))
-        .collect::<Result<_>>()?;
+    let (language, _) = grammar::load(grammar_dir)?;
 
     // Only files WE reject are interesting; the rest have no error of ours
     // to place.
@@ -86,9 +82,8 @@ pub fn run(
         .filter_map(|f| {
             let rel = format!("{}/{}", f.pkgdir, f.rel);
             let src = std::fs::read(corpus_src.join(&rel)).ok()?;
-            let idx = crate::routing::route(lang, &f.dialect, &f.rel);
             let mut parser = Parser::new();
-            parser.set_language(&langs[idx]).ok()?;
+            parser.set_language(&language).ok()?;
             let tree = parser.parse(&src, None)?;
             if !tree.root_node().has_error() {
                 return None;

@@ -13,7 +13,12 @@ pub struct Zig;
 const CURRENT: &str = "zig";
 const LEGACY: &str = "zig-0.11";
 
-fn judge(program: &str, hint: &str, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
+fn judge(
+    program: &str,
+    hint: &str,
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<HashMap<String, bool>> {
     stdin_oracle::run(
         "bash",
         &[
