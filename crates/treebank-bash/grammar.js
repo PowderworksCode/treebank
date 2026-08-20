@@ -474,6 +474,9 @@ module.exports = grammar({
         // expands `{a,b}` and `{1..5}` but passes `{x}` through -- so it
         // is word content, which is also what `\${GIT_COMMIT}` needs.
         /\{[^{}\s,.]*\}/,
+        // extglob patterns are one chunk: `@(dir|all)`, `?(a|b)` -- the
+        // pipes and parens inside are pattern syntax, not shell operators.
+        /[?*+@!]\([^()\s]*\)/,
       ),
       repeat(choice(
         // `!` continues a word -- `-x!y` is one argument -- though it
@@ -484,6 +487,7 @@ module.exports = grammar({
         /\[/,
         /\]/,
         /\{[^{}\s,.]*\}/,
+        /[?*+@!]\([^()\s]*\)/,
       )),
     ))),
 
