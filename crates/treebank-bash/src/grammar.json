@@ -857,6 +857,13 @@
             "name": "_terminator"
           },
           {
+            "type": "REPEAT",
+            "content": {
+              "type": "STRING",
+              "value": "\n"
+            }
+          },
+          {
             "type": "FIELD",
             "name": "body",
             "content": {
@@ -1462,6 +1469,10 @@
                 {
                   "type": "SYMBOL",
                   "name": "_word_like"
+                },
+                {
+                  "type": "SYMBOL",
+                  "name": "redirect"
                 }
               ]
             }
@@ -2252,6 +2263,15 @@
                     "value": "[^\"$`\\\\]+"
                   }
                 }
+              },
+              {
+                "type": "ALIAS",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "_dollar_literal"
+                },
+                "named": false,
+                "value": "$"
               }
             ]
           }
@@ -2609,6 +2629,18 @@
           {
             "type": "STRING",
             "value": "*"
+          },
+          {
+            "type": "STRING",
+            "value": ";"
+          },
+          {
+            "type": "STRING",
+            "value": "("
+          },
+          {
+            "type": "STRING",
+            "value": ")"
           }
         ]
       }
@@ -2684,27 +2716,57 @@
       ]
     },
     "arithmetic_expansion": {
-      "type": "SEQ",
+      "type": "CHOICE",
       "members": [
         {
-          "type": "STRING",
-          "value": "$(("
-        },
-        {
-          "type": "CHOICE",
+          "type": "SEQ",
           "members": [
             {
-              "type": "SYMBOL",
-              "name": "_arithmetic"
+              "type": "STRING",
+              "value": "$(("
             },
             {
-              "type": "BLANK"
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_arithmetic"
+                },
+                {
+                  "type": "BLANK"
+                }
+              ]
+            },
+            {
+              "type": "STRING",
+              "value": "))"
             }
           ]
         },
         {
-          "type": "STRING",
-          "value": "))"
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "STRING",
+              "value": "$["
+            },
+            {
+              "type": "CHOICE",
+              "members": [
+                {
+                  "type": "SYMBOL",
+                  "name": "_arithmetic"
+                },
+                {
+                  "type": "BLANK"
+                }
+              ]
+            },
+            {
+              "type": "STRING",
+              "value": "]"
+            }
+          ]
         }
       ]
     },
@@ -2837,6 +2899,10 @@
     {
       "type": "SYMBOL",
       "name": "_backtick_close"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "_dollar_literal"
     },
     {
       "type": "SYMBOL",

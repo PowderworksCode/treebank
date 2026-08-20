@@ -27,6 +27,7 @@ enum TokenType {
   FILE_DESCRIPTOR,
   BACKTICK_OPEN,
   BACKTICK_CLOSE,
+  DOLLAR_LITERAL,
   ERROR_SENTINEL,
 };
 
@@ -245,6 +246,24 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   // gone -- the same shape as ASSIGNMENT_NAME below, resolved the same
   // way: look past the digits, emit only when the operator is really
   // there.
+  // A `$` that no expansion can follow is literal string content:
+  // `"$"`, `"v$/x"`. One character of lookahead settles it -- everything
+  // that CAN start an expansion after `$` is listed, and anything else
+  // (a quote, a slash, a space) means the dollar is just a dollar.
+  if (valid[DOLLAR_LITERAL] && lexer->lookahead == '$') {
+    advance(lexer);
+    lexer->mark_end(lexer);
+    int32_t c = lexer->lookahead;
+    bool expandable = iswalnum(c) || c == '_' || c == '{' || c == '(' ||
+                      c == '!' || c == '#' || c == '?' || c == '@' ||
+                      c == '*' || c == '-' || c == '$' || c == '\'';
+    if (!expandable) {
+      lexer->result_symbol = DOLLAR_LITERAL;
+      return true;
+    }
+    return false;
+  }
+
   // Backticks close on the FIRST unescaped backtick -- bash's own rule,
   // and the reason the old-style substitution cannot nest. A parity bit is
   // all it takes, and it is lexer state, which is exactly what the grammar

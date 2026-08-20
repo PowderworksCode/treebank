@@ -662,6 +662,10 @@
           "named": true
         },
         {
+          "type": "redirect",
+          "named": true
+        },
+        {
           "type": "variable_assignment",
           "named": true
         },
@@ -1512,6 +1516,10 @@
   },
   {
     "type": "$((",
+    "named": false
+  },
+  {
+    "type": "$[",
     "named": false
   },
   {

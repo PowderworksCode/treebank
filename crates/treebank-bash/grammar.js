@@ -41,6 +41,7 @@ module.exports = grammar({
     $._file_descriptor,
     $._backtick_open,
     $._backtick_close,
+    $._dollar_literal,
     $._error_sentinel,
   ],
 
@@ -219,7 +220,10 @@ module.exports = grammar({
       choice('for', 'select'),
       field('variable', alias($.word, $.variable_name)),
       optional(seq('in', field('value', repeat1($._word_like)))),
+      // `for x in $(...);\n do` -- a `;` terminator may still be followed
+      // by newlines before the body opens.
       $._terminator,
+      repeat('\n'),
       field('body', $._body),
       repeat($.redirect),
     )),
@@ -297,7 +301,9 @@ module.exports = grammar({
     // words, which no ordinary command does.
     declaration_command: $ => prec.left(seq(
       choice('declare', 'typeset', 'export', 'readonly', 'local'),
-      repeat(choice($.variable_assignment, $._word_like)),
+      // Redirects too: `declare -p X &> /dev/null` is how scripts probe
+      // for a variable's existence.
+      repeat(choice($.variable_assignment, $._word_like, $.redirect)),
     )),
 
     // Newlines inside the parentheses: an array written one element per
@@ -437,6 +443,13 @@ module.exports = grammar({
         $._expansion_like,
         $.escape_sequence,
         token.immediate(prec(1, /[^"$`\\]+/)),
+        // A `$` followed by anything that cannot start an expansion is a
+        // literal dollar sign: `"$"`, `"v$/x"`. One character of lookahead
+        // decides it, which is scanner work -- as a grammar token the
+        // lexer had to guess between this and the expansion opener before
+        // seeing what followed, and guessed one way or the other for the
+        // whole corpus.
+        alias($._dollar_literal, '$'),
       )),
       '"',
     ),
@@ -515,7 +528,10 @@ module.exports = grammar({
 
     _expansion_tail: $ => repeat1(choice(
       $._word_like,
-      ':', '-', '=', '?', '+', '#', '%', '/', '^', ',', '@', '*',
+      // `;` and `(`/`)` are ordinary characters inside `${...}` -- the
+      // braces delimit the expansion, so `${tags:-2fa;auth}` and
+      // `${1:- (%s)}` never end at the semicolon or open a subshell.
+      ':', '-', '=', '?', '+', '#', '%', '/', '^', ',', '@', '*', ';', '(', ')',
     )),
 
     // The backtick form's delimiters are EXTERNAL: the first unescaped
@@ -535,7 +551,11 @@ module.exports = grammar({
       ),
     ),
 
-    arithmetic_expansion: $ => seq('$((', optional($._arithmetic), '))'),
+    arithmetic_expansion: $ => choice(
+      seq('$((', optional($._arithmetic), '))'),
+      // The deprecated `$[ ... ]` spelling, alive in old corpora.
+      seq('$[', optional($._arithmetic), ']'),
+    ),
 
     process_substitution: $ => seq(choice('<(', '>('), $._statements, ')'),
 
