@@ -106,7 +106,15 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
-    [$.unexpanded_macro, $._sizeable_type],
+    [$.pointer_declarator, $.abstract_pointer_declarator],
+    [$._declaration_specifiers, $.parenthesized_declarator],
+    [$.macro_modifier, $._declarator],
+    [$.macro_modifier, $._type, $._declarator],
+    [$.macro_modifier, $._sizeable_type],
+    [$.macro_modifier, $._type],
+    [$.unexpanded_macro, $.macro_modifier, $._sizeable_type],
+    [$.unexpanded_macro, $.macro_modifier],
+    [$.unexpanded_macro, $.macro_modifier, $._type],
     [$.macro_type_specifier, $._type_argument],
     [$.unexpanded_macro, $._type, $.macro_type_specifier],
     [$.unexpanded_macro, $._type],
@@ -134,6 +142,13 @@ module.exports = grammar({
     [$.sized_type_specifier],
     [$._type, $._expression, $.macro_type_specifier],
     [$._type, $.macro_type_specifier],
+    // `int f(a, b) T a; { … }` against `int f(void) __THROW;`: after the
+    // parameter list an identifier is either the first K&R parameter
+    // declaration or a macro sitting on the declarator, and nothing before
+    // it has decided which. A declared conflict rather than a precedence
+    // because both readings are real and only what follows picks one; the
+    // negative dynamic precedence on `macro_attribute` gives K&R the tie.
+    [$._declarator, $.macro_attributed_declarator],
   ],
 
   inline: $ => [
@@ -278,8 +293,21 @@ module.exports = grammar({
       $.preproc_has_include,
       alias($.preproc_unary_expression, $.unary_expression),
       alias($.preproc_binary_expression, $.binary_expression),
+      alias($.preproc_conditional_expression, $.conditional_expression),
       alias($.preproc_parenthesized_expression, $.parenthesized_expression),
     ),
+
+    // `#if defined __cplusplus ? __GNUC_PREREQ (2, 6) : __GNUC_PREREQ (2, 4)`
+    // — glibc's `sys/cdefs.h` asks a different question of the compiler
+    // depending on the language, and the preprocessor's grammar has `?:`
+    // exactly as C's does.
+    preproc_conditional_expression: $ => prec.right(PREC.CONDITIONAL, seq(
+      field('condition', $._preproc_expression),
+      '?',
+      field('consequence', $._preproc_expression),
+      ':',
+      field('alternative', $._preproc_expression),
+    )),
 
     preproc_parenthesized_expression: $ => seq('(', $._preproc_expression, ')'),
 
@@ -368,10 +396,27 @@ module.exports = grammar({
       field('value', choice($.initializer_list, $._expression)),
     ),
 
+    // The macro between the specifiers and the name is the alignment and
+    // deprecation marker a typedef carries: `typedef int __ONCE_ALIGNMENT
+    // pthread_once_t;`, `typedef struct { … } __ATM_API_ALIGN atm_kptr_t;`,
+    // `} __ARCH_SI_ATTRIBUTES siginfo_t;`. It is admitted here and not in
+    // `_declaration_specifiers` because that repetition is shared with
+    // `declaration`, where a macro after the type is precisely the rule that
+    // makes `int x y;` parse. `typedef` has already committed the parser,
+    // so nothing else can be reached through it.
+    //
+    // Which of two adjacent identifiers is the macro is not decidable
+    // here, and the ledger says so: glib writes the marker AFTER the name
+    // (`typedef struct _GTrashStack GTrashStack GLIB_DEPRECATED_TYPE_IN_2_48;`)
+    // and the file parses, with the `declarator` field naming the macro and
+    // the macro naming the type. One of the two spellings has to lose, and
+    // the one that keeps its tree is the one whose macro is a type
+    // attribute rather than a deprecation notice.
     type_definition: $ => seq(
       optional($.extension_specifier),
       'typedef',
       $._declaration_specifiers,
+      repeat($.macro_modifier),
       commaSep1(field('declarator', $._declarator)),
       ';',
     ),
@@ -393,10 +438,41 @@ module.exports = grammar({
     // is the correct rule and not a shortcut — which is why `_modifier`
     // stays in the TABLE tier here where rust had to demote it.
     _declaration_specifiers: $ => seq(
-      repeat($._declaration_modifiers),
+      repeat(choice($._declaration_modifiers, $.macro_modifier)),
       field('type', $._type),
       repeat($._declaration_modifiers),
     ),
+
+    // `ZEND_API ZEND_ATTRIBUTE_MALLOC char *ZEND_FASTCALL zend_strndup (…)`,
+    // `static zend_always_inline zend_result f (…)`,
+    // `OSSL_DEPRECATEDIN_3_0 int ERR_load_ASN1_strings (void);` — a macro
+    // standing in the specifier soup beside the real type, which will expand
+    // to a storage class, a visibility attribute, a calling convention, or to
+    // nothing at all.
+    //
+    // BEFORE THE TYPE ONLY, and that restriction is the whole safety
+    // argument. `int x y;` cannot reach this rule: `int` is the type, and a
+    // macro after the type is not admitted. What it does admit is
+    // `foo bar baz;` — three identifiers, where the first is read as a macro,
+    // the second as the type and the third as the name. The ledger declares
+    // that.
+    //
+    // No argument list, unlike `macro_attribute` after the declarator. That
+    // is not a claim that such macros never take arguments; it is that at
+    // `identifier •  (` three rules already compete — `macro_type_specifier`,
+    // `unexpanded_macro` and a call — and a fourth reading of the hottest
+    // state in the grammar costs more than the handful of files it buys.
+    // Dynamic precedence BELOW `unexpanded_macro`, not merely below a real
+    // declaration. At file scope `__BEGIN_DECLS int f(void);` can be read
+    // either way — a macro standing alone, or a modifier on the declaration
+    // that follows — and both readings parse the whole file, so the tie is
+    // decided here rather than by chance. It goes to the standalone reading,
+    // which is the one the corpus test asserts and the one `__BEGIN_DECLS`
+    // actually is. Where a declaration has already started, `static
+    // zend_always_inline zend_result f(…)`, the standalone reading is not
+    // available and this is the only one left, which is where the rule earns
+    // its keep.
+    macro_modifier: $ => prec.dynamic(-2, field('name', $.identifier)),
 
     _declaration_modifiers: $ => choice(
       $._modifier,
@@ -560,10 +636,19 @@ module.exports = grammar({
     // A macro used where a type goes: `GLIBC_TYPE(int) x;`. Not a type
     // constructor of the language, but the only reading available without
     // the macro's definition.
+    //
+    // The arguments after the first are the kernel UAPI headers':
+    // `__DECLARE_FLEX_ARRAY(struct in6_addr, addr);` is a whole member
+    // written as one macro call, and the tokens the parser is handed are a
+    // type and a name. The first argument stays a `type_descriptor` and
+    // keeps the `type` field, because that is what makes this a type
+    // specifier at all; the rest are ordinary `_argument`s, which already
+    // admit a type or an expression.
     macro_type_specifier: $ => prec.dynamic(-1, seq(
       field('name', $.identifier),
       '(',
       field('type', $.type_descriptor),
+      repeat(seq(',', $._argument)),
       ')',
     )),
 
@@ -712,16 +797,23 @@ module.exports = grammar({
       alias($.preproc_ifdef_in_enumerator_list_no_comma, $.preproc_ifdef),
     ),
 
-    enumerator: $ => seq(
+    // The macro after the name is glib's availability marker —
+    // `G_URI_FLAGS_SCHEME_NORMALIZE GLIB_AVAILABLE_ENUMERATOR_IN_2_68 = 1 << 8,`
+    // — which expands to an attribute or to nothing. It sits exactly where
+    // `__attribute__((deprecated))` sits on the line above it.
+    // Right-associative because the run of markers is greedy: at a second
+    // identifier the enumerator takes it rather than ending.
+    enumerator: $ => prec.right(seq(
       field('name', $.identifier),
-      repeat($._attribute),
+      repeat(choice($._attribute, $.macro_modifier)),
       optional(seq('=', field('value', $._expression))),
-    ),
+    )),
 
     // ── declarators ──────────────────────────────────────────────────
     // The concrete hierarchy: it bottoms out in a name.
     _declarator: $ => choice(
       $.attributed_declarator,
+      $.macro_attributed_declarator,
       $.pointer_declarator,
       $.function_declarator,
       $.array_declarator,
@@ -741,9 +833,19 @@ module.exports = grammar({
     // Negative precedence: `T (x)` is a call of `T` far more often than it
     // is a parenthesised declarator of `x`, and only a context that has
     // already committed to a declaration should read it the other way.
+    // The leading macro is the calling convention in front of the star, the
+    // spelling every Windows-facing header uses and ncurses with it:
+    // `void (NCURSES_API *_nc_check_termtype)(TERMTYPE *)`,
+    // `BOOL (WINAPI *PGetFileInformationByName)(…)`.
     parenthesized_declarator: $ => prec.dynamic(PREC.PAREN_DECLARATOR, seq(
       '(',
-      $._declarator,
+      choice(
+        $._declarator,
+        // The macro must be followed by the star, which is what keeps this
+        // out of `(f(x))`: at the open paren the macro reading is only alive
+        // while a pointer declarator can still follow it.
+        seq(repeat1($.macro_modifier), $.pointer_declarator),
+      ),
       ')',
     )),
 
@@ -755,9 +857,15 @@ module.exports = grammar({
 
     // The attribute after the `*` is GCC's: `int * __attribute__((nonnull))
     // f;` puts it on the pointer, not on the declaration.
+    // The macro alongside the qualifiers is the calling convention and the
+    // pointer-attribute macro: `zend_ast * ZEND_FASTCALL f (…)`,
+    // `png_struct * PNG_RESTRICT png_structrp`. It sits exactly where
+    // `const` and `__restrict` sit, expands to one of them or to an
+    // attribute, and is admitted here only — after a `*` that has already
+    // committed the parser to a declarator.
     pointer_declarator: $ => prec.dynamic(1, prec.right(seq(
       '*',
-      repeat($._type_qualifier_or_attribute),
+      repeat(choice($._type_qualifier_or_attribute, $.macro_modifier)),
       field('declarator', $._declarator),
     ))),
 
@@ -804,6 +912,53 @@ module.exports = grammar({
       repeat1(choice($._attribute, $.asm_label)),
     )),
 
+    // `extern void aio_init (const struct aioinit *__init) __THROW __nonnull ((1));`
+    // — the macro after the declarator, which is the single largest thing a
+    // grammar meets in unpreprocessed C. `__THROW` sits on very nearly every
+    // function glibc declares; `__ul_attribute__((warn_unused_result))`,
+    // `_X_NONSTRING` and `__attribute_nonstring__` do the same in util-linux,
+    // X11 and the kernel UAPI headers. Every one of them expands to an
+    // attribute or to nothing, and none of them is in the file being parsed.
+    //
+    // The ledger used to reject this rule, and the reason it gave was right
+    // about the rule it was rejecting: a bare identifier after ANY declarator
+    // makes `int x y;` parse. This one is not that. The declarator it may
+    // follow has to END IN `)` OR `]` — a function or array declarator — so
+    // a name followed by a name is still not a declaration,
+    // and `two-expressions-juxtaposed.c` still fails. A pointer reaches it
+    // through nesting, the way an attribute does: `*alloca (size_t) __THROW`
+    // is a pointer around this, not this around a pointer.
+    //
+    // What it does admit that C does not is `int f(void) g;` and
+    // `int a[3] g;`, and the ledger declares them. That is the whole cost,
+    // and it is the same shape and the same size as the over-acceptance
+    // `unexpanded_macro` already carries at file scope.
+    macro_attributed_declarator: $ => prec.right(seq(
+      field('declarator', choice(
+        $.function_declarator,
+        $.array_declarator,
+      )),
+      repeat1(field('attribute', $.macro_attribute)),
+    )),
+
+    // The macro itself, with the arguments it may carry: `__nonnull ((1))`
+    // and `__ul_attribute__((warn_unused_result))` are one identifier and one
+    // argument list, where the doubled parentheses are the outer list holding
+    // a parenthesised expression.
+    //
+    // A node of its own rather than an `_attribute`, for the reason
+    // `asm_label` gives below: `_attribute` is admitted at the start of a
+    // statement, and a bare identifier there would give every expression
+    // statement a second reading. The negative dynamic precedence keeps it
+    // last wherever something real also fits.
+    // Right-associative because the argument list is greedy: at
+    // `__nonnull (` the parenthesis belongs to the macro rather than
+    // starting the next thing.
+    macro_attribute: $ => prec.dynamic(-1, prec.right(seq(
+      field('name', $.identifier),
+      optional(field('arguments', $.argument_list)),
+    ))),
+
     // `extern int errno __asm__("__errno_location");` — GCC's assembler
     // name, which glibc puts on a great many declarations. Admitted only
     // here, after a declarator, and not through `_attribute`: an
@@ -818,9 +973,26 @@ module.exports = grammar({
     ),
 
     // ── parameters ───────────────────────────────────────────────────
+    // The nested parameter list is glibc's `__REDIRECT` family and
+    // openssl's `OSSL_CORE_MAKE_FUNC`:
+    //
+    //   extern int __REDIRECT_NTH (aio_read, (struct aiocb *__aiocbp), aio_read64);
+    //
+    // A macro that takes a name, a parameter list and an alias, and expands
+    // to a declaration with an `__asm__` label on it. Nothing here says that
+    // is what it means — what the parser is handed is a declarator followed
+    // by a parenthesised list whose middle element is itself a parenthesised
+    // list of parameters, and reading it as one is the only reading there
+    // is. This is the same concession `macro_type_specifier` and
+    // `unexpanded_macro` make, in the one position left that needed it.
+    //
+    // The cost is `int f(int a, (int b));`, which clang rejects. It is
+    // narrow because a parameter declaration cannot start with `(` — the
+    // nested list is the only reading of that token, so nothing that parsed
+    // before parses differently now.
     parameter_list: $ => seq(
       '(',
-      commaSep(choice($.parameter_declaration, $.variadic_parameter)),
+      commaSep(choice($.parameter_declaration, $.variadic_parameter, $.parameter_list)),
       ')',
     ),
 
