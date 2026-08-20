@@ -3,8 +3,9 @@
 Tree-sitter grammars written from scratch and owned outright, carrying a
 shared node vocabulary that is enforced in the parse table itself — so
 queries like `(_declaration)`, `(_loop)` and `(_callable)` mean the same
-thing across languages. Initial languages: **Python, Rust, TypeScript**
-(the TypeScript grammar also parses JavaScript).
+thing across languages. Languages: **Python, Rust, TypeScript** (the
+TypeScript grammar also parses JavaScript), **Java, Ruby, Bash** and
+**Zig**.
 
 **[`DESIGN.md`](DESIGN.md) is the authoritative document** — the vocabulary,
 its two tiers and the measurements that forced them, the version-union
@@ -19,6 +20,7 @@ grammar policy, the testing invariants, and the crate layout. Start there.
 | `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
 | `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |
 | `crates/treebank-java` | Java 8 through 21 in one grammar |
+| `crates/treebank-ruby` | Ruby 3.x in one grammar |
 | `crates/treebank-bash` | GNU bash 5.x in one grammar |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-core` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |

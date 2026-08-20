@@ -86,6 +86,7 @@ languages! {
     Javascript => "javascript", exts: ["js", "jsx", "mjs", "cjs"], grammar: Typescript;
     Java => "java", exts: ["java"], grammar: Java;
     Bash => "bash", exts: ["sh", "bash"], grammar: Bash;
+    Ruby => "ruby", exts: ["rb"], grammar: Ruby;
     Zig => "zig", exts: ["zig", "zon"], grammar: Zig;
 }
 

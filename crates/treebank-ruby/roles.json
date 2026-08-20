@@ -1,0 +1,135 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_binding": [
+      "as_pattern",
+      "assignment",
+      "block_parameter",
+      "class_definition",
+      "double_star_parameter",
+      "for_statement",
+      "function_definition",
+      "keyword_parameter",
+      "lambda",
+      "match_pattern",
+      "module_definition",
+      "parameter",
+      "pattern_list",
+      "rescue_clause",
+      "star_parameter",
+      "star_pattern",
+      "tuple_parameter",
+      "tuple_pattern"
+    ],
+    "_callable": [
+      "brace_block",
+      "do_block",
+      "function_definition",
+      "lambda"
+    ],
+    "_clause": [
+      "else_clause",
+      "elsif_clause",
+      "ensure_clause",
+      "in_clause",
+      "rescue_clause",
+      "when_clause"
+    ],
+    "_comment": [
+      "block_comment",
+      "comment"
+    ],
+    "_identifier": [
+      "class_variable",
+      "constant",
+      "global_variable",
+      "identifier",
+      "instance_variable",
+      "scope_resolution",
+      "self",
+      "setter_method_name"
+    ],
+    "_scope": [
+      "brace_block",
+      "class_definition",
+      "do_block",
+      "function_definition",
+      "lambda",
+      "module_definition",
+      "program",
+      "singleton_class"
+    ],
+    "_string": [
+      "concatenated_string",
+      "heredoc_beginning",
+      "heredoc_body",
+      "string"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "argument_list",
+      "reason": "the argument-list container; its elements carry _argument"
+    },
+    {
+      "node": "array_pattern",
+      "reason": "a case/in array shape; deliberately NOT under _pattern because ruby's destructuring targets and its match shapes admit different member sets, the same measured reason python's roles.json records"
+    },
+    {
+      "node": "block_parameters",
+      "reason": "the |…| parameter-list container of a block; its elements carry _parameter"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "hash_key_symbol",
+      "reason": "the `key:` label of a pair or keyword parameter"
+    },
+    {
+      "node": "hash_pattern",
+      "reason": "a case/in hash shape; outside _pattern for array_pattern's reason"
+    },
+    {
+      "node": "heredoc_content",
+      "reason": "lexical component of a heredoc body, below the role layer"
+    },
+    {
+      "node": "heredoc_end",
+      "reason": "the line that closes a heredoc"
+    },
+    {
+      "node": "operator",
+      "reason": "an operator spelling used as a method name (`def +`, `alias << push`)"
+    },
+    {
+      "node": "or_pattern",
+      "reason": "top-of-pattern alternation in a case/in; deliberately NOT under _pattern because ruby allows `|` only at the top level of a pattern, the same argument python and rust record"
+    },
+    {
+      "node": "parameters",
+      "reason": "the parameter-list container; its elements carry _parameter"
+    },
+    {
+      "node": "pin_pattern",
+      "reason": "`^expr` in a case/in pattern: a value read, not a binding"
+    },
+    {
+      "node": "string_content",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "string_end",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "string_start",
+      "reason": "lexical component of a string literal, below the role layer"
+    },
+    {
+      "node": "uninterpreted",
+      "reason": "the __END__ data section: bytes the language itself does not parse"
+    }
+  ]
+}

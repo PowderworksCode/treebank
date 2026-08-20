@@ -1,0 +1,45 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'ruby'
+versions = '''
+Ruby 3.x, plus the older spellings that cost nothing to keep (hash rockets, `for` loops, `=begin` comments, BEGIN/END blocks). The 3.x additions are in: endless methods and one-line pattern matching (3.0), hash shorthand `{x:}` and anonymous block/splat forwarding (3.1/3.2), case/in patterns with find/alternative/pin forms. `it` as an implicit block parameter (3.4) is not special-cased — it parses as the ordinary identifier it also is.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+18 of 22 table-tier terms are threaded. `_type` is omitted because ruby has no type syntax; `_modifier` and `_attribute` because ruby has neither keyword modifiers nor annotations — visibility (`private`) and macros (`attr_reader`) are ordinary method calls and parse as the calls they are. `_control_flow` is omitted for python's reason with ruby's evidence: branches and loops are values here (`x = if c then 1 end`), but jumps are not (`x = break` is "void value expression", a SyntaxError from CRuby's parser), so an umbrella containing `_jump` would either accept those or violate the vocabulary's containment rule. `_branch`, `_loop` and `_jump` thread individually.
+
+Statement modifiers (`x if y`, `retry while flaky`) are NOT under `_branch`/`_loop`, and the reason is the same one python's roles.json records for its match shapes: a supertype's members enter every position that references it, `_branch` is reachable from argument position (`x = if c then a end` is legal), and a modifier there — `foo(1 if c)` — is a SyntaxError. The modifier nodes are their own statement-tier types instead.'''
+
+[corpus]
+source = 'top-120 RubyGems by downloads (fetched 2026-08-20), ruby-platform releases; plus the CRuby 3.3.6 standard library as a second, harder population'
+files = 6485
+packages = 120
+ranking_note = '''
+RubyGems publishes real per-gem download counts but no top-N endpoint; ecosyste.ms indexes the registry and sorts by them, the same traffic metric crates.io and npm rank by. The `.gem` format needs the nested-archive hooks: a gem is a plain tar whose source lives entirely inside its `data.tar.gz` member, and neither layer has a wrapper directory to strip. Platform gems (precompiled extensions) are refused in favour of the `ruby`-platform release, for the reason python refuses wheels. One acquisition deviation is on record: this corpus was downloaded by a curl-driven script applying treebank-corpus's ruby rules verbatim (ranking source, platform rule, nesting, the classify lists, vendor/ exclusion), because the treebank binary's TLS stack does not trust the sandbox's egress proxy; the sweep itself ran through `treebank sweep` against the manifest unchanged.'''
+
+[corpus.sweep]
+files = 6485
+passed = 6345
+failed = 140
+gap_files = 140
+noise_files = 0
+pass_rate = '97.8%'
+note = '''
+FIRST PASS. Zero noise: all 140 failures are files CRuby accepts, adjudicated per file by the oracle — real gaps, honestly counted. The same grammar over the interpreter's own standard library (1,650 files, a deliberately hostile population: stdlib exercises corners gems avoid) passes 97.0%. Nine fixes during bring-up moved stdlib from 67.2% to 97.0%; the largest single one (141 files) was a statement-sequence shape that committed the parser to a statement after a run of blank lines that never came. The rest, each ledgered when found: `Const::method` calls starved by a static precedence, keyword-plus-`?` method names (`x.nil?`), `=begin` comments, block-parameter defaults (which take a primary, not an arg — parse.y's own distinction), `do` binding to a loop iterable's trailing call rather than the loop, stray `end` lexing as an identifier (fixed with tree-sitter's reserved-word sets — the fix python's ledger wished for), and `=>` pairs in command arguments being read as one-line pattern matches.
+
+The dominant remaining cluster (module-wrapped multi-method files, 39 of the 140) is measured and named: GLR version-count pressure. tree-sitter caps concurrent parse versions; this grammar's declared conflicts can hold 8–11 alive in dense code (measured with --debug on minimized failures), and beyond the cap the right fork can be culled on a tie. The failures are therefore non-compositional — every minimized reproduction parses cleanly the moment any line is removed, and the same constructs pass in isolation. The fix direction is structural: fewer ambient conflicts, plus dynamic-precedence weights so ties never reach the arbitrary cull — the do_block and match_pattern weights already applied are the pattern, each of which recovered a cluster.'''
+
+[[oracles]]
+family = 'ruby'
+tool = 'RubyVM::AbstractSyntaxTree.parse_file, via tools/rb-oracle/check.rb'
+version = 'CRuby 3.3.6'
+role = '''
+primary and only. It runs the same parser `ruby` runs and stops at the AST: no require, no execution, no constant resolution, so a missing gem is not an error and a file is judged entirely on its own text. The interpreter's version decides what counts as valid Ruby and is a real knob — `it` blocks are 3.4+, `{x:}` shorthand is 3.1+, endless methods 3.0+ — so a file needing newer syntax than the oracle's interpreter is recorded as noise, an answer about the toolchain rather than the grammar. Verified rather than assumed: `File.write(...); raise "ran"` parses valid and writes nothing, and neither `BEGIN {}` nor `at_exit {}` fires.'''
+
+[deviations]
+extras_heredoc = '''
+`heredoc_body` sits in `extras`, an exception to DESIGN.md §4.1's comments-and-whitespace rule, declared here: a heredoc's body physically lies between the newline that ends its operator's line and the next line — between tokens of unrelated constructs — and an extra is the only placement the parse table offers for that. The scanner only produces one while a heredoc operator is actually pending.'''
+known_gaps = '''
+Constructs known missing or approximated, each ledgered when found on the corpus: bare lowercase heredocs (`<<eos`) read as shifts, since the lexical state ruby uses to know better is not visible (uppercase, quoted, `<<~` and `<<-` forms all work); `#@ivar` short interpolation reads as content; `?a` character literals adjacent to ternaries (`a ?b : c`) mis-lex; `%=…=` percent literals are refused so `a %= b` stays an operator; `expr::CONST` takes a constant/self scope only, so a fully computed receiver (`foo()::C`) is a gap; regex character classes containing an unescaped `/` (`/[/]/`) close early; `def f (a)` with a space reads the parens as a destructuring parameter (CRuby itself warns on the form); operator-suffixed constants as method names (`def PermaLink?`) and bare keyword-plus-suffix calls (`module?` with no receiver) are gaps; `a!=b` written without spaces lexes as `a != b` correctly, but `:sym=~x` families rely on one-character lookahead in the scanner. The parameter list accepts orderings CRuby rejects (`def f(&b, a)`) — the ordering chain python's parameterRules spells out is the known fix, and until then `_parameter` stays honestly in the table tier.'''

@@ -1,0 +1,140 @@
+================================================================================
+strings and interpolation
+================================================================================
+
+plain = 'it\'s raw'
+double = "a\n#{x + 1} tail"
+sym = :"quoted #{n}"
+words = %w[one two]
+symbols = %i[a b]
+q = %q(no interp)
+big = %Q{with #{interp}}
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (string_content)
+      (string_end)))
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (string_content)
+      (escape_sequence)
+      (interpolation
+        (binary_expression
+          (identifier)
+          (integer)))
+      (string_content)
+      (string_end)))
+  (assignment
+    (identifier)
+    (quoted_symbol
+      (string_start)
+      (string_content)
+      (interpolation
+        (identifier))
+      (string_end)))
+  (assignment
+    (identifier)
+    (string_array
+      (string_start)
+      (string_content)
+      (string_content)
+      (string_end)))
+  (assignment
+    (identifier)
+    (symbol_array
+      (string_start)
+      (string_content)
+      (string_content)
+      (string_end)))
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (string_content)
+      (string_end)))
+  (assignment
+    (identifier)
+    (string
+      (string_start)
+      (string_content)
+      (interpolation
+        (identifier))
+      (string_end))))
+
+================================================================================
+heredocs
+================================================================================
+
+body = <<~SQL
+  SELECT *
+  FROM #{table}
+SQL
+
+raw = <<-'EOS'
+  no #{interp}
+  EOS
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (heredoc_beginning))
+  (heredoc_body
+    (heredoc_content)
+    (interpolation
+      (identifier))
+    (heredoc_content)
+    (heredoc_end))
+  (assignment
+    (identifier)
+    (heredoc_beginning))
+  (heredoc_body
+    (heredoc_content)
+    (heredoc_end)))
+
+================================================================================
+regex and subshell
+================================================================================
+
+m = text =~ /pat#{q}tern/i
+files = `ls #{dir}`
+r = %r{^/users/(\d+)$}x
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (binary_expression
+      (identifier)
+      (regex
+        (string_start)
+        (string_content)
+        (interpolation
+          (identifier))
+        (string_content)
+        (string_end))))
+  (assignment
+    (identifier)
+    (subshell
+      (string_start)
+      (string_content)
+      (interpolation
+        (identifier))
+      (string_end)))
+  (assignment
+    (identifier)
+    (regex
+      (string_start)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (string_end))))

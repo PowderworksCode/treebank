@@ -1207,6 +1207,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "treebank-ruby"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "treebank-rust"
 version = "0.1.0"
 dependencies = [

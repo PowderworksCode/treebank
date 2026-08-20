@@ -96,6 +96,21 @@ pub(crate) fn get(name: LangName) -> Capabilities {
             unparse: None,
         },
 
+        LangName::Ruby => Capabilities {
+            // CRuby can give one: RubyVM::AbstractSyntaxTree nodes carry
+            // first/last line and column, so a span oracle is reachable
+            // the same way python's was. Not built yet, and saying so
+            // beats a `shape` run that silently compares against nothing.
+            spans: None,
+            // rubocop and standardrb are gems, not part of the
+            // interpreter, and neither is installed. Stated rather than
+            // faked.
+            reformat: None,
+            // CRuby ships no unparser: RubyVM::AbstractSyntaxTree has no
+            // printer, and prism's is not in the 3.3 stdlib.
+            unparse: None,
+        },
+
         LangName::Zig => Capabilities {
             // `zig fmt` reports a verdict and a diagnostic, not a tree.
             // The compiler can dump one (`std.zig.Ast`, from a small
