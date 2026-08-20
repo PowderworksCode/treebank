@@ -13,13 +13,20 @@
 const { commaSep1 } = require('./helpers.js');
 
 module.exports = {
-  print_statement: $ => seq(
+  // Reachable only from a subscript -- see python2/grammar.js.
+  ellipsis: _ => '...',
+
+  // prec.dynamic(1): see python2/grammar.js's note on softKeywords. When
+  // `print(x)` parses BOTH as this statement and as a call, the statement
+  // wins, because that is what the text means in a file with no
+  // `from __future__ import print_function`.
+  print_statement: $ => prec.dynamic(1, seq(
     'print',
     optional(choice(
       seq('>>', $._expression, optional(seq(',', choice($._expression, $._expression_list_tuple)))),
       choice($._expression, $._expression_list_tuple),
     )),
-  ),
+  )),
 
   // The code operand is primary-tier so `exec code in g` needs no reduce
   // before the `in` -- which would otherwise lose to the comparison

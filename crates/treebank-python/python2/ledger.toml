@@ -1,11 +1,6 @@
 # The python2 variant's evidence file. Separate from ../ledger.toml because
 # everything in a ledger is per parse table: corpus, oracle, sweep numbers,
 # known gaps. VARIANTS.md §4.
-#
-# Read this one knowing it is young. The python3 ledger records a
-# 297,612-file corpus, four sweeps, a shape check against CPython's `ast`
-# and a fuzz run. This variant has none of that, and the reason is one
-# thing: it has no oracle.
 
 language = 'python'
 variant = 'python2'
@@ -22,98 +17,203 @@ its own syntax, and a declared corpus blind spot that admitted the py2 half
 of the union was measured by hand-written fixtures.'''
 
 oracle = '''
-NONE. There is no python 2 binary in CI, so nothing here has been
-adjudicated by a reference parser -- the single most important fact about
-this variant, and the reason the widenings below are recorded rather than
-fixed. VARIANTS.md §6.4 sets out what wiring one looks like: CPython 2.7's
-`compile` in a container, pinned like the others, with the existing frozen
-battery demoted from oracle to smoke test.'''
+CPython 2.7's OWN parser, reached from python3 through `typed_ast.ast27` —
+Python/graminit.c and the 2.7 grammar vendored as a C extension — so this
+is not a reimplementation of python 2, it is python 2's parser in a python3
+process. Pinned at typed_ast 1.5.5. tools/py-oracle/check27.py.
 
-corpus = '''
-NONE. VARIANTS.md §6.4 names the source that should exist -- for each
-top-ranked PyPI package, the last release carrying the
-`Programming Language :: Python :: 2` classifier, acquired by the same
-`Ecosystem` machinery as every other corpus. Until that exists this variant
-is measured by its corpus tests, its negative corpus, and the crossvariant
-gate, and by nothing else.'''
+That choice is what made this variant measurable at all. The alternative was
+a container holding an EOL interpreter, pulled per CI job, for a yes/no
+answer; this is a pinned wheel. A real CPython 2.7 stays useful as the
+ADJUDICATOR for anything the oracle and the grammar disagree about, which is
+how rust already uses `syn` in-process and `rustc -Zparse-only` for the
+arguments (DESIGN.md §4.3).
 
-what_is_measured = '''
-`tree-sitter test` 6/6; negative corpus 15/15 rejected; `treebank
-crossvariant` 29 files across both pairs -- 12 py2 forms this table accepts
-and python3 rejects, 17 py3 forms python3 accepts and this table rejects.
-Over the 8,761 local CPython-3.11-valid files, this table rejects 4,895
-(55.9%), which is the blunt evidence that the two tables are two languages.
+Validated before being trusted: 29 of 29 crossvariant fixtures, which are
+the constructs chosen precisely because they discriminate between the two
+languages.
 
-The crossvariant gate was falsified three ways before being trusted: a
-fixture nothing accepts is caught, python2 re-admitting f-strings is
-caught, and python3 re-admitting the py2 print statement is caught.'''
+Two ways its verdicts differ from python3's check.py, both stated because
+they change what the numbers mean:
+
+  1. It PARSES rather than compiles. check.py uses compile() so post-parse
+     SyntaxErrors count as invalid; typed_ast exposes the parser only, so
+     this is the `ast.parse` equivalent and is LAXER. The direction is the
+     safe one: a laxer oracle calls more files valid, so it can over-report
+     gaps and can never hide one. ../ledger.toml records the opposite bias
+     for compile() and calls it out as understating gaps.
+  2. PEP 263 is handled in the harness, not the parser. typed_ast decodes to
+     unicode before parsing and CPython 2 then refuses a source carrying a
+     coding declaration. Unhandled this rejects most of a real py2 corpus and
+     calls it invalid — measured at 77% of files in py2-era sdists before it
+     was found. check27.py neutralises the declaration in the only two lines
+     PEP 263 allows it, preserving byte length so offsets stay valid.'''
+
+[corpus]
+source = '''
+CPython 2.7.18's own source tree (python.org, pinned; 2.7.18 is the final
+python 2 release, so the pin cannot go stale). 2,182 `.py` files: the
+standard library, its test suite, Tools/, Demo/ and setup.py.'''
+files = 2182
+packages = 1
+
+why_not_pypi = '''
+Every other corpus here ranks a registry by downloads and takes the top K,
+because the top of a registry is what that language's code looks like.
+Rewinding PyPI to the python 2 era does not give that, and the measurement
+is not close.
+
+Of the top 40 PyPI packages, 28 have a pre-EOL release declaring python 2
+support and ZERO of those 28 are python-2-ONLY — every one is six-style code
+written in the INTERSECTION of the two languages. Over 1,004 files from ten
+such releases: 96.9% parse under both python 2 and python 3, and 1.99% use
+syntax python 3 rejects. A corpus like that is ~98% blind to the variant it
+is supposed to be measuring.
+
+CPython 2.7.18's tree measures 44.4% python-2-only over 2,182 files — 22x
+the density — and Lib/test/ inside it is adversarial by construction. Same
+reasoning as VARIANTS.md §7.5 reaching for engine regression suites rather
+than application code for SQL.'''
+
+blind_to = '''
+It is ONE codebase, in one house style, written by the people implementing
+the language rather than the people using it. Idioms common in application
+code (heavy metaclass use, Django/Twisted-era conventions, the long tail of
+what people actually wrote) are under-represented, and nothing here measures
+that gap.
+
+The breadth source that would cover it is the PyPI rewind above, at 1.99%
+discriminating density — worth adding for what it says about ordinary code,
+and worth adding with that number attached so nobody mistakes a big file
+count for coverage of python 2 as a LANGUAGE.
+
+Also absent: python 2 code that was never published — most of what still
+runs — and any measurement of tree SHAPE (see shape_check).'''
+
+sweep = '''
+2,182 files, 2,177 passed, 5 failed: 1 grammar gap, 4 corpus noise.
+99.77% of a corpus that is 44% python-2-only syntax.
+
+First contact was 22 gaps in 13 clusters, and the corpus named every one of
+them. What closed them:
+
+  12  `print(x, file=f)` — PEP 3105's `from __future__ import
+      print_function` makes `print` a name again, so `print` became a SOFT
+      keyword here with a positive dynamic precedence on the statement.
+      That is the fork the python3 variant was freed of, put back in the
+      one table where it is cheap: +8 parse states, +3.3% parser.c, and no
+      modern py3 corpus for it to slow down.
+   4  `[join(F, fw) for fw in 'Tcl', 'Tk']` — python 2's comprehension
+      iterable is `testlist_safe`, a bare comma list; python 3 narrowed it
+      to `or_test`. Four gaps, one of them in CPython's own setup.py.
+   3  `except socket.error, (errno, msg):` — the comma form binds a TARGET,
+      not just a name.
+   1  `x[:42, ..., :24:]` — `...` exists in python 2 in exactly one
+      position, inside a subscript. The variant file already said so; the
+      grammar did not do it.
+
+The 4 noise files are CPython's own deliberately-broken fixtures
+(badsyntax_nocaret.py, bad_coding3.py, the py3 half of lib2to3's grammar
+test data, and a py3 f-string in PCbuild/). The oracle calling exactly those
+invalid, and nothing else, is the adjudication checking itself.'''
 
 table = '''
-1,797 parse states (python3: 2,387), 87 large states (176), 256 symbols
-(295), 181 node types (196), 13 declared conflicts (37), parser.c 1.82 MB
-(2.66 MB). `print` and `exec` are hard keywords here, so the statement
-forms need no dynamic precedence and declare no conflicts at all -- in the
-union they carried a negative dynamic precedence and six conflicts each to
-lose a fork at every occurrence.'''
+1,691 parse states (python3: 2,387), 84 large states (176), 255 symbols
+(295), 1 declared conflict (37), parser.c 1.70 MB (2.66 MB). The single
+conflict is `print_statement` against `_soft_keyword` and is the price of
+the PEP 3105 fix above.'''
 
-# Constructs python 2.7 rejects that this table accepts. Every one was found
-# by probing, not by reading: the probe is quoted so it can be re-run.
+what_is_gated = '''
+`tree-sitter test` 10/10; negative corpus 15/15 rejected; `treebank
+crossvariant` 29 files across both pairs. Over the 8,758 local
+CPython-3.11-valid files this table rejects 55.9%, which is the blunt
+evidence that the two tables are two languages.
+
+The crossvariant gate was falsified three ways before being trusted: a
+fixture nothing accepts is caught, python2 re-admitting f-strings is caught,
+and python3 re-admitting the py2 print statement is caught.'''
+
+shape_check = '''
+NOT BUILT, and reachable: typed_ast.ast27 yields lineno and col_offset for
+every node, so this variant can have the same boundary check python 3 has.
+Until it exists, every number above is accept/reject and none of them can
+see the grammar accepting a file and building the wrong tree — the failure
+mode DESIGN.md §5.6 exists for, and the one that found five real bugs in
+TypeScript within a day of looking.'''
+
+# The one construct CPython 2.7's own source rejects that this table also
+# rejects. It is not a loose end: it is the boundary VARIANTS.md §3 draws.
+[[known_gaps]]
+construct = 'a tuple parameter with a default — `def spam(a, (e, (f,))=(4, (5,))):`'
+files = 1
+example = 'Lib/test/inspect_fodder.py:8'
+note = '''
+`tuple_parameter` is in this variant's `plainParameters`, which is the slot
+for a parameter with no default. Putting it in the with-default slot too
+means changing the parameter CHAIN — the "what may still follow" rules in
+helpers.js that encode ordering — and that is rewriting a shared rule's
+internals behind a variant flag, the one thing VARIANTS.md §3 forbids.
+
+So this is the declared boundary showing up in a real corpus rather than in
+an argument, and it is the same boundary as the widenings below: the
+mechanism can change a MEMBER list or a token family, and cannot change
+parameter or collection SHAPE. The fix is a declared extension point for
+shape, designed once — which VARIANTS.md §6.2 already names as the thing
+SQL needs before §7 starts.'''
+
+# Constructs python 2.7 rejects that this table accepts. Found by probing
+# rather than by reading; the probe is quoted so it can be re-run. Every one
+# is the same shape boundary as the gap above.
 [[known_widenings]]
 constructs = '`def f(*, a)` and `def f(a, /, b)` — the py3 parameter-list separators'
 introduced = 'Python 3.0 (keyword-only) and 3.8 (positional-only)'
 why = '''
-The parameter list is a chain of "what may still follow" rules carrying two
-bits of state (see helpers.js `parameterRules`), and the separators are
-positions IN that chain, not members of a list. Removing them means
-rewriting a shared rule's internals behind a variant flag, which is the one
-thing VARIANTS.md §3 forbids -- it is how a parameterized grammar stops
-being readable. Doing it properly needs a declared extension point for
-parameter-list SHAPE, which is a design change rather than a line change.'''
+Positions IN the parameter chain rather than members of a list. Same cause
+as the known_gap above, from the other direction.'''
 
 [[known_widenings]]
 constructs = '`{**a}`, `[*a, *b]`, `f(*a, *b)`, `f(**a, **b)` — the PEP 448 unpacking generalizations'
 introduced = 'Python 3.5'
 why = '''
-Same cause as the parameter separators, in the collection-element rules
-rather than the parameter chain. py2 allows exactly one `*args` and one
-`**kwargs` in a call and no unpacking in a display at all; saying that
-needs the element rules split into groups with different member sets, which
-is rule structure, not a member list.'''
+The collection-element rules, not the parameter chain, but the same kind of
+change: python 2 allows exactly one `*args` and one `**kwargs` in a call and
+no unpacking in a display, and saying that needs the element rules split
+into groups with different member sets.'''
 
 [[known_widenings]]
 constructs = '`a @ b` — the matrix-multiplication operator'
 introduced = 'Python 3.5'
 why = '''
-The one cheap item in this list: `@` is an entry in the binary-operator
-table and `@=` in the augmented-assignment set. It stays because splitting
-the operator table is the same KIND of change as the two above and is worth
-making once, as one extension point for operator sets, rather than
-piecemeal.'''
+The cheap one: an entry in the binary-operator table and `@=` in the
+augmented-assignment set. It stays because splitting the operator table is
+the same KIND of change as the two above and is worth doing once, as one
+extension point for operator sets, rather than piecemeal.'''
 
 [[known_gaps]]
 construct = 'py2 tab/space indentation rules'
 note = '''
-Inherited from the shared scanner, and identical to the python3 ledger's
-first known gap: the indent is measured with `get_column`, which counts
-characters, where CPython expands a tab to the next multiple of eight. If
-anything the exposure is larger here, because tabs are far more common in
-python 2 code than in python 3 code -- and with no corpus, nothing measures
-how much larger.'''
+Inherited from the shared scanner and identical to ../ledger.toml's first
+known gap: the indent is measured with `get_column`, which counts
+characters, where CPython expands a tab to the next multiple of eight. The
+exposure is larger here — tabs are far more common in python 2 code — and
+the CPython corpus does not surface it, so nothing has measured how much
+larger.'''
 
 [[known_gaps]]
 construct = '`f((a)=1)` — a parenthesized keyword argument'
 note = '''
-Valid python 2, rejected here. This is the opposite direction from the
-widenings above: the shared `arguments` rule takes the python 3 shape, and
+Valid python 2, rejected here, and the opposite direction from the
+widenings: the shared `arguments` rule takes the python 3 shape, and
 admitting the py2 one would fork against `f((a) == 1)` at every
 parenthesized first argument. Recorded rather than fixed because the
-construct is vanishingly rare and the fork is not.'''
+construct is vanishingly rare and the fork is not. It is also the one
+rejection python3 keeps from the union (../variants.toml).'''
 
 [[known_gaps]]
 construct = '`True` and `False` as assignable names'
 note = '''
 They are ordinary names in python 2 (`True = 0` is legal, if unwise) and
 `_literal` members here, so this table gives them a `true`/`false` node
-where python 2 semantics would say `identifier`. Left alone deliberately:
-it is a tree-shape difference with no oracle to adjudicate it, and guessing
-at one is worse than recording it.'''
+where python 2 semantics would say `identifier`. A tree-SHAPE difference,
+which is exactly the class no gate here can currently see — see
+shape_check.'''

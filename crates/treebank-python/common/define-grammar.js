@@ -22,13 +22,16 @@
  *   v.floats               the float token family
  *   v.identifier           the identifier token
  *   v.literals             extra `_literal` members
+ *   v.subscriptMembers     extra subscript members
  *   v.patternMembers       extra `_pattern` members
  *   v.ruleGroups           rule definitions this variant includes
  *   v.conflicts            GLR conflicts only this variant needs
  *   v.features             shared constructs this variant has at all:
  *                          `async` (async/await), `annotations` (PEP 3107
  *                          and PEP 526 type annotations), `yieldFrom`,
- *                          `exceptStar`, `parenthesizedWithItems`
+ *                          `exceptStar`, `parenthesizedWithItems`,
+ *                          `commaIterable` (py2's testlist_safe
+ *                          comprehension iterable)
  *
  * `features` is the removal side of the same rule. Some differences are
  * not a member of a list but a construct a variant simply lacks, and
@@ -82,6 +85,17 @@ function nameChoices(v, $) {
 function asyncModifier(v) {
   return v.features.async ? [optional('async')] : [];
 }
+
+/**
+ * How `except E <alias>` binds. Two shapes rather than two keywords: the
+ * py2 comma form takes an assignment TARGET, so `except os.error, (errno,
+ * msg):` and `except E, self.err:` are both real and both appear in
+ * CPython's own source.
+ */
+const EXCEPT_ALIASES = {
+  as: $ => seq('as', field('alias', $._name)),
+  py2Comma: $ => seq(',', field('alias', $._pattern)),
+};
 
 const RAISE_TAILS = {
   from: $ => seq('from', field('cause', $._expression)),
@@ -577,7 +591,7 @@ module.exports = (v) => grammar({
       ...(v.features.exceptStar ? [optional('*')] : []),  // py3.11
       optional(seq(
         $._expression,
-        optional(choice(...v.exceptAliases.map((kw) => seq(kw, field('alias', $._name))))),
+        optional(choice(...v.exceptAliases.map((name) => EXCEPT_ALIASES[name]($)))),
       )),
       ':',
       field('body', $._body),
@@ -828,7 +842,12 @@ module.exports = (v) => grammar({
     subscript_expression: $ => prec(PREC.postfix, seq(
       field('object', $._primary_expression),
       '[',
-      commaSep1(field('subscript', choice($._expression, $.starred_expression, $.slice))),
+      commaSep1(field('subscript', choice(
+        $._expression,
+        $.starred_expression,
+        $.slice,
+        ...v.subscriptMembers.map((name) => $[name]),
+      ))),
       optional(','),
       ']',
     )),
@@ -907,12 +926,19 @@ module.exports = (v) => grammar({
       repeat(choice($.for_in_clause, $.if_clause)),
     ),
 
+    // python 2's comprehension iterable is `testlist_safe` — a BARE comma
+    // list, so `[join(F, fw) for fw in 'Tcl', 'Tk']` is valid. Python 3
+    // narrowed it to `or_test`, which is why the same line is a syntax
+    // error there. Four of the five gaps CPython 2.7's own source found
+    // after the first round of fixes were this one construct.
     for_in_clause: $ => prec.left(1, seq(
       ...asyncModifier(v),
       'for',
       field('left', $._left_hand_side),
       'in',
-      field('right', $._no_conditional_expression),
+      field('right', v.features.commaIterable
+        ? choice($._no_conditional_expression, $._expression_list_tuple)
+        : $._no_conditional_expression),
     )),
 
     if_clause: $ => prec.left(1, seq('if', $._no_conditional_expression)),

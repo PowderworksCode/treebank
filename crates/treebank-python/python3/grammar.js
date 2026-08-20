@@ -24,6 +24,9 @@ module.exports = require('../common/define-grammar.js')({
 
   statements: ['nonlocal_statement', 'type_alias_statement'],
   literals: ['ellipsis'],
+  // `...` is an ordinary literal here, so it reaches a subscript through
+  // the expression tier and needs no separate mention.
+  subscriptMembers: [],
   patternMembers: ['star_pattern'],
   branches: ['match_statement'],
   orTestMembers: ['named_expression'],
@@ -43,6 +46,7 @@ module.exports = require('../common/define-grammar.js')({
     yieldFrom: true,
     exceptStar: true,
     parenthesizedWithItems: true,
+    commaIterable: false,
   },
 
   // The match sub-grammar is where python 3's ambiguity lives: a pattern

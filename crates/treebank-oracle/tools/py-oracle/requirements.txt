@@ -1,0 +1,8 @@
+# The python2 oracle's parser, pinned like every other oracle: it carries
+# CPython 2.7's own grammar as a C extension, so the version is the language
+# version. check27.py errors with this line in it if the import fails.
+#
+# Not needed for the python3 oracle, which uses the interpreter's own
+# compile(). Sweeps are not run in CI (the corpora are gigabytes), so this
+# is a dependency of running `treebank sweep --lang python2` locally.
+typed_ast==1.5.5

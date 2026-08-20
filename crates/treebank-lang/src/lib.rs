@@ -108,6 +108,29 @@ macro_rules! for_each_language {
             Cpp => "cpp", ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], Cpp, false, cxx::Cxx, c::Cpp, (NONE, NONE, NONE);
             Ruby => "ruby", ["rb"], Ruby, true, ruby::Ruby, ruby::Ruby, (RB_SPANS, NONE, NONE);
             Zig => "zig", ["zig", "zon"], Zig, false, zig::Zig, zig::Zig, (NONE, ZIG_FORMAT, NONE);
+            // Not a grammar crate of its own: it is the `python2` VARIANT
+            // inside treebank-python (VARIANTS.md §2), the same way
+            // `javascript` is a dialect of the typescript grammar. It is a
+            // language here because its CORPUS and its ORACLE have nothing
+            // in common with python 3's -- the code comes from a different
+            // era and a different place, and the reference parser is a
+            // different program.
+            //
+            // Not in rosetta: that gate is cross-LANGUAGE, and a
+            // multi-variant language meets it once, as its default variant.
+            //
+            // Three NONEs, and each is a different sentence.
+            //   spans     reachable and NOT built. typed_ast.ast27 yields
+            //             lineno and col_offset for every node, so this
+            //             variant can have the boundary check python 3 has.
+            //             Until it does, nothing can see the grammar accept
+            //             a file and build the WRONG TREE, which is the one
+            //             failure a verdict oracle is blind to.
+            //   reformat  black dropped python 2 in 22.1, and a formatter
+            //             that rewrites py2 into py3 measures the formatter.
+            //   unparse   typed_ast carries python 2's parser and no
+            //             printer; python 3's `ast.unparse` renders python 3.
+            Python2 => "python2", ["py"], Python, false, python2::Python2, python2::Python2, (NONE, NONE, NONE);
         }
     };
 }

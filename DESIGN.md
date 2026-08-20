@@ -402,10 +402,14 @@ runs before any verdict is trusted.
 
 With a version-union grammar there is one oracle per version family:
 
-- **python**: CPython 3 `compile(src, path, 'exec')`, and CPython 2.7's
-  `compile` where a python2 exists; when CI has no python2 binary, py2
-  verdicts come from a frozen battery of known-valid/known-invalid files,
-  and the ledger says so.
+- **python**: one oracle per variant, since the split (VARIANTS.md).
+  `python3` is CPython 3 `compile(src, path, 'exec')`. `python2` is CPython
+  2.7's own parser, reached from python3 through `typed_ast.ast27` — the
+  2.7 grammar vendored as a C extension — which is what let the variant be
+  measured without a container holding an EOL interpreter. It parses rather
+  than compiles, so it is the laxer of the two and can over-report gaps but
+  never hide them; `python2/ledger.toml` states that and the PEP 263
+  handling it needs.
 - **rust**: `syn` in-process for the sweep; `rustc -Zparse-only` per
   `--edition` for adjudicating anything `syn` and the grammar disagree on.
 - **typescript**: `tsc` parse per dialect; V8 as a secondary oracle for

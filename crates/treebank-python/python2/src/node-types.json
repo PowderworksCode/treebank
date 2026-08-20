@@ -1492,6 +1492,10 @@
           {
             "type": "_name",
             "named": true
+          },
+          {
+            "type": "_pattern",
+            "named": true
           }
         ]
       },
@@ -1828,6 +1832,11 @@
         }
       ]
     }
+  },
+  {
+    "type": "identifier",
+    "named": true,
+    "fields": {}
   },
   {
     "type": "if_clause",
@@ -2745,6 +2754,10 @@
             "named": true
           },
           {
+            "type": "ellipsis",
+            "named": true
+          },
+          {
             "type": "slice",
             "named": true
           },
@@ -3271,6 +3284,10 @@
     "named": false
   },
   {
+    "type": "ellipsis",
+    "named": true
+  },
+  {
     "type": "else",
     "named": false
   },
@@ -3309,10 +3326,6 @@
   {
     "type": "global",
     "named": false
-  },
-  {
-    "type": "identifier",
-    "named": true
   },
   {
     "type": "if",

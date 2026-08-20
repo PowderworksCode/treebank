@@ -26,6 +26,7 @@ mod capabilities;
 mod java;
 mod javascript;
 mod python;
+mod python2;
 mod reformat;
 mod ruby;
 mod rust;

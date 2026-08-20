@@ -1,6 +1,7 @@
 ================================================================================
-python 2 statement forms — `print` and `exec` are keywords here, so the
-forms need no dynamic precedence and declare no conflicts
+python 2 statement forms. `exec` is a hard keyword here so its statement is
+unambiguous; `print` is a SOFT keyword, because PEP 3105's future import can
+turn it back into a name (see the note in python2/grammar.js)
 ================================================================================
 
 print "hello", x
@@ -111,8 +112,8 @@ def f((a, b), c):
 
 ================================================================================
 `match`, `case`, `type`, `await` and `nonlocal` are ordinary names in
-python 2 — no soft-keyword machinery, because none of the constructs that
-made them keywords exists here
+python 2 — none of the constructs that made them keywords in python 3
+exists here, so they need no special handling at all
 ================================================================================
 
 match = re.match(p, s)
@@ -160,3 +161,109 @@ if a <> b: pass
       (identifier))
     body: (block
       (pass_statement))))
+
+================================================================================
+`print` as a call. `from __future__ import print_function` makes it a name,
+and only the call reading can carry `file=`/`end=`/`sep=` — so this parses
+where a hard-keyword `print` could not. It is 12 of the 22 gaps CPython
+2.7's own source found on the first sweep
+================================================================================
+
+from __future__ import print_function
+print(msg, file=sys.stderr)
+
+--------------------------------------------------------------------------------
+
+(module
+  (import_from_statement
+    module: (dotted_name
+      (identifier))
+    (dotted_name
+      (identifier)))
+  (expression_statement
+    (call_expression
+      function: (identifier)
+      arguments: (arguments
+        (identifier)
+        (keyword_argument
+          name: (identifier)
+          value: (member_expression
+            object: (identifier)
+            property: (identifier)))))))
+
+================================================================================
+the py2 `except` comma form binds a TARGET, not just a name
+================================================================================
+
+try:
+    pass
+except socket.error, (errno, msg):
+    pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (try_statement
+    body: (block
+      (pass_statement))
+    (except_clause
+      (member_expression
+        object: (identifier)
+        property: (identifier))
+      alias: (tuple_pattern
+        (identifier)
+        (identifier))
+      body: (block
+        (pass_statement)))))
+
+================================================================================
+`...` exists in python 2 in exactly one position — inside a subscript
+================================================================================
+
+testme[:42, ..., :24:, 24, 100]
+
+--------------------------------------------------------------------------------
+
+(module
+  (expression_statement
+    (subscript_expression
+      object: (identifier)
+      subscript: (slice
+        (integer))
+      subscript: (ellipsis)
+      subscript: (slice
+        (integer))
+      subscript: (integer)
+      subscript: (integer))))
+
+================================================================================
+python 2's comprehension iterable is `testlist_safe` — a bare comma list.
+Python 3 narrowed it to `or_test`, which is why the same line is a syntax
+error there. Four of the five gaps left after the first round of fixes were
+this one construct, in CPython's own setup.py among others
+================================================================================
+
+x = [join(F, fw) for fw in 'Tcl', 'Tk']
+
+--------------------------------------------------------------------------------
+
+(module
+  (assignment
+    left: (identifier)
+    right: (list_comprehension
+      body: (call_expression
+        function: (identifier)
+        arguments: (arguments
+          (identifier)
+          (identifier)))
+      (for_in_clause
+        left: (identifier)
+        right: (tuple
+          (string
+            (string_start)
+            (string_content)
+            (string_end))
+          (string
+            (string_start)
+            (string_content)
+            (string_end)))))))

@@ -17,6 +17,7 @@ mod java;
 mod javascript;
 mod npm;
 mod python;
+mod python2;
 mod ruby;
 mod rust;
 mod typescript;
