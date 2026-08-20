@@ -83,6 +83,7 @@ module.exports = grammar({
     [$.field_declaration, $._type],
     [$.modifiers, $.annotated_type],
     [$.lambda, $._name],
+    [$.annotated_type, $.type_pattern],
     [$.module_declaration, $.package_declaration, $.modifiers],
     [$.module_declaration, $.modifiers],
     [$.annotation_type_element, $.parameters],
@@ -219,7 +220,7 @@ module.exports = grammar({
     ),
 
     enum_constant: $ => seq(
-      repeat($._attribute),
+      optional(alias($._enum_constant_modifiers, $.modifiers)),
       field('name', $.identifier),
       field('arguments', optional($.arguments)),
       field('body', optional($.class_body)),
@@ -464,15 +465,19 @@ module.exports = grammar({
 
     _parameter: $ => choice($.parameter, $.spread_parameter, $.receiver_parameter),
 
+    // `modifiers`-wrapped like every other declaration -- the full-corpus
+    // javac span run found 23,283 MODIFIERS boundaries at parameters with
+    // no node of ours, the same inconsistency the 2k sample caught on
+    // locals. One construct, one shape, everywhere.
     parameter: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       field('name', $.identifier),
       optional($._dims),
     ),
 
     spread_parameter: $ => seq(
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       repeat($._attribute),
       '...',
@@ -552,6 +557,7 @@ module.exports = grammar({
     _declarator_list: $ => seq($.variable_declarator, repeat(seq(',', $.variable_declarator))),
 
     _local_modifiers: $ => repeat1(choice($._attribute, $.final_modifier)),
+    _enum_constant_modifiers: $ => repeat1($._attribute),
 
     variable_declarator: $ => seq(
       field('name', $.identifier),
@@ -660,7 +666,7 @@ module.exports = grammar({
     enhanced_for_statement: $ => seq(
       'for',
       '(',
-      repeat(choice($._attribute, $.final_modifier)),
+      optional(alias($._local_modifiers, $.modifiers)),
       field('type', $._unannotated_type),
       field('name', $.identifier),
       optional($._dims),

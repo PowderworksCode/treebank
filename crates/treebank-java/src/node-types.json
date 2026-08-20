@@ -1883,7 +1883,7 @@
           "named": true
         },
         {
-          "type": "final_modifier",
+          "type": "modifiers",
           "named": true
         }
       ]
@@ -1944,11 +1944,11 @@
       }
     },
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": false,
       "types": [
         {
-          "type": "_attribute",
+          "type": "modifiers",
           "named": true
         }
       ]
@@ -3322,7 +3322,7 @@
           "named": true
         },
         {
-          "type": "final_modifier",
+          "type": "modifiers",
           "named": true
         }
       ]
@@ -3791,7 +3791,7 @@
           "named": true
         },
         {
-          "type": "final_modifier",
+          "type": "modifiers",
           "named": true
         }
       ]

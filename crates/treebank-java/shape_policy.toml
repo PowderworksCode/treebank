@@ -80,3 +80,7 @@ why = '''
 signature = 'NEW_CLASS <- enum_constant'
 why = '''
 An enum constant with a body -- `FOO() { ... }` -- is internally a NEW_CLASS (anonymous class instantiation) to javac, spanning from the arguments through the body. Ours is an enum_constant with `arguments:` and `body:` fields, which is what the file says it is.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- parameter'
+why = 'The parameter form of `ARRAY_TYPE <- local_variable_declaration`: C-style `float copyFrom[]`, where javac reports a type span crossing the identifier.'
