@@ -170,9 +170,14 @@ impl SpanOracle for JavaSpans {
     /// exists and every reported node is something the file spells.
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
         let script = crate::tool("java-oracle/Spans.java");
+        // -Xss64m: TreeScanner recurses per operand, and a generated
+        // thousand-term string concatenation is one visitBinary chain --
+        // the default stack died 219k files into the first full-corpus
+        // run. Same failure family (and same fix) as the 64 MiB rayon
+        // stack that syn's visitor needed on rust.
         let lines = stdin_oracle::run_lines(
             "java",
-            &[script.to_string_lossy().as_ref()],
+            &["-Xss64m", script.to_string_lossy().as_ref()],
             "java tools/java-oracle/Spans.java — is a JDK (not just a JRE) installed?",
             srcroot,
             paths,
