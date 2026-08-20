@@ -948,6 +948,7 @@ the tail is what a user notices:
 | python | 0.3% | 17.1% | 99.1% | 240 |
 | rust | 0.1% | 5.6% | 78.9% | 116 |
 | typescript | 0.5% | 17.5% | 94.1% | 60 |
+| c | 0.1% | 10.8% | 90% | 250 |
 
 "Shredded" means more than half of a file of at least 1 KiB ended up inside
 an error. **The size floor was added after the first run reported nearly
@@ -1125,3 +1126,41 @@ Six constructs stayed cut, and `crates/treebank-cpp/ledger.toml` names each
 with what it was costing. The C++ corpus is libstdc++, which is a floor
 rather than a typical case: the standard library's own implementation is
 the most macro- and template-dense C++ there is.
+
+### 8.2 The unexpanded macro, and why a refusal is not a finding
+
+C shipped at 2,184 of 3,662 files with 422 grammar gaps, and nearly every
+one of those gaps was the same thing: a macro standing where the
+preprocessor would have put a keyword. The ledger named three positions for
+it and refused all three, with a reason — a bare identifier admitted after
+a declarator makes `int x y;` parse, which is the accepts-invalid direction
+the negative corpus exists to catch.
+
+The reason was correct about the rule being refused. It was not a finding
+about the position. Admitting the macro **after a declarator that ends in
+`)` or `]`**, and **before the type** where a keyword type cannot be, and
+inside a `{` that `struct` or `enum` has already opened, and after
+`typedef` — four contexts a juxtaposed pair of names cannot reach — took
+the same corpus to **2,623 files and 132 gaps**, with `int x y;` still
+rejected in every position the negative corpus asks about.
+
+Three things generalise from that, and none of them is about C:
+
+1. **A refusal is only as good as its scope.** "This rule admits `int x y;`"
+   is a fact about a rule, not about a construct. The useful question is
+   always which committed context the construct can be confined to, and the
+   grammar is what says whether such a context exists. For the macro that
+   stands in for a whole parameter list — `void f BASE64_ENC_PARAMS { … }` —
+   there is no such context, the tokens ARE `int x y;`, and it stays refused.
+2. **The corpus reclassifies as the grammar improves.** 44 of the remaining
+   132 gaps are reported at an `extern "C" {` line that no grammar can fix,
+   because it is the file's FIRST error and its real gap is further down.
+   A cluster report is a queue, not a diagnosis, and the top of the queue
+   is the least reliable entry in it.
+3. **The pass rate is not the only number that moves.** Error recovery got
+   worse — p90 5.7% to 10.8%, 182 shreds to 250 — and part of that is real
+   rather than population: a rule that admits a bare identifier where a
+   keyword was expected gives the parser one more way to keep going wrongly
+   after a lost brace. §5.12's table and the C ledger both record it. A
+   grammar that only ever measures what it accepts will trade this away
+   without noticing.

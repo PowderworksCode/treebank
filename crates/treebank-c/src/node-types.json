@@ -354,6 +354,10 @@
       {
         "type": "static_assert_declaration",
         "named": true
+      },
+      {
+        "type": "unexpanded_macro",
+        "named": true
       }
     ]
   },
@@ -1828,6 +1832,16 @@
     "type": "enumerator",
     "named": true,
     "fields": {
+      "arguments": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "argument_list",
+            "named": true
+          }
+        ]
+      },
       "name": {
         "multiple": false,
         "required": true,
@@ -3215,10 +3229,6 @@
         {
           "type": "initializer_pair",
           "named": true
-        },
-        {
-          "type": "unexpanded_macro",
-          "named": true
         }
       ]
     }
@@ -3295,10 +3305,6 @@
         {
           "type": "initializer_pair",
           "named": true
-        },
-        {
-          "type": "unexpanded_macro",
-          "named": true
         }
       ]
     }
@@ -3345,10 +3351,6 @@
         },
         {
           "type": "initializer_pair",
-          "named": true
-        },
-        {
-          "type": "unexpanded_macro",
           "named": true
         }
       ]
@@ -3525,10 +3527,6 @@
         {
           "type": "initializer_pair",
           "named": true
-        },
-        {
-          "type": "unexpanded_macro",
-          "named": true
         }
       ]
     }
@@ -3604,10 +3602,6 @@
         },
         {
           "type": "initializer_pair",
-          "named": true
-        },
-        {
-          "type": "unexpanded_macro",
           "named": true
         }
       ]

@@ -6219,6 +6219,10 @@
         },
         {
           "type": "SYMBOL",
+          "name": "unexpanded_macro"
+        },
+        {
+          "type": "SYMBOL",
           "name": "_directive_in_field_declaration_list"
         }
       ]
@@ -6305,6 +6309,13 @@
               "type": "BLANK"
             }
           ]
+        },
+        {
+          "type": "REPEAT",
+          "content": {
+            "type": "SYMBOL",
+            "name": "macro_modifier"
+          }
         },
         {
           "type": "STRING",
@@ -6509,6 +6520,22 @@
               "type": "SYMBOL",
               "name": "identifier"
             }
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "arguments",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "argument_list"
+                }
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
           },
           {
             "type": "REPEAT",
@@ -10783,6 +10810,10 @@
     }
   ],
   "conflicts": [
+    [
+      "field_declaration",
+      "macro_attributed_declarator"
+    ],
     [
       "_declaration_specifiers",
       "parenthesized_declarator",

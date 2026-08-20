@@ -30,22 +30,32 @@ One package, and a pathological one. Every measurement below is about libstdc++ 
 
 [corpus.sweep]
 files = 791
-passed = 222
-failed = 569
-gap_files = 451
+passed = 224
+failed = 567
+gap_files = 449
 config_files = 2
 noise_files = 116
 indeterminate_files = 111
 clusters = 151
-pass_rate = '28.1%'
+pass_rate = '28.3%'
 note = '''
-FIRST PASS, adjudicated by the libclang oracle at `-x c++ -std=gnu++17`, and the number says so. Of 569 failures, **451 are grammar gaps**, 2 are configuration-inherent and 116 are noise — of which 111 are `indeterminate` rather than `invalid`, because `Oracle::validate` collapses "could not tell" to false so that no fix agent is ever aimed at a file nobody can vouch for.
+FIRST PASS, adjudicated by the libclang oracle at `-x c++ -std=gnu++17`, and the number says so. Of 567 failures, **449 are grammar gaps**, 2 are configuration-inherent and 116 are noise — of which 111 are `indeterminate` rather than `invalid`, because `Oracle::validate` collapses "could not tell" to false so that no fix agent is ever aimed at a file nobody can vouch for.
 
 The corpus is the reason to read 28.1% carefully rather than as a verdict. libstdc++ is the most macro- and template-dense C++ there is; the largest cluster, 129 files, is an ERROR that opens at the file's first comment, which means the parse failed somewhere below and the report has nowhere better to point. The named clusters behind it are `PB_DS_CLASS_T_DEC` (a macro standing for a whole `template<…>` head), `_GLIBCXX_NOEXCEPT` after a declarator, and partial specialisations whose names are instantiations.
 
 Dead-branch elimination is worth almost nothing here — 2 files — and that is itself a finding rather than a disappointment: the `extern "C" {`-split-across-`#ifdef` class that costs C 696 files is a C problem, because compiling as C++ is the configuration in which those braces are LIVE.
 
-For calibration on what a first pass looks like in this repository, bash shipped at 43.8% over a corpus of shell scripts. This is 28.1% over the C++ standard library.'''
+For calibration on what a first pass looks like in this repository, bash shipped at 43.8% over a corpus of shell scripts. This is 28.3% over the C++ standard library.
+
+**What the C grammar's macro work moved here, and what it did not.** C grew rules for the unexpanded macro in five positions; C++ inherits four of them — after a declarator that ends in `)` or `]`, beside a pointer's qualifiers, on an enumerator, inside a typedef — and the measured return is 222 files becoming 224, at 46.8 MB of table and 90 seconds of generation becoming 48.4 MB and 2m08s. Two files is a thin return and it is recorded as one. It stays because the corpus that would show its worth is the one the source note above already calls a floor: libstdc++ fails on templates long before it fails on macros, so a macro fix cannot show up until the template gaps are closed.
+
+Three of C's rules are WRITTEN OUT here instead, joining `_top_level_item` and `_member` in the list of things this grammar declines to inherit. Each was tried, generated and reverted on what the table did:
+
+- C's leading `macro_modifier` makes the two halves of `_declaration_specifiers` different repeat symbols, and a parser that has just reduced a modifier can no longer tell which half it is in. It asked for a conflict on `_out_of_line_definition`, then on both member forms, then on `macro_modifier` against `_expression` in four widening combinations — the runaway shape DESIGN.md §8.1 records, still going when the loop was stopped at six.
+- The declarator-INITIAL macro form and the one in front of a parenthesised declarator's star collide with a lambda's init-capture and with multiplication: `[x](…` and `(a * b)` are the states the generator named.
+- `field_declaration`'s trailing macro run and `unexpanded_macro` as a member both collide with what a C++ member list holds that a C one does not — a function definition, and `f() const`.
+
+C pays for all five and C++ for none, which is the difference between a struct body and a class body rather than a difference of opinion.'''
 
 [[oracles]]
 family = 'cpp'

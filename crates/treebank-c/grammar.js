@@ -106,6 +106,7 @@ module.exports = grammar({
   ]).map((name) => $[name]),
 
   conflicts: $ => [
+    [$.field_declaration, $.macro_attributed_declarator],
     [$._declaration_specifiers, $.parenthesized_declarator, $.macro_attributed_declarator],
     [$.macro_modifier, $._type, $.macro_type_specifier, $._declarator],
     [$.macro_attributed_declarator],
@@ -728,6 +729,14 @@ module.exports = grammar({
     _member: $ => choice(
       $.field_declaration,
       $.static_assert_declaration,
+      // `struct k_atm_aal_stats { __AAL_STAT_ITEMS };` — a macro standing
+      // alone as a whole member, with no semicolon of its own because what
+      // it expands to already carries several. It is the same concession
+      // `_top_level_item` makes and it is confined the same way: the `{`
+      // that `struct` opened has already committed the parser, so the only
+      // thing this admits that C does not is a bare name inside a struct
+      // body.
+      $.unexpanded_macro,
       $._directive_in_field_declaration_list,
     ),
 
@@ -754,6 +763,12 @@ module.exports = grammar({
     field_declaration: $ => seq(
       $._declaration_specifiers,
       commaSep($._field_declarator),
+      // `struct atm_trafprm rxtp __ATM_API_ALIGN;` — the alignment macro
+      // after the member's name. It sits here rather than on the declarator
+      // because the declarator is a bare identifier, which is the one shape
+      // `macro_attributed_declarator` must not accept; a member list is a
+      // committed context and a declaration at file scope is not.
+      repeat($.macro_modifier),
       ';',
     ),
 
@@ -817,8 +832,17 @@ module.exports = grammar({
     // `__attribute__((deprecated))` sits on the line above it.
     // Right-associative because the run of markers is greedy: at a second
     // identifier the enumerator takes it rather than ending.
+    // The argument list is the whole enumerator arriving from a macro —
+    // `FT_ENC_TAG( FT_ENCODING_NONE, 0, 0, 0, 0 ),`,
+    // `V4L2_MBUS_FROM_MEDIA_BUS_FMT(FIXED),`,
+    // `BROTLI_DECODER_ERROR_CODES_LIST(BROTLI_ERROR_CODE_ENUM_ITEM_, …)` —
+    // which expands to one enumerator or to a run of them. It is
+    // `unexpanded_macro`'s concession in the one other place a bare macro
+    // stands as a whole item, and it is reachable only inside a `{` that
+    // `enum` has already committed.
     enumerator: $ => prec.right(seq(
       field('name', $.identifier),
+      optional(field('arguments', $.argument_list)),
       repeat(choice($._attribute, $.macro_modifier)),
       optional(seq('=', field('value', $._expression))),
     )),

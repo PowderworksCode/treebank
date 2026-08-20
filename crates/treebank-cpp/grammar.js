@@ -164,6 +164,17 @@ module.exports = grammar(C, {
       field('declarator', $._declarator),
     ))),
 
+    // Without C's trailing `macro_modifier` run. A C++ member list also
+    // holds function DEFINITIONS, so after a declarator an identifier is
+    // already ambiguous between the start of a definition and something
+    // else; C's alignment-macro run makes it a three-way one. C has no
+    // member definitions and pays nothing for the rule.
+    field_declaration: $ => seq(
+      $._declaration_specifiers,
+      commaSep($._field_declarator),
+      ';',
+    ),
+
     // The suffix form only. C's rule has a second alternative that opens
     // with the macro — `ZEND_API void ZEND_FASTCALL f(…)` — which puts
     // `macro_modifier` at the START of a declarator, and a declarator
@@ -570,8 +581,17 @@ module.exports = grammar(C, {
 
     // A class body holds DECLARATIONS where a C struct body holds fields,
     // which is why `_member` grows here rather than staying what C left it.
-    _member: ($, previous) => choice(
-      previous,
+    // Written out rather than extended, to LEAVE OUT `unexpanded_macro`.
+    // C admits a bare macro as a whole member because `struct
+    // k_atm_aal_stats { __AAL_STAT_ITEMS };` is what a kernel header looks
+    // like; here a member may be a function DECLARATION, so `f() const` and
+    // a macro call followed by a qualifier are the same tokens, and the
+    // table said so at `struct { identifier ( ) •  const`. It is the same
+    // exclusion `_top_level_item` makes above and for the same reason.
+    _member: $ => choice(
+      $.field_declaration,
+      $.static_assert_declaration,
+      $._directive_in_field_declaration_list,
       $.access_label,
       $.function_definition,
       $._out_of_line_definition,

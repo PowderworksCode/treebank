@@ -131,3 +131,176 @@ int;
         (enumerator name: (identifier))
         (enumerator name: (identifier)))))
   (declaration type: (primitive_type)))
+
+==================
+A macro after a declarator
+==================
+
+extern void aio_init (const struct aioinit *__init) __THROW __nonnull ((1));
+extern void *alloca (size_t __size) __THROW;
+int abs (int __x) __THROW __attribute__ ((__const__)) __wur;
+
+---
+
+(translation_unit
+  (declaration
+    (storage_class_specifier)
+    type: (primitive_type)
+    declarator: (macro_attributed_declarator
+      declarator: (function_declarator
+        declarator: (identifier)
+        parameters: (parameter_list
+          (parameter_declaration
+            (type_qualifier)
+            type: (struct_specifier
+              name: (type_identifier))
+            declarator: (pointer_declarator
+              declarator: (identifier)))))
+      attribute: (macro_attribute
+        name: (identifier))
+      attribute: (macro_attribute
+        name: (identifier)
+        arguments: (argument_list
+          (parenthesized_expression
+            (number_literal))))))
+  (declaration
+    (storage_class_specifier)
+    type: (primitive_type)
+    declarator: (pointer_declarator
+      declarator: (macro_attributed_declarator
+        declarator: (function_declarator
+          declarator: (identifier)
+          parameters: (parameter_list
+            (parameter_declaration
+              type: (type_identifier)
+              declarator: (identifier))))
+        attribute: (macro_attribute
+          name: (identifier)))))
+  (declaration
+    type: (primitive_type)
+    declarator: (macro_attributed_declarator
+      declarator: (attributed_declarator
+        (macro_attributed_declarator
+          declarator: (function_declarator
+            declarator: (identifier)
+            parameters: (parameter_list
+              (parameter_declaration
+                type: (primitive_type)
+                declarator: (identifier))))
+          attribute: (macro_attribute
+            name: (identifier)))
+        (attribute_specifier
+          (attribute
+            name: (identifier))))
+      attribute: (macro_attribute
+        name: (identifier)))))
+
+==================
+A macro in the declaration specifiers
+==================
+
+ZEND_API void ZEND_FASTCALL zend_ast_ref_destroy(zend_ast_ref *ast);
+OSSL_DEPRECATEDIN_3_0 int ERR_load_ASN1_strings(void);
+static zend_always_inline int zend_ulong_ntz(unsigned long num) { return 0; }
+zend_ast * ZEND_FASTCALL zend_ast_create(int kind);
+void (NCURSES_API *_nc_check_termtype)(TERMTYPE *);
+
+---
+
+(translation_unit
+  (unexpanded_macro
+    name: (identifier))
+  (declaration
+    type: (primitive_type)
+    declarator: (macro_attributed_declarator
+      modifier: (macro_modifier
+        name: (identifier))
+      declarator: (function_declarator
+        declarator: (identifier)
+        parameters: (parameter_list
+          (parameter_declaration
+            type: (type_identifier)
+            declarator: (pointer_declarator
+              declarator: (identifier)))))))
+  (unexpanded_macro
+    name: (identifier))
+  (declaration
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration
+          type: (primitive_type)))))
+  (function_definition
+    (storage_class_specifier)
+    (macro_modifier
+      name: (identifier))
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration
+          type: (sized_type_specifier
+            type: (type_identifier)))))
+    body: (compound_statement
+      (return_statement
+        value: (number_literal))))
+  (declaration
+    type: (type_identifier)
+    declarator: (pointer_declarator
+      declarator: (macro_attributed_declarator
+        modifier: (macro_modifier
+          name: (identifier))
+        declarator: (function_declarator
+          declarator: (identifier)
+          parameters: (parameter_list
+            (parameter_declaration
+              type: (primitive_type)
+              declarator: (identifier)))))))
+  (declaration
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (parenthesized_declarator
+        (macro_modifier
+          name: (identifier))
+        (pointer_declarator
+          declarator: (identifier)))
+      parameters: (parameter_list
+        (parameter_declaration
+          type: (type_identifier)
+          declarator: (abstract_pointer_declarator))))))
+
+==================
+A nested parameter list and a __declspec with an argument
+==================
+
+extern int __REDIRECT_NTH (aio_read, (struct aiocb *__aiocbp), aio_read64);
+__declspec(align(8)) int y;
+
+---
+
+(translation_unit
+  (declaration
+    (storage_class_specifier)
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration
+          type: (type_identifier))
+        (parameter_list
+          (parameter_declaration
+            type: (struct_specifier
+              name: (type_identifier))
+            declarator: (pointer_declarator
+              declarator: (identifier))))
+        (parameter_declaration
+          type: (type_identifier)))))
+  (declaration
+    (ms_declspec_modifier
+      (call_expression
+        function: (identifier)
+        arguments: (argument_list
+          (number_literal))))
+    type: (primitive_type)
+    declarator: (identifier)))

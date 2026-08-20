@@ -6700,21 +6700,16 @@
       "type": "CHOICE",
       "members": [
         {
-          "type": "CHOICE",
-          "members": [
-            {
-              "type": "SYMBOL",
-              "name": "field_declaration"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "static_assert_declaration"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "_directive_in_field_declaration_list"
-            }
-          ]
+          "type": "SYMBOL",
+          "name": "field_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "static_assert_declaration"
+        },
+        {
+          "type": "SYMBOL",
+          "name": "_directive_in_field_declaration_list"
         },
         {
           "type": "SYMBOL",
@@ -7082,6 +7077,22 @@
               "type": "SYMBOL",
               "name": "identifier"
             }
+          },
+          {
+            "type": "CHOICE",
+            "members": [
+              {
+                "type": "FIELD",
+                "name": "arguments",
+                "content": {
+                  "type": "SYMBOL",
+                  "name": "argument_list"
+                }
+              },
+              {
+                "type": "BLANK"
+              }
+            ]
           },
           {
             "type": "REPEAT",
@@ -15051,6 +15062,10 @@
     }
   ],
   "conflicts": [
+    [
+      "field_declaration",
+      "macro_attributed_declarator"
+    ],
     [
       "_declaration_specifiers",
       "parenthesized_declarator",

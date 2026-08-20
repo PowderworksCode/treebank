@@ -184,10 +184,6 @@
     {
       "node": "subscript_designator",
       "reason": "the `[3]` or `[0 ... 7]` of one"
-    },
-    {
-      "node": "unexpanded_macro",
-      "reason": "a macro standing alone at file scope — `__BEGIN_DECLS`, `BEGIN_EXTERN_C()`. It is not a declaration, not a statement, and not a directive: it is the hole the preprocessor would have filled. See the declared deviation in ledger.toml"
     }
   ]
 }

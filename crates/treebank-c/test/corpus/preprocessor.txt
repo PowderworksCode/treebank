@@ -117,3 +117,32 @@ __END_DECLS
       declarator: (identifier)
       parameters: (parameter_list (parameter_declaration type: (primitive_type)))))
   (unexpanded_macro name: (identifier)))
+
+==================
+A conditional in an #if
+==================
+
+#if defined __cplusplus ? __GNUC_PREREQ (2, 6) : __GNUC_PREREQ (2, 4)
+int x;
+#endif
+
+---
+
+(translation_unit
+  (preproc_if
+    condition: (conditional_expression
+      condition: (preproc_defined
+        (identifier))
+      consequence: (call_expression
+        function: (identifier)
+        arguments: (argument_list
+          (number_literal)
+          (number_literal)))
+      alternative: (call_expression
+        function: (identifier)
+        arguments: (argument_list
+          (number_literal)
+          (number_literal))))
+    (declaration
+      type: (primitive_type)
+      declarator: (identifier))))

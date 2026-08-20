@@ -104,3 +104,62 @@ void f(va_list ap) {
                   declarator: (abstract_parenthesized_declarator (abstract_pointer_declarator))
                   parameters: (parameter_list
                     (parameter_declaration type: (primitive_type))))))))))))
+
+==================
+Macros on a typedef, an enumerator and a member
+==================
+
+typedef int __ONCE_ALIGNMENT pthread_once_t;
+enum e {
+  G_URI_FLAGS_NONE GLIB_AVAILABLE_ENUMERATOR_IN_2_66 = 0,
+  FT_ENC_TAG( FT_ENCODING_NONE, 0, 0 ),
+};
+struct atm_qos { struct atm_trafprm rxtp __ATM_API_ALIGN; __AAL_STAT_ITEMS };
+struct rpl_iptunnel { __DECLARE_FLEX_ARRAY(struct in6_addr, addr); };
+
+---
+
+(translation_unit
+  (type_definition
+    type: (primitive_type)
+    (macro_modifier
+      name: (identifier))
+    declarator: (identifier))
+  (declaration
+    type: (enum_specifier
+      name: (type_identifier)
+      body: (enumerator_list
+        (enumerator
+          name: (identifier)
+          (macro_modifier
+            name: (identifier))
+          value: (number_literal))
+        (enumerator
+          name: (identifier)
+          arguments: (argument_list
+            (identifier)
+            (number_literal)
+            (number_literal))))))
+  (declaration
+    type: (struct_specifier
+      name: (type_identifier)
+      body: (field_declaration_list
+        (field_declaration
+          type: (struct_specifier
+            name: (type_identifier))
+          declarator: (identifier)
+          (macro_modifier
+            name: (identifier)))
+        (unexpanded_macro
+          name: (identifier)))))
+  (declaration
+    type: (struct_specifier
+      name: (type_identifier)
+      body: (field_declaration_list
+        (field_declaration
+          type: (macro_type_specifier
+            name: (identifier)
+            type: (type_descriptor
+              type: (struct_specifier
+                name: (type_identifier)))
+            (identifier)))))))
