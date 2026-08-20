@@ -1,0 +1,32 @@
+# Generated grammar output. DESIGN.md §7 keeps `src/` committed on purpose —
+# cargo compiles `parser.c` through build.rs, the published crates carry it in
+# their `include` list, and `node-types.json` is `include_str!`d by the rust
+# bindings. I1 (ci.yml) proves it is byte-for-byte what grammar.js produces at
+# the pinned CLI. None of that needs the bytes to be READABLE in review, which
+# is all this file changes.
+
+# parser.c is millions of lines of state tables. Nobody reads its diff, and a
+# textual three-way merge of one produces a corrupt file rather than a useful
+# conflict. `-diff` reports "Bin N -> M bytes" instead of the wall; merge=binary
+# leaves the path conflicted with our version in the worktree, so the resolution
+# is `tree-sitter generate`, which is the only correct one anyway.
+#
+# Both are safe for I1: `git diff --quiet -- src/` (ci.yml, and verify.rs's
+# generation_is_reproducible) still exits non-zero on any change, and
+# `git diff --stat -- src/` still names the file that moved.
+crates/treebank-*/src/parser.c          linguist-generated=true -diff merge=binary
+
+# grammar.json and node-types.json stay diffable: a node appearing or vanishing
+# from node-types.json is exactly what the roles gate (DESIGN.md §5, I4) is
+# about, and reading that change is part of reviewing a grammar edit. Marking
+# them generated only collapses them behind a click and keeps them out of the
+# repo's language stats.
+crates/treebank-*/src/grammar.json      linguist-generated=true
+crates/treebank-*/src/node-types.json   linguist-generated=true
+
+# Runtime headers the CLI copies in; ours to ship, not ours to edit.
+crates/treebank-*/src/tree_sitter/*.h   linguist-generated=true -diff
+
+# NOT listed, deliberately: src/scanner.c is hand-written external-scanner
+# source that happens to live next to the generated files. It is reviewed like
+# any other C in the tree.
