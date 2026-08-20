@@ -148,6 +148,7 @@ module.exports = grammar({
       $._declaration,
       $._directive,
       $.container_field,
+      alias($._anonymous_function_declaration, $.function_declaration),
       $.test_declaration,
       // Container-level `comptime { … }`. It is the same NODE as the
       // statement-level one — same text, same meaning — but the rule takes
@@ -163,9 +164,7 @@ module.exports = grammar({
     // and a labelled block would make the two indistinguishable until the
     // token after the `:` — a label on a container-level comptime block
     // can name nothing anyway, since nothing there can break to it.
-    _comptime_block: $ => seq('comptime', field('operand', alias($._unlabelled_block, $.block))),
-
-    _unlabelled_block: $ => seq('{', repeat($._statement), '}'),
+    _comptime_block: $ => seq('comptime', field('operand', $.block)),
 
     // The comma is REQUIRED after a field and absent from the last one, so
     // the last field is a rule of its own rather than an `optional(',')`
@@ -205,6 +204,10 @@ module.exports = grammar({
             $.builtin_call,
             $.container_declaration,
             $.error_set_declaration,
+            // `struct { (fn () u32) }` — a function type needs the
+            // parentheses to sit in a field list at all, since a bare `fn`
+            // there would read as a declaration.
+            $.grouped_expression,
           )),
           optional(seq('=', field('value', $._expression))),
         ),
@@ -215,6 +218,29 @@ module.exports = grammar({
     _declaration: $ => choice(
       $.function_declaration,
       $.variable_declaration,
+    ),
+
+    // `fn () void {}` and `fn () void;` — a prototype with no name. Zig's
+    // parser accepts it and reports the missing name afterwards, so `zig
+    // fmt` calls these files valid and the sweep counts them as ours.
+    //
+    // Admitted at CONTAINER level only. Inside a block, `fn` also starts a
+    // function TYPE through the expression category, and with the name
+    // optional in both there is nothing left to tell them apart; at
+    // container level the type is unreachable, so the name can be dropped
+    // for free. Aliased to `function_declaration` because that is what it
+    // is.
+    _anonymous_function_declaration: $ => seq(
+      optional(field('modifier', $.visibility_modifier)),
+      optional(field('modifier', choice($.linkage_modifier, $.inline_modifier))),
+      'fn',
+      field('parameters', $.parameters),
+      repeat(field('modifier', $._fn_qualifier)),
+      field('return_type', choice(
+        $._type_operand,
+        alias($._inferred_error_union, $.error_union_type),
+      )),
+      choice(field('body', $._body), ';'),
     ),
 
     // The name is REQUIRED, and that is what keeps `fn` unambiguous: with
@@ -260,7 +286,14 @@ module.exports = grammar({
       optional(field('modifier', $.comptime_modifier)),
       field('kind', choice('const', 'var')),
       field('name', $._name),
-      optional(seq(':', field('type', $._type_operand))),
+      // The `comptime` form is admitted HERE and not in `_type_operand`
+      // itself: a container field already spells `comptime` as its own
+      // modifier, so `comptime x` in a field would be the modifier and a
+      // type at once. A variable's type slot has no such competitor.
+      optional(seq(':', field('type', choice(
+        $._type_operand,
+        alias($._comptime_type, $.comptime_expression),
+      )))),
       optional(field('modifier', $.align_qualifier)),
       optional(field('modifier', $.addrspace_qualifier)),
       optional(field('modifier', $.link_section)),
@@ -403,10 +436,18 @@ module.exports = grammar({
     )),
 
     // ── bodies and blocks ────────────────────────────────────────────
-    _body: $ => choice($.block),
+    // The labelled and unlabelled forms are separate RULES producing the
+    // same node, and that split is what lets a labelled block stand in a
+    // type position. With one rule carrying `optional(label)`, any second
+    // rule admitting `label { … }` is a duplicate derivation of the same
+    // symbols and the table cannot choose — which is exactly what defeated
+    // the first attempt at `fn remap(…) t: { … }`.
+    _body: $ => choice($.block, alias($._labelled_block, $.block)),
 
-    block: $ => seq(
-      optional(field('label', $.block_label)),
+    block: $ => seq('{', repeat($._statement), '}'),
+
+    _labelled_block: $ => seq(
+      field('label', $.block_label),
       '{',
       repeat($._statement),
       '}',
@@ -524,7 +565,18 @@ module.exports = grammar({
       // as an initializer on `C` and the function loses its body.
       prec(PREC.prefix, $.switch_expression),
       prec(PREC.prefix, alias($._if_type_expression, $.if_expression)),
+      // `pub fn remap(…) t: { … }` and `var symbols: Symbols: { … }` — a
+      // labelled block COMPUTES the type and `break :t` yields it. Zig's
+      // `LabeledTypeExpr`; `std.mem.Allocator` writes `remap` this way.
+      // Only the labelled form: a bare `{` in a return-type position is
+      // the function's own body and the two cannot be told apart.
+      prec(PREC.prefix, alias($._labelled_block, $.block)),
+      // `y: if (&x != &x) unreachable else u8` — the arm that cannot be
+      // taken names no type, and `unreachable` is what stands there.
+      prec(PREC.prefix, $.unreachable_expression),
     ),
+
+    _comptime_type: $ => prec.right(seq('comptime', field('operand', $._type_operand))),
 
     _if_type_expression: $ => prec.right(seq(
       'if',
@@ -606,6 +658,10 @@ module.exports = grammar({
         // set is written in parentheses, and it is how every function that
         // unions two error sets spells its return type.
         $.grouped_expression,
+        // And it may be COMPUTED: `fn fmt(…) switch (@TypeOf(node)) { … }!T`
+        // picks the error set from the argument's type. `std.zig.llvm` writes
+        // its formatters this way.
+        $.switch_expression,
       )),
       '!',
       field('payload', $._type_operand),
@@ -898,7 +954,14 @@ module.exports = grammar({
       // literal after it (`: .{ .rcx = true, .r11 = true }`). Both spellings
       // are here, which is what the version union means.
       repeat(seq(':', optional(seq(
-        commaSep1(choice($.asm_operand, $.string, $.anonymous_initializer_expression)),
+        commaSep1(choice(
+          $.asm_operand,
+          $.string,
+          $.anonymous_initializer_expression,
+          // `asm volatile ("" ::: undefined)` parses and is rejected later;
+          // the clobber slot is an expression to Zig's parser, not a string.
+          $.undefined,
+        )),
         optional(','),
       )))),
       ')',
@@ -917,6 +980,12 @@ module.exports = grammar({
     // ── functions as types ───────────────────────────────────────────
     function_type: $ => prec.right(seq(
       'fn',
+      // A function TYPE may carry a name — `const aFunc = fn someFunc(x:
+      // i32) void;` — because Zig's parser parses one prototype and decides
+      // afterwards whether a name belonged there. It is an error in the
+      // language and it parses, which is the distinction this grammar has
+      // to keep to agree with the reference parser.
+      optional(field('name', $._name)),
       field('parameters', $.parameters),
       repeat(field('modifier', $._fn_qualifier)),
       field('return_type', choice(

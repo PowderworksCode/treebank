@@ -9,6 +9,8 @@ Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file i
 The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.'''
 generate_cli = '0.26.12'
 vocabulary = '0.1.0'
+parser_note = '''
+`src/parser.c` is 20 MB, the largest in this repository by a factor of two over typescript's 11 MB, and it is worth saying why rather than letting a reader assume the grammar is careless. Zig's expression grammar is a four-deep chain of categories -- `_expression`, `_type_operand`, `_init_type`, `_suffix_expression` -- that exists because a type IS an expression here and the `{` of an initializer has to be told apart from the `{` of a body at every one of those positions. The precedences that separate them force the generator to keep states distinct that a language with a separate type grammar would merge. It costs generate time (40 s in CI against 2 s for the other grammars) and nothing at parse time; the sweep runs 17,168 files through it in under a minute.'''
 roles_note = '''
 19 of 22 table-tier terms are threaded, and the three that are not are facts about Zig.
 
@@ -45,19 +47,21 @@ Application code, and third-party libraries entirely. Everything measured here w
 
 [corpus.sweep]
 files = 17168
-passed = 16947
-failed = 221
-gap_files = 54
+passed = 16997
+failed = 171
+gap_files = 4
 noise_files = 167
-pass_rate = '98.71%'
+pass_rate = '99.00%'
 note = '''
-Four sweeps: 88.11% -> 96.93% -> 98.12% -> 98.71%, and every step was the corpus naming a construct rather than a guess about one.
+Six sweeps: 88.11% -> 96.93% -> 98.12% -> 98.71% -> 98.98% -> 99.00%, and every step was the corpus naming a construct rather than a guess about one.
 
 The first sweep's four largest clusters were, in order, `comptime var` as a statement (336 files), a capture list of more than two elements (232), a type chosen at comptime by an `if` or a `switch` (220) and destructuring assignment (230) -- none of them exotic, all of them things a grammar written without a corpus simply does not think of. The second sweep's largest was the labelled switch and its `continue :sw value` dispatch (58), which is Zig 0.14 syntax the standard library now writes state machines in.
 
 Two of the rounds were about being too STRICT rather than too permissive. Zig's tokenizer emits one permissive `number_literal` token and leaves `0x`, `1_x0.0` and `0x1.0p1ab1` to AstGen, and it takes a whole `'…'` without validating the escape; a grammar that validated either reported gaps on files the reference PARSER accepts. Both tokens are now as permissive as Zig's, with the `integer`/`float` split kept because a query wants it and Zig's single token does not give it.
 
-The 54 that remain are listed under known_gaps and are characterised rather than counted: 32 are in `test/cases/`, the compile-error corpus.'''
+The last two rounds were the tail, and both were shapes a first pass would not invent. A LABELLED BLOCK is a type expression -- `pub fn remap(…) t: { … break :t T; }` is how `std.mem.Allocator` declares its return type -- and closing it needed the labelled and unlabelled forms split into separate RULES, because one rule carrying `optional(label)` makes any second rule admitting `label { … }` a duplicate derivation the table cannot choose between. An error set can be COMPUTED by a `switch` on an argument's type, which is how `std.zig.llvm` writes its formatters. And Zig's parser accepts a prototype with the name in the wrong place -- `fn () void {}`, `const aFunc = fn someFunc(x: i32) void;` -- reporting it afterwards, so `zig fmt` calls those files valid and they were ours to parse; the anonymous form is admitted at container level only, where the function TYPE is unreachable and the name can be dropped without ambiguity.
+
+4 files remain, all one construct, and it is a version conflict rather than a gap: see known_gaps.'''
 
 [[oracles]]
 family = 'zig'
@@ -73,28 +77,14 @@ The second family is REQUIRED, not a nicety, and Zig needs it more than any othe
 `zig ast-check` is the obvious candidate and is deliberately NOT used. An `invalid` verdict books a file the grammar failed as corpus NOISE, so the readier an oracle is to say it, the more flawless the grammar looks -- and `ast-check` runs AstGen as well as the parser, rejecting files that parse perfectly well (an unused local, a discard of something already void). Every one of those would excuse a real gap. Here the stricter tool is the dangerous one, which is the opposite of the intuition, and it is written down so the swap is not made later as an "improvement".'''
 
 [[known_gaps]]
-construct = 'a function prototype with the name in the wrong place'
-files = 28
+construct = '`async` and `await` used as identifiers'
+files = 4
 note = '''
-`fn () void {}`, `fn () void;`, `pub fn (main) void {}` and `const aFunc = fn someFunc(x: i32) void;`. All 28 are in `test/cases/compile_errors/`, and all 28 are code Zig REJECTS -- the disagreement is only about when. This grammar requires a name on a declaration and forbids one on a function type, which is what makes `fn` decidable with one token of lookahead; Zig's parser accepts either and reports the error afterwards. Making the name optional costs a GLR conflict on every `fn` in the language to agree with the reference parser about files neither of us will compile.'''
+`.async = async,` and `.await = await,` in `std.Io.Dispatch`, `Kqueue`, `Threaded` and `Uring`. Zig REMOVED `async`/`await` from the language, so in 0.15 and later they are ordinary identifiers -- and in 0.11 through 0.14 they are prefix operators. Both readings are in this corpus and the grammar cannot have both, because keyword extraction is a LEXER decision: wherever `async_expression` is a valid parse, the token is the keyword and never the identifier.
 
-[[known_gaps]]
-construct = 'a labelled block as a type expression'
-files = 9
-note = '''
-`pub fn remap(…) t: { … }` and `var symbols: Symbols: { … }` -- a labelled block computes the type and `break :t` yields it. Zig's `LabeledTypeExpr` covers it and the standard library uses it in `mem.Allocator`. Tried and rejected: a `_labelled_block` rule aliased to `block` and admitted only in type positions, which is unambiguous on paper and is not in the table -- the labelled and unlabelled forms are one rule, so the two readings of `label { … }` collide wherever an expression and a type position meet. The next attempt should start by splitting `block` into labelled and unlabelled rules, not by trying the alias again.'''
+DESIGN.md §4.2 says the latest version wins when two conflict, and that rule is deliberately NOT applied here. Measured over the corpus: 116 files use `async`/`await` as a prefix operator (37 in 0.11.0, 76 across 0.12-0.14, 3 later) and 54 use them as identifiers (all in 0.15 and 0.16). Applying §4.2 would trade 116 passing files for these 4 -- most of the 54 identifier uses are field NAMES after a `.`, where the keyword is not valid and already lex as identifiers. The four that fail are the ones where the identifier is a VALUE.
 
-[[known_gaps]]
-construct = 'literals the tokenizer accepts and the language does not'
-files = 6
-note = '''
-`'\u{}'`, `'\u{12z34}'`, `''`, `-0x`. The number and character tokens were widened to Zig's own tokenizer, which is what closed 27 files of this kind; these six are the residue, where the shape is wrong in a way even a permissive token cannot spell. Every one is in `test/cases/compile_errors/`.'''
-
-[[known_gaps]]
-construct = 'assorted type-position syntax'
-files = 11
-note = '''
-`var a: comptime u32 = 0;` (a `comptime` prefix on a type), `y: if (…) unreachable else u8` (a type-position `if` whose arm is `unreachable`), `struct { (fn () u32) }` (a parenthesised function type as a tuple field), and `.async = async` (`async` as a field name). Each is one or two constructs and none is a family; they are listed together because that is what they are.'''
+Tried and rejected: making `async_expression`'s operand optional. It parses all four, and it is a lie -- the file means the identifier `async` and the tree would say `async_expression`. That is precisely the silent mis-parse the `shape` gate exists to catch, so it is not worth 4 files.'''
 
 [[deviations]]
 what = '''

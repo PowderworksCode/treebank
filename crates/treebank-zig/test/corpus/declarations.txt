@@ -240,3 +240,151 @@ a .zon file: one anonymous initializer and nothing else
         value: (anonymous_initializer_expression
           value: (initializer_list
             (string)))))))
+
+================================================================================
+a labelled block computing a type, and a switch computing an error set
+================================================================================
+
+pub fn remap(self: Allocator, allocation: anytype) t: {
+    const Slice = @typeInfo(@TypeOf(allocation)).pointer;
+    break :t ?[]align(Slice.alignment) Slice.child;
+} {
+    _ = self;
+    return null;
+}
+
+fn fmt(node: anytype) switch (@TypeOf(node)) {
+    Metadata => Allocator.Error,
+    else => error{},
+}!Alt {
+    _ = node;
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (identifier))
+      (parameter
+        name: (identifier)
+        type: (inferred_type)))
+    return_type: (block
+      label: (block_label
+        (identifier))
+      (variable_declaration
+        name: (identifier)
+        value: (field_expression
+          object: (builtin_call
+            function: (builtin_identifier)
+            arguments: (arguments
+              (builtin_call
+                function: (builtin_identifier)
+                arguments: (arguments
+                  (identifier)))))
+          field: (identifier)))
+      (expression_statement
+        (break_expression
+          label: (loop_label
+            (identifier))
+          value: (optional_type
+            type: (slice_type
+              modifier: (align_qualifier
+                (field_expression
+                  object: (identifier)
+                  field: (identifier)))
+              type: (field_expression
+                object: (identifier)
+                field: (identifier)))))))
+    body: (block
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (identifier)))
+      (expression_statement
+        (return_expression
+          value: (null)))))
+  (function_declaration
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (inferred_type)))
+    return_type: (error_union_type
+      error_set: (switch_expression
+        value: (builtin_call
+          function: (builtin_identifier)
+          arguments: (arguments
+            (identifier)))
+        (switch_case
+          value: (identifier)
+          body: (field_expression
+            object: (identifier)
+            field: (identifier)))
+        (switch_case
+          body: (error_set_declaration)))
+      payload: (identifier))
+    body: (block
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (identifier))))))
+
+================================================================================
+a prototype with no name, and a function type that carries one
+================================================================================
+
+fn () void {}
+fn () void;
+
+const aFunc = fn someFunc(x: i32) void;
+const bFunc = fn (x: i32) void;
+
+pub fn named(x: i32) void {
+    _ = x;
+}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (function_declaration
+    parameters: (parameters)
+    return_type: (identifier)
+    body: (block))
+  (function_declaration
+    parameters: (parameters)
+    return_type: (identifier))
+  (variable_declaration
+    name: (identifier)
+    value: (function_type
+      name: (identifier)
+      parameters: (parameters
+        (parameter
+          name: (identifier)
+          type: (identifier)))
+      return_type: (identifier)))
+  (variable_declaration
+    name: (identifier)
+    value: (function_type
+      parameters: (parameters
+        (parameter
+          name: (identifier)
+          type: (identifier)))
+      return_type: (identifier)))
+  (function_declaration
+    modifier: (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters
+      (parameter
+        name: (identifier)
+        type: (identifier)))
+    return_type: (identifier)
+    body: (block
+      (expression_statement
+        (assignment_expression
+          left: (identifier)
+          right: (identifier))))))
