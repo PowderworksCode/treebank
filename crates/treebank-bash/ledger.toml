@@ -19,11 +19,11 @@ Stars, which is attention rather than use, and the weakest popularity metric in 
 
 [corpus.sweep]
 files = 76830
-passed = 74693
-failed = 2137
-gap_files = 1548
+passed = 75179
+failed = 1651
+gap_files = 1062
 noise_files = 589
-pass_rate = '97.22%'
+pass_rate = '97.85%'
 
 [[oracles]]
 family = 'bash'

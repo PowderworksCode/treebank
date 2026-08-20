@@ -387,7 +387,9 @@ module.exports = grammar({
       // `^(pip|easy)[23]$` is one operand even though parens and pipes are
       // operators everywhere else. One token, bracket-groups kept whole so
       // a `]` inside a class does not end the conditional.
-      seq('=~', optional(alias(token(prec(1, /([^\s\[\]\\]|\\.|\[([^\]\[]|\[:[^\]]*:\])*\])+/)), $.regex))),
+      // A quoted RHS is a literal match, not a regex -- the token must not
+      // eat the opening quote or `=~ " $c "` loses its string.
+      seq('=~', optional(alias(token(prec(1, /([^\s\[\]\\'"]|\\.|\[([^\]\[]|\[:[^\]]*:\])*\])+/)), $.regex))),
       '!', seq('&&', repeat('\n')), seq('||', repeat('\n')),
       '==', '!=', '<', '>', '-a', '-o', '(', ')',
     )),
