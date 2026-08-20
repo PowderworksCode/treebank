@@ -132,9 +132,11 @@ clean()
   (variable_assignment
     (variable_name)
     (command_substitution
-      (string
-        (simple_expansion
-          (variable_name)))))
+      (command
+        (redirect
+          (string
+            (simple_expansion
+              (variable_name)))))))
   (command
     (word)
     (word)

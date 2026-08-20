@@ -86,7 +86,8 @@ module.exports = grammar({
     [$.return_statement],
     [$.expansion],
     [$.variable_assignment],
-    [$.command, $.variable_assignments],],
+    [$.command, $.variable_assignments],
+    [$.command, $._redirect_statement],],
 
   rules: {
     // A file of nothing but comments and blank lines is a program: the
@@ -119,6 +120,9 @@ module.exports = grammar({
       $._invocation,
       $._assignment,
       $.variable_assignments,
+      // A bare redirection is a command with no name: `> "$FILE"`
+      // truncates, `< f` tests readability. The node is still a command.
+      alias($._redirect_statement, $.command),
       $.list,
       $.pipeline,
       $.subshell,
@@ -288,6 +292,11 @@ module.exports = grammar({
     // `-exec rm {} \;` -- even though both are operator spellings at a
     // statement's head. Position is the whole difference, so they are
     // spelled at the argument position and aliased to word.
+    // Loses every tie on purpose: wherever a redirect can attach to a
+    // real command or compound, it belongs there, and only a redirect
+    // with nothing to serve is a statement of its own.
+    _redirect_statement: $ => prec.dynamic(-1, prec.left(repeat1($.redirect))),
+
     _argument: $ => choice(
       $._word_like,
       $.redirect,
@@ -603,9 +612,6 @@ module.exports = grammar({
     // and started a phantom nested substitution that ran to EOF.
     command_substitution: $ => choice(
       seq('$(', $._statements, ')'),
-      // `$(< file)` is bash's read-a-file substitution -- a bare input
-      // redirect with no command, meaning `$(cat file)` without the cat.
-      seq('$(', '<', $._word_like, ')'),
       seq(
         alias($._backtick_open, '`'),
         $._statements,

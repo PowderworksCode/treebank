@@ -126,6 +126,15 @@
           "name": "variable_assignments"
         },
         {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_redirect_statement"
+          },
+          "named": true,
+          "value": "command"
+        },
+        {
           "type": "SYMBOL",
           "name": "list"
         },
@@ -1280,6 +1289,21 @@
             }
           }
         ]
+      }
+    },
+    "_redirect_statement": {
+      "type": "PREC_DYNAMIC",
+      "value": -1,
+      "content": {
+        "type": "PREC_LEFT",
+        "value": 0,
+        "content": {
+          "type": "REPEAT1",
+          "content": {
+            "type": "SYMBOL",
+            "name": "redirect"
+          }
+        }
       }
     },
     "_argument": {
@@ -2835,27 +2859,6 @@
           "type": "SEQ",
           "members": [
             {
-              "type": "STRING",
-              "value": "$("
-            },
-            {
-              "type": "STRING",
-              "value": "<"
-            },
-            {
-              "type": "SYMBOL",
-              "name": "_word_like"
-            },
-            {
-              "type": "STRING",
-              "value": ")"
-            }
-          ]
-        },
-        {
-          "type": "SEQ",
-          "members": [
-            {
               "type": "ALIAS",
               "content": {
                 "type": "SYMBOL",
@@ -3034,6 +3037,10 @@
     [
       "command",
       "variable_assignments"
+    ],
+    [
+      "command",
+      "_redirect_statement"
     ]
   ],
   "precedences": [],

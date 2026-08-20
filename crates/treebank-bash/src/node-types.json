@@ -236,6 +236,10 @@
         "named": true
       },
       {
+        "type": "command",
+        "named": true
+      },
+      {
         "type": "compound_statement",
         "named": true
       },
@@ -508,7 +512,7 @@
       },
       "name": {
         "multiple": false,
-        "required": true,
+        "required": false,
         "types": [
           {
             "type": "_expression",
@@ -553,23 +557,7 @@
       "required": true,
       "types": [
         {
-          "type": "_expression",
-          "named": true
-        },
-        {
           "type": "_statement",
-          "named": true
-        },
-        {
-          "type": "brace_expression",
-          "named": true
-        },
-        {
-          "type": "concatenation",
-          "named": true
-        },
-        {
-          "type": "word",
           "named": true
         }
       ]
