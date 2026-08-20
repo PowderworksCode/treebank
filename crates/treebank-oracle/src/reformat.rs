@@ -39,9 +39,18 @@ pub trait Reformatter: Sync {
     /// What ran, for the report — the reader should not have to guess which
     /// formatter's opinion they are looking at.
     fn tool(&self) -> &'static str;
+    /// Is the tool actually on this machine? Separate from whether the
+    /// language HAS a formatter, which is what `capabilities` declares:
+    /// rustfmt ships with the toolchain, black does not.
+    fn available(&self) -> bool {
+        true
+    }
 }
 
-/// `None` where no formatter is available for the language.
+/// `None` where no formatter is available for the language — either
+/// because the language has none we can drive (declared, with reasons, in
+/// [`crate::capabilities`]) or because the one it has is not installed
+/// here.
 ///
 /// Python's is `black`, which unlike rustfmt is not part of the toolchain,
 /// so it is probed for. The probe is not hedging about whether to depend on
@@ -49,28 +58,9 @@ pub trait Reformatter: Sync {
 /// machine without it gets a sentence naming the missing tool instead of a
 /// subprocess failure per file.
 pub fn get(name: LangName) -> Option<&'static dyn Reformatter> {
-    static RS: RustFmt = RustFmt;
-    static PY: BlackFmt = BlackFmt;
-    match name {
-        LangName::Rust => Some(&RS),
-        LangName::Python => which("black").map(|_| &PY as &dyn Reformatter),
-        // tsc exposes formatting only through the language service, and
-        // prettier is not vendored. Stated rather than faked.
-        LangName::Typescript | LangName::Javascript => None,
-        // google-java-format is the obvious candidate and is not installed;
-        // the JDK ships no formatter of its own.
-        LangName::Java => None,
-        // shfmt is the candidate and is not installed.
-        LangName::Bash => None,
-        // `zig fmt` is the obvious candidate and is a real reformatter
-        // shipped with the compiler. Not wired yet: the reformat gate wants
-        // the tool pinned alongside the oracle, and the oracle's own
-        // version pin is the thing to settle first.
-        LangName::Zig => None,
-        // sqlformat and pg_format are the candidates and neither is
-        // installed; SQLite ships no formatter of its own.
-        LangName::Sql => None,
-    }
+    crate::capabilities::get(name)
+        .reformat
+        .filter(|r| r.available())
 }
 
 fn which(bin: &str) -> Option<String> {
@@ -84,8 +74,8 @@ fn which(bin: &str) -> Option<String> {
         .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
 }
 
-struct RustFmt;
-struct BlackFmt;
+pub(crate) struct RustFmt;
+pub(crate) struct BlackFmt;
 
 /// Run a formatter over each file's TEXT, on stdin, taking the result from
 /// stdout.
@@ -223,5 +213,9 @@ impl Reformatter for BlackFmt {
 
     fn reformat(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, Reformatted>> {
         format_stdin(srcroot, paths, &["black", "-q", "--fast", "-"])
+    }
+
+    fn available(&self) -> bool {
+        which("black").is_some()
     }
 }

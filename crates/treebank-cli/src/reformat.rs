@@ -148,11 +148,7 @@ pub fn run(
         entries.truncate(n);
     }
 
-    let dirs = crate::routing::grammar_dirs(lang);
-    let langs: Vec<tree_sitter::Language> = dirs
-        .iter()
-        .map(|d| grammar::load(&grammar_dir.join(d)).map(|(l, _)| l))
-        .collect::<Result<_>>()?;
+    let (language, _) = grammar::load(grammar_dir)?;
 
     println!(
         "reformat: {} files through {} — the tree must not move",
@@ -174,10 +170,9 @@ pub fn run(
             .collect();
         let formatted = fmt.reformat(&corpus_src, &paths)?;
 
-        let results: Vec<(bool, bool, bool, Option<String>, Option<Divergence>)> = chunk
+        let results: Vec<(bool, bool, bool, Option<String>, Option<Divergence>)> = paths
             .par_iter()
-            .zip(&paths)
-            .map(|(f, rel)| -> Result<_> {
+            .map(|rel| -> Result<_> {
                 let Some(r) = formatted.get(rel) else {
                     return Ok((false, false, false, Some("no record".into()), None));
                 };
@@ -207,9 +202,8 @@ pub fn run(
                         None,
                     ));
                 }
-                let idx = crate::routing::route(lang, &f.dialect, &f.rel);
                 let mut parser = Parser::new();
-                parser.set_language(&langs[idx])?;
+                parser.set_language(&language)?;
                 let (Some(before), Some(after)) = (
                     parser.parse(&before_src, None),
                     parser.parse(after_src.as_bytes(), None),

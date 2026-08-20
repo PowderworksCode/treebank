@@ -251,9 +251,7 @@ enum Cmd {
     Sweep {
         #[arg(long, value_enum, default_value_t = LangName::Rust)]
         lang: LangName,
-        /// Grammar dir. rust: a generated grammar repo. typescript: the
-        /// treebank-typescript root (contains typescript/ and tsx/; .tsx
-        /// files route to the tsx grammar)
+        /// The grammar crate to sweep with, e.g. crates/treebank-rust
         #[arg(long)]
         grammar: PathBuf,
         /// [default: corpus/<lang>/manifest.json]

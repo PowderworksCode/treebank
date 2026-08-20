@@ -21,6 +21,7 @@
 //! `CARGO_MANIFEST_DIR`, so the binary works from any cwd in-repo.
 
 mod bash;
+mod capabilities;
 mod java;
 mod javascript;
 mod python;

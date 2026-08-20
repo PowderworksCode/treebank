@@ -1,37 +1,23 @@
-//! The sweep-side per-language knowledge: which generated grammars a
-//! language's crate carries, how a corpus file routes to one, and what the
-//! language knows about its own preprocessor. This is grammar knowledge,
-//! not corpus or oracle knowledge, which is why it lives here and not in
-//! treebank-corpus or treebank-oracle.
+//! The sweep-side per-language knowledge: what a language knows about its
+//! own preprocessor. Grammar knowledge, not corpus or oracle knowledge,
+//! which is why it lives here and not in treebank-corpus or
+//! treebank-oracle.
+//!
+//! This used to also carry `grammar_dirs` and `route`, which let one
+//! language's crate hold several parsers and picked one per corpus file.
+//! Nothing ever used it: `grammar_dirs` returned `["."]` for every
+//! language and `route` returned `0` for every file, so nine callers built
+//! a one-element `Vec<Language>` and indexed it at zero. The construct it
+//! was built for was the TypeScript/JavaScript dialect split, and
+//! DESIGN.md §4.2 settled that with one union grammar — the legacy `<T>x`
+//! cast measured at ~zero corpus incidence and carried as a ledgered
+//! known-gap. Generality kept for a case that was measured and rejected
+//! costs a `Vec` and an index at every call site and buys nothing; a
+//! language that genuinely needs two parsers can reintroduce both, with a
+//! caller that does something with them.
 
 use treebank_lang::LangName;
 use treebank_preprocessing::Symbols;
-
-/// Grammar dirs to load, in routing-index order, relative to the grammar
-/// crate root. Single-grammar languages get `["."]`.
-pub fn grammar_dirs(lang: LangName) -> &'static [&'static str] {
-    match lang {
-        // One parser covers the whole TS ∪ JS ∪ JSX union: the only
-        // construct the DESIGN.md §4.2 dialect split existed for is the
-        // legacy `<T>x` cast, measured at ~zero corpus incidence and
-        // carried as a ledgered known-gap instead. Plain JS sweeps point
-        // --grammar at the same crate.
-        LangName::Python
-        | LangName::Rust
-        | LangName::Typescript
-        | LangName::Javascript
-        | LangName::Java
-        | LangName::Bash
-        | LangName::Zig
-        | LangName::Sql => &["."],
-    }
-}
-
-/// Index into `grammar_dirs()` for a file.
-pub fn route(lang: LangName, dialect: &Option<String>, rel: &str) -> usize {
-    let _ = (lang, dialect, rel);
-    0
-}
 
 /// What this language knows for certain about its own preprocessor.
 /// `None` means the source is parsed exactly as written, which is right

@@ -25,13 +25,34 @@ jobs:
       - run: cargo build --workspace
       - run: cargo test --workspace
 
+  # The grammar list, read off the repository rather than written down.
+  # A hand-maintained matrix means a new grammar's gates are green because
+  # nothing ran them, which is the one failure mode a gate cannot survive.
+  # A directory under crates/ with a grammar.js in it IS a grammar.
+  discover:
+    name: discover grammars
+    runs-on: ubuntu-latest
+    outputs:
+      grammars: ${{ steps.list.outputs.grammars }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: list
+        run: |
+          set -euo pipefail
+          list=$(ls -d crates/treebank-*/grammar.js \
+            | sed 's|^crates/treebank-||; s|/grammar.js$||' \
+            | jq -R . | jq -sc .)
+          echo "grammars=$list" >> "$GITHUB_OUTPUT"
+          echo "gating: $list"
+
   grammars:
     name: gates (${{ matrix.grammar }})
     runs-on: ubuntu-latest
+    needs: discover
     strategy:
       fail-fast: false
       matrix:
-        grammar: [python, rust, typescript, java, zig, sql]
+        grammar: ${{ fromJSON(needs.discover.outputs.grammars) }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -84,18 +105,24 @@ jobs:
       #
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
+      # Whether there is anything to guard is a property of the checkout,
+      # not a list of exceptions: java and zig have no test/shape yet, for
+      # different reasons (java's span oracle exists and its fixtures do
+      # not; zig has no span oracle at all, because `zig fmt` reports a
+      # verdict and not a tree). Both read as "no fixtures", and the day
+      # either grows some the step starts running by itself.
+      - name: are there shape fixtures
+        id: fixtures
+        run: |
+          if [ -d "crates/treebank-${{ matrix.grammar }}/test/shape" ]; then
+            echo "have=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "have=false" >> "$GITHUB_OUTPUT"
+            echo "no crates/treebank-${{ matrix.grammar }}/test/shape; nothing to guard"
+          fi
+
       - name: shape (tree agrees with the reference parser)
-        # Three grammars skip this step, for two different reasons.
-        # java's span oracle exists now (java-oracle/Spans.java) but
-        # `crates/treebank-java/test/shape` does not, so the step would
-        # fail on the missing directory with no fixture to guard. zig and
-        # sql have no span oracle at all: `zig fmt` reports a verdict
-        # rather than a tree and the `std.zig.Ast` program that would give
-        # one is not built, and sqlite frees its parse tree during prepare
-        # and reports opcodes, so libpg_query is what a SQL span oracle
-        # would have to be built on. `shape` says so and exits rather than
-        # comparing against nothing.
-        if: matrix.grammar != 'java' && matrix.grammar != 'zig' && matrix.grammar != 'sql'
+        if: steps.fixtures.outputs.have == 'true'
         run: ./target/debug/treebank shape
           --lang ${{ matrix.grammar }}
           --grammar crates/treebank-${{ matrix.grammar }}

@@ -900,7 +900,7 @@ impl Judge<'_> {
         if texts.is_empty() {
             return Ok(Vec::new());
         }
-        let ext = ext(self.lang);
+        let ext = self.lang.primary_extension();
         let names: Vec<String> = (0..texts.len())
             .map(|i| format!("probe{i}.{ext}"))
             .collect();
@@ -923,19 +923,6 @@ impl Judge<'_> {
 
     fn accepts(&self, text: &str) -> Result<bool> {
         Ok(self.accepts_many(std::slice::from_ref(&text.to_string()))?[0])
-    }
-}
-
-fn ext(lang: LangName) -> &'static str {
-    match lang {
-        LangName::Rust => "rs",
-        LangName::Python => "py",
-        LangName::Typescript => "ts",
-        LangName::Javascript => "js",
-        LangName::Java => "java",
-        LangName::Bash => "sh",
-        LangName::Zig => "zig",
-        LangName::Sql => "sql",
     }
 }
 
@@ -1114,8 +1101,7 @@ pub fn run(
             }
         );
     }
-    let dirs = crate::routing::grammar_dirs(lang);
-    let (language, _) = crate::grammar::load(&grammar_dir.join(dirs[0]))?;
+    let (language, _) = crate::grammar::load(grammar_dir)?;
     let mut parser = Parser::new();
     parser.set_language(&language)?;
 

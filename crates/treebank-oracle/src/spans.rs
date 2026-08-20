@@ -93,41 +93,21 @@ pub trait SpanOracle: Sync {
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>>;
 }
 
-/// The languages whose oracle can report boundaries. Zig and SQL are the
-/// two that cannot, which is what the `Option` is for: `None` is an honest
-/// answer where a silent no-op would not be, and the arms below say why
-/// each of them is one.
+/// The languages whose oracle can report boundaries. Every one of them
+/// has one now; the `Option` stays because the next language added will
+/// not, and `None` is an honest answer where a silent no-op would not be.
+///
+/// Which languages those are is declared in [`crate::capabilities`],
+/// alongside the other two things a toolchain may or may not be able to
+/// do, so that a new language answers all three in one place.
 pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
-    static TS: TypeScriptSpans = TypeScriptSpans;
-    static PY: PythonSpans = PythonSpans;
-    static RS: crate::rust_spans::RustSpans = crate::rust_spans::RustSpans;
-    static JAVA: JavaSpans = JavaSpans;
-    static BASH: BashSpans = BashSpans;
-    match name {
-        LangName::Typescript | LangName::Javascript => Some(&TS),
-        LangName::Python => Some(&PY),
-        LangName::Rust => Some(&RS),
-        LangName::Java => Some(&JAVA),
-        LangName::Bash => Some(&BASH),
-        // `zig fmt` reports a verdict and a diagnostic, not a tree. The
-        // compiler can dump one (`std.zig.Ast`, from a small program of our
-        // own, the way the java and bash oracles were built), and that is
-        // not built yet. Saying so beats a `shape` run that compares
-        // against nothing.
-        LangName::Zig => None,
-        // SQLite parses to a VDBE program, not to a tree with source
-        // positions: `EXPLAIN` reports opcodes, and the parse tree is freed
-        // inside sqlite3_prepare. libpg_query would give one -- it returns
-        // postgres's own parse tree as JSON with node locations -- and it
-        // is the same build this language's second validity oracle needs.
-        LangName::Sql => None,
-    }
+    crate::capabilities::get(name).spans
 }
 
-struct TypeScriptSpans;
-struct PythonSpans;
-struct JavaSpans;
-struct BashSpans;
+pub(crate) struct TypeScriptSpans;
+pub(crate) struct PythonSpans;
+pub(crate) struct JavaSpans;
+pub(crate) struct BashSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
