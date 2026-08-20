@@ -696,11 +696,6 @@
     }
   },
   {
-    "type": "file_descriptor",
-    "named": true,
-    "fields": {}
-  },
-  {
     "type": "for_statement",
     "named": true,
     "fields": {
@@ -922,11 +917,6 @@
         }
       ]
     }
-  },
-  {
-    "type": "number",
-    "named": true,
-    "fields": {}
   },
   {
     "type": "pipeline",
@@ -1644,6 +1634,10 @@
     "named": false
   },
   {
+    "type": "file_descriptor",
+    "named": true
+  },
+  {
     "type": "for",
     "named": false
   },
@@ -1674,6 +1668,10 @@
   {
     "type": "local",
     "named": false
+  },
+  {
+    "type": "number",
+    "named": true
   },
   {
     "type": "raw_string",

@@ -38,6 +38,7 @@ module.exports = grammar({
     $.heredoc_end,
     $._concat,
     $._assignment_name,
+    $._file_descriptor,
     $._error_sentinel,
   ],
 
@@ -68,7 +69,6 @@ module.exports = grammar({
     [$.string],
     [$._statement, $._body],
     [$._statements],
-    [$.file_descriptor, $.number],
     [$.command, $._assignment],
     [$.continue_statement],
     [$.break_statement],
@@ -278,7 +278,7 @@ module.exports = grammar({
     // ── redirection ──────────────────────────────────────────────────
     redirect: $ => prec.left(PREC.redirect, choice(
       seq(
-        optional(field('descriptor', $.file_descriptor)),
+        optional(field('descriptor', alias($._file_descriptor, $.file_descriptor))),
         field('operator', choice('<', '>', '>>', '&>', '&>>', '<&', '>&', '>|', '<>')),
         field('destination', $._word_like),
       ),
@@ -286,14 +286,13 @@ module.exports = grammar({
     )),
 
     heredoc_redirect: $ => seq(
-      optional(field('descriptor', $.file_descriptor)),
+      optional(field('descriptor', alias($._file_descriptor, $.file_descriptor))),
       choice('<<', '<<-'),
       $.heredoc_start,
       optional($.heredoc_body),
       optional($.heredoc_end),
     ),
 
-    file_descriptor: _ => token(/[0-9]+/),
 
     // ── tests and arithmetic ─────────────────────────────────────────
     test_command: $ => choice(

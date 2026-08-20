@@ -100,24 +100,21 @@ pub fn get(name: LangName) -> Option<&'static dyn SpanOracle> {
     static TS: TypeScriptSpans = TypeScriptSpans;
     static PY: PythonSpans = PythonSpans;
     static RS: crate::rust_spans::RustSpans = crate::rust_spans::RustSpans;
+    static JAVA: JavaSpans = JavaSpans;
+    static BASH: BashSpans = BashSpans;
     match name {
         LangName::Typescript | LangName::Javascript => Some(&TS),
         LangName::Python => Some(&PY),
         LangName::Rust => Some(&RS),
-        // javac can give one: `Trees.getSourcePositions()` yields start and
-        // end offsets for every tree node, so a span oracle is reachable
-        // the same way the validity one was. Not built yet, and saying so
-        // beats a `spans` run that silently compares against nothing.
-        LangName::Java => None,
-        // bash has no AST to ask for: `bash -n` reports a verdict and
-        // nothing else, and there is no second implementation to borrow
-        // one from.
-        LangName::Bash => None,
+        LangName::Java => Some(&JAVA),
+        LangName::Bash => Some(&BASH),
     }
 }
 
 struct TypeScriptSpans;
 struct PythonSpans;
+struct JavaSpans;
+struct BashSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -126,6 +123,12 @@ struct RawFile {
     spans: Vec<(usize, usize, String)>,
     #[serde(default)]
     edges: Vec<(usize, usize, String, String, usize, usize)>,
+    /// Whether this oracle reports edges AT ALL. Absent means yes, which
+    /// the two original span oracles both do; javac's TreeScanner has no
+    /// generic field reflection, so its script says `false` explicitly
+    /// rather than letting an empty list claim every file has no edges.
+    #[serde(default)]
+    has_edges: Option<bool>,
     #[serde(default)]
     tokens: Option<Vec<(usize, usize)>>,
     #[serde(default)]
@@ -161,6 +164,64 @@ impl SpanOracle for PythonSpans {
     }
 }
 
+impl SpanOracle for JavaSpans {
+    /// javac's own parser, via `Trees.getSourcePositions()` over
+    /// `JavacTask.parse()`. Parse only — no analyze — so nothing synthetic
+    /// exists and every reported node is something the file spells.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        let script = crate::tool("java-oracle/Spans.java");
+        let lines = stdin_oracle::run_lines(
+            "java",
+            &[script.to_string_lossy().as_ref()],
+            "java tools/java-oracle/Spans.java — is a JDK (not just a JRE) installed?",
+            srcroot,
+            paths,
+        )?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
+impl SpanOracle for BashSpans {
+    /// NOT the reference implementation. bash has no AST to ask for --
+    /// `bash -n` is a verdict and nothing else -- so boundaries come from
+    /// mvdan.cc/sh, an independent reimplementation, and this check is
+    /// differential against a PEER. A disagreement is a place to look, not
+    /// automatically our bug; the oracle program's header carries the full
+    /// authority statement, and validity verdicts still come from bash.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        // Built once per session rather than `go run` per batch: `go -C`
+        // would also change the working directory, and the paths on stdin
+        // are relative to ours.
+        let dir = crate::tool("bash-oracle/spans");
+        let bin = std::env::temp_dir().join("treebank-bash-spans");
+        {
+            static BUILT: std::sync::Once = std::sync::Once::new();
+            BUILT.call_once(|| {
+                let out = std::process::Command::new("go")
+                    .args(["-C", dir.to_string_lossy().as_ref(), "build", "-o"])
+                    .arg(&bin)
+                    .arg(".")
+                    .output()
+                    .expect("run go build — is a Go toolchain installed?");
+                if !out.status.success() {
+                    panic!(
+                        "go build tools/bash-oracle/spans failed:\n{}",
+                        String::from_utf8_lossy(&out.stderr)
+                    );
+                }
+            });
+        }
+        let lines = stdin_oracle::run_lines(
+            bin.to_string_lossy().as_ref(),
+            &[],
+            "tools/bash-oracle/spans — go build produced no binary?",
+            srcroot,
+            paths,
+        )?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
 /// Both span oracles answer in the same JSON-lines shape, so the decoding is
 /// shared: one object per file, spans as `[start, end, kind]` triples.
 fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileSpans>> {
@@ -189,7 +250,7 @@ fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileS
                         child: (cs, ce),
                     })
                     .collect(),
-                has_edges: true,
+                has_edges: raw.has_edges.unwrap_or(true),
                 has_tokens: raw.tokens.is_some(),
                 tokens: raw.tokens.unwrap_or_default(),
                 error: raw.error,
