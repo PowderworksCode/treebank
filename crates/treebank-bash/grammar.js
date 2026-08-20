@@ -85,7 +85,8 @@ module.exports = grammar({
     [$.break_statement],
     [$.return_statement],
     [$.expansion],
-    [$.variable_assignment],],
+    [$.variable_assignment],
+    [$.command, $.variable_assignments],],
 
   rules: {
     // A file of nothing but comments and blank lines is a program: the
@@ -117,6 +118,7 @@ module.exports = grammar({
       $._control_flow,
       $._invocation,
       $._assignment,
+      $.variable_assignments,
       $.list,
       $.pipeline,
       $.subshell,
@@ -295,6 +297,11 @@ module.exports = grammar({
 
     _assignment: $ => choice($.variable_assignment, $.declaration_command),
 
+    // `IFS=' ' output=( ... )`: several assignments standing alone as one
+    // statement, each applying in order, no command following. repeat1
+    // after the first, so a single assignment stays the supertype's.
+    variable_assignments: $ => prec.left(seq($.variable_assignment, repeat1($.variable_assignment))),
+
     variable_assignment: $ => seq(
       field('name', alias($._assignment_name, $.variable_name)),
       // `a[0]=1`: the scanner fences the NAME and peeks through the
@@ -349,13 +356,13 @@ module.exports = grammar({
 
 
     // ── tests and arithmetic ─────────────────────────────────────────
-    test_command: $ => choice(
-      seq('[[', $._conditional, ']]'),
+    test_command: $ => prec.left(choice(
+      seq('[[', $._conditional, ']]', repeat($.redirect)),
       // `[` is a command and its arguments are words -- but `!=`, `=` and
       // `!` are operator characters the word token excludes, so they have
       // to be spelled: `[ "$a" != "$b" ]` errored on the `!=`.
-      seq('[', repeat(choice($._word_like, '!', '!=', '==', '=', '-a', '-o', '(', ')')), ']'),
-    ),
+      seq('[', repeat(choice($._word_like, '!', '!=', '==', '=', '-a', '-o', '(', ')')), ']', repeat($.redirect)),
+    )),
 
     _conditional: $ => repeat1(choice(
       $._word_like,
@@ -363,8 +370,9 @@ module.exports = grammar({
       // `^(pip|easy)[23]$` is one operand even though parens and pipes are
       // operators everywhere else. One token, bracket-groups kept whole so
       // a `]` inside a class does not end the conditional.
-      seq('=~', optional(alias(token(prec(1, /([^\s\[\]]|\[[^\]]*\])+/)), $.regex))),
-      '!', '&&', '||', '==', '!=', '<', '>', '-a', '-o', '(', ')',
+      seq('=~', optional(alias(token(prec(1, /([^\s\[\]]|\[([^\]\[]|\[:[^\]]*:\])*\])+/)), $.regex))),
+      '!', seq('&&', repeat('\n')), seq('||', repeat('\n')),
+      '==', '!=', '<', '>', '-a', '-o', '(', ')',
     )),
 
     arithmetic_command: $ => seq('((', optional($._arithmetic), '))'),
@@ -430,12 +438,16 @@ module.exports = grammar({
       choice(
         /[^\s'"<>{}()$`|&;!\\\[\]#]/,
         /\\[^\r\n]/,
+        // A bracket glob is one chunk, and `!` is legal INSIDE it --
+        // `[!0-9]` negates the class -- while staying an operator outside.
+        /\[[^\]\s]*\]/,
         /\[/,
         /\]/,
       ),
       repeat(choice(
         /[^\s'"<>{}()$`|&;!\\\[\]]/,
         /\\[^\r\n]/,
+        /\[[^\]\s]*\]/,
         /\[/,
         /\]/,
       )),
@@ -527,7 +539,14 @@ module.exports = grammar({
     expansion: $ => seq(
       '${',
       optional(choice('#', '!')),
-      field('name', optional(choice($.variable_name, $.special_variable, $.subscript))),
+      field('name', optional(choice(
+        $.variable_name,
+        $.special_variable,
+        // `${10}`, `${12%x}`: multi-digit positionals only spell inside
+        // braces; the single-char special_variable cannot carry them.
+        alias(token.immediate(/[0-9]+/), $.special_variable),
+        $.subscript,
+      ))),
       optional($._expansion_tail),
       '}',
     ),
@@ -558,6 +577,7 @@ module.exports = grammar({
       // braces delimit the expansion, so `${tags:-2fa;auth}` and
       // `${1:- (%s)}` never end at the semicolon or open a subshell.
       ':', '-', '=', '?', '+', '#', '%', '/', '^', ',', '@', '*', ';', '(', ')',
+      '|', '&', '<', '>', '!',
     )),
 
     // The backtick form's delimiters are EXTERNAL: the first unescaped

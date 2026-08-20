@@ -262,6 +262,10 @@
       {
         "type": "test_command",
         "named": true
+      },
+      {
+        "type": "variable_assignments",
+        "named": true
       }
     ]
   },
@@ -1324,6 +1328,10 @@
           "named": true
         },
         {
+          "type": "redirect",
+          "named": true
+        },
+        {
           "type": "regex",
           "named": true
         },
@@ -1436,6 +1444,21 @@
           }
         ]
       }
+    }
+  },
+  {
+    "type": "variable_assignments",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "variable_assignment",
+          "named": true
+        }
+      ]
     }
   },
   {
