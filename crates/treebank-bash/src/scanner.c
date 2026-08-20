@@ -20,6 +20,7 @@
 
 enum TokenType {
   HEREDOC_START,
+  HEREDOC_START_DASH,
   HEREDOC_BODY,
   HEREDOC_END,
   CONCAT,
@@ -84,7 +85,7 @@ static bool is_word_char(int32_t c) {
 // `<<EOF`, `<<-EOF`, `<<"EOF"`, `<<'EOF'`. Only the NAME is captured; the
 // quoting decides whether the body expands, which the grammar does not
 // model yet.
-static bool scan_heredoc_start(Scanner *s, TSLexer *lexer) {
+static bool scan_heredoc_start(Scanner *s, TSLexer *lexer, bool dash) {
   while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
   int32_t quote = 0;
   if (lexer->lookahead == '"' || lexer->lookahead == '\'') {
@@ -104,7 +105,8 @@ static bool scan_heredoc_start(Scanner *s, TSLexer *lexer) {
   }
   if (s->length == 0) return false;
   s->started = false;
-  lexer->result_symbol = HEREDOC_START;
+  s->allows_indent = dash;
+  lexer->result_symbol = dash ? HEREDOC_START_DASH : HEREDOC_START;
   return true;
 }
 
@@ -325,8 +327,8 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   if (valid[HEREDOC_END] && s->length > 0) {
     if (scan_heredoc_end(s, lexer)) return true;
   }
-  if (valid[HEREDOC_START]) {
-    return scan_heredoc_start(s, lexer);
+  if (valid[HEREDOC_START] || valid[HEREDOC_START_DASH]) {
+    return scan_heredoc_start(s, lexer, valid[HEREDOC_START_DASH]);
   }
   return false;
 }

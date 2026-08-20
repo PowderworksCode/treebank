@@ -34,6 +34,7 @@ module.exports = grammar({
 
   externals: $ => [
     $.heredoc_start,
+    $._heredoc_start_dash,
     $.heredoc_body,
     $.heredoc_end,
     $._concat,
@@ -324,8 +325,17 @@ module.exports = grammar({
 
     heredoc_redirect: $ => seq(
       optional(field('descriptor', alias($._file_descriptor, $.file_descriptor))),
-      choice('<<', '<<-'),
-      $.heredoc_start,
+      // Two start tokens for two operators: the scanner cannot see which
+      // `<<` form the internal lexer consumed, but the VALID-TOKEN set at
+      // the next position can carry it -- after `<<-` only the dash
+      // variant is valid, and that is what sets tab-stripping for the
+      // terminator. The `allows_indent` flag existed from the first
+      // version of this scanner and was never assigned: `<<-` heredocs
+      // only ever closed when their terminator happened to be unindented.
+      choice(
+        seq('<<', $.heredoc_start),
+        seq('<<-', alias($._heredoc_start_dash, $.heredoc_start)),
+      ),
       optional($.heredoc_body),
       optional($.heredoc_end),
     ),
