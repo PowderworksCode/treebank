@@ -110,3 +110,30 @@ Nested type-use annotations inside generics: javac builds an ANNOTATED_TYPE per 
 [[ignore]]
 signature = 'ANNOTATED_TYPE <- array_creation_expression'
 why = 'The array-creation face of the type-use annotation family: `new @Nullable Object[n]`.'
+
+[[ignore]]
+signature = 'EXTENDS_WILDCARD <- wildcard'
+why = '''
+`<@NonNull ? extends X>` -- our wildcard owns its annotations (repeat($._attribute) at the front, the same decision as python's decorators), so it starts at the `@`; javac's EXTENDS_WILDCARD starts at the `?` and hangs the annotation elsewhere. A deliberate difference in where the construct begins.'''
+
+[[ignore]]
+signature = 'SUPER_WILDCARD <- wildcard'
+why = 'See `EXTENDS_WILDCARD <- wildcard`.'
+
+[[ignore]]
+signature = 'ENUM <- enum_constant'
+why = '''
+An enum constant with a body is internally an anonymous class to javac -- an ENUM/NEW_CLASS pair whose spans run from the arguments through the body. Same family as the declared `NEW_CLASS <- enum_constant`.'''
+
+[[ignore]]
+signature = 'MEMBER_SELECT <- explicit_constructor_invocation'
+why = '''
+Qualified super: `outer.super(...)`. javac wraps `outer.super` as a MEMBER_SELECT; ours holds the qualifier and `super` as fields of the invocation, the same flattening as every method call's receiver.'''
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- enhanced_for_statement'
+why = 'The for-head form of the C-style declarator family: `for (Object objs[] : ...)`.'
+
+[[ignore]]
+signature = 'ARRAY_TYPE <- method_declaration'
+why = 'The return-type form of the C-style family: `byte getBytes()[]`, where javac reports a type span crossing the parameter list.'

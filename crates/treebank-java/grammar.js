@@ -837,21 +837,34 @@ module.exports = grammar({
       prec.left(PREC.postfix, seq($._no_lambda, choice('++', '--'))),
     ),
 
-    cast_expression: $ => prec(PREC.cast, seq(
-      '(',
-      field('type', $._type),
-      repeat(seq('&', $._type)),
-      ')',
-      // Spelled as an inline choice rather than `$._expression`, which is
-      // the same set -- but `_expression` is a hidden rule, and its unit
-      // reduction is where the conflict resolution went wrong: with it in
-      // place, `(float)keys.length / x` parsed as `(float)(keys.length/x)`,
-      // the cast swallowing the division exactly as `++last == maxSize`
-      // swallowed the comparison. Java casts bind their operand at unary
-      // strength (JLS 15.16); the lambda stays because casting a lambda to
-      // a functional interface is ordinary code.
-      field('value', choice($.lambda, $._no_lambda)),
-    )),
+    // Two forms with different strengths, which is the JLS's own
+    // disambiguation (15.16): a PRIMITIVE cast takes a full unary operand,
+    // `(byte) -1`; a REFERENCE cast takes UnaryExpressionNotPlusMinus, so
+    // `(s1_2 & U32) + x` is the parenthesized expression PLUS x, never a
+    // cast to an intersection type with a unary-plus operand -- which is
+    // exactly how the full-corpus javac span run caught bouncycastle's
+    // field arithmetic mis-parsed. The reference form loses GLR ties to
+    // the parenthesized reading; a genuine cast survives because the
+    // parenthesized reading has no way to continue past `(Foo) bar`.
+    //
+    // The operand is an inline choice rather than `$._expression`: the
+    // hidden rule's unit reduction broke the precedence contest (see the
+    // `++last == maxSize` commit).
+    cast_expression: $ => choice(
+      prec(PREC.cast, seq(
+        '(',
+        field('type', $.primitive_type),
+        ')',
+        field('value', choice($.lambda, $._no_lambda)),
+      )),
+      prec.dynamic(-1, prec(PREC.cast, seq(
+        '(',
+        field('type', $._type),
+        repeat(seq('&', $._type)),
+        ')',
+        field('value', choice($.lambda, $._no_lambda)),
+      ))),
+    ),
 
     instanceof_expression: $ => prec(PREC.relational, seq(
       field('left', $._no_lambda),
