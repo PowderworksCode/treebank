@@ -102,26 +102,13 @@ pub trait Oracle: Sync {
 /// Total: an unsupported name cannot be constructed, because clap and serde
 /// both reject it at the boundary. Nothing here can fail.
 pub fn get(name: LangName) -> &'static dyn Oracle {
-    static PYTHON: python::Python = python::Python;
-    static RUST: rust::Rust = rust::Rust;
-    static TYPESCRIPT: typescript::TypeScript = typescript::TypeScript;
-    static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
-    static JAVA: java::Java = java::Java;
-    static BASH: bash::Bash = bash::Bash;
-    static C: c::C = c::C;
-    static CPP: c::Cpp = c::Cpp;
-    static ZIG: zig::Zig = zig::Zig;
-    static RUBY: ruby::Ruby = ruby::Ruby;
-    match name {
-        LangName::Python => &PYTHON,
-        LangName::Rust => &RUST,
-        LangName::Typescript => &TYPESCRIPT,
-        LangName::Javascript => &JAVASCRIPT,
-        LangName::Java => &JAVA,
-        LangName::Bash => &BASH,
-        LangName::C => &C,
-        LangName::Cpp => &CPP,
-        LangName::Zig => &ZIG,
-        LangName::Ruby => &RUBY,
+    macro_rules! oracle_match {
+        ($( $variant:ident => $name:literal, $exts:tt, $grammar:ident, $rosetta:literal,
+             $ecosystem:path, $oracle:path, $caps:tt; )+) => {
+            match name {
+                $(LangName::$variant => &$oracle,)+
+            }
+        };
     }
+    treebank_lang::for_each_language!(oracle_match)
 }

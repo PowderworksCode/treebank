@@ -20,7 +20,8 @@ use serde::Deserialize;
 /// Declare the languages. Each entry is:
 ///
 /// ```text
-/// Variant => "name", exts: ["ext", ...], grammar: Variant;
+/// Variant => "name", ["ext", ...], Grammar, rosetta,
+/// ecosystem::Adapter, oracle::Adapter, (SPANS, FORMATTER, UNPARSER);
 /// ```
 ///
 /// - `name` is the canonical spelling: what `--lang` accepts, what
@@ -30,10 +31,15 @@ use serde::Deserialize;
 /// - `grammar` names the language whose `crates/treebank-<name>` grammar
 ///   parses this one. Usually itself; it differs only for a dialect that
 ///   an existing union grammar already covers.
+/// - the remaining columns register Rosetta participation and the adapters
+///   consumed by `treebank-corpus` and `treebank-oracle`; `NONE` explicitly
+///   records an unsupported optional oracle capability.
 macro_rules! languages {
     ($(
         $(#[$attr:meta])*
-        $variant:ident => $name:literal, exts: [$($ext:literal),+ $(,)?], grammar: $grammar:ident;
+        $variant:ident => $name:literal, [$($ext:literal),+ $(,)?], $grammar:ident,
+        $rosetta:literal, $ecosystem:path, $oracle:path,
+        ($spans:ident, $reformat:ident, $unparse:ident);
     )+) => {
         /// The canonical name of a supported language. This is the only
         /// place the spelling is decided.
@@ -72,31 +78,41 @@ macro_rules! languages {
                     $(LangName::$variant => LangName::$grammar,)+
                 }
             }
+
+            /// Whether this language participates in the cross-language
+            /// Rosetta vocabulary gate.
+            pub fn rosetta(self) -> bool {
+                match self {
+                    $(LangName::$variant => $rosetta,)+
+                }
+            }
         }
     };
 }
 
-languages! {
-    Python => "python", exts: ["py", "pyi"], grammar: Python;
-    Rust => "rust", exts: ["rs"], grammar: Rust;
-    Typescript => "typescript", exts: ["ts", "tsx", "mts", "cts"], grammar: Typescript;
-    /// Not a treebank grammar of its own — the TypeScript grammar's `tsx`
-    /// dialect parses plain JS. Kept as a corpus/oracle language so `.js`
-    /// files can be fetched, swept and adjudicated (V8) independently.
-    Javascript => "javascript", exts: ["js", "jsx", "mjs", "cjs"], grammar: Typescript;
-    Java => "java", exts: ["java"], grammar: Java;
-    Bash => "bash", exts: ["sh", "bash"], grammar: Bash;
-    C => "c", exts: ["c", "h"], grammar: C;
-    /// A grammar of its own, and not a dialect of `c`: the C++ grammar
-    /// EXTENDS the C one rather than replacing it, but the two parse
-    /// different languages and a `.h` belongs to exactly one of them.
-    /// Which one is a corpus question the extension cannot answer, which
-    /// is why `.h` is C's here and the corpus filter decides per file —
-    /// see treebank-corpus's `cxx::header_is_cxx`.
-    Cpp => "cpp", exts: ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], grammar: Cpp;
-    Ruby => "ruby", exts: ["rb"], grammar: Ruby;
-    Zig => "zig", exts: ["zig", "zon"], grammar: Zig;
+/// Feed the complete registry to a consumer macro. Paths and capability
+/// handles are deliberately tokens: they resolve in the corpus/oracle crate
+/// that invokes the callback. This keeps registration data here without
+/// making this leaf crate depend on either implementation crate.
+#[macro_export]
+macro_rules! for_each_language {
+    ($callback:ident) => {
+        $callback! {
+            Python => "python", ["py", "pyi"], Python, true, python::Python, python::Python, (PY_SPANS, BLACK, PY_PRINT);
+            Rust => "rust", ["rs"], Rust, true, rust::Rust, rust::Rust, (RS_SPANS, RUSTFMT, RS_PRINT);
+            Typescript => "typescript", ["ts", "tsx", "mts", "cts"], Typescript, true, typescript::TypeScript, typescript::TypeScript, (TS_SPANS, NONE, TS_PRINT);
+            Javascript => "javascript", ["js", "jsx", "mjs", "cjs"], Typescript, false, javascript::JavaScript, javascript::JavaScript, (TS_SPANS, NONE, TS_PRINT);
+            Java => "java", ["java"], Java, false, java::Java, java::Java, (JAVA_SPANS, NONE, NONE);
+            Bash => "bash", ["sh", "bash"], Bash, false, bash::Bash, bash::Bash, (BASH_SPANS, NONE, NONE);
+            C => "c", ["c", "h"], C, false, c::C, c::C, (NONE, NONE, NONE);
+            Cpp => "cpp", ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], Cpp, false, cxx::Cxx, c::Cpp, (NONE, NONE, NONE);
+            Ruby => "ruby", ["rb"], Ruby, true, ruby::Ruby, ruby::Ruby, (RB_SPANS, NONE, NONE);
+            Zig => "zig", ["zig", "zon"], Zig, false, zig::Zig, zig::Zig, (NONE, NONE, NONE);
+        }
+    };
 }
+
+for_each_language!(languages);
 
 impl LangName {
     /// The canonical extension: what to call a file of this language when
@@ -181,5 +197,15 @@ mod tests {
         );
         assert_eq!(LangName::Javascript.grammar_crate(), "treebank-typescript");
         assert_eq!(LangName::Zig.grammar_extensions(), vec!["zig", "zon"]);
+    }
+
+    #[test]
+    fn rosetta_participants_are_registry_data() {
+        let names: Vec<_> = LangName::ALL
+            .iter()
+            .filter(|lang| lang.rosetta())
+            .map(|lang| lang.as_str())
+            .collect();
+        assert_eq!(names, ["python", "rust", "typescript", "ruby"]);
     }
 }
