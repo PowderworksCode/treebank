@@ -60,13 +60,23 @@ tree at df0c243:
     leans entirely on the corpus tests and batteries". The least-measured
     part of the best-measured grammar in the repository.
 
-What the split bought, measured after:
+What the split bought, measured after. The "before" column is main's union
+grammar as it stands at c0554d2 -- what this branch would otherwise be
+shipping -- rather than the base the split was first written against, so
+the two columns are two things you can generate today:
 
-  parser.c            2,891,295 -> 2,660,725 bytes (python3)   -8.0%
-  parse states            2,494 -> 2,387                       -107
-  declared conflicts         33 -> 27 (python3), 13 (python2)
-  differential            8,761 CPython-3.11-valid files, trees
+  parser.c            2,894,567 -> 2,663,878 bytes (python3)   -8.0%
+  parse states            2,487 -> 2,380                       -107
+  large states              215 -> 177                          -38
+  symbols                   305 -> 296                           -9
+  declared conflicts         45 -> 39 (python3), 16 (python2)    -6
+  differential            8,758 CPython-3.11-valid files, trees
                           byte-identical before and after the strip
+
+The conflict counts are TOTALS, which is what `treebank lint` reports and
+what a GLR fork site costs. Of python3's 39, fifteen are declared in the
+shared common/define-grammar.js and 24 in its own manifest; of python2's
+16, the same fifteen are shared and exactly ONE is its own.
 
 And the three purpose-rejections stop being rejections where they belong:
 bare `await` and bare `nonlocal` parse as ordinary identifiers in python2,
@@ -91,6 +101,7 @@ rule's internals behind a flag, which is the one thing §3 forbids. Doing it
 properly needs a new declared extension point designed for parameter and
 collection shape; doing it improperly is how the parameterization rots.
 
-They are recorded and not guessed at because this variant has no oracle:
-there is no python 2 binary in CI, so nothing can adjudicate a removal. A
-guess in a parse table is worse than a written-down gap.'''
+They were recorded rather than guessed at when this variant had no oracle,
+and they are still recorded rather than removed now that it has one:
+python2/ledger.toml names the probe that found each, and the reason each
+stays is the shape boundary above, not an inability to adjudicate.'''

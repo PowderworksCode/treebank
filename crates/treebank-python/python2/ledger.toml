@@ -118,10 +118,14 @@ test data, and a py3 f-string in PCbuild/). The oracle calling exactly those
 invalid, and nothing else, is the adjudication checking itself.'''
 
 table = '''
-1,691 parse states (python3: 2,387), 84 large states (176), 255 symbols
-(295), 1 declared conflict (37), parser.c 1.70 MB (2.66 MB). The single
-conflict is `print_statement` against `_soft_keyword` and is the price of
-the PEP 3105 fix above.'''
+1,714 parse states (python3: 2,380), 84 large states (177), 256 symbols
+(296), 16 declared conflicts (39), parser.c 1.73 MB (2.66 MB).
+
+The conflict counts are TOTALS -- what `treebank lint` reports, and what a
+GLR fork site actually costs. Fifteen of each are declared in the shared
+common/define-grammar.js; the difference is that python3 adds 24 of its own
+and python2 adds exactly ONE, `print_statement` against `_soft_keyword`,
+which is the price of the PEP 3105 fix above.'''
 
 what_is_gated = '''
 `tree-sitter test` 10/10; negative corpus 15/15 rejected; `treebank

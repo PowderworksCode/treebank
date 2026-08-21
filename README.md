@@ -111,10 +111,11 @@ oracles.
 
 Deliberately short, and kept that way. The workspace picks a new crate up
 from `crates/*`, CI builds its gate matrix from which directories contain a
-`grammar.js`, the shape gate turns itself on when `test/shape` appears, and
-file extensions are read from the registry rather than restated in the
-fuzzer and the shape checker. What is left is the work with a decision in
-it:
+`grammar.js` — one row per parse table, so a language that declares variants
+contributes one row each — the shape gate turns itself on when `test/shape`
+appears, and file extensions are read from the registry rather than restated
+in the fuzzer and the shape checker. What is left is the work with a decision
+in it:
 
 1. **Write the grammar.** `crates/treebank-<lang>/` — `grammar.js`,
    `tree-sitter.json`, `roles.json`, `ledger.toml`, `build.rs`, the Rust

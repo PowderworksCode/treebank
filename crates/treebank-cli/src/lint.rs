@@ -49,7 +49,42 @@ struct Report {
     hard_failures: Vec<String>,
 }
 
+/// Lint is per PARSE TABLE, not per language. Every input it reads is
+/// generated for one table — `src/grammar.json`, `src/scanner.c`,
+/// `src/parser.c` — and so are the `lint_policy.toml` ratchets: python2's
+/// one declared conflict is the measured price of PEP 3105 in that table
+/// and is not debt python3 may spend. A multi-variant language
+/// (VARIANTS.md §2) therefore gets one run per variant.
+///
+/// Every table is linted even after one fails. Stopping at the first would
+/// print nothing about the second, which reads as clean.
 pub fn run(grammar_dir: &Path) -> Result<()> {
+    let tables = crate::verify::variant_dirs(grammar_dir);
+    let multi = tables.len() > 1;
+    let mut failed = Vec::new();
+    for dir in &tables {
+        let label = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().to_string())
+            .unwrap_or_default();
+        if multi {
+            println!("lint: [{label}]");
+        }
+        if let Err(e) = run_table(dir) {
+            failed.push(if multi {
+                format!("{label}: {e}")
+            } else {
+                e.to_string()
+            });
+        }
+    }
+    if !failed.is_empty() {
+        bail!("{}", failed.join("; "));
+    }
+    Ok(())
+}
+
+fn run_table(grammar_dir: &Path) -> Result<()> {
     let grammar: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(grammar_dir.join("src/grammar.json"))
             .context("read src/grammar.json — generate first")?,
@@ -134,6 +169,37 @@ fn ratchet(r: &mut Report, name: &str, actual: usize, baseline: Option<usize>) {
     }
 }
 
+/// The scanner body, following the one indirection a variant introduces.
+///
+/// A multi-variant language's `src/scanner.c` is a stub around the shared
+/// `common/scanner.c` (VARIANTS.md §2), so reading the stub alone finds no
+/// enum at all and this check reports drift it cannot actually see — on
+/// every variant, forever. Same blind spot as the dylib cache that once
+/// fingerprinted only the stub and served a stale parser to the
+/// crossvariant gate.
+///
+/// The includes are consulted only when the file has no enum of its own, so
+/// every single-file scanner is read exactly as before, and `tree_sitter/`
+/// is skipped: the runtime's headers are what every scanner includes and
+/// where no scanner declares its TokenType. Both conditions exist so that a
+/// missing enum still FAILS rather than matching against something that was
+/// never the scanner's.
+fn scanner_source(path: &Path) -> std::io::Result<String> {
+    let raw = std::fs::read(path)?;
+    let mut text = String::from_utf8_lossy(&raw).into_owned();
+    if text.contains("enum ") {
+        return Ok(text);
+    }
+    for inc in crate::grammar::local_includes(path, &raw) {
+        if inc.components().any(|c| c.as_os_str() == "tree_sitter") {
+            continue;
+        }
+        text.push('\n');
+        text.push_str(&String::from_utf8_lossy(&std::fs::read(inc)?));
+    }
+    Ok(text)
+}
+
 /// Externals and the scanner's TokenType enum are matched BY POSITION;
 /// drift between them is undefined behaviour that presents as impossible
 /// tokens, so this one is a hard failure with or without a policy. (The
@@ -144,7 +210,7 @@ fn check_scanner_enum(dir: &Path, grammar: &serde_json::Value, r: &mut Report) {
     if externals == 0 {
         return;
     }
-    let Ok(scanner) = std::fs::read_to_string(dir.join("src/scanner.c")) else {
+    let Ok(scanner) = scanner_source(&dir.join("src/scanner.c")) else {
         r.hard_failures.push(format!(
             "grammar declares {externals} externals but src/scanner.c is unreadable"
         ));

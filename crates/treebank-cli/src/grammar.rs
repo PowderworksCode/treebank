@@ -83,7 +83,7 @@ pub fn load(grammar_dir: &Path) -> Result<(tree_sitter::Language, String)> {
 /// Quoted `#include` paths in a C file, resolved relative to it. One level
 /// deep, which is all the variant stubs use; a deeper chain would need this
 /// to recurse, and the day one appears is the day to make it.
-fn local_includes(file: &Path, contents: &[u8]) -> Vec<std::path::PathBuf> {
+pub fn local_includes(file: &Path, contents: &[u8]) -> Vec<std::path::PathBuf> {
     let dir = file.parent().unwrap_or(Path::new("."));
     String::from_utf8_lossy(contents)
         .lines()

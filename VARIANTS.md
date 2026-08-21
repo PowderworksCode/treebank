@@ -295,11 +295,13 @@ and the three dynamic precedences. Expected: a smaller table, a faster sweep,
 and — the part worth measuring first — some number of ambiguity-driven
 mis-shapes that only existed because a losing fork was on the table.
 
-*Measured:* parser.c −8.0% (2,891,295 → 2,660,725 bytes), 2,494 → 2,387 parse
-states, 214 → 176 large states, six conflicts and three negative dynamic
-precedences gone. Zero mis-shapes surfaced: a differential parse of 8,761
-CPython-3.11-valid files gives byte-identical trees before and after. Nine
-constructs it now rejects, all nine of which CPython 3.11 also rejects.
+*Measured*, against the union grammar on `main`: parser.c −8.0% (2,894,567 →
+2,663,878 bytes), 2,487 → 2,380 parse states, 215 → 177 large states, 305 → 296
+symbols, 45 → 39 declared conflicts — the six carried for `print` and `exec` —
+and three negative dynamic precedences gone. Zero mis-shapes surfaced: a
+differential parse of 8,761 CPython-3.11-valid files gives byte-identical trees
+before and after. Nine constructs it now rejects, all nine of which CPython
+3.11 also rejects.
 
 **`python2`** — the shared core plus a py2 rule module. Everything above comes
 back as ordinary unambiguous grammar, and the three purpose-rejected constructs
@@ -309,9 +311,11 @@ when `print` is a keyword. `variants.toml` keeps `f((a)=1)` as a rejection —
 that one is py3.0–3.7, an intra-variant version question, and the union rule
 still governs it.
 
-*Measured:* 1,797 parse states against python3's 2,387, and 13 declared
-conflicts against 37. The two tables disagree about 55.9% of the 8,761-file
-py3 corpus, and about all 29 crossvariant fixtures.
+*Measured:* 1,714 parse states against python3's 2,380, and 16 declared
+conflicts against 39 — fifteen of each are the shared ones in
+`common/define-grammar.js`, so what the variant itself adds is 1 against 24.
+The two tables disagree about 55.9% of the 8,761-file py3 corpus, and about all
+29 crossvariant fixtures.
 
 *Not done:* three python 3 constructs python2 still accepts — `@` matmul, the
 PEP 448 unpacking generalizations, and the py3 parameter-list separators. They

@@ -112,9 +112,14 @@ jobs:
 
       # I4 — vocabulary conformance: closed term lists, total node
       # coverage, containments, and a roles.json whose members all exist.
-      # One manifest per LANGUAGE, so the default variant runs it.
+      # One manifest per LANGUAGE, and `roles` resolves the default variant
+      # itself, so a multi-variant language runs this once per row and gets
+      # the same answer each time. Deliberately unconditional: skipping the
+      # non-default rows would mean naming the default variant HERE, and a
+      # name written in CI is a name that goes stale the first time a
+      # language declares variants this file has never heard of — silently,
+      # by running the gate for none of them.
       - name: vocabulary conformance
-        if: matrix.variant == '' || matrix.variant == 'python3'
         run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
 
       # The FIELD_GUIDE.md smell detector: declared-conflict growth, early
@@ -122,8 +127,10 @@ jobs:
       # keywords, scanner/externals drift, parse-table growth. Enforced
       # against the grammar's lint_policy.toml ratchets where one exists;
       # advisory (report only) where none does yet.
+      # Per PARSE TABLE, like generation and the corpora above: every input
+      # it reads is generated for one table, and so are the ratchets.
       - name: grammar lint
-        run: ./target/debug/treebank lint crates/treebank-${{ matrix.grammar }}
+        run: ./target/debug/treebank lint ${{ matrix.dir }}
 
       # Sweeps and the negative corpus both judge accept/reject. This judges
       # the TREE: every node boundary the reference parser reports must

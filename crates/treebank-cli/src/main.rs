@@ -270,8 +270,9 @@ enum Cmd {
     /// drift, and parse-table growth — judged against the grammar's
     /// lint_policy.toml baselines (advisory when there is none)
     Lint {
-        /// Grammar crate root: reads src/grammar.json, src/parser.c,
-        /// src/scanner.c and lint_policy.toml
+        /// Language crate root: reads src/grammar.json, src/parser.c,
+        /// src/scanner.c and lint_policy.toml from every variant it
+        /// declares, since all four are per parse table
         grammar: PathBuf,
     },
     /// Check a grammar's vocabulary conformance (DESIGN.md §3.3): declared
