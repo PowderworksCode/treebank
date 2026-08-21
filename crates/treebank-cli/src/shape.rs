@@ -202,6 +202,21 @@ fn trim_end(src: &[u8], start: usize, mut end: usize) -> usize {
     end
 }
 
+/// The start-side mirror of `trim_end`, and ruby is what forces it: a
+/// statement list owns its terminators as ITEMS (a blank line is a thing a
+/// ruby body may begin with), so our `block` can start on the newline after
+/// `do |x|` where CRuby's BLOCK starts on the first statement. Same
+/// punctuation-bookkeeping argument, same byte set, other side.
+fn trim_start(src: &[u8], mut start: usize, end: usize) -> usize {
+    while start < end {
+        match src[start] {
+            b';' | b',' | b' ' | b'\t' | b'\n' | b'\r' => start += 1,
+            _ => break,
+        }
+    }
+    start
+}
+
 /// The declared correspondence between the reference parser's node kinds and
 /// ours: `"<OracleKind>": ["our_kind", ...]`.
 ///
@@ -270,7 +285,7 @@ fn our_edges(
             parents.push((pa, pc));
             parents.push((pa, trim_end(src, pa, pc.min(src.len()))));
         }
-        for lead in leading_starts(node) {
+        for lead in leading_starts(node, src) {
             if lead < pa {
                 parents.push((lead, pb));
                 parents.push((lead, trim_end(src, lead, pb.min(src.len()))));
@@ -340,7 +355,7 @@ fn our_edges(
                 kids.push((a, c));
                 kids.push((a, trim_end(src, a, c.min(src.len()))));
             }
-            for lead in leading_starts(child) {
+            for lead in leading_starts(child, src) {
                 if lead < a {
                     kids.push((lead, b));
                     kids.push((lead, trim_end(src, lead, b.min(src.len()))));
@@ -448,6 +463,21 @@ fn content_end(node: tree_sitter::Node) -> usize {
     }
 }
 
+/// The start-side mirror of `content_end`: where the node begins once the
+/// trivia it OWNS at the front is counted as trivia. A ruby file that opens
+/// with a license comment has that comment as `program`'s first child, and
+/// CRuby's toplevel BLOCK starts at the first statement instead — trivia
+/// ownership, not a disagreement about the code.
+fn content_start(node: tree_sitter::Node) -> usize {
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        if !child.is_extra() {
+            return content_start(child);
+        }
+    }
+    node.start_byte()
+}
+
 /// Where a node's span begins once the trivia immediately in front of it is
 /// counted as its own.
 ///
@@ -465,7 +495,7 @@ fn content_end(node: tree_sitter::Node) -> usize {
 /// item, has TWO contiguous extras in front of the item, and syn takes only
 /// the second -- the one that is the item's documentation. Taking only the
 /// longest extension would miss it by exactly one comment.
-fn leading_starts(node: tree_sitter::Node) -> Vec<usize> {
+fn leading_starts(node: tree_sitter::Node, src: &[u8]) -> Vec<usize> {
     let mut out = Vec::new();
     let mut prev = node.prev_sibling();
     while let Some(p) = prev {
@@ -473,6 +503,17 @@ fn leading_starts(node: tree_sitter::Node) -> Vec<usize> {
             break;
         }
         out.push(p.start_byte());
+        // ...and the horizontal whitespace in front of the extra, which the
+        // reference parser may count as part of the same trivia run: CRuby
+        // stamps a module body's BLOCK right after the header name, one
+        // space BEFORE the `# :nodoc:` comment the body then swallows.
+        let mut ws = p.start_byte();
+        while ws > 0 && matches!(src[ws - 1], b' ' | b'\t') {
+            ws -= 1;
+        }
+        if ws < p.start_byte() {
+            out.push(ws);
+        }
         prev = p.prev_sibling();
     }
     out
@@ -505,20 +546,42 @@ fn our_spans(root: tree_sitter::Node, src: &[u8]) -> HashMap<(usize, usize), Vec
                 }
             };
             let (a, b) = (n.start_byte(), n.end_byte());
-            add((a, b));
-            add((a, trim_end(src, a, b.min(src.len()))));
-            // ...and the same node with any trailing trivia it owns removed,
-            // then separator-trimmed again, since the trivia may sit after a
-            // terminator.
+            // Start candidates: the node's own start, its start once leading
+            // trivia it owns is counted as trivia, and each of those with
+            // leading separators dropped (`trim_start` — ruby statement
+            // lists own their newlines as items).
+            let mut starts = [a, 0, 0, 0];
+            let mut n_starts = 1;
+            {
+                let mut push = |s: usize| {
+                    if s < b && !starts[..n_starts].contains(&s) {
+                        starts[n_starts] = s;
+                        n_starts += 1;
+                    }
+                };
+                push(trim_start(src, a, b.min(src.len())));
+                let cs = content_start(n);
+                if cs > a {
+                    push(cs);
+                    push(trim_start(src, cs, b.min(src.len())));
+                }
+            }
             let c = content_end(n);
-            if c > a && c < b {
-                add((a, c));
-                add((a, trim_end(src, a, c.min(src.len()))));
+            for &s in &starts[..n_starts] {
+                add((s, b));
+                add((s, trim_end(src, s, b.min(src.len()))));
+                // ...and the same node with any trailing trivia it owns
+                // removed, then separator-trimmed again, since the trivia
+                // may sit after a terminator.
+                if c > s && c < b {
+                    add((s, c));
+                    add((s, trim_end(src, s, c.min(src.len()))));
+                }
             }
             // ...and the same node counting the trivia in FRONT of it as its
             // own, which is where the two parsers disagree about doc
             // comments.
-            for lead in leading_starts(n) {
+            for lead in leading_starts(n, src) {
                 if lead >= a {
                     continue;
                 }

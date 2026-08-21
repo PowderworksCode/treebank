@@ -97,6 +97,14 @@ jobs:
       - name: vocabulary conformance
         run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
 
+      # The FIELD_GUIDE.md smell detector: declared-conflict growth, early
+      # commits between parallel tiers, same-text token splits, unreserved
+      # keywords, scanner/externals drift, parse-table growth. Enforced
+      # against the grammar's lint_policy.toml ratchets where one exists;
+      # advisory (report only) where none does yet.
+      - name: grammar lint
+        run: ./target/debug/treebank lint crates/treebank-${{ matrix.grammar }}
+
       # Sweeps and the negative corpus both judge accept/reject. This judges
       # the TREE: every node boundary the reference parser reports must
       # exist in ours. It is the only check here that can see a file parse

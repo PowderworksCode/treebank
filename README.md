@@ -3,12 +3,16 @@
 Tree-sitter grammars written from scratch and owned outright, carrying a
 shared node vocabulary that is enforced in the parse table itself — so
 queries like `(_declaration)`, `(_loop)` and `(_callable)` mean the same
-thing across languages. Initial languages: **Python, Rust, TypeScript**
-(the TypeScript grammar also parses JavaScript).
+thing across languages. Languages: **Python, Rust, TypeScript** (the
+TypeScript grammar also parses JavaScript), **Java, Ruby, Bash** and
+**Zig**.
 
 **[`DESIGN.md`](DESIGN.md) is the authoritative document** — the vocabulary,
 its two tiers and the measurements that forced them, the version-union
 grammar policy, the testing invariants, and the crate layout. Start there.
+**[`FIELD_GUIDE.md`](FIELD_GUIDE.md)** is its companion for grammar
+authors: what to do and what not to do when writing a parser, each rule
+paid for by a measured incident, enforced mechanically by `treebank lint`.
 
 ## What is in this repo
 
@@ -19,6 +23,7 @@ grammar policy, the testing invariants, and the crate layout. Start there.
 | `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
 | `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |
 | `crates/treebank-java` | Java 8 through 21 in one grammar |
+| `crates/treebank-ruby` | Ruby 3.x in one grammar |
 | `crates/treebank-bash` | GNU bash 5.x in one grammar |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-core` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
@@ -66,6 +71,7 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | negative corpus | accepts-invalid-code — the direction optimizing a pass rate drifts toward, and the one no corpus of real source can reveal |
 | `treebank roles` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
 | `treebank rosetta` | a role threaded in one grammar and forgotten in another (supertype matching is derivation-based, so a missed thread is otherwise silent) |
+| `treebank lint` | the FIELD_GUIDE.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 
 Corpus sweeps are not in CI: the corpora are gigabytes and gitignored.
@@ -84,7 +90,11 @@ it:
 
 1. **Write the grammar.** `crates/treebank-<lang>/` — `grammar.js`,
    `tree-sitter.json`, `roles.json`, `ledger.toml`, `build.rs`, the Rust
-   bindings, and `test/corpus` + `test/negative`.
+   bindings, and `test/corpus` + `test/negative`. `lint_policy.toml` and
+   `shape_policy.toml` are optional and arrive later: the first ratchets
+   the FIELD_GUIDE.md smells once the grammar has settled, the second
+   declares where the reference parser groups the tree differently on
+   purpose. Both are advisory until written.
 2. **Register the language.** One line in the `languages!` block in
    [`crates/treebank-lang/src/lib.rs`](crates/treebank-lang/src/lib.rs):
    canonical name, source extensions, and which grammar parses it.

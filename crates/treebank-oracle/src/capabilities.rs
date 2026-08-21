@@ -44,6 +44,7 @@ static PY_SPANS: spans::PythonSpans = spans::PythonSpans;
 static RS_SPANS: rust_spans::RustSpans = rust_spans::RustSpans;
 static JAVA_SPANS: spans::JavaSpans = spans::JavaSpans;
 static BASH_SPANS: spans::BashSpans = spans::BashSpans;
+static RB_SPANS: spans::RubySpans = spans::RubySpans;
 
 static RUSTFMT: reformat::RustFmt = reformat::RustFmt;
 static BLACK: reformat::BlackFmt = reformat::BlackFmt;
@@ -93,6 +94,21 @@ pub(crate) fn get(name: LangName) -> Capabilities {
             reformat: None,
             // bash has no printer; nothing renders a script back from a
             // tree.
+            unparse: None,
+        },
+
+        LangName::Ruby => Capabilities {
+            // CRuby's own AST, the same parser `validate` asks:
+            // RubyVM::AbstractSyntaxTree nodes carry first/last line and
+            // column. Ripper rides along as the lexical oracle, the role
+            // `tokenize` plays for python.
+            spans: Some(&RB_SPANS),
+            // rubocop and standardrb are gems, not part of the
+            // interpreter, and neither is installed. Stated rather than
+            // faked.
+            reformat: None,
+            // CRuby ships no unparser: RubyVM::AbstractSyntaxTree has no
+            // printer, and prism's is not in the 3.3 stdlib.
             unparse: None,
         },
 

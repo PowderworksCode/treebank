@@ -1,0 +1,509 @@
+================================================================================
+the operator ladder
+================================================================================
+
+x = a + b * -c ** 2
+y = a < b && c != d || !e
+z = m & n | p ^ q << r
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (binary_expression
+      (identifier)
+      (binary_expression
+        (identifier)
+        (unary_expression
+          (binary_expression
+            (identifier)
+            (integer))))))
+  (assignment
+    (identifier)
+    (binary_expression
+      (binary_expression
+        (binary_expression
+          (identifier)
+          (identifier))
+        (binary_expression
+          (identifier)
+          (identifier)))
+      (unary_expression
+        (identifier))))
+  (assignment
+    (identifier)
+    (binary_expression
+      (binary_expression
+        (binary_expression
+          (identifier)
+          (identifier))
+        (identifier))
+      (binary_expression
+        (identifier)
+        (identifier)))))
+
+================================================================================
+calls, commands, blocks
+================================================================================
+
+items.map { |x| x * 2 }
+obj.write data, mode: :strict
+File.open(path) do |f|
+  f.read
+end
+puts fetch url
+
+--------------------------------------------------------------------------------
+
+(program
+  (call_expression
+    (member_expression
+      (identifier)
+      (identifier))
+    (brace_block
+      (block_parameters
+        (parameter
+          (identifier)))
+      (block
+        (binary_expression
+          (identifier)
+          (integer)))))
+  (call_expression
+    (member_expression
+      (identifier)
+      (identifier))
+    (argument_list
+      (identifier)
+      (pair
+        (hash_key_symbol)
+        (simple_symbol))))
+  (call_expression
+    (member_expression
+      (constant)
+      (identifier))
+    (argument_list
+      (identifier))
+    (do_block
+      (block_parameters
+        (parameter
+          (identifier)))
+      (block
+        (member_expression
+          (identifier)
+          (identifier)))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (call_expression
+        (identifier)
+        (argument_list
+          (identifier))))))
+
+================================================================================
+assignment shapes
+================================================================================
+
+a, b = 1, 2
+first, *rest = list
+n ||= compute
+h[:k] += 1
+obj.attr = value
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (pattern_list
+      (identifier)
+      (identifier))
+    (array
+      (integer)
+      (integer)))
+  (assignment
+    (pattern_list
+      (identifier)
+      (star_pattern
+        (identifier)))
+    (identifier))
+  (augmented_assignment
+    (identifier)
+    (identifier))
+  (augmented_assignment
+    (subscript_expression
+      (identifier)
+      (simple_symbol))
+    (integer))
+  (assignment
+    (member_expression
+      (identifier)
+      (identifier))
+    (identifier)))
+
+================================================================================
+access, ranges, ternary
+================================================================================
+
+v = table[i][j]
+name = user&.profile&.name
+r = (1..10)
+s = 5..
+t = ..limit
+w = ok ? yes : no
+c = Foo::Bar::BAZ
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (subscript_expression
+      (subscript_expression
+        (identifier)
+        (identifier))
+      (identifier)))
+  (assignment
+    (identifier)
+    (member_expression
+      (member_expression
+        (identifier)
+        (identifier))
+      (identifier)))
+  (assignment
+    (identifier)
+    (parenthesized_expression
+      (range_expression
+        (integer)
+        (integer))))
+  (assignment
+    (identifier)
+    (range_expression
+      (integer)))
+  (assignment
+    (identifier)
+    (range_expression
+      (identifier)))
+  (assignment
+    (identifier)
+    (conditional_expression
+      (identifier)
+      (identifier)
+      (identifier)))
+  (assignment
+    (identifier)
+    (scope_resolution
+      (scope_resolution
+        (constant)
+        (constant))
+      (constant))))
+
+================================================================================
+splats, block passes, keyword arguments
+================================================================================
+
+foo(*args, **opts, &blk)
+bar 1, key: 2, "s" => 3
+render json: payload
+
+--------------------------------------------------------------------------------
+
+(program
+  (call_expression
+    (identifier)
+    (argument_list
+      (splat_argument
+        (identifier))
+      (splat_argument
+        (identifier))
+      (block_argument
+        (identifier))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (integer)
+      (pair
+        (hash_key_symbol)
+        (integer))
+      (pair
+        (string
+          (string_start)
+          (string_content)
+          (string_end))
+        (integer))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (pair
+        (hash_key_symbol)
+        (identifier)))))
+
+================================================================================
+lambdas and symbols
+================================================================================
+
+add = ->(a, b) { a + b }
+run = -> { work }
+tag = :name
+op = :<=>
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (lambda
+      (parameters
+        (parameter
+          (identifier))
+        (parameter
+          (identifier)))
+      (brace_block
+        (block
+          (binary_expression
+            (identifier)
+            (identifier))))))
+  (assignment
+    (identifier)
+    (lambda
+      (brace_block
+        (block
+          (identifier)))))
+  (assignment
+    (identifier)
+    (simple_symbol))
+  (assignment
+    (identifier)
+    (simple_symbol)))
+
+================================================================================
+a rocket in command arguments is a pair, even under assignment
+================================================================================
+
+x = y.merge "a" => b.value
+server = Server.new :Port => @port
+x = 1 => Integer
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (identifier)
+        (identifier))
+      (argument_list
+        (pair
+          (string
+            (string_start)
+            (string_content)
+            (string_end))
+          (member_expression
+            (identifier)
+            (identifier))))))
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (constant)
+        (identifier))
+      (argument_list
+        (pair
+          (simple_symbol)
+          (instance_variable)))))
+  (match_pattern
+    (assignment
+      (identifier)
+      (integer))
+    (constant)))
+
+================================================================================
+keyword-plus-suffix names are plain identifiers
+================================================================================
+
+x = module? ? "module" : "class"
+puts nil?
+kind = class!
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (conditional_expression
+      (identifier)
+      (string
+        (string_start)
+        (string_content)
+        (string_end))
+      (string
+        (string_start)
+        (string_content)
+        (string_end))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (identifier)))
+  (assignment
+    (identifier)
+    (identifier)))
+
+================================================================================
+symbols of special global variables
+================================================================================
+
+case var
+when :$/, :$;, :$0, :$stdout, :$-w
+  1
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (case_statement
+    (identifier)
+    (when_clause
+      (simple_symbol)
+      (simple_symbol)
+      (simple_symbol)
+      (simple_symbol)
+      (simple_symbol)
+      (block
+        (integer)))))
+
+================================================================================
+do binds to the command, not the last value
+================================================================================
+
+create_table :a, id: pkt do |t|
+  t.integer :status
+end
+x = obj.each do |i| i end
+
+--------------------------------------------------------------------------------
+
+(program
+  (call_expression
+    (identifier)
+    (argument_list
+      (simple_symbol)
+      (pair
+        (hash_key_symbol)
+        (identifier)))
+    (do_block
+      (block_parameters
+        (parameter
+          (identifier)))
+      (block
+        (call_expression
+          (member_expression
+            (identifier)
+            (identifier))
+          (argument_list
+            (simple_symbol))))))
+  (assignment
+    (identifier)
+    (call_expression
+      (member_expression
+        (identifier)
+        (identifier))
+      (do_block
+        (block_parameters
+          (parameter
+            (identifier)))
+        (block
+          (identifier))))))
+
+================================================================================
+defined? binds its immediate parens like a call
+================================================================================
+
+a = defined?(x) && y
+b = defined? x.y
+c = defined?(m).nil?
+
+--------------------------------------------------------------------------------
+
+(program
+  (assignment
+    (identifier)
+    (binary_expression
+      (defined_expression
+        (identifier))
+      (identifier)))
+  (assignment
+    (identifier)
+    (defined_expression
+      (member_expression
+        (identifier)
+        (identifier))))
+  (assignment
+    (identifier)
+    (member_expression
+      (defined_expression
+        (identifier))
+      (identifier))))
+
+================================================================================
+scope chains stay chains, ranges keep their signs
+================================================================================
+
+ActionCable::Server::Worker.set_callback :work, prepend: true do |x|
+end
+y = file[a.size + 1..-"_helper.rb".size - 1]
+z = x..-1
+f(::File)
+
+--------------------------------------------------------------------------------
+
+(program
+  (call_expression
+    (member_expression
+      (scope_resolution
+        (scope_resolution
+          (constant)
+          (constant))
+        (constant))
+      (identifier))
+    (argument_list
+      (simple_symbol)
+      (pair
+        (hash_key_symbol)
+        (true)))
+    (do_block
+      (block_parameters
+        (parameter
+          (identifier)))
+      (block)))
+  (assignment
+    (identifier)
+    (subscript_expression
+      (identifier)
+      (range_expression
+        (binary_expression
+          (member_expression
+            (identifier)
+            (identifier))
+          (integer))
+        (binary_expression
+          (unary_expression
+            (member_expression
+              (string
+                (string_start)
+                (string_content)
+                (string_end))
+              (identifier)))
+          (integer)))))
+  (assignment
+    (identifier)
+    (call_expression
+      (identifier)
+      (argument_list
+        (range_expression
+          (unary_expression
+            (integer))))))
+  (call_expression
+    (identifier)
+    (argument_list
+      (scope_resolution
+        (constant)))))

@@ -26,6 +26,7 @@ mod java;
 mod javascript;
 mod python;
 mod reformat;
+mod ruby;
 mod rust;
 mod rust_spans;
 mod spans;
@@ -107,6 +108,7 @@ pub fn get(name: LangName) -> &'static dyn Oracle {
     static JAVA: java::Java = java::Java;
     static BASH: bash::Bash = bash::Bash;
     static ZIG: zig::Zig = zig::Zig;
+    static RUBY: ruby::Ruby = ruby::Ruby;
     match name {
         LangName::Python => &PYTHON,
         LangName::Rust => &RUST,
@@ -115,5 +117,6 @@ pub fn get(name: LangName) -> &'static dyn Oracle {
         LangName::Java => &JAVA,
         LangName::Bash => &BASH,
         LangName::Zig => &ZIG,
+        LangName::Ruby => &RUBY,
     }
 }

@@ -1,0 +1,31 @@
+{
+  "grammars": [
+    {
+      "name": "ruby",
+      "camelcase": "Ruby",
+      "scope": "source.ruby",
+      "file-types": [
+        "rb",
+        "rake",
+        "gemspec",
+        "ru",
+        "rbi",
+        "podspec",
+        "jbuilder",
+        "Gemfile",
+        "Rakefile",
+        "Vagrantfile"
+      ],
+      "injection-regex": "^(rb|ruby)$",
+      "first-line-regex": "^#!.*\\bruby\\b"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "Ruby 3.x in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

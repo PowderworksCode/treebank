@@ -1,0 +1,216 @@
+================================================================================
+branches
+================================================================================
+
+if x > 1
+  a
+elsif x < 0
+  b
+else
+  c
+end
+
+unless ready
+  wait
+end
+
+value = if ok then 1 else 2 end
+
+--------------------------------------------------------------------------------
+
+(program
+  (if_statement
+    (binary_expression
+      (identifier)
+      (integer))
+    (block
+      (identifier))
+    (elsif_clause
+      (binary_expression
+        (identifier)
+        (integer))
+      (block
+        (identifier)))
+    (else_clause
+      (block
+        (identifier))))
+  (unless_statement
+    (identifier)
+    (block
+      (identifier)))
+  (assignment
+    (identifier)
+    (if_statement
+      (identifier)
+      (block
+        (integer))
+      (else_clause
+        (block
+          (integer))))))
+
+================================================================================
+case/when and case/in
+================================================================================
+
+case value
+when 1, 2 then small
+when String
+  text
+else
+  other
+end
+
+case config
+in { name: String => n, version: }
+  n
+in [first, *rest] if first
+  first
+in Integer | Float
+  numeric
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (case_statement
+    (identifier)
+    (when_clause
+      (integer)
+      (integer)
+      (block
+        (identifier)))
+    (when_clause
+      (constant)
+      (block
+        (identifier)))
+    (else_clause
+      (block
+        (identifier))))
+  (case_statement
+    (identifier)
+    (in_clause
+      (hash_pattern
+        (pair
+          (hash_key_symbol)
+          (as_pattern
+            (constant)
+            (identifier)))
+        (pair
+          (hash_key_symbol)))
+      (block
+        (identifier)))
+    (in_clause
+      (array_pattern
+        (identifier)
+        (star_pattern
+          (identifier)))
+      (identifier)
+      (block
+        (identifier)))
+    (in_clause
+      (or_pattern
+        (constant)
+        (constant))
+      (block
+        (identifier)))))
+
+================================================================================
+loops and jumps
+================================================================================
+
+while attempts < 3
+  attempts += 1
+  break if done
+end
+
+until finished
+  next
+end
+
+for i in 1..3 do
+  redo if never
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (while_statement
+    (binary_expression
+      (identifier)
+      (integer))
+    (block
+      (augmented_assignment
+        (identifier)
+        (integer))
+      (if_modifier
+        (break_statement)
+        (identifier))))
+  (until_statement
+    (identifier)
+    (block
+      (next_statement)))
+  (for_statement
+    (identifier)
+    (range_expression
+      (integer)
+      (integer))
+    (block
+      (if_modifier
+        (redo_statement)
+        (identifier)))))
+
+================================================================================
+begin/rescue and modifiers
+================================================================================
+
+begin
+  risky
+rescue KeyError, ArgumentError => e
+  handle e
+else
+  celebrate
+ensure
+  cleanup
+end
+
+value = attempt rescue fallback
+log if verbose
+work until done
+retry_it while flaky
+
+--------------------------------------------------------------------------------
+
+(program
+  (begin_statement
+    (block
+      (identifier))
+    (rescue_clause
+      (argument_list
+        (constant)
+        (constant))
+      (identifier)
+      (block
+        (call_expression
+          (identifier)
+          (argument_list
+            (identifier)))))
+    (else_clause
+      (block
+        (identifier)))
+    (ensure_clause
+      (block
+        (identifier))))
+  (assignment
+    (identifier)
+    (rescue_modifier
+      (identifier)
+      (identifier)))
+  (if_modifier
+    (identifier)
+    (identifier))
+  (until_modifier
+    (identifier)
+    (identifier))
+  (while_modifier
+    (identifier)
+    (identifier)))

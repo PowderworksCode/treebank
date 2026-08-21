@@ -1,0 +1,204 @@
+================================================================================
+methods and classes
+================================================================================
+
+module Widgets
+  class Config < Base
+    def initialize(name, items = [], *rest, timeout: 1.0, **opts, &block)
+      @name = name
+    end
+
+    def self.load(path)
+      new(path)
+    end
+  end
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (module_definition
+    (constant)
+    (block
+      (class_definition
+        (constant)
+        (constant)
+        (block
+          (function_definition
+            (identifier)
+            (parameters
+              (parameter
+                (identifier))
+              (parameter
+                (identifier)
+                (array))
+              (star_parameter
+                (identifier))
+              (keyword_parameter
+                (hash_key_symbol)
+                (float))
+              (double_star_parameter
+                (identifier))
+              (block_parameter
+                (identifier)))
+            (block
+              (assignment
+                (instance_variable)
+                (identifier))))
+          (function_definition
+            (self)
+            (identifier)
+            (parameters
+              (parameter
+                (identifier)))
+            (block
+              (call_expression
+                (identifier)
+                (argument_list
+                  (identifier))))))))))
+
+================================================================================
+endless and setter methods
+================================================================================
+
+def done? = @items.empty?
+
+def size=(value)
+  @size = value
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (function_definition
+    (identifier)
+    (member_expression
+      (instance_variable)
+      (identifier)))
+  (function_definition
+    (setter_method_name
+      (identifier))
+    (parameters
+      (parameter
+        (identifier)))
+    (block
+      (assignment
+        (instance_variable)
+        (identifier)))))
+
+================================================================================
+singleton class and operator method
+================================================================================
+
+class << self
+  def <=>(other)
+    0
+  end
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (singleton_class
+    (self)
+    (block
+      (function_definition
+        (operator)
+        (parameters
+          (parameter
+            (identifier)))
+        (block
+          (integer))))))
+
+================================================================================
+method body with rescue and ensure
+================================================================================
+
+def fetch(url)
+  get(url)
+rescue Timeout::Error => e
+  retry
+ensure
+  log
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (function_definition
+    (identifier)
+    (parameters
+      (parameter
+        (identifier)))
+    (block
+      (call_expression
+        (identifier)
+        (argument_list
+          (identifier))))
+    (rescue_clause
+      (argument_list
+        (scope_resolution
+          (constant)
+          (constant)))
+      (identifier)
+      (block
+        (retry_statement)))
+    (ensure_clause
+      (block
+        (identifier)))))
+
+================================================================================
+superclass may be a paren-less command
+================================================================================
+
+class Attribute < Struct.new :relation, :name
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (class_definition
+    (constant)
+    (call_expression
+      (member_expression
+        (constant)
+        (identifier))
+      (argument_list
+        (simple_symbol)
+        (simple_symbol)))
+    (block)))
+
+================================================================================
+at-suffixed operator names and a parenthesised receiver
+================================================================================
+
+class C
+  def ~@
+  end
+  def !@
+  end
+  def (o = self.content).content
+    o
+  end
+end
+
+--------------------------------------------------------------------------------
+
+(program
+  (class_definition
+    (constant)
+    (block
+      (function_definition
+        (operator))
+      (function_definition
+        (operator))
+      (function_definition
+        (parenthesized_expression
+          (assignment
+            (identifier)
+            (member_expression
+              (self)
+              (identifier))))
+        (identifier)
+        (block
+          (identifier))))))

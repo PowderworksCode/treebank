@@ -25,8 +25,16 @@ struct Expected {
 }
 
 /// One language's participation in a rosetta case: which grammar crate
-/// parses it, and what extension its program carries.
-const LANGUAGES: &[(&str, &str)] = &[("python", "py"), ("rust", "rs"), ("typescript", "ts")];
+/// parses it, and what extension its program carries. Ruby is the fourth
+/// participant — the first language added to the suite after the original
+/// three (java and bash are not in it: java's counts diverge on
+/// constructs the cases assert, and bash cannot express them).
+const LANGUAGES: &[(&str, &str)] = &[
+    ("python", "py"),
+    ("ruby", "rb"),
+    ("rust", "rs"),
+    ("typescript", "ts"),
+];
 
 pub fn run(dir: &Path, crates_dir: &Path) -> Result<()> {
     run_inner(dir, crates_dir, false)

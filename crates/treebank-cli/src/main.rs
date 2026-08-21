@@ -3,6 +3,7 @@ mod fuzz;
 mod grammar;
 mod incremental;
 mod kinds;
+mod lint;
 mod mutate;
 mod recovery;
 mod reformat;
@@ -261,6 +262,16 @@ enum Cmd {
         /// alongside]
         #[arg(long)]
         out: Option<PathBuf>,
+    },
+    /// Check a grammar for the structural smells FIELD_GUIDE.md names:
+    /// declared-conflict growth, early commits between parallel tiers,
+    /// same-text token splits, unreserved keywords, scanner/externals
+    /// drift, and parse-table growth — judged against the grammar's
+    /// lint_policy.toml baselines (advisory when there is none)
+    Lint {
+        /// Grammar crate root: reads src/grammar.json, src/parser.c,
+        /// src/scanner.c and lint_policy.toml
+        grammar: PathBuf,
     },
     /// Check a grammar's vocabulary conformance (DESIGN.md §3.3): declared
     /// supertypes from the closed table tier, every named node covered or
@@ -593,6 +604,7 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/sweep.json"),
         ),
+        Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
         Cmd::Rosetta { dir, crates } => rosetta::run(&dir, &crates),
         Cmd::Verify {
