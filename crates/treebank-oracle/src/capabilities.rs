@@ -101,6 +101,7 @@ mod tests {
         }
     }
 
+
     #[test]
     fn c_family_span_capabilities_are_registered() {
         assert!(get(LangName::C).spans.is_some());
