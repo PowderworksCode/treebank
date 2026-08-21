@@ -18,9 +18,9 @@ roles_note = '''
 patterns_note = '''
 match patterns are a dedicated sub-grammar (PEP 634), not the expression rules. The shapes reuse the destructuring node names by alias — `(tuple_pattern)`, `(list_pattern)`, `(star_pattern)` mean the same thing in `a, b = x` and in `case (a, b)` — but they are NOT threaded through the `_pattern` supertype, and that is a measured decision rather than an oversight: python's destructuring and match positions admit different member sets (`x[0]` and `*rest` destructure but do not match; `Point(x=0)` and `{'k': v}` match but do not destructure), and a supertype's members enter every position that references it. Routing them through `_pattern` made `a, Point(x=0) = z` parse, which CPython rejects. This is the `_clause` law in a second place; rust does not hit it because its `let` and `match` patterns are one set. Consequence: `(_pattern)` covers destructuring positions here, and match patterns are reached by their shared concrete names.'''
 variant_policy = '''
-DESIGN.md §4.2: where a construct is valid only in an older version AND admitting it would change how current code parses, the current language wins. Three constructs are rejected on purpose — `f((a)=1)` (py3.0–3.7), bare `nonlocal` (py2), bare `await` (py2, py3.0–3.4). Declared with reasoning in version_policy.toml, gated by test/negative/, and booked by the sweep as `version` rather than `gap`. Older syntax with no competing reading in any later version stays ACCEPTED (`except E, e:`, py2 print/exec, backticks, old octal) — that is most of what the py2 half of the union is.'''
+Now variants.toml. Of the union's three purpose-rejections ONE survives here — `f((a)=1)`, valid in py3.0–3.7, still rejected because it is a python 3 point-release removal and DESIGN.md §4.2 still governs versions WITHIN a variant. The other two were py2 constructs rejected because the py2 reading forked against modern py3 code: bare `nonlocal` and bare `await` now parse as ordinary identifiers in the python2 table, and both files live in test/crossvariant/python2-not-python3/. Nothing "stays accepted for py2" any more — `except E, e:`, print/exec, backticks and old octal are python 2 syntax and this table rejects all of them, which is what CPython 3 does too.'''
 shape_check = '''
-`treebank shape` compares our node BOUNDARIES against CPython `ast` over the whole corpus: 112,138,339 oracle nodes across 137,876 files, 0 missed. It started at 1,682,942. Everything left is declared in shape_policy.toml as a granularity difference with its reasoning — CPython nests `elif` as a new If, starts a FunctionDef at `def` rather than the decorator, splits parameter defaults into a parallel list, folds implicitly concatenated strings, and treats BoolOp as n-ary. 1,329 files are skipped: python2-only sources, and files whose PEP 263 coding declaration or BOM means `ast` reports offsets into a byte string that is not the one on disk.'''
+`treebank shape` compares our node BOUNDARIES against CPython `ast` over the whole corpus: 112,138,339 oracle nodes across 137,876 files, 0 missed. It started at 1,682,942. Everything left is declared in shape_policy.toml as a granularity difference with its reasoning — CPython nests `elif` as a new If, starts a FunctionDef at `def` rather than the decorator, splits parameter defaults into a parallel list, folds implicitly concatenated strings, and treats BoolOp as n-ary. 1,329 files are skipped: python2-only sources, and files whose PEP 263 coding declaration or BOM means `ast` reports offsets into a byte string that is not the one on disk. The py2 half of that skip list is no longer a python3 concern at all — those files are python 2, and the python2 variant is where they belong — but the number is the union's and has not been re-measured.'''
 mutation_check = '''
 `treebank mutate` — 4,508 mutants over 594 corpus files, 102 widenings in 83 clusters. The sweep measures rejects-valid over 139,205 files; this measures the other direction, which test/negative/ had been measuring with eighteen hand-written ones.'''
 error_positions = '''
@@ -34,7 +34,7 @@ check.py judges with `compile()` deliberately -- its header sets out why, and st
 argument_ordering_analysis = '''
 Enforcing `f(a=1, b)` as an error needs the argument list split into a positional group and a keyword group with DIFFERENT element sets -- that is what makes a positional after a keyword unreachable, and no precedence or dynamic precedence substitutes for it, because both readings are complete parses. Two element sets means two hidden rules. `_argument` is a TABLE-tier supertype and DESIGN.md §2 fact 4 records that supertype queries are derivation-based, so a rule can carry the role only where the parse flowed through it: whichever group is not `_argument` stops answering `(_argument)`. Verified by building it -- the grammar rejected `f(a=1, b)` correctly and the roles gate then failed on `keyword_argument` and `splat_argument`. The facet tier does not help either: facets are type-level, and a positional argument is a bare expression with no distinguishing node type, so no list of types can name it. The only shape that works is to give positional arguments a node of their own -- an `argument` wrapper -- and move `_argument` from the table tier to the facet tier over {argument, keyword_argument, splat_argument}, which are types that occur nowhere else. That is coherent and it is a cross-language vocabulary change: TypeScript and Rust have no keyword arguments and so need none of the ordering, but they would carry the wrapper and the tier move anyway. Recorded rather than taken.'''
 fuzz_check = '''
-`treebank fuzz` — programs derived from grammar.json and judged by CPython's PARSER (`ast.parse`, via validate_syntax_only) rather than by `compile()`. That distinction is the whole result: judged by `compile()` the run was dominated by `break`, `yield` and `* x` at module level, which CPython's parser accepts and its compiler rejects — no tree-sitter grammar should track loop nesting to reproduce those. Judged by the parser, 400 derivations gave 21 distinct shrunk programs, 4 of them the declared py2 union (fuzz_policy.toml) and the rest the five causes in known_widenings. All were confirmed against ast.parse.'''
+`treebank fuzz` — programs derived from grammar.json and judged by CPython's PARSER (`ast.parse`, via validate_syntax_only) rather than by `compile()`. That distinction is the whole result: judged by `compile()` the run was dominated by `break`, `yield` and `* x` at module level, which CPython's parser accepts and its compiler rejects — no tree-sitter grammar should track loop nesting to reproduce those. Judged by the parser, 400 derivations gave 21 distinct shrunk programs, 4 of them the declared py2 union (fuzz_policy.toml) and the rest the five causes in known_widenings. All were confirmed against ast.parse. Those 4 are gone with the split: fuzz_policy.toml held three declarations (`print `, `exec `, `lambda (`) and now holds none, because none of them is python 3 syntax any more. The run has not been repeated since — this number is the union's.'''
 
 incremental_check = '''
 `treebank incremental` — 3000 files, 8898 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 0 diverged, 0 of them on text that still parses cleanly. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
@@ -59,7 +59,7 @@ top-1000 PyPI packages by download rank (hugovk top-pypi-packages), sdists only;
 files = 297612
 packages = 1914
 blind_to = '''
-python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension'''
+notebooks; scripts without a .py extension. NOT a blind spot any more: python-2-only code, which the union grammar had to cover from this same corpus and could not. It is the python2 variant's problem now, it has its own corpus for it (CPython 2.7.18's tree, 44.4% py2-only), and python2/ledger.toml carries that measurement and its own blind spots.'''
 mutation_falsification = '''
 while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified.'''
 corpus_composition_note = '''
@@ -84,16 +84,24 @@ horizon_note = '''
 
 [[oracles]]
 family = 'python2'
-tool = '''
-tools/py-oracle/check2.py under python2 (stdin batch, compile(src, path, 'exec'); the script is written in the py2/py3 common subset)'''
-version = '''
-CPython 2.7.18, built from source (Ubuntu 24.04 ships no python2 package)'''
-role = '''
-REQUIRED second leg of the union: every file python3 rejects is re-judged, and a file is valid if either accepts. The driver errors loudly if python2 is missing — a py3-only sweep books every py2-only file as noise, which silently hides the py2 half's gaps. Adding this leg surfaced 4 real gap files the py3-only sweep had mis-filed as noise.'''
-battery = '''
-test/negative-oracle/py3/ (print statement, backticks, 0777, except-comma) verified live: python3 rejects all four, python2 accepts all four. test/negative-oracle/py2/ (f-string, nonlocal, walrus) verified live in the reverse direction. The battery caught its own bad fixture on first run: bare `nonlocal x` with no enclosing binding is a SyntaxError in py3 as well, so the fixture gained the enclosing function it needed.'''
-bug_found_by_widening = '''
-The wider corpus crashed the py2 leg: a file with a NUL byte makes py2's compile() raise TypeError where py3 raises ValueError, and check2.py caught only the latter, so the oracle died instead of returning a verdict. A NUL in the source is a VERDICT (the bytes were read fine, they are just not python), not an oracle failure, so both are now caught. The loud-failure discipline worked exactly as designed — the sweep aborted rather than silently booking every python2 file as noise.'''
+retired = '''
+This table no longer has a python 2 leg, and the entry is kept rather than
+deleted because every sweep number above was produced WITH it.
+
+The union oracle asked "does ANY version family accept this file", because
+one parse table had to serve both. It ran tools/py-oracle/check2.py under a
+CPython 2.7.18 built from source, and it was REQUIRED: a py3-only sweep of a
+union grammar books every py2-only file as noise, which hides the py2 half's
+gaps. Adding the leg surfaced 4 real gap files the py3-only sweep had
+mis-filed. It also found its own bug on the wider corpus — a NUL byte makes
+py2's compile() raise TypeError where py3 raises ValueError, and check2.py
+caught only the latter, so the oracle died rather than returning a verdict.
+A NUL is a verdict, not an oracle failure; both are caught now.
+
+With the variants split the question changed. `python3` is judged by python 3
+alone, which is what makes its rejection of `print "x"` correct rather than
+merely tolerated, and python 2 has its own oracle on its own table — CPython
+2.7's parser via typed_ast, in python2/ledger.toml.'''
 
 [[known_gaps]]
 construct = "backslash continuations that change a suite's indentation"
@@ -109,11 +117,11 @@ One is tolerated. `repeat1` there HANGS the parser — the scanner emits a zero-
 
 [[deviations]]
 what = '''
-py2 chevron print `print >> f, x` takes the expression reading (a tuple whose head is a right-shift) — it is valid py3 syntax too, and the union prefers the py3 reading whenever both parse (print_statement carries prec.dynamic(-1))'''
+`print >> f, x` is a tuple whose head is a right-shift. It used to be the case that decided the union's dynamic precedence against the py2 print statement; with the variants split there is no print statement in this table and no weighting, and the reading is simply what the text means in python 3. The py2 reading lives in the python2 variant, where it is equally unambiguous.'''
 
 [[deviations]]
 what = '''
-keywords that were identifiers in some version (True/False/None in py2, async/await before 3.7) are hard keywords here; `True = 5` (py2-valid) does not parse. Soft-keyword machinery exists for print/exec/match/case/type, which carry real corpus weight; the others measured no corpus incidence'''
+keywords that were identifiers in an older python (async/await before 3.7) are hard keywords here. Soft-keyword machinery exists for match/case/type — the three that carry real python 3 corpus weight. `print` and `exec` were on that list while this table had to read python 2; they are ordinary identifiers now, and the soft-keyword handling `print` still needs under PEP 3105 belongs to the python2 variant, which is where it lives.'''
 
 [[deviations]]
 what = '''

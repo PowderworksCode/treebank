@@ -370,22 +370,12 @@ fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// The variant a language's shared manifests describe: the first one
-/// tree-sitter.json declares. For python that is python3, which is what
-/// `roles.json` covers; python2's differences live in its roles.delta.json.
-fn default_variant(crate_dir: &std::path::Path) -> std::path::PathBuf {
-    crate::verify::variant_dirs(crate_dir)
-        .into_iter()
-        .next()
-        .unwrap_or_else(|| crate_dir.to_path_buf())
-}
-
 /// `treebank roles`: the vocabulary-conformance gate, one grammar crate at
 /// a time. Prints every finding rather than the first, and exits non-zero
 /// on any — an empty report is conformance.
 pub fn roles_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
     let vocab = treebank_core::vocabulary();
-    let nt = treebank_core::node_types::NodeTypes::load(&default_variant(grammar_dir).join("src/node-types.json"))?;
+    let nt = treebank_core::node_types::NodeTypes::load(&crate::verify::default_variant(grammar_dir).join("src/node-types.json"))?;
     let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
     let mut findings = treebank_core::check::check(&nt, &roles, vocab);
     findings.extend(ledger_vocabulary_finding(grammar_dir, &vocab.version));
@@ -419,7 +409,7 @@ fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> O
 
 fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
     let vocab = treebank_core::vocabulary();
-    let nt = treebank_core::node_types::NodeTypes::load(&default_variant(grammar_dir).join("src/node-types.json"))?;
+    let nt = treebank_core::node_types::NodeTypes::load(&crate::verify::default_variant(grammar_dir).join("src/node-types.json"))?;
     let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
     let mut findings = treebank_core::check::check(&nt, &roles, vocab);
     findings.extend(ledger_vocabulary_finding(grammar_dir, &vocab.version));

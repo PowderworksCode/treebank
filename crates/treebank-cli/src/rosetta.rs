@@ -84,11 +84,12 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
             // `treebank crossvariant` would grow into if a language ever
             // needs it; python does not, because its variants disagree
             // about the vocabulary's members rather than sharing them.
-            let (language, _) = crate::grammar::load(&crate::verify::variant_dirs(&grammar_dir)[0])?;
+            let variant = crate::verify::default_variant(&grammar_dir);
+            let (language, _) = crate::grammar::load(&variant)?;
             let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
             let facets: BTreeMap<String, Vec<String>> = roles.facets.into_iter().collect();
             let node_types = treebank_core::node_types::NodeTypes::load(
-                &grammar_dir.join("src/node-types.json"),
+                &variant.join("src/node-types.json"),
             )?;
 
             let source = std::fs::read_to_string(&program)?;

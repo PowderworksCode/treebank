@@ -43,6 +43,18 @@ pub fn variant_dirs(crate_dir: &Path) -> Vec<PathBuf> {
     }
 }
 
+/// The variant a language's SHARED manifests describe, and the one a
+/// cross-language check meets it as: the first that tree-sitter.json
+/// declares. For python that is python3 — what `roles.json` covers, and
+/// what `treebank_python::LANGUAGE` means. A single-variant language is
+/// its own default, so callers need no special case.
+pub fn default_variant(crate_dir: &Path) -> PathBuf {
+    variant_dirs(crate_dir)
+        .into_iter()
+        .next()
+        .unwrap_or_else(|| crate_dir.to_path_buf())
+}
+
 pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<()> {
     let name = grammar_dir
         .file_name()
@@ -282,7 +294,15 @@ mod tests {
         let mut found = Vec::new();
         for entry in std::fs::read_dir(&crates).unwrap() {
             let dir = entry.unwrap().path();
-            if !dir.join("grammar.js").is_file() {
+            // A grammar crate keeps grammar.js at its root, or one per
+            // VARIANT directory (VARIANTS.md §2). Looking only at the root
+            // would drop a multi-variant language out of this check
+            // entirely — the same silently-ungated hole that globbing one
+            // level deep opened in CI's discovery step.
+            if !super::variant_dirs(&dir)
+                .iter()
+                .any(|d: &std::path::PathBuf| d.join("grammar.js").is_file())
+            {
                 continue;
             }
             match registered(&dir) {
@@ -298,7 +318,8 @@ mod tests {
             }
             assert!(
                 found.contains(&lang),
-                "{lang} is registered as its own grammar but crates/{} has no grammar.js",
+                "{lang} is registered as its own grammar but crates/{} has no \
+                 grammar.js, at its root or in a variant directory",
                 lang.grammar_crate(),
             );
         }

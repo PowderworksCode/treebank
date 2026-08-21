@@ -5,16 +5,18 @@
 rule = '''
 Over-acceptance this grammar commits to ON PURPOSE, as prefixes of the shrunk program `treebank fuzz` reports. Entries must be as narrow as the decision they record: a blanket prefix silences the real finding that turns up next month wearing similar clothes, which is how a check like this quietly stops working. Every entry names the decision it follows from, and that decision is in ledger.json — not invented here to make a number go down.'''
 
-[[declared]]
-starts_with = 'print '
-why = '''
-py2 print statement. This grammar is 2.7 ∪ 3.x by design (ledger.versions), so a py2 statement form is a widening against py3's parser and is meant to be one.'''
+emptied_by_the_variant_split = '''
+This file held three entries and now holds none, and that is the split
+paying out rather than a policy being relaxed.
 
-[[declared]]
-starts_with = 'exec '
-why = 'py2 exec statement; same union decision as `print`.'
+All three — `print `, `exec ` and `lambda (` — were py2 forms declared as
+deliberate widenings because one table had to be 2.7 ∪ 3.x, so the fuzzer
+(which judges against CPython 3) reported them and the ledger had to say
+"meant to be". With python 2 in its own table they are simply not python 3
+syntax any more: this grammar rejects all three, CPython 3 rejects all
+three, and there is nothing left to declare.
 
-[[declared]]
-starts_with = 'lambda ('
-why = '''
-py2 tuple parameters: `lambda (x, y): x` destructures its argument in 2.7 and is `Lambda expression parameters cannot be parenthesized` in 3.x. Same union decision as `print` (ledger.versions); the fuzzer judges against the py3 parser, so the py2-only form reports as a widening and is meant to.'''
+A declared widening is a promise that a check will keep reporting something
+harmless. Three such promises expiring at once is the clearest measure of
+what the union was costing here — the fuzzer can now report a `print `
+finding and mean it.'''

@@ -150,12 +150,19 @@ impl LangName {
     /// fixture directory for it may hold either.
     pub fn grammar_extensions(self) -> Vec<&'static str> {
         let grammar = self.grammar();
-        LangName::ALL
-            .iter()
-            .filter(|l| l.grammar() == grammar)
-            .flat_map(|l| l.extensions())
-            .copied()
-            .collect()
+        let mut out: Vec<&'static str> = Vec::new();
+        for lang in LangName::ALL.iter().filter(|l| l.grammar() == grammar) {
+            for ext in lang.extensions() {
+                // Deduplicated: languages sharing a grammar may also share
+                // an extension (python 2 and python 3 are both `.py`), and
+                // a caller listing fixture suffixes wants the set, not the
+                // bag.
+                if !out.contains(ext) {
+                    out.push(ext);
+                }
+            }
+        }
+        out
     }
 
     /// The directory name of the grammar crate that parses this language,
@@ -194,16 +201,30 @@ mod tests {
         assert_eq!(LangName::from_name("cobol"), None);
     }
 
-    /// An extension may belong to exactly one language. Two claims on the
-    /// same suffix would make a corpus file's language a coin toss, and
-    /// the coin would be tossed differently in each caller.
+    /// Two languages may claim the same extension only if they share a
+    /// grammar. Unrelated claims on one suffix would make a corpus file's
+    /// language a coin toss, and the coin would be tossed differently in
+    /// each caller.
+    ///
+    /// The exception is not a loophole, it is the case being named: python
+    /// 2 and python 3 are both `.py`, and no amount of looking at the
+    /// filename will say which. That is exactly why a variant's language
+    /// comes from the corpus's PROVENANCE — which ecosystem fetched it —
+    /// and never from the file (VARIANTS.md §6.3). Nothing in the tree maps
+    /// an extension back to a language, and this test is what keeps it that
+    /// way for languages that do not share a grammar.
     #[test]
-    fn extensions_are_unambiguous() {
-        let mut owner = std::collections::HashMap::new();
+    fn an_extension_is_shared_only_within_a_grammar() {
+        let mut owner: std::collections::HashMap<&str, LangName> =
+            std::collections::HashMap::new();
         for &lang in LangName::ALL {
             for ext in lang.extensions() {
                 if let Some(other) = owner.insert(*ext, lang) {
-                    panic!("both {other} and {lang} claim .{ext}");
+                    assert_eq!(
+                        other.grammar(),
+                        lang.grammar(),
+                        "{other} and {lang} both claim .{ext} but do not share a grammar"
+                    );
                 }
             }
         }
