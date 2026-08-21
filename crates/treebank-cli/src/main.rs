@@ -367,7 +367,8 @@ pub fn roles_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
     let vocab = treebank_core::vocabulary();
     let nt = treebank_core::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
     let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
-    let findings = treebank_core::check::check(&nt, &roles, vocab);
+    let mut findings = treebank_core::check::check(&nt, &roles, vocab);
+    findings.extend(ledger_vocabulary_finding(grammar_dir, &vocab.version));
     if !findings.is_empty() {
         anyhow::bail!("{}", findings.join("; "));
     }
@@ -417,6 +418,39 @@ fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
         vocab.version,
     );
     Ok(())
+}
+
+#[cfg(test)]
+mod roles_tests {
+    use super::roles_check;
+    use std::path::Path;
+
+    #[test]
+    fn programmatic_roles_check_includes_the_ledger_gate() {
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../treebank-python");
+        let dir = std::env::temp_dir().join(format!(
+            "treebank-roles-ledger-{}-{}",
+            std::process::id(),
+            std::thread::current().name().unwrap_or("test")
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("src")).unwrap();
+        std::fs::copy(
+            source.join("src/node-types.json"),
+            dir.join("src/node-types.json"),
+        )
+        .unwrap();
+        std::fs::copy(source.join("roles.json"), dir.join("roles.json")).unwrap();
+        std::fs::write(dir.join("ledger.toml"), "vocabulary = \"0.0.0\"\n").unwrap();
+
+        let error = roles_check(&dir).unwrap_err().to_string();
+        assert!(
+            error.contains("ledger.toml states vocabulary 0.0.0"),
+            "unexpected error: {error}"
+        );
+
+        std::fs::remove_dir_all(dir).unwrap();
+    }
 }
 
 fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {

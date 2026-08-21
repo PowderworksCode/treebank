@@ -26,6 +26,7 @@ use std::path::Path;
 
 use anyhow::{Context, Result};
 use rayon::prelude::*;
+use serde::Deserialize;
 
 use crate::LangName;
 
@@ -76,6 +77,42 @@ fn which(bin: &str) -> Option<String> {
 
 pub(crate) struct RustFmt;
 pub(crate) struct BlackFmt;
+pub(crate) struct TypeScriptFmt;
+pub(crate) struct ZigFmt;
+
+#[derive(Deserialize)]
+struct BatchFormatted {
+    path: String,
+    #[serde(default)]
+    source: Option<String>,
+    #[serde(default)]
+    skipped: Option<String>,
+}
+
+fn format_json_lines(
+    tool_dir: &Path,
+    script: &str,
+    srcroot: &Path,
+    paths: &[String],
+) -> Result<HashMap<String, Reformatted>> {
+    let lines = crate::stdin_oracle::node_lines(tool_dir, script, &[], srcroot, paths)?;
+    lines
+        .into_iter()
+        .filter(|line| !line.trim().is_empty())
+        .map(|line| {
+            let value: BatchFormatted = serde_json::from_str(&line)
+                .with_context(|| format!("parse formatter output: {line:.200}"))?;
+            let path = crate::stdin_oracle::relativize(&value.path, srcroot);
+            Ok((
+                path,
+                Reformatted {
+                    source: value.source,
+                    skipped: value.skipped,
+                },
+            ))
+        })
+        .collect()
+}
 
 /// Run a formatter over each file's TEXT, on stdin, taking the result from
 /// stdout.
@@ -217,5 +254,33 @@ impl Reformatter for BlackFmt {
 
     fn available(&self) -> bool {
         which("black").is_some()
+    }
+}
+
+impl Reformatter for TypeScriptFmt {
+    fn tool(&self) -> &'static str {
+        "TypeScript language service formatter"
+    }
+
+    fn reformat(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, Reformatted>> {
+        format_json_lines(&crate::tool("ts-oracle"), "format.mjs", srcroot, paths)
+    }
+
+    fn available(&self) -> bool {
+        which("node").is_some() && which("npm").is_some()
+    }
+}
+
+impl Reformatter for ZigFmt {
+    fn tool(&self) -> &'static str {
+        "zig fmt"
+    }
+
+    fn reformat(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, Reformatted>> {
+        format_stdin(srcroot, paths, &["zig", "fmt", "--stdin"])
+    }
+
+    fn available(&self) -> bool {
+        which("zig").is_some()
     }
 }

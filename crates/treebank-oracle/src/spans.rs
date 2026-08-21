@@ -109,6 +109,8 @@ pub(crate) struct PythonSpans;
 pub(crate) struct JavaSpans;
 pub(crate) struct BashSpans;
 pub(crate) struct RubySpans;
+pub(crate) struct CSpans;
+pub(crate) struct CppSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -136,6 +138,21 @@ impl SpanOracle for TypeScriptSpans {
         let lines =
             stdin_oracle::node_lines(&crate::tool("ts-oracle"), "spans.mjs", &[], srcroot, paths)?;
         parse_jsonl(&lines, srcroot)
+    }
+}
+
+impl SpanOracle for CSpans {
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        parse_jsonl(&crate::c::span_lines(LangName::C, srcroot, paths)?, srcroot)
+    }
+}
+
+impl SpanOracle for CppSpans {
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        parse_jsonl(
+            &crate::c::span_lines(LangName::Cpp, srcroot, paths)?,
+            srcroot,
+        )
     }
 }
 

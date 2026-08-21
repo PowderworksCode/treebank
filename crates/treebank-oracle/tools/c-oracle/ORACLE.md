@@ -60,6 +60,12 @@ load-bearing for the same reason `generate_cli` is: clang's error-recovery
 behaviour decides whether a file is called invalid or indeterminate, so a
 different libclang moves the sweep numbers.
 
+The same program also backs `treebank shape` for C and C++. Invoked with
+`--spans`, it walks libclang's cursors and reports the byte extent of every
+cursor spelled in the main file. Cursors originating in included headers and
+zero-width implicit cursors are excluded; libclang has no generic field-name
+reflection, so this oracle deliberately reports boundaries without edges.
+
 Three libclang properties do the work, all verified by probe:
 
 1. **`CXTranslationUnit_KeepGoing`** makes a missing include non-fatal, so

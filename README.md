@@ -35,7 +35,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-oracle` | reference-parser oracles behind one trait, carrying their own oracle programs |
 | `crates/treebank-cli` | `treebank` — `rank` · `fetch` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
 | `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors: `__cplusplus` undefined for C and `201703L` for C++, which is what makes the `extern "C" {`-split-across-`#ifdef` class legible as something other than a grammar bug |
-| `test/rosetta` | the same program in every owned language, with the role counts all three must produce |
+| `test/rosetta` | the same program in every participating language, with the role counts all four must produce |
 
 Each grammar crate ships its `roles.json` and `ledger.toml` inside the
 published package, so a consumer gets the facet membership and the
@@ -81,6 +81,29 @@ Corpus sweeps are not in CI: the corpora are gigabytes and gitignored.
 Their numbers live in each grammar's `ledger.toml`, alongside what the
 corpus is blind to and the mutation test proving the pipeline can report
 non-zero.
+
+### Reference-tool capabilities
+
+Every language has a validity oracle. The deeper checks depend on what its
+reference toolchain exposes; absence is explicit rather than a silent no-op.
+
+| language | node spans (`shape`) | own formatter (`reformat`) | AST printer (`roundtrip`) |
+|---|---:|---:|---:|
+| Python | yes | Black | `ast.unparse` |
+| Rust | yes | rustfmt | prettyplease over syn |
+| TypeScript / JavaScript | yes | TypeScript language service | TypeScript printer |
+| Java | yes | — | — |
+| Bash | yes | — | — |
+| Ruby | yes | — | — |
+| C / C++ | yes | — | — |
+| Zig | — | `zig fmt` | — |
+
+The remaining dashes are real toolchain gaps, not forgotten registrations:
+the project does not substitute a third-party style formatter for a
+language-owned formatter, and does not call a token-preserving formatter an
+AST printer. A stable Zig AST surface is the next span dependency; the Zig
+toolchain currently exposes formatting and validation but no supported tree
+dump carrying source extents.
 
 ## Adding a language
 

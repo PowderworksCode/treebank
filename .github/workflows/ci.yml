@@ -114,13 +114,11 @@ jobs:
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
       # Whether there is anything to guard is a property of the checkout,
-      # not a list of exceptions: java, zig, c and cpp have no test/shape
-      # yet, for different reasons (java's span oracle exists and its
-      # fixtures do not; zig has no span oracle at all, because `zig fmt`
-      # reports a verdict and not a tree; libclang can give one for the C
-      # family through `clang_getCursorExtent` and that program is not
-      # built). All of them read as "no fixtures", and the day any grows
-      # some the step starts running by itself.
+      # not a list of exceptions: java has a span oracle but no fixtures yet;
+      # C and C++ have both and run here; zig has no span oracle because its
+      # toolchain exposes formatting and a verdict, not a supported tree dump.
+      # Any grammar currently without fixtures starts running this step the
+      # day its first one lands.
       - name: are there shape fixtures
         id: fixtures
         run: |
@@ -130,6 +128,10 @@ jobs:
             echo "have=false" >> "$GITHUB_OUTPUT"
             echo "no crates/treebank-${{ matrix.grammar }}/test/shape; nothing to guard"
           fi
+
+      - name: install libclang span oracle
+        if: steps.fixtures.outputs.have == 'true' && (matrix.grammar == 'c' || matrix.grammar == 'cpp')
+        run: sudo apt-get update -qq && sudo apt-get install -y libclang-dev
 
       - name: shape (tree agrees with the reference parser)
         if: steps.fixtures.outputs.have == 'true'

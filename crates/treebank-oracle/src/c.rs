@@ -69,16 +69,7 @@ fn run(
     srcroot: &Path,
     paths: &[String],
 ) -> Result<HashMap<String, bool>> {
-    let oracle = crate::tool("c-oracle/c-oracle");
-    if !oracle.exists() {
-        let build = crate::tool("c-oracle/build.sh");
-        eprintln!("oracle: building {} (libclang)", build.display());
-        let ok = Command::new(&build)
-            .status()
-            .with_context(|| format!("run {} — is libclang installed?", build.display()))?
-            .success();
-        anyhow::ensure!(ok, "{} failed", build.display());
-    }
+    let oracle = ensure_oracle()?;
 
     let mut child = Command::new(&oracle)
         .stdin(Stdio::piped())
@@ -161,6 +152,55 @@ fn run(
         eprintln!("oracle: verdict detail at {}", sidecar.display());
     }
     Ok(map)
+}
+
+fn ensure_oracle() -> Result<std::path::PathBuf> {
+    let oracle = crate::tool("c-oracle/c-oracle");
+    let source = crate::tool("c-oracle/oracle.c");
+    let build = crate::tool("c-oracle/build.sh");
+    let stale = || -> Result<bool> {
+        if !oracle.exists() {
+            return Ok(true);
+        }
+        let built = oracle.metadata()?.modified()?;
+        Ok(source.metadata()?.modified()? > built || build.metadata()?.modified()? > built)
+    };
+    if stale()? {
+        eprintln!("oracle: building {} (libclang)", build.display());
+        let ok = Command::new(&build)
+            .status()
+            .with_context(|| format!("run {} — is libclang installed?", build.display()))?
+            .success();
+        anyhow::ensure!(ok, "{} failed", build.display());
+    }
+    Ok(oracle)
+}
+
+pub(crate) fn span_lines(lang: LangName, srcroot: &Path, paths: &[String]) -> Result<Vec<String>> {
+    let dialect: &[&str] = match lang {
+        LangName::C => &["-x", "c", "-std=gnu17"],
+        LangName::Cpp => &["-x", "c++", "-std=gnu++17"],
+        _ => anyhow::bail!("libclang spans requested for {lang}"),
+    };
+    let oracle = ensure_oracle()?;
+    let requests: Vec<String> = paths
+        .iter()
+        .map(|p| {
+            let full = srcroot.join(p);
+            let mut args: Vec<String> = dialect.iter().map(|s| s.to_string()).collect();
+            args.push("-ferror-limit=0".to_string());
+            args.push("-w".to_string());
+            args.extend(include_dirs(srcroot, p));
+            format!("{}\t{}", full.display(), args.join("\t"))
+        })
+        .collect();
+    crate::stdin_oracle::run_lines(
+        oracle.to_string_lossy().as_ref(),
+        &["--spans"],
+        "c-oracle --spans — is libclang installed?",
+        Path::new(""),
+        &requests,
+    )
 }
 
 /// Every directory in a package that holds a header, plus their ancestors
