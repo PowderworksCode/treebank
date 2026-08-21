@@ -524,6 +524,26 @@ than after five more languages.
 The one genuinely new thing is `crossvariant`. Everything else is filling in a
 seam the design already cut.
 
+**What actually shipped, where it differs from the plan above.** Two rows were
+wrong, and both in the same direction — the seam that was already cut turned out
+to be cut somewhere else:
+
+- **`treebank-lang`** did not grow a `Variant { lang, name }` type or a
+  `--variant` flag. `python2` is an ordinary `LangName` whose `grammar` column
+  points at `Python`, exactly as `javascript` points at `Typescript`. A variant
+  that has its own corpus and its own oracle *is* a language to every caller
+  that fetches, sweeps or adjudicates; what it shares is a grammar crate, and
+  the registry already had a column for that.
+- **`routing.rs`'s `grammar_dirs()`/`route()` were deleted upstream** before
+  this landed, as generality for a case that had been measured and rejected.
+  They are not resurrected: with `python2` in the registry, a caller takes the
+  grammar directory and the default variant directly. `verify::variant_dirs`
+  reads `tree-sitter.json`, which is where tree-sitter itself looks, so the gate
+  and the generator cannot disagree about what exists.
+
+The CI row was right, and understated: discovery walks both depths and emits
+`{grammar, variant, dir}`, so a new variant needs no CI edit at all.
+
 ---
 
 ## 9. What this costs
@@ -532,7 +552,9 @@ seam the design already cut.
 variant adds a parser.c. Current: python 2.8 MB, rust 6.1 MB, typescript
 11.2 MB, bash 3.1 MB, java 1.7 MB. Splitting Python adds roughly one python-sized
 table — and the py3 table should *shrink*, since the five py2 conflicts come out
-of it. Five SQL dialects is the real bill, and it is why §7.1's oracle gate
+of it. *Measured:* python3 2.66 MB and python2 1.73 MB against a 2.89 MB union,
+so the pair costs 1.50 MB more than the union did and the py3 half did shrink,
+by 8.0%. Five SQL dialects is the real bill, and it is why §7.1's oracle gate
 matters as a size discipline too, not only as a correctness one.
 
 **CI time.** Every gate multiplies by variant count. Mitigation: the matrix is
