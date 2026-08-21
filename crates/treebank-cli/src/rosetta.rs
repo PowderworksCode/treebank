@@ -24,17 +24,14 @@ struct Expected {
     queries: BTreeMap<String, usize>,
 }
 
-/// One language's participation in a rosetta case: which grammar crate
-/// parses it, and what extension its program carries. Ruby is the fourth
-/// participant — the first language added to the suite after the original
-/// three (java and bash are not in it: java's counts diverge on
-/// constructs the cases assert, and bash cannot express them).
-const LANGUAGES: &[(&str, &str)] = &[
-    ("python", "py"),
-    ("ruby", "rb"),
-    ("rust", "rs"),
-    ("typescript", "ts"),
-];
+/// Participation is declared in `treebank-lang`; the program extension and
+/// grammar routing come from that same registry as every other command.
+fn languages() -> impl Iterator<Item = treebank_lang::LangName> {
+    treebank_lang::LangName::ALL
+        .iter()
+        .copied()
+        .filter(|lang| lang.rosetta())
+}
 
 pub fn run(dir: &Path, crates_dir: &Path) -> Result<()> {
     run_inner(dir, crates_dir, false)
@@ -69,7 +66,8 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
         .with_context(|| format!("parse {}/expected.json", name))?;
         let _ = &expected.note;
 
-        for (lang, ext) in LANGUAGES {
+        for lang in languages() {
+            let ext = lang.primary_extension();
             let program = case.join(format!("program.{ext}"));
             if !program.exists() {
                 failures.push(format!(
@@ -78,7 +76,7 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
                 ));
                 continue;
             }
-            let grammar_dir = crates_dir.join(format!("treebank-{lang}"));
+            let grammar_dir = crates_dir.join(lang.grammar_crate());
             let (language, _) = crate::grammar::load(&grammar_dir)?;
             let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
             let facets: BTreeMap<String, Vec<String>> = roles.facets.into_iter().collect();
@@ -137,7 +135,7 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
         println!(
             "rosetta OK: {} case(s) × {} languages, {checked} assertions",
             cases.len(),
-            LANGUAGES.len()
+            languages().count()
         );
     }
     Ok(())

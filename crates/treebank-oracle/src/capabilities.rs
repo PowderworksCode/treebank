@@ -54,102 +54,28 @@ static TS_PRINT: unparse::TypeScriptUnparser = unparse::TypeScriptUnparser;
 static RS_PRINT: unparse::RustUnparser = unparse::RustUnparser;
 
 pub(crate) fn get(name: LangName) -> Capabilities {
-    match name {
-        LangName::Python => Capabilities {
-            spans: Some(&PY_SPANS),
-            reformat: Some(&BLACK),
-            unparse: Some(&PY_PRINT),
-        },
-
-        LangName::Rust => Capabilities {
-            spans: Some(&RS_SPANS),
-            reformat: Some(&RUSTFMT),
-            unparse: Some(&RS_PRINT),
-        },
-
-        // One toolchain answers for both: tsc parses `.js` as a dialect,
-        // which is the same union the grammar carries.
-        LangName::Typescript | LangName::Javascript => Capabilities {
-            spans: Some(&TS_SPANS),
-            // tsc exposes formatting only through the language service,
-            // and prettier is not vendored. Stated rather than faked.
-            reformat: None,
-            unparse: Some(&TS_PRINT),
-        },
-
-        LangName::Java => Capabilities {
-            spans: Some(&JAVA_SPANS),
-            // google-java-format is the obvious candidate and is not
-            // installed; the JDK ships no formatter of its own.
-            reformat: None,
-            // javac's `Pretty` printer is an internal API behind
-            // --add-exports, and it is lossy in ways that would read as
-            // our failures. Left out until it is worth the argument.
-            unparse: None,
-        },
-
-        LangName::Bash => Capabilities {
-            spans: Some(&BASH_SPANS),
-            // shfmt is the candidate and is not installed.
-            reformat: None,
-            // bash has no printer; nothing renders a script back from a
-            // tree.
-            unparse: None,
-        },
-
-        // Both C-family languages answer the same way, and each `None`
-        // is a real answer rather than a gap in the table.
-        LangName::C | LangName::Cpp => Capabilities {
-            // libclang gives one — `clang_getCursorExtent` yields start and
-            // end offsets for every cursor — so a span oracle is reachable
-            // through the same program `c.rs` already builds. Not built
-            // yet, and saying so beats a `shape` run that compares against
-            // nothing.
-            spans: None,
-            // clang-format is the obvious candidate and is a FORMATTER
-            // rather than a printer driven from the parse tree: it
-            // reformats text it did not fully parse, which is exactly the
-            // property a reformat-invariance check must not have. A tree
-            // the grammar got wrong would be reformatted around rather
-            // than reported.
-            reformat: None,
-            // C has no round-trippable printer, and the reason is the
-            // preprocessor: a macro's expansion is not in the tree at all,
-            // so anything printing a C tree back would be printing the
-            // source it was handed.
-            unparse: None,
-        },
-
-        LangName::Ruby => Capabilities {
-            // CRuby's own AST, the same parser `validate` asks:
-            // RubyVM::AbstractSyntaxTree nodes carry first/last line and
-            // column. Ripper rides along as the lexical oracle, the role
-            // `tokenize` plays for python.
-            spans: Some(&RB_SPANS),
-            // rubocop and standardrb are gems, not part of the
-            // interpreter, and neither is installed. Stated rather than
-            // faked.
-            reformat: None,
-            // CRuby ships no unparser: RubyVM::AbstractSyntaxTree has no
-            // printer, and prism's is not in the 3.3 stdlib.
-            unparse: None,
-        },
-
-        LangName::Zig => Capabilities {
-            // `zig fmt` reports a verdict and a diagnostic, not a tree.
-            // The compiler can dump one (`std.zig.Ast`, from a small
-            // program of our own, the way the java and bash oracles were
-            // built), and that is not built yet. Saying so beats a `shape`
-            // run that compares against nothing.
-            spans: None,
-            // `zig fmt` IS a real reformatter, shipped with the compiler.
-            // Not wired yet: the reformat gate wants the tool pinned
-            // alongside the oracle, and the oracle's own version pin is
-            // the thing to settle first.
-            reformat: None,
-            // `std.zig.render` is what `zig fmt` is built on, so a printer
-            // is reachable through the same small program. Not built yet.
-            unparse: None,
-        },
+    // `NONE` is recorded explicitly in the central registry. It means the
+    // reference toolchain has no implementation wired for that capability;
+    // adding one is a single registry-field change once its adapter exists.
+    macro_rules! capability {
+        (NONE) => {
+            None
+        };
+        ($value:ident) => {
+            Some(&$value)
+        };
     }
+    macro_rules! capability_match {
+        ($( $variant:ident => $name:literal, $exts:tt, $grammar:ident, $rosetta:literal,
+             $ecosystem:path, $oracle:path, ($spans:ident, $reformat:ident, $unparse:ident); )+) => {
+            match name {
+                $(LangName::$variant => Capabilities {
+                    spans: capability!($spans),
+                    reformat: capability!($reformat),
+                    unparse: capability!($unparse),
+                },)+
+            }
+        };
+    }
+    treebank_lang::for_each_language!(capability_match)
 }
