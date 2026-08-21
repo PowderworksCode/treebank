@@ -92,6 +92,7 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | language | node spans (`shape`) | own formatter (`reformat`) | AST printer (`roundtrip`) |
 |---|---:|---:|---:|
 | Python | yes | Black | `ast.unparse` |
+| Python 2 | — | — | — |
 | Rust | yes | rustfmt | prettyplease over syn |
 | TypeScript / JavaScript | yes | TypeScript language service | TypeScript printer |
 | Java | yes | — | — |
@@ -105,7 +106,11 @@ the project does not substitute a third-party style formatter for a
 language-owned formatter, and does not call a token-preserving formatter an
 AST printer. C/C++ source extents and a stable Zig AST surface are the next
 span work when their adapters can make the same guarantees as the existing
-oracles.
+oracles. Python 2's three are three different sentences, written out beside
+its registry row: spans are *reachable and not built* (`typed_ast.ast27`
+carries `lineno` and `col_offset`), Black dropped python 2 in 22.1 and a
+formatter that rewrites py2 into py3 would measure the formatter, and
+`typed_ast` ships python 2's parser with no printer.
 
 ## Adding a language
 
@@ -134,10 +139,11 @@ in it:
    `crates/treebank-oracle/src/<lang>.rs`, with its checker program under
    that crate's `tools/`. A grammar with no reference parser cannot be
    swept: every failure would be its own excuse.
-5. **Answer the three optional capabilities** in
-   [`crates/treebank-oracle/src/capabilities.rs`](crates/treebank-oracle/src/capabilities.rs)
-   — node boundaries, a formatter, a tree printer. `None` is a real answer
-   as long as it comes with the sentence saying why.
+5. **Answer the three optional capabilities** in the registry row from
+   step 2 — node boundaries, a formatter, a tree printer, resolved by
+   [`crates/treebank-oracle/src/capabilities.rs`](crates/treebank-oracle/src/capabilities.rs).
+   `NONE` is a real answer as long as it comes with the sentence saying why,
+   which now belongs beside the row rather than in the resolver.
 6. **Add a row** to the table at the top of this file.
 
 Steps 3, 4 and 5 are exhaustive `match`es, so the compiler asks for them;

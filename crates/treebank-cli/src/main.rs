@@ -438,7 +438,13 @@ mod roles_tests {
 
     #[test]
     fn programmatic_roles_check_includes_the_ledger_gate() {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../treebank-python");
+        // The fixture is built from python's DEFAULT variant, resolved
+        // rather than spelled: treebank-python keeps its generated `src/`
+        // under python3/ (VARIANTS.md §2), and a hardcoded crate-root path
+        // here would be the fourth place in this repository to go looking
+        // for a file the variant layout moved.
+        let crate_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../treebank-python");
+        let source = crate::verify::default_variant(&crate_root);
         let dir = std::env::temp_dir().join(format!(
             "treebank-roles-ledger-{}-{}",
             std::process::id(),
@@ -451,7 +457,9 @@ mod roles_tests {
             dir.join("src/node-types.json"),
         )
         .unwrap();
-        std::fs::copy(source.join("roles.json"), dir.join("roles.json")).unwrap();
+        // roles.json is per LANGUAGE, so it stays at the crate root while
+        // node-types.json comes from the variant above.
+        std::fs::copy(crate_root.join("roles.json"), dir.join("roles.json")).unwrap();
         std::fs::write(dir.join("ledger.toml"), "vocabulary = \"0.0.0\"\n").unwrap();
 
         let error = roles_check(&dir).unwrap_err().to_string();
