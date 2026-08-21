@@ -40,10 +40,11 @@ gap_files = 119
 noise_files = 547
 pass_rate = '72.31%'
 
-# The block above is written by `treebank sweep` itself — the numbers in a
-# ledger are the tool's to state, not a human's to transcribe. What the
-# writer does not carry is here, where it will survive the next run.
 [corpus.gaps]
+# Everything the sweep's ledger writer does not carry. It owns
+# `[corpus.sweep]` above and replaces that block wholesale on every run —
+# prose included, and up to the next section header — so anything written
+# between the two sections is eaten. Here, past the header, it survives.
 config_files = 348
 indeterminate_files = 506
 clusters = 91
