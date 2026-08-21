@@ -1,0 +1,167 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'c'
+versions = '''
+C89 through C23 in one grammar, in the GNU dialect, because that is what a distribution's C is written in and there is no version of C in the corpus that is not. C99 brought `//` comments, declarations inside a `for`, designated initializers, compound literals, `_Complex` and variadic macros; C11 brought `_Static_assert`, `_Generic`, `_Atomic` in both its jobs and anonymous struct and union members; C23 brought `[[attributes]]`, `typeof`, `constexpr`, `bool` and `nullptr` as keywords, `#elifdef`, an enum's underlying type and a label at the end of a block. The GNU extensions are not a tier below those: statement expressions, `__attribute__`, case ranges, `__typeof__`, extended `asm`, `__auto_type`, computed `goto` and K&R definitions are all in the table, and a grammar without them parses none of glibc.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+19 of 22 table-tier terms are threaded. `_pattern` and `_interpolation` have no member because C has neither — there is no destructuring position in the language and no string may embed an expression, which is also why every one of C's string rules satisfies `_literal`'s per-rule test where python's does not. `_parameter` is demoted to the facet tier; see `demoted` in roles.json.
+
+Two placements are worth stating because they are choices and not oversights. `conditional_expression` is NOT a `_branch`: `_branch` nests inside `_control_flow`, which nests inside `_statement` because that is what C's control flow is, so a `?:` admitted there would make a bare `a ? b : c` parse as a statement. TypeScript, which has the same pair, draws the line in the same place. And `_type` is threaded over the type SPECIFIERS rather than over `type_descriptor`, which is a specifier plus an abstract declarator and may only appear where a type is an operand — C's own grammar gives that its own nonterminal (`type-name`) for the same reason. `type_descriptor` is still covered, through `_argument`.
+
+`_name` has exactly one member, and that is a fact about C. C has a single lexical class of names: `foo` in `foo bar;` is a type only because a typedef the parser cannot see says so. `type_identifier` exists as an alias in type POSITION, where the position and not the token is what decides.'''
+
+[corpus]
+source = '''
+**A stand-in, and it is named rather than dressed up.** The corpus swept here is the 3,662 `.c` and `.h` files present on the build machine — glibc, X11, php, openssl, glib and the linux UAPI headers under `/usr/include`, plus mypyc's vendored C. It is header-heavy where a real C corpus is source-heavy, it is one distribution's installed set rather than a ranked sample of what a distribution ships, and gap numbers from it are not gap numbers from Debian.
+
+The Debian path is BUILT and unrun: `treebank rank --lang c` and `treebank fetch --lang c` work today, ranking sid source packages by popcon installs and filtering to packages with >=2000 SLOC of C and more C than C++, taking upstream `.orig.tar.*` only. What has not happened is the fetch, which is tens of gigabytes. When it does, these numbers are replaced rather than added to.'''
+files = 3662
+packages = 2
+ranking_note = '''
+C has no registry, so popularity has to be borrowed, and Debian is the only source that supplies a popularity signal and a source tarball for the same name — which is why it beats vcpkg and Conan (no download counts) and a GitHub star scrape (no version identity). popcon counts machines, which is the same kind of metric as crates.io downloads rather than java's dependent-repos proxy. The bias is explicit and it is the point: that corpus is the C a distribution SHIPS — system libraries, daemons, autotools trees, decades-old code that still runs everything — and not trending C on GitHub, which would give different numbers. The SLOC filter exists because popcon ranks everything Debian ships: without one the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc (no C at all).
+
+The C and C++ filters are written as a PARTITION and tested as one — C wants `ansic >= cpp`, C++ wants `cpp > ansic` — so glibc cannot enter the C++ corpus on its fringe and LibreOffice cannot enter the C one on its.'''
+blind_to = '''
+`.h` is shared by C and C++ and the extension cannot tell them apart, so the corpus filter reads the file: a header with unguarded `namespace`, `template<`, `class` or `public:` is dropped, with comments, string literals and every `__cplusplus`-guarded region excluded from that scan. The filter is blunt on purpose — a corpus boundary, not a language detector — and it drops real C headers that talk ABOUT C++ in the wrong place.
+
+No build system is run, so a generated `config.h` is simply absent. That is the largest single reason the oracle answers `indeterminate` as often as it does, and it shows up as an unadjudicable file rather than a fabricated verdict. Resolving more would mean executing arbitrary upstream build scripts.
+
+The stand-in corpus above is blind to something else again, and it matters more: it is almost all HEADERS. Declaration syntax is over-represented and statement syntax is under-represented, so the gap clusters below are a fair picture of what breaks in a header and a poor one of what breaks in a `.c`.'''
+
+[corpus.sweep]
+files = 3662
+passed = 2648
+failed = 1014
+gap_files = 119
+noise_files = 547
+pass_rate = '72.31%'
+
+[corpus.gaps]
+# Everything the sweep's ledger writer does not carry. It owns
+# `[corpus.sweep]` above and replaces that block wholesale on every run —
+# prose included, and up to the next section header — so anything written
+# between the two sections is eaten. Here, past the header, it survives.
+config_files = 348
+indeterminate_files = 506
+clusters = 91
+gap_clusters = 51
+note = """
+The four buckets are the point. Of 1,014 failures: **119 are grammar gaps** — valid C this grammar rejects, the number to drive down — **348 are configuration-inherent**, valid C that cannot be represented as written because a preprocessor conditional splits a construct, and **547 are noise**, where the reference parser did not vouch for the file.
+
+The noise bucket is inflated and by how much is recorded: the oracle answered 467 valid, 41 invalid and **506 indeterminate** over the 1,014, and `Oracle::validate` collapses indeterminate to false so that no fix agent is ever aimed at a file whose validity nobody can vouch for. So 506 of the 547 noise files are "we could not tell" and only 41 are "the reference rejected it". A C gap number quoted without its indeterminate count is not a claim this crate makes — and the sweep now says so itself, because more files are unadjudicable than are known-valid. That ratio inverted as the grammar improved rather than because anything changed about the oracle: the files that still fail are the ones a build system would have configured.
+
+Read the other way: 2,648 + 348 = **2,996 of 3,662 files, 81.8%, are either parsed or accounted for**, and 119 are the queue.
+
+**Where these numbers came from.** The grammar as first shipped passed 2,184 and left 422 gaps in 157 clusters. Nearly every one of those clusters was the same thing — an unexpanded macro standing where the preprocessor would have put a keyword — and the ledger named three positions for it and refused all three, on the grounds that a bare identifier admitted after a declarator makes `int x y;` parse. That was true of the rule being refused and not of the rule: each position is now admitted only where the parse has already committed to something a juxtaposed pair of names cannot reach. The five negative files under `test/negative/` that pin those boundaries — `two-names-juxtaposed.c`, `two-names-juxtaposed-in-a-block.c`, `tag-with-two-names.c`, `macro-suffix-on-a-plain-name.c` and the older `two-expressions-juxtaposed.c` — are all still rejected, and clang rejects all of them too.
+
+**How the gaps below are counted, because the sweep cannot do it.** 42 of the 119 are reported by the sweep at an `extern \"C\" {` line, which is not what is wrong with them: the brace is opened inside one `#ifdef __cplusplus` and closed inside another, so it is the FIRST error in a file whose real gap is further down. The per-construct counts in `known_gaps` come from removing those branches by hand and re-reading the first error, which is a floor per class — a file with two gaps is counted under one of them. 22 of the 119 have nothing behind the brace and parse once it is removed.
+
+Two contributions are worth separating out. Dead-branch elimination is load-bearing: 343 of the 348 configuration-inherent files parse cleanly once the branches a C compiler would not take are removed, and the split `extern \"C\" {` has no grammar fix at all — the token stream is not nested. And the sweep's macro census still explains 11 gap files outright: they parse once their package's own macros are expanded.
+
+For calibration on what 119 is worth: the patched upstream tree-sitter-c this grammar replaces passed 43,089 of 84,455 files on the real Debian corpus, 51%, with 13,826 gap files. The two are over different populations and must not be subtracted.
+"""
+
+[corpus.recovery]
+note = """
+`treebank recovery` needs no oracle — it deletes one token from a file that parses cleanly and measures how much of the file lands inside an ERROR — so it is the one distribution here that the local corpus can produce honestly. Over 2,634 files and 8,067 breaking deletions: **median blast radius 0.1%, p90 10.8%, p99 90%, 250 shredded**. For the shape of that, DESIGN.md §5.12 records python at 0.3 / 17.1 / 99.1 and typescript at 0.5 / 17.5 / 94.1 over their own corpora.
+
+**The tail got worse and the reason is recorded rather than smoothed over.** The same grammar before the macro rules landed measured 0.1 / 5.7 / 88.5 with 182 shreds over 2,172 files and 7,843 deletions. Part of that is population: recovery only runs on files that parse cleanly, and 462 more of them do now — the macro-dense headers, which are exactly the ones that recover worst. Part of it is the rules themselves, and that part is real. A rule that admits a bare identifier where a keyword was expected gives the parser one more way to keep going after a lost brace, and going on wrongly is what a wide blast radius IS. This is the price of the pass rate above, it is paid in the p90 rather than in the median, and a future change that buys files by widening it further should be weighed against this line.
+
+(An earlier version of this file quoted 0.1 / 3.5 / 44.4 with 6 shreds over 400 files. That measurement does not reproduce: the tool sweeps every clean-parsing file and there were 2,172 of them at the time, not 400. The numbers here are what the current tool prints.)
+
+The worst case is the brace, as it is everywhere: 98 of the 250 shreds are a deleted `}` and 62 a deleted `;`. A C file is one long run of declarations with no statement-level resynchronisation point, so a lost brace has nothing to recover ONTO until the next one — which is a fact about C rather than about this parse table.
+"""
+
+[corpus.kinds]
+note = """
+`treebank kinds` over the same 3,662 files, which measures the CORPUS rather than the grammar: 101 of 117 named kinds appear in the 2,637 files it can read, 16 never do, 12 fewer than twenty times. The sixteen absent ones say what this corpus is blind to rather than what the grammar lacks, and the list is shorter than it was — `asm_statement`, `generic_expression`, `typeof_specifier`, `static_assert_declaration`, `compound_literal_expression` and `atomic_type_specifier` were absent before and are counted now, because the files carrying them were the files failing for the macro reasons above.
+
+That is the second view of the same fix and it is worth stating plainly: `kinds` counts only CLEAN parses, so it moves when the sweep moves. What it still says is which constructs a generated program (`treebank fuzz`) would be worth aiming at first.
+"""
+
+[[oracles]]
+family = 'c'
+tool = 'tools/c-oracle — libclang, parse-only, verdict from clang’s own diagnostic categories'
+version = 'libclang 18 or newer; the build pins one and ORACLE.md says why the pin matters'
+role = '''
+primary and only, and the only THREE-VALUED oracle here: valid / invalid / indeterminate. See ORACLE.md for the full argument; the short version is that the claim is "no C syntax error, in GNU C, given these include paths", NOT "this compiles".
+
+`gcc -fsyntax-only` cannot make that claim and the reason was measured rather than assumed. A missing include makes gcc emit `compilation terminated` and parse nothing after line 1; worse, a macro it has never seen produces a genuine syntax-class diagnostic — `MYLIB_EXPORT int f(void);` gives `expected ';' before 'int'`, textually identical to the real syntax error in `int x = ;`. Classifying gcc's message text cannot separate them because at gcc's level of recovery they are the same event.
+
+libclang can, for three reasons that were each verified by probe: `CXTranslationUnit_KeepGoing` makes a missing include non-fatal so the rest of the file is still parsed; `clang_getDiagnosticCategoryText` returns clang's own category from its diagnostic tables, which is data rather than prose; and clang's parser recovers into the SEMANTIC category where gcc falls into the syntax one, so the undefined macro above comes back as `unknown type name 'MYLIB_EXPORT'`.
+
+The rule reads category counts and no message text at all: valid iff no parse-category error; invalid iff a parse error and nothing else; indeterminate otherwise. `#error "unsupported platform"` is a `User-Defined Issue` and is treated as missing context, which is right — it is the author saying this configuration is not supported. Any unrecognised category counts as `other`, pushes the file to indeterminate rather than invalid, and reports its name, so a clang change surfaces as a visible count rather than a silent misclassification.
+
+`Oracle::validate` is two-valued and **indeterminate collapses to false**, so `gap_files` is a FLOOR and `noise_files` mixes "the reference rejected it" with "we could not tell". A C gap number quoted without its indeterminate count is not a claim this crate makes.'''
+
+[[known_gaps]]
+construct = 'a macro standing in for a whole parameter list'
+files = 9
+note = """
+`void base64_stream_encode_avx BASE64_ENC_PARAMS { … }` — the parameter list, parentheses and all, arrives from a macro. There is no declarator shape to match, because the tokens that would form one are not there.
+
+This is the one macro position that is still REFUSED, and unlike the three that were refused before it, the reason survives inspection. Every rule that was taken confines itself to a context that a juxtaposed pair of names cannot reach: after a declarator that ends in `)` or `]`, before the type where a keyword type cannot be, inside a `{` that `struct` or `enum` opened, after `typedef`. This one has no such context. `void f BASE64_ENC_PARAMS;` and `int x y;` are the same three tokens in the same order, so admitting the first admits the second, and `test/negative/two-names-juxtaposed.c` exists to say that is not allowed.
+
+The sweep diagnoses it for itself: 9 of the 16 files in its cluster parse once `BASE64_ENC_PARAMS` is expanded, and the census names it. All ten are one vendored copy of libbase64.
+"""
+
+[[known_gaps]]
+construct = 'a macro inside a type descriptor'
+files = 4
+note = """
+`NCURSES_EXPORT(NCURSES_CONST char *) unctrl (chtype);` and `NCURSES_WRAPPED_VAR(NCURSES_CONST char * const *, boolnames);` — a macro in the specifier run of a `type_descriptor`, which is the one specifier position that did not get a `macro_modifier`.
+
+Not refused on correctness grounds but on cost: `type_descriptor` is what a cast, a `sizeof` and a type argument all take, so it is reachable from the hottest expression states in the grammar, and a bare identifier admitted there competes with every one of them. The four positions that DID get the rule are each behind a committed token. Left here with its price attached so the next attempt starts with the measurement rather than the idea.
+"""
+
+[[known_gaps]]
+construct = 'a parenthesised parameter list as a macro argument'
+files = 2
+note = """
+`int (*close) __P((struct __db *));` and `OSSL_CORE_MAKE_FUNC(int, provider_teardown, (void *provctx))` — the macro's argument is a function's signature, which is neither an expression nor a `type_descriptor`.
+
+`parameter_list` may nest inside another `parameter_list`, which is what carries glibc's `__REDIRECT` family; the same rule as an `_argument` was written, generated and MEASURED at one additional file for three more declared conflicts and 19 kB of table, and was reverted on that number. It is recorded because the next reader will have the same idea.
+"""
+
+[[known_gaps]]
+construct = 'an empty macro argument'
+files = 5
+note = """
+`__struct_group(/* no tag */, addrs, /* no attrs */, struct { … });` — the kernel's flexible-array helper passes empty arguments, spelled as a comment. `macro_type_specifier` requires its first argument to be a `type_descriptor` and its later ones to be `_argument`s, and neither may be nothing.
+"""
+
+[[deviations]]
+what = """
+**A macro standing alone parses where the compiler wants a declaration, at file scope and inside a struct body.** `__BEGIN_DECLS`, `_XFUNCPROTOBEGIN`, `G_BEGIN_DECLS` and `BEGIN_EXTERN_C()` open a great many headers; `struct k_atm_aal_stats { __AAL_STAT_ITEMS };` is the same thing one level down, where the macro expands to several members. `unexpanded_macro` admits both at a negative dynamic precedence, so anything readable as a declaration still reads as one.
+
+The cost is stated rather than buried: `f();` at file scope now parses too, as this rule plus an `empty_declaration`, and clang calls that an error; inside a struct body a bare name parses as a member. It was measured before it was taken — `unexpanded_macro` and the empty-declarator-list rule beside it moved 580 of 1,367 remaining local failures between them — and the alternative was losing every header that opens with one.
+"""
+
+[[deviations]]
+what = """
+**A macro may stand where a keyword would, in five positions, and each one admits something C does not.** The rules are `macro_modifier` (a bare name) and `macro_attribute` (a name with an optional argument list), and the whole safety argument is where they are reachable FROM:
+
+- After a declarator that ENDS IN `)` OR `]`, which is `__THROW`, `__nonnull ((1))`, `__ul_attribute__((warn_unused_result))`. Admits `int f(void) g;` and `int a[3] g;`. Does not admit `int x y;`, because a name is not a function or array declarator.
+- In the declaration specifiers BEFORE the type, and in front of a function declarator. Admits `foo bar baz;` and `int x y();`. Does not admit `int x y;`, because `int` is a keyword and `y` carries no parameter list.
+- Beside a pointer's qualifiers and in front of a parenthesised declarator's star, which is `ZEND_FASTCALL` and `WINAPI`. Admits `int *x y;`.
+- On an enumerator, together with an argument list for the enumerator that IS a macro call. Admits `enum { A B };` and `enum { A(1) };`.
+- After `typedef`'s specifiers and after a struct member's declarator. Admits `typedef int x y;` and `struct { int x y; };`.
+
+Every one of those is inside a context the parser has already committed to, and none of them is `int x y;` at file scope or in a block. Four negative files pin that and clang rejects all four.
+
+One further consequence is not an over-acceptance but a wrong tree, and it is unavoidable: where two adjacent identifiers could be either name-then-macro or macro-then-name, the grammar has to pick. In a typedef it picks macro-then-name, so `typedef struct _GTrashStack GTrashStack GLIB_DEPRECATED_TYPE_IN_2_48;` parses with the `declarator` field naming the macro. At file scope a leading macro is read as a standalone `unexpanded_macro` rather than as a modifier, so `ZEND_API void ZEND_FASTCALL f(int);` gives `ZEND_API` its own node — which is right for `__BEGIN_DECLS` and wrong for `ZEND_API`, and there is nothing in the token stream that separates them.
+"""
+
+[[deviations]]
+what = """
+**A parameter list may contain another parameter list.** `extern int __REDIRECT_NTH (aio_read, (struct aiocb *__aiocbp), aio_read64);` — glibc's redirect macros hand the parser a parenthesised parameter list sitting where a parameter goes, and reading it as one is the only reading there is. It admits `int f(int a, (int b));`, which clang rejects. Narrow, because a parameter declaration cannot begin with `(`: nothing that parsed before parses differently now. Worth 46 files on the local corpus.
+"""
+
+[[deviations]]
+what = """
+**Two declarator hierarchies, not four.** A declarator ending in a name and one ending in nothing, where a grammar that also wanted `field_identifier` and `type_identifier` node types in declarator position would need four near-identical copies. The consequence is a naming one: a struct member's name and a typedef's name are both `identifier`, and what they name is carried by the field (`declarator:`) and by the enclosing node rather than by the node type. `type_identifier` still exists, as the alias used in type POSITION, where the position decides and no second hierarchy is needed.
+"""

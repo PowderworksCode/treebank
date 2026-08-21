@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "cpp",
+      "camelcase": "Cpp",
+      "scope": "source.cpp",
+      "file-types": ["cc", "cpp", "cxx", "c++", "hpp", "hh", "hxx", "h++", "ipp", "tcc"],
+      "injection-regex": "^(cc|cpp|cxx|c\\+\\+)$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "C++98 through C++23 in one grammar, extending treebank-c, carrying the treebank node vocabulary",
+    "links": { "repository": "https://github.com/PowderworksCode/treebank" }
+  }
+}

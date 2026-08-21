@@ -9,6 +9,8 @@ pub mod fetch;
 pub mod rank;
 
 mod bash;
+mod c;
+mod cxx;
 mod debian;
 mod github;
 mod java;
@@ -99,6 +101,8 @@ pub fn get(name: LangName) -> &'static dyn Ecosystem {
     static JAVASCRIPT: javascript::JavaScript = javascript::JavaScript;
     static JAVA: java::Java = java::Java;
     static BASH: bash::Bash = bash::Bash;
+    static C: c::C = c::C;
+    static CXX: cxx::Cxx = cxx::Cxx;
     static ZIG: zig::Zig = zig::Zig;
     static RUBY: ruby::Ruby = ruby::Ruby;
     match name {
@@ -108,6 +112,8 @@ pub fn get(name: LangName) -> &'static dyn Ecosystem {
         LangName::Javascript => &JAVASCRIPT,
         LangName::Java => &JAVA,
         LangName::Bash => &BASH,
+        LangName::C => &C,
+        LangName::Cpp => &CXX,
         LangName::Zig => &ZIG,
         LangName::Ruby => &RUBY,
     }

@@ -86,6 +86,14 @@ languages! {
     Javascript => "javascript", exts: ["js", "jsx", "mjs", "cjs"], grammar: Typescript;
     Java => "java", exts: ["java"], grammar: Java;
     Bash => "bash", exts: ["sh", "bash"], grammar: Bash;
+    C => "c", exts: ["c", "h"], grammar: C;
+    /// A grammar of its own, and not a dialect of `c`: the C++ grammar
+    /// EXTENDS the C one rather than replacing it, but the two parse
+    /// different languages and a `.h` belongs to exactly one of them.
+    /// Which one is a corpus question the extension cannot answer, which
+    /// is why `.h` is C's here and the corpus filter decides per file —
+    /// see treebank-corpus's `cxx::header_is_cxx`.
+    Cpp => "cpp", exts: ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], grammar: Cpp;
     Ruby => "ruby", exts: ["rb"], grammar: Ruby;
     Zig => "zig", exts: ["zig", "zon"], grammar: Zig;
 }

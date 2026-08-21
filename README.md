@@ -4,7 +4,8 @@ Tree-sitter grammars written from scratch and owned outright, carrying a
 shared node vocabulary that is enforced in the parse table itself — so
 queries like `(_declaration)`, `(_loop)` and `(_callable)` mean the same
 thing across languages. Languages: **Python, Rust, TypeScript** (the
-TypeScript grammar also parses JavaScript), **Java, Ruby, Bash** and
+TypeScript grammar also parses JavaScript), **Java, Ruby, Bash**, **C and
+C++** (the C++ grammar extends the C one rather than copying it), and
 **Zig**.
 
 **[`DESIGN.md`](DESIGN.md) is the authoritative document** — the vocabulary,
@@ -25,13 +26,15 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-java` | Java 8 through 21 in one grammar |
 | `crates/treebank-ruby` | Ruby 3.x in one grammar |
 | `crates/treebank-bash` | GNU bash 5.x in one grammar |
+| `crates/treebank-c` | C89–C23 with the GNU extensions, preprocessor included |
+| `crates/treebank-cpp` | C++98–C++23, extending the C grammar through tree-sitter's own inheritance |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-core` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
 | `crates/treebank-oracle` | reference-parser oracles behind one trait, carrying their own oracle programs |
 | `crates/treebank-cli` | `treebank` — `rank` · `fetch` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
-| `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors (no current target needs it; kept for the languages that will) |
+| `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors: `__cplusplus` undefined for C and `201703L` for C++, which is what makes the `extern "C" {`-split-across-`#ifdef` class legible as something other than a grammar bug |
 | `test/rosetta` | the same program in every owned language, with the role counts all three must produce |
 
 Each grammar crate ships its `roles.json` and `ledger.toml` inside the

@@ -1,0 +1,89 @@
+==================
+A range-based for over a structured binding
+==================
+
+void f(Map m) {
+  for (const auto& [key, value] : m) {
+    use(key);
+  }
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration
+          type: (type_identifier)
+          declarator: (identifier))))
+    body: (compound_statement
+      (for_range_loop
+        (type_qualifier)
+        type: (placeholder_type_specifier)
+        declarator: (reference_declarator
+          declarator: (structured_binding_declarator
+            (identifier)
+            (identifier)))
+        right: (identifier)
+        body: (compound_statement
+          (expression_statement
+            (call_expression
+              function: (identifier)
+              arguments: (argument_list
+                (identifier)))))))))
+
+==================
+try, catch and throw
+==================
+
+int f() {
+  try {
+    throw Error("x");
+  } catch (const std::exception& e) {
+    return 1;
+  } catch (...) {
+    return 2;
+  }
+  return 0;
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list))
+    body: (compound_statement
+      (try_statement
+        body: (compound_statement
+          (expression_statement
+            (throw_expression
+              value: (call_expression
+                function: (identifier)
+                arguments: (argument_list
+                  (string_literal))))))
+        (catch_clause
+          parameters: (parameter_list
+            (parameter_declaration
+              (type_qualifier)
+              type: (qualified_identifier
+                scope: (identifier)
+                name: (identifier))
+              declarator: (reference_declarator
+                declarator: (identifier))))
+          body: (compound_statement
+            (return_statement
+              value: (number_literal))))
+        (catch_clause
+          parameters: (parameter_list
+            (variadic_parameter))
+          body: (compound_statement
+            (return_statement
+              value: (number_literal)))))
+      (return_statement
+        value: (number_literal)))))

@@ -1,0 +1,98 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'cpp'
+versions = '''
+C++98 through C++23 in one grammar, in the GNU dialect, EXTENDING treebank-c through tree-sitter's own grammar inheritance rather than copying it. C++11 brought `auto`, `decltype`, lambdas, rvalue references, `nullptr`, scoped enums, `= default` and `= delete`, alias declarations, trailing return types, raw strings and variadic templates; C++14 generic lambdas; C++17 nested namespaces, structured bindings and `if constexpr`; C++20 concepts and `requires`, the three-way comparison and coroutines. The GNU extensions come with the base grammar and are not re-listed: `__attribute__`, statement expressions, `typeof`, `asm`, the alternate keyword spellings.
+
+The inheritance is not a convenience. C++ genuinely IS C's declarator grammar with more on top, and the alternative — a second copy of the declaration specifiers, the four declarator shapes, the whole preprocessor and every GNU extension — is a copy that drifts. A fix to the way `int (*f[3])(void)` parses has to land in both languages or in neither.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+roles_note = '''
+20 of 22 table-tier terms are threaded, one more than C, and the extra one is `_pattern`: C++17's structured binding — `for (const auto& [key, value] : m)` — is the FIRST destructuring position in the C family, and it is exactly what the term is for. `_interpolation` still has no member, because a C++ string cannot embed an expression at any version. `_parameter` is demoted to the facet tier, inherited from C and for C's reason; see `demoted` in roles.json.
+
+Two placements are worth stating. `throw_expression` is NOT a `_jump`, for the structural reason C's `?:` is not a `_branch`: `_jump` nests inside `_control_flow` inside `_statement`, and a `throw` admitted there would make `throw x` parse with no semicolon. C++'s own grammar agrees — a throw-expression is an assignment-expression, which is why `f(cond ? a : throw e)` is legal. And `access_specifier` is not a `_modifier`: `public` says how a base is inherited, not what a declaration means, and admitting it as a modifier made `class W { public int x; };` — a `public:` with the colon left out — parse as a field with a modifier.'''
+
+[corpus]
+source = '''
+**A stand-in, and the hardest one available.** The corpus swept here is the 791 files of libstdc++ 13's installed headers. That is the C++ standard library's own implementation: template metaprogramming, SFINAE, concepts, and a `_GLIBCXX_*` macro on very nearly every line. It is not what a distribution's C++ looks like — an application is ordinary by comparison — and a gap number from it is a floor rather than a typical case.
+
+The Debian path is built and unrun, exactly as C's is: `treebank rank --lang cpp` and `treebank fetch --lang cpp` work today, ranking sid source packages by popcon installs and filtering to packages with at least 2000 SLOC of C++ and more C++ than C.'''
+files = 791
+packages = 1
+ranking_note = '''
+The C and C++ filters are written as a PARTITION and tested as one: C wants `ansic >= 2000 && ansic >= cpp`, C++ wants `cpp >= 2000 && cpp > ansic`. Without that second half glibc would enter the C++ corpus on its fringe exactly as LibreOffice would enter the C one on its. `.h` belongs to both languages and the extension cannot say which, so `header_is_cxx` decides it by content and is SHARED between the two ecosystems — the corpora divide the headers between them rather than each answering the question its own way.'''
+blind_to = '''
+One package, and a pathological one. Every measurement below is about libstdc++ and should be read that way: the failure clusters are the standard library's idioms, not C++'s.
+
+`__cplusplus` is declared DEFINED at `201703L` rather than merely defined, and the value matters: the sweep and the oracle have to agree on a dialect, or a `#if __cplusplus >= 202002L` branch is deleted by one and compiled by the other, and the grammar is measured against a file neither of them read.'''
+
+[corpus.sweep]
+files = 791
+passed = 224
+failed = 567
+gap_files = 449
+noise_files = 116
+pass_rate = '28.32%'
+
+[corpus.gaps]
+# Everything the sweep's ledger writer does not carry. It owns
+# `[corpus.sweep]` above and replaces that block wholesale on every run —
+# prose included, and up to the next section header — so anything written
+# between the two sections is eaten. Here, past the header, it survives.
+config_files = 2
+indeterminate_files = 111
+clusters = 143
+note = """
+FIRST PASS, adjudicated by the libclang oracle at `-x c++ -std=gnu++17`, and the number says so. Of 567 failures, **449 are grammar gaps**, 2 are configuration-inherent and 116 are noise — of which 111 are `indeterminate` rather than `invalid`, because `Oracle::validate` collapses "could not tell" to false so that no fix agent is ever aimed at a file nobody can vouch for.
+
+The corpus is the reason to read 28.3% carefully rather than as a verdict. libstdc++ is the most macro- and template-dense C++ there is; the largest cluster, 129 files, is an ERROR that opens at the file's first comment, which means the parse failed somewhere below and the report has nowhere better to point. The named clusters behind it are `PB_DS_CLASS_T_DEC` (a macro standing for a whole `template<…>` head), `_GLIBCXX_NOEXCEPT` after a declarator, and partial specialisations whose names are instantiations.
+
+Dead-branch elimination is worth almost nothing here — 2 files — and that is itself a finding rather than a disappointment: the `extern "C" {`-split-across-`#ifdef` class that costs C 696 files is a C problem, because compiling as C++ is the configuration in which those braces are LIVE.
+
+For calibration on what a first pass looks like in this repository, bash shipped at 43.8% over a corpus of shell scripts. This is 28.3% over the C++ standard library.
+
+**What the C grammar's macro work moved here, and what it did not.** C grew rules for the unexpanded macro in five positions; C++ inherits four of them — after a declarator that ends in `)` or `]`, beside a pointer's qualifiers, on an enumerator, inside a typedef — and the measured return is 222 files becoming 224, at 46.8 MB of table and 90 seconds of generation becoming 48.4 MB and 2m08s. Two files is a thin return and it is recorded as one. It stays because the corpus that would show its worth is the one the source note above already calls a floor: libstdc++ fails on templates long before it fails on macros, so a macro fix cannot show up until the template gaps are closed.
+
+Three of C's rules are WRITTEN OUT here instead, joining `_top_level_item` and `_member` in the list of things this grammar declines to inherit. Each was tried, generated and reverted on what the table did:
+
+- C's leading `macro_modifier` makes the two halves of `_declaration_specifiers` different repeat symbols, and a parser that has just reduced a modifier can no longer tell which half it is in. It asked for a conflict on `_out_of_line_definition`, then on both member forms, then on `macro_modifier` against `_expression` in four widening combinations — the runaway shape DESIGN.md §8.1 records, still going when the loop was stopped at six.
+- The declarator-INITIAL macro form and the one in front of a parenthesised declarator's star collide with a lambda's init-capture and with multiplication: `[x](…` and `(a * b)` are the states the generator named.
+- `field_declaration`'s trailing macro run and `unexpanded_macro` as a member both collide with what a C++ member list holds that a C one does not — a function definition, and `f() const`.
+
+C pays for all five and C++ for none, which is the difference between a struct body and a class body rather than a difference of opinion.
+"""
+
+[[oracles]]
+family = 'cpp'
+tool = 'crates/treebank-oracle/tools/c-oracle — the same libclang program C uses, at `-x c++ -std=gnu++17`'
+version = 'libclang 18 or newer; build.sh pins one and ORACLE.md says why the pin matters'
+role = '''
+primary and only, three-valued (valid / invalid / indeterminate), and the argument for it is C's — see `crates/treebank-oracle/tools/c-oracle/ORACLE.md`. The verdict is read from clang's own diagnostic CATEGORIES and no message text at all.
+
+`gnu++17` rather than the newest standard clang knows, and that is a decision rather than a default. C++20 and C++23 REMOVE things: `throw()` exception specifications were dropped in C++20 and are all over the corpus, and judging by the newest dialect would book working library headers as invalid. C++17 is what a distribution's C++ is written against.'''
+
+[[known_gaps]]
+construct = 'a macro standing for a whole template head or a qualified name'
+files = 27
+note = '''
+`PB_DS_CLASS_T_DEC` and `PB_DS_CLASS_C_DEC::` in libstdc++'s policy-based data structures: one expands to `template<typename Key, typename Mapped, …>` and the other to `PB_DS_CLASS_NAME<Key, Mapped, …>`, and unexpanded there is no template head and no qualified name to match. Not fixable by a rule, because the tokens that would form one are not present.'''
+
+[[known_gaps]]
+construct = 'an unexpanded macro after a declarator'
+files = 74
+note = '''
+`_GLIBCXX_NOEXCEPT`, `_GLIBCXX_CONSTEXPR` and their siblings where `noexcept` or `constexpr` would go. This is C's largest gap in the same position — `__THROW` after every glibc declaration — and it is rejected here for C's reason: admitting a bare identifier after a declarator makes `int x y;` parse, which is the accepts-invalid direction the negative corpus exists to catch.'''
+
+[[deviations]]
+what = '''
+**Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern "C" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it.
+
+`T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern "C" { … }` all parse. DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.'''
+
+[[deviations]]
+what = '''
+**A macro in a namespace head or body parses, and the compiler rejects it.** `namespace std _GLIBCXX_VISIBILITY(default) { … }` opens very nearly every libstdc++ header and `_GLIBCXX_BEGIN_NAMESPACE_VERSION` follows it; unexpanded, neither is anything.
+
+C admits the same shape at FILE SCOPE and C++ cannot afford to — a bare name where a declaration goes hands every `f(x)` a second reading, and that was measured: it was the last four declared conflicts before the table stopped converging. Here it is reachable from exactly two positions, both already committed by the `namespace` keyword before the macro appears. Measured before it was taken: the two positions are 200 and 73 files of 791.'''

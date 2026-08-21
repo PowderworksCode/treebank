@@ -1,0 +1,73 @@
+==================
+A lambda with a capture list and a trailing return type
+==================
+
+int f(int argc) {
+  auto g = [&, argc](auto x) -> int { return x + argc; };
+  return g(1);
+}
+
+---
+
+(translation_unit
+  (function_definition
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list
+        (parameter_declaration
+          type: (primitive_type)
+          declarator: (identifier))))
+    body: (compound_statement
+      (declaration
+        type: (placeholder_type_specifier)
+        declarator: (init_declarator
+          declarator: (identifier)
+          value: (lambda_expression
+            captures: (lambda_capture_specifier
+              (lambda_default_capture)
+              (lambda_capture
+                (identifier)))
+            declarator: (abstract_function_declarator
+              parameters: (parameter_list
+                (parameter_declaration
+                  type: (placeholder_type_specifier)
+                  declarator: (identifier)))
+              (trailing_return_type
+                type: (type_descriptor
+                  type: (primitive_type))))
+            body: (compound_statement
+              (return_statement
+                value: (binary_expression
+                  left: (identifier)
+                  right: (identifier)))))))
+      (return_statement
+        value: (call_expression
+          function: (identifier)
+          arguments: (argument_list
+            (number_literal)))))))
+
+==================
+Raw strings, with and without a delimiter
+==================
+
+const char* a = R"(has "quotes" and )parens)";
+const char* b = R"delim(has )" inside)delim";
+
+---
+
+(translation_unit
+  (declaration
+    (type_qualifier)
+    type: (primitive_type)
+    declarator: (init_declarator
+      declarator: (pointer_declarator
+        declarator: (identifier))
+      value: (raw_string_literal)))
+  (declaration
+    (type_qualifier)
+    type: (primitive_type)
+    declarator: (init_declarator
+      declarator: (pointer_declarator
+        declarator: (identifier))
+      value: (raw_string_literal))))

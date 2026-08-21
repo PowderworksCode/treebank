@@ -948,6 +948,7 @@ the tail is what a user notices:
 | python | 0.3% | 17.1% | 99.1% | 240 |
 | rust | 0.1% | 5.6% | 78.9% | 116 |
 | typescript | 0.5% | 17.5% | 94.1% | 60 |
+| c | 0.1% | 10.8% | 90% | 250 |
 
 "Shredded" means more than half of a file of at least 1 KiB ended up inside
 an error. **The size floor was added after the first run reported nearly
@@ -1056,3 +1057,110 @@ keywords). The scanners are where the risk concentrates: indentation, raw
 strings, template literals, regex-vs-division and other ASI-adjacent token
 decisions, JSX text. One language at a time, with the sweep and the roles
 checker live from the first week, is what keeps that risk measured.
+
+### 8.1 C and C++, and what the C++ parse table costs — measured
+
+C landed as the sixth grammar and it is the first whose **preprocessor is
+part of the syntax**: a conditional does not enclose a construct, it
+encloses a run of whatever was there, so the five conditional rules are
+generated once per context they may interrupt. That, two declarator
+hierarchies rather than four, and the GNU dialect throughout are the whole
+of its shape; `crates/treebank-c/ledger.toml` carries the numbers.
+
+C++ is the seventh, and it **extends** C through tree-sitter's own grammar
+inheritance rather than copying it. That is the right architecture and was
+never in doubt: C++ genuinely is C's declarator grammar with more on top,
+and a second copy of the declaration specifiers, the four declarator
+shapes, the whole preprocessor and every GNU extension is a copy that
+drifts. What was in doubt, for a long time, was whether the **parse table**
+could be built at all — and that is the part worth recording, because it is
+the part a second C-family grammar will hit again.
+
+A first version generated, after 49 declared conflicts, to a **65 MB
+`parser.c`** — six times TypeScript's and fifteen times C's — taking about
+twenty minutes. Reproducible generation is CI's first gate, so a
+twenty-minute generate is disqualifying on its own. Every round after that
+plateaued in the same place: about twenty declared conflicts, after which
+each additional conflict cost ten minutes and bought one more. A declared
+conflict SPLITS the parse state and carries both readings; twenty of them
+over the same three symbols multiply.
+
+What brought it to 44 MB and about a minute, in the order it was measured,
+because each of these is worth doing FIRST next time:
+
+1. **Static precedence instead of a declared conflict**, wherever one
+   reading is simply right. `Widget(` at the head of a member is a
+   constructor, never a field of type `Widget` with a parenthesised
+   declarator, and saying so with `prec` rather than a conflict removed
+   three of the most expensive splits outright.
+2. **Confining a rule to where it can occur.** A no-return-type declarator
+   offered wherever a declaration goes gives every `f(x)` in the language a
+   second reading; offered only from `_member`, it gives nothing a second
+   reading, because a member function declaration needs a return type
+   before its name. The out-of-line definition is the same story with a
+   sharper edge: C++ has no nested function definitions, and while that
+   rule was reachable from a statement its `prec(2)` won inside every
+   block, so `std::__terminate();` read as a declaration of
+   `std::__terminate` and errored on its own semicolon.
+3. **Not duplicating the base grammar's own alternatives.** The `struct`
+   extension made the base clause optional, which made it a second,
+   identical reading of every plain `struct X { … }` in the corpus.
+4. **One rule where there were two identical ones.** `template_type` and
+   `template_function` had the same body and differed only in which
+   alternation reached them, so every instantiation carried both.
+5. **Leaving out what C conceded to unpreprocessed source.** C admits a
+   bare macro at file scope, a K&R identifier list and a type where an
+   argument goes. Each earns its keep in C and costs multiples of that in
+   C++, where the same shapes are already a constructor call, a functional
+   cast and a template argument.
+
+What did NOT help is worth as much: cutting features. Fold expressions,
+user-defined literals, concepts in the function-suffix position, the
+parenthesised initialiser, condition declarations and pack expansion as an
+ordinary expression were all removed, and the plateau did not move until
+the five structural changes above were made. The cost was never C++'s
+feature count; it is the declaration-versus-expression ambiguity that C
+already has, multiplied by `::`, `&` and `<`.
+
+Six constructs stayed cut, and `crates/treebank-cpp/ledger.toml` names each
+with what it was costing. The C++ corpus is libstdc++, which is a floor
+rather than a typical case: the standard library's own implementation is
+the most macro- and template-dense C++ there is.
+
+### 8.2 The unexpanded macro, and why a refusal is not a finding
+
+C shipped at 2,184 of 3,662 files with 422 grammar gaps, and nearly every
+one of those gaps was the same thing: a macro standing where the
+preprocessor would have put a keyword. The ledger named three positions for
+it and refused all three, with a reason — a bare identifier admitted after
+a declarator makes `int x y;` parse, which is the accepts-invalid direction
+the negative corpus exists to catch.
+
+The reason was correct about the rule being refused. It was not a finding
+about the position. Admitting the macro **after a declarator that ends in
+`)` or `]`**, and **before the type** where a keyword type cannot be, and
+inside a `{` that `struct` or `enum` has already opened, and after
+`typedef` — four contexts a juxtaposed pair of names cannot reach — took
+the same corpus to **2,648 files and 119 gaps**, with `int x y;` still
+rejected in every position the negative corpus asks about.
+
+Three things generalise from that, and none of them is about C:
+
+1. **A refusal is only as good as its scope.** "This rule admits `int x y;`"
+   is a fact about a rule, not about a construct. The useful question is
+   always which committed context the construct can be confined to, and the
+   grammar is what says whether such a context exists. For the macro that
+   stands in for a whole parameter list — `void f BASE64_ENC_PARAMS { … }` —
+   there is no such context, the tokens ARE `int x y;`, and it stays refused.
+2. **The corpus reclassifies as the grammar improves.** 42 of the remaining
+   119 gaps are reported at an `extern "C" {` line that no grammar can fix,
+   because it is the file's FIRST error and its real gap is further down.
+   A cluster report is a queue, not a diagnosis, and the top of the queue
+   is the least reliable entry in it.
+3. **The pass rate is not the only number that moves.** Error recovery got
+   worse — p90 5.7% to 10.8%, 182 shreds to 250 — and part of that is real
+   rather than population: a rule that admits a bare identifier where a
+   keyword was expected gives the parser one more way to keep going wrongly
+   after a lost brace. §5.12's table and the C ledger both record it. A
+   grammar that only ever measures what it accepts will trade this away
+   without noticing.

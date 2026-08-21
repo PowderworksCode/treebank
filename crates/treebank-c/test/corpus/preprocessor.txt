@@ -1,0 +1,148 @@
+==================
+Conditionals around top-level items
+==================
+
+#if defined(__linux__) && !defined(NO_X)
+#  include <sys/types.h>
+#elif __has_include(<threads.h>)
+#  define HAVE_THREADS 1
+#else
+#  error "unsupported"
+#endif
+
+---
+
+(translation_unit
+  (preproc_if
+    condition: (binary_expression
+      left: (preproc_defined (identifier))
+      right: (unary_expression argument: (preproc_defined (identifier))))
+    (preproc_include path: (system_lib_string))
+    alternative: (preproc_elif
+      condition: (preproc_has_include (system_lib_string))
+      (preproc_def name: (identifier) value: (preproc_arg))
+      alternative: (preproc_else
+        (preproc_call directive: (preproc_directive) argument: (preproc_arg))))))
+
+==================
+Named variadic macro parameters
+==================
+
+#define check(FMT...) do { } while (0)
+#define log(fmt, args...) printf(fmt, ##args)
+
+---
+
+(translation_unit
+  (preproc_function_def
+    name: (identifier)
+    parameters: (preproc_params (variadic_parameter (identifier)))
+    value: (preproc_arg))
+  (preproc_function_def
+    name: (identifier)
+    parameters: (preproc_params (identifier) (variadic_parameter (identifier)))
+    value: (preproc_arg)))
+
+==================
+Directives between enumerators
+==================
+
+enum e {
+	A = 0,
+#define A A
+	B = 1,
+#define B B
+	LAST
+#define LAST LAST
+};
+
+---
+
+(translation_unit
+  (declaration
+    type: (enum_specifier
+      name: (type_identifier)
+      body: (enumerator_list
+        (enumerator name: (identifier) value: (number_literal))
+        (preproc_def name: (identifier) value: (preproc_arg))
+        (enumerator name: (identifier) value: (number_literal))
+        (preproc_def name: (identifier) value: (preproc_arg))
+        (enumerator name: (identifier))
+        (preproc_def name: (identifier) value: (preproc_arg))))))
+
+==================
+Conditionals inside an initializer list
+==================
+
+static const char *t[] = {
+	"a",
+#ifdef HAVE_B
+	"b",
+#endif
+#define C_INDEX 2
+	"c",
+};
+
+---
+
+(translation_unit
+  (declaration
+    (storage_class_specifier)
+    (type_qualifier)
+    type: (primitive_type)
+    declarator: (init_declarator
+      declarator: (pointer_declarator
+        declarator: (array_declarator declarator: (identifier)))
+      value: (initializer_list
+        (string_literal)
+        (preproc_ifdef name: (identifier) (string_literal))
+        (preproc_def name: (identifier) value: (preproc_arg))
+        (string_literal)))))
+
+==================
+A macro standing alone at file scope
+==================
+
+__BEGIN_DECLS
+int f(void);
+__END_DECLS
+
+---
+
+(translation_unit
+  (unexpanded_macro name: (identifier))
+  (declaration
+    type: (primitive_type)
+    declarator: (function_declarator
+      declarator: (identifier)
+      parameters: (parameter_list (parameter_declaration type: (primitive_type)))))
+  (unexpanded_macro name: (identifier)))
+
+==================
+A conditional in an #if
+==================
+
+#if defined __cplusplus ? __GNUC_PREREQ (2, 6) : __GNUC_PREREQ (2, 4)
+int x;
+#endif
+
+---
+
+(translation_unit
+  (preproc_if
+    condition: (conditional_expression
+      condition: (preproc_defined
+        (identifier))
+      consequence: (call_expression
+        function: (identifier)
+        arguments: (argument_list
+          (number_literal)
+          (number_literal)))
+      alternative: (call_expression
+        function: (identifier)
+        arguments: (argument_list
+          (number_literal)
+          (number_literal))))
+    (declaration
+      type: (primitive_type)
+      declarator: (identifier))))

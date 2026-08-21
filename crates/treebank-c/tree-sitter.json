@@ -1,0 +1,22 @@
+{
+  "grammars": [
+    {
+      "name": "c",
+      "camelcase": "C",
+      "scope": "source.c",
+      "file-types": [
+        "c",
+        "h"
+      ],
+      "injection-regex": "^c$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "C89 through C23 with the GNU extensions, in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

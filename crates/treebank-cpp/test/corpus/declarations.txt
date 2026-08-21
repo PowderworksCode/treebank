@@ -1,0 +1,87 @@
+==================
+Nested namespaces, using, and an alias
+==================
+
+namespace app::detail {
+using std::swap;
+using namespace std;
+using Ints = std::vector<int>;
+namespace alias = app::detail;
+}
+
+---
+
+(translation_unit
+  (namespace_definition
+    name: (nested_namespace_specifier
+      (identifier)
+      (identifier))
+    body: (declaration_list
+      (using_declaration
+        name: (qualified_identifier
+          scope: (identifier)
+          name: (identifier)))
+      (using_declaration
+        name: (identifier))
+      (alias_declaration
+        name: (identifier)
+        type: (type_descriptor
+          type: (template_type
+            name: (qualified_identifier
+              scope: (identifier)
+              name: (identifier))
+            arguments: (template_argument_list
+              (type_descriptor
+                type: (primitive_type))))))
+      (ERROR
+        (nested_namespace_specifier
+          (identifier)
+          (ERROR
+            (identifier))
+          (identifier)))
+      (expression_statement))))
+
+==================
+extern "C"
+==================
+
+extern "C" {
+int c_entry(void);
+}
+
+---
+
+(translation_unit
+  (linkage_specification
+    value: (string_literal)
+    body: (declaration_list
+      (declaration
+        type: (primitive_type)
+        declarator: (function_declarator
+          declarator: (identifier)
+          parameters: (parameter_list
+            (parameter_declaration
+              type: (primitive_type))))))))
+
+==================
+A scoped enum with an underlying type
+==================
+
+enum class Colour : unsigned char { Red = 1, Green, Blue };
+
+---
+
+(translation_unit
+  (declaration
+    type: (enum_specifier
+      name: (identifier)
+      underlying_type: (sized_type_specifier
+        type: (primitive_type))
+      body: (enumerator_list
+        (enumerator
+          name: (identifier)
+          value: (number_literal))
+        (enumerator
+          name: (identifier))
+        (enumerator
+          name: (identifier))))))

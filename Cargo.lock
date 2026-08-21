@@ -1111,6 +1111,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "treebank-c"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-language",
+]
+
+[[package]]
 name = "treebank-cli"
 version = "0.1.0"
 dependencies = [
@@ -1156,6 +1167,17 @@ dependencies = [
  "treebank-lang",
  "ureq",
  "zip",
+]
+
+[[package]]
+name = "treebank-cpp"
+version = "0.1.0"
+dependencies = [
+ "cc",
+ "serde_json",
+ "toml",
+ "tree-sitter",
+ "tree-sitter-language",
 ]
 
 [[package]]
