@@ -48,6 +48,8 @@ static RB_SPANS: spans::RubySpans = spans::RubySpans;
 
 static RUSTFMT: reformat::RustFmt = reformat::RustFmt;
 static BLACK: reformat::BlackFmt = reformat::BlackFmt;
+static TS_FORMAT: reformat::TypeScriptFmt = reformat::TypeScriptFmt;
+static ZIG_FORMAT: reformat::ZigFmt = reformat::ZigFmt;
 
 static PY_PRINT: unparse::PythonUnparser = unparse::PythonUnparser;
 static TS_PRINT: unparse::TypeScriptUnparser = unparse::TypeScriptUnparser;
@@ -78,4 +80,22 @@ pub(crate) fn get(name: LangName) -> Capabilities {
         };
     }
     treebank_lang::for_each_language!(capability_match)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{get, LangName};
+
+    #[test]
+    fn formatter_capabilities_are_registered_for_supported_toolchains() {
+        for lang in [
+            LangName::Python,
+            LangName::Rust,
+            LangName::Typescript,
+            LangName::Javascript,
+            LangName::Zig,
+        ] {
+            assert!(get(lang).reformat.is_some(), "missing formatter for {lang}");
+        }
+    }
 }
