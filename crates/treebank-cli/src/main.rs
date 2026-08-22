@@ -57,6 +57,20 @@ enum Cmd {
         /// [default: corpus/<lang>]
         #[arg(long)]
         corpus: Option<PathBuf>,
+        /// Also write a committable exact corpus lock here
+        #[arg(long)]
+        lock_out: Option<PathBuf>,
+    },
+    /// Recreate and verify the exact corpus pinned by a committed lock
+    Hydrate {
+        #[arg(long, value_enum, default_value_t = LangName::Rust)]
+        lang: LangName,
+        /// [default: corpus-locks/<lang>.json]
+        #[arg(long)]
+        lock: Option<PathBuf>,
+        /// [default: corpus/<lang>]
+        #[arg(long)]
+        corpus: Option<PathBuf>,
     },
     /// Sweep the corpus with a grammar, adjudicate failures with the
     /// reference parser, and write sweep.json + an agent-ready REPORT.md
@@ -463,6 +477,10 @@ fn lang_path(lang: LangName, given: Option<PathBuf>, suffix: &str) -> PathBuf {
     })
 }
 
+fn lock_path(lang: LangName, given: Option<PathBuf>) -> PathBuf {
+    given.unwrap_or_else(|| PathBuf::from("corpus-locks").join(format!("{}.json", lang.as_str())))
+}
+
 /// Rayon workers get the platform default stack (2 MiB), and two of the
 /// recursive descents that run on them are unbounded in the corpus rather
 /// than in our code: `syn`'s visitor over a deeply nested Rust expression,
@@ -492,10 +510,17 @@ fn main() -> anyhow::Result<()> {
             list,
             limit,
             corpus,
+            lock_out,
         } => treebank_corpus::fetch::run(
             treebank_corpus::get(lang),
             &lang_path(lang, list, "top-k.json"),
             limit,
+            &lang_path(lang, corpus, ""),
+            lock_out.as_deref(),
+        ),
+        Cmd::Hydrate { lang, lock, corpus } => treebank_corpus::fetch::hydrate(
+            treebank_corpus::get(lang),
+            &lock_path(lang, lock),
             &lang_path(lang, corpus, ""),
         ),
         Cmd::Shape {

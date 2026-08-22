@@ -33,7 +33,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
 | `crates/treebank-oracle` | reference-parser oracles behind one trait, carrying their own oracle programs |
-| `crates/treebank-cli` | `treebank` — `rank` · `fetch` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
+| `crates/treebank-cli` | `treebank` — `rank` · `fetch` · `hydrate` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
 | `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors: `__cplusplus` undefined for C and `201703L` for C++, which is what makes the `extern "C" {`-split-across-`#ifdef` class legible as something other than a grammar bug |
 | `test/rosetta` | the same program in every participating language, with the role counts all four must produce |
 
@@ -77,10 +77,36 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | `treebank lint` | the FIELD_GUIDE.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 
-Corpus sweeps are not in CI: the corpora are gigabytes and gitignored.
-Their numbers live in each grammar's `ledger.toml`, alongside what the
+The full corpora are gigabytes and gitignored, so per-change CI sweeps a
+checked-in two-file corpus for every language through the production path.
+Full-corpus numbers live in each grammar's `ledger.toml`, alongside what the
 corpus is blind to and the mutation test proving the pipeline can report
 non-zero.
+
+### Reproducible corpora
+
+A sweep is release evidence only when another machine can recreate its exact
+inputs. `fetch` therefore records both levels of provenance: the immutable
+archive URL, byte count and SHA-256, then the path, byte count and SHA-256 of
+every admitted source file. Write a committable lock while fetching:
+
+```sh
+cargo run -p treebank-cli -- fetch --lang rust \
+  --lock-out corpus-locks/rust.json
+```
+
+The corpus itself stays under the ignored `corpus/` directory. A clean
+machine recreates it from the lock without resolving package versions again:
+
+```sh
+cargo run -p treebank-cli -- hydrate --lang rust
+```
+
+Hydration stages the complete source tree and publishes it only after every
+archive and extracted file matches. It refuses to overwrite a non-empty
+corpus and refuses older manifests without archive provenance; those describe
+a past run but cannot reproduce one. See [`corpus-locks/README.md`](corpus-locks/README.md)
+for the lock update contract.
 
 ### Reference-tool capabilities
 
