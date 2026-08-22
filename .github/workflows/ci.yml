@@ -25,7 +25,7 @@ jobs:
       - run: cargo build --workspace
       - run: cargo test --workspace
 
-  # The grammar list, read off the repository rather than written down.
+  # The grammar and sweep lists, read off the repository rather than written down.
   # A hand-maintained matrix means a new grammar's gates are green because
   # nothing ran them, which is the one failure mode a gate cannot survive.
   # A directory under crates/ with a grammar.js in it IS a grammar.
@@ -34,16 +34,102 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       grammars: ${{ steps.list.outputs.grammars }}
+      languages: ${{ steps.list.outputs.languages }}
     steps:
       - uses: actions/checkout@v4
       - id: list
         run: |
           set -euo pipefail
-          list=$(ls -d crates/treebank-*/grammar.js \
+          list=$(find crates -mindepth 2 -maxdepth 2 -type f -name grammar.js \
             | sed 's|^crates/treebank-||; s|/grammar.js$||' \
             | jq -R . | jq -sc .)
           echo "grammars=$list" >> "$GITHUB_OUTPUT"
           echo "gating: $list"
+          languages=$(find test/sweep-smoke -mindepth 1 -maxdepth 1 -type d \
+            -exec basename {} \; | sort | jq -R . | jq -sc .)
+          echo "languages=$languages" >> "$GITHUB_OUTPUT"
+          echo "sweeping: $languages"
+
+  sweeps:
+    name: sweep smoke (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    needs: discover
+    strategy:
+      fail-fast: false
+      matrix:
+        language: ${{ fromJSON(needs.discover.outputs.languages) }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        if: matrix.language == 'typescript' || matrix.language == 'javascript'
+        with:
+          node-version: "22"
+      - name: install TypeScript oracle dependencies
+        if: matrix.language == 'typescript'
+        working-directory: crates/treebank-oracle/tools/ts-oracle
+        run: npm ci --no-audit --no-fund
+      - name: install JavaScript oracle dependencies
+        if: matrix.language == 'javascript'
+        working-directory: crates/treebank-oracle/tools/js-oracle
+        run: npm ci --no-audit --no-fund
+
+      # Python and Zig grammars cover historical syntax too. Their legacy
+      # oracle legs are mandatory: omitting one would mislabel old-version
+      # syntax as noise and make a broken sweep look healthier.
+      - uses: actions/setup-python@v5
+        if: matrix.language == 'python'
+        with:
+          # setup-python no longer publishes CPython 2 builds. PyPy's 2.7
+          # parser drives only this two-file plumbing smoke; production
+          # evidence continues to use the CPython 2.7 oracle named in the ledger.
+          python-version: "pypy-2.7"
+      - name: expose Python 2 under the oracle's pinned name
+        if: matrix.language == 'python'
+        run: |
+          ln -s "$(command -v python)" "$RUNNER_TEMP/python2"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'java'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: ruby/setup-ruby@v1
+        if: matrix.language == 'ruby'
+        with:
+          ruby-version: "3.3.6"
+
+      - name: install libclang oracle
+        if: matrix.language == 'c' || matrix.language == 'cpp'
+        run: sudo apt-get update -qq && sudo apt-get install -y libclang-dev
+
+      - uses: step-security/setup-zig@v2
+        if: matrix.language == 'zig'
+        with:
+          version: 0.11.0
+          cache-key: sweep-smoke-legacy
+      - name: preserve the legacy Zig oracle
+        if: matrix.language == 'zig'
+        run: |
+          legacy=$(command -v zig)
+          printf '#!/usr/bin/env bash\nexec %q "$@"\n' "$legacy" > "$RUNNER_TEMP/zig-0.11"
+          chmod +x "$RUNNER_TEMP/zig-0.11"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - uses: step-security/setup-zig@v2
+        if: matrix.language == 'zig'
+        with:
+          version: 0.16.0
+          cache-key: sweep-smoke-current
+
+      - run: cargo build -p treebank-cli
+      # Each checked-in micro-corpus has one valid and one invalid file. The
+      # latter must be rejected by both Treebank and the reference parser,
+      # proving the language-specific oracle path rather than only parsing.
+      - run: ./tools/sweep-smoke.sh ${{ matrix.language }}
 
   grammars:
     name: gates (${{ matrix.grammar }})
