@@ -1,0 +1,67 @@
+name: corpus canary
+
+on:
+  workflow_dispatch:
+  schedule:
+    # Weekly, outside the per-change CI path: the locked Rust corpus is about
+    # 500 MB extracted and the sweep parses every file from scratch.
+    - cron: "17 5 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: corpus-canary-rust
+  cancel-in-progress: false
+
+jobs:
+  rust:
+    name: rust corpus evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: restore verified package archives
+        uses: actions/cache@v4
+        with:
+          path: corpus/rust/cache
+          key: rust-corpus-${{ hashFiles('corpus-locks/rust.json') }}
+
+      - run: cargo build -p treebank-cli
+
+      # A transient registry failure may interrupt a clean hydrate. Successful
+      # archives are already digest-verified in the cache, so retrying resumes
+      # safely; a corrupt archive or lock mismatch fails identically each time.
+      - name: hydrate the exact locked corpus
+        run: |
+          for attempt in 1 2 3; do
+            if ./target/debug/treebank hydrate --lang rust; then
+              exit 0
+            fi
+            echo "hydrate attempt $attempt failed" >&2
+            sleep $((attempt * 10))
+          done
+          exit 1
+
+      - name: sweep and enforce the committed evidence
+        run: |
+          ./target/debug/treebank sweep \
+            --lang rust \
+            --grammar crates/treebank-rust \
+            --manifest corpus/rust/manifest.json \
+            --out corpus/rust/reports/sweep.json
+          if ! git diff --exit-code -- crates/treebank-rust/ledger.toml; then
+            echo "::error::Rust corpus evidence differs from the committed ledger"
+            echo "Update the lock or grammar deliberately, rerun the full sweep, and review the new evidence."
+            exit 1
+          fi
+
+      - name: upload the corpus report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-corpus-report
+          path: corpus/rust/reports/
+          if-no-files-found: ignore

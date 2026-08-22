@@ -81,7 +81,9 @@ The full corpora are gigabytes and gitignored, so per-change CI sweeps a
 checked-in two-file corpus for every language through the production path.
 Full-corpus numbers live in each grammar's `ledger.toml`, alongside what the
 corpus is blind to and the mutation test proving the pipeline can report
-non-zero.
+non-zero. Rust is the first full-corpus canary: a weekly or manually dispatched
+workflow hydrates its committed 1,000-crate lock, sweeps all 27,307 files, and
+fails if the generated evidence differs from the ledger.
 
 ### Reproducible corpora
 
