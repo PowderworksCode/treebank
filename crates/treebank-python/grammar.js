@@ -110,7 +110,9 @@ module.exports = grammar({
     [$._pattern, $._name],
     [$._pattern, $._access],
     // `with (a, b):` — parenthesized with-items vs a parenthesized tuple.
-    [$.with_item, $._collection_elements],
+    [$._with_item_expression, $._or_test],
+    [$._with_item_expression, $._expression],
+    [$._with_item_expression, $._no_conditional_expression],
     // In `def f(x: int)` the colon is an annotation; in `lambda x: y` it is
     // the body. Same parameter rule, GLR decides per context.
     [$.parameter],
@@ -724,7 +726,7 @@ module.exports = grammar({
       choice(
         seq(
           repeat1($.except_clause),
-          optional($.else_clause),
+          optional(field('alternative', $.else_clause)),
           optional($.finally_clause),
         ),
         $.finally_clause,
@@ -758,11 +760,31 @@ module.exports = grammar({
       field('body', $._body),
     ),
 
-    _parenthesized_with_items: $ => seq('(', commaSep1($.with_item), optional(','), ')'),
+    // This and a parenthesized expression are a real grammar ambiguity:
+    // `with (item,):` is a parenthesized LIST of one with-item, while
+    // `with (item := 42,):` is one with-item whose value is a TUPLE. Prefer
+    // the list whenever both readings complete; the tuple reading remains
+    // the only one when a top-level named expression appears below.
+    _parenthesized_with_items: $ => prec.dynamic(1,
+      seq('(', commaSep1($.with_item), optional(','), ')'),
+    ),
 
     with_item: $ => seq(
-      field('value', $._expression),
+      // CPython's `with_item` takes `expression`, not the broader
+      // `assignment_expression`: a walrus is legal only when parentheses
+      // make it part of the expression. This distinction disambiguates a
+      // parenthesized item list from a tuple containing a named expression.
+      field('value', $._with_item_expression),
       optional(seq('as', field('alias', $._pattern))),
+    ),
+
+    _with_item_expression: $ => choice(
+      $.conditional_expression,
+      $.lambda,
+      alias($.boolean_expression, $.binary_expression),
+      alias($.not_expression, $.unary_expression),
+      $.comparison_expression,
+      $._primary_expression,
     ),
 
     // ── suites ───────────────────────────────────────────────────────

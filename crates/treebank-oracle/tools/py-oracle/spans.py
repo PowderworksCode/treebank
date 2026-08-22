@@ -19,6 +19,7 @@ import io
 import json
 import sys
 import tokenize
+import warnings
 
 # Token types that mark no text: layout the parser synthesises, and the
 # stream's own bookends. Everything else has a real extent to compare.
@@ -85,38 +86,39 @@ HULL_KINDS = {
 }
 
 
-def extend_left(data, start, words):
-    """Move `start` back over whitespace to swallow a leading keyword.
+def token_at_or_after(tokens, offset):
+    """Index of the first significant token starting at or after `offset`."""
+    lo, hi = 0, len(tokens)
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if tokens[mid][1] < offset:
+            lo = mid + 1
+        else:
+            hi = mid
+    return lo
+
+
+def extend_left(start, words, tokens):
+    """Move `start` back to the preceding real keyword token.
 
     Returns None rather than guessing: a hull we cannot complete is not a
-    boundary claim we are entitled to make.
+    boundary claim we are entitled to make. This uses `tokenize` rather than
+    scanning bytes because a comment between the keyword and target may itself
+    end in the word `for` or `case`.
     """
-    i = start
-    while i > 0 and data[i - 1 : i] in (b" ", b"\t", b"\n", b"\r", b"\\"):
-        i -= 1
-    for w in words:
-        if not data[:i].endswith(w):
-            continue
-        j = i - len(w)
-        # A word boundary, or `for` matches the tail of `endfor`.
-        if j > 0:
-            prev = data[j - 1 : j]
-            if prev.isalnum() or prev == b"_":
-                return None
-        # `async for` -- the comprehension owns the `async` too.
-        k = j
-        while k > 0 and data[k - 1 : k] in (b" ", b"\t", b"\n", b"\r", b"\\"):
-            k -= 1
-        if data[:k].endswith(b"async"):
-            a = k - 5
-            if a == 0 or not (data[a - 1 : a].isalnum() or data[a - 1 : a] == b"_"):
-                return a
-        return j
-    return None
+    i = token_at_or_after(tokens, start) - 1
+    if i < 0:
+        return None
+    text, offset, _ = tokens[i]
+    if text not in words:
+        return None
+    if text == b"for" and i > 0 and tokens[i - 1][0] == b"async":
+        return tokens[i - 1][1]
+    return offset
 
 
 def bracket_pairs(data, starts, text_lines):
-    """`{open_offset: close_offset}` and its inverse, from the TOKEN stream.
+    """Bracket pairs and significant tokens from the TOKEN stream.
 
     A hull cannot see enclosing brackets, because CPython records no
     position for them -- `with (yield from pool) as conn` gives a
@@ -131,14 +133,21 @@ def bracket_pairs(data, starts, text_lines):
         line = text_lines[row] if row < len(text_lines) else ""
         return starts[row] + len(line[:col].encode("utf-8"))
 
-    opens, closes, stack = {}, {}, []
+    opens, closes, stack, tokens = {}, {}, [], []
     try:
         for t in tokenize.tokenize(io.BytesIO(data).readline):
-            if t.type != tokenize.OP or t.string not in "()[]{}":
-                continue
             if t.start[0] >= len(starts):
                 continue
             off = at(t.start[0], t.start[1])
+            if (
+                t.type not in LAYOUT
+                and t.type != tokenize.COMMENT
+                and not t.string.isspace()
+            ):
+                end = at(t.end[0], t.end[1])
+                tokens.append((t.string.encode("utf-8"), off, end))
+            if t.type != tokenize.OP or t.string not in "()[]{}":
+                continue
             if t.string in "([{":
                 stack.append((t.string, off))
             elif stack and stack[-1][0] == "([{"[")]}".index(t.string)]:
@@ -146,8 +155,8 @@ def bracket_pairs(data, starts, text_lines):
                 opens[o] = off
                 closes[off] = o
     except (tokenize.TokenError, SyntaxError, IndentationError, ValueError):
-        return {}, {}
-    return opens, closes
+        return {}, {}, []
+    return opens, closes, tokens
 
 
 def balance(data, lo, hi, opens, closes):
@@ -175,7 +184,49 @@ def balance(data, lo, hi, opens, closes):
     return lo, hi
 
 
-def hull_span(node, data, starts, size, opens, closes):
+def enclosing_pair(lo, hi, opens, tokens):
+    """The immediately enclosing bracket-token pair, if there is one."""
+    ai = token_at_or_after(tokens, hi)
+    bi = token_at_or_after(tokens, lo) - 1
+    if bi < 0 or ai >= len(tokens) or tokens[bi][2] > lo:
+        return None
+    btext, boff, _ = tokens[bi]
+    atext, aoff, _ = tokens[ai]
+    if btext not in (b"(", b"[", b"{") or opens.get(boff) != aoff:
+        return None
+    return bi, ai, boff, aoff + len(atext)
+
+
+def outer_with_list(pair, node, lo, hi, original, tokens):
+    """Whether a pair belongs to ``with (...)`` rather than its one item.
+
+    The two constructs are genuinely ambiguous in the token stream. CPython's
+    AST resolves the ambiguity but gives the resulting ``withitem`` no range.
+    An outer list pair is the pair immediately after ``with`` and immediately
+    before the suite colon. A bare named expression or yield is not an
+    ``expression`` in the with-item grammar, so its first pair necessarily
+    belongs to the expression instead.
+    """
+    bi, ai, _, _ = pair
+    if bi == 0 or ai + 1 >= len(tokens):
+        return False
+    if tokens[bi - 1][0] != b"with" or tokens[ai + 1][0] != b":":
+        return False
+    value = getattr(node, "context_expr", None)
+    required = tuple(
+        kind
+        for kind in (
+            getattr(ast, "NamedExpr", None),
+            getattr(ast, "Yield", None),
+            getattr(ast, "YieldFrom", None),
+        )
+        if kind is not None
+    )
+    needs_first_pair = isinstance(value, required) and (lo, hi) == original
+    return not needs_first_pair
+
+
+def hull_span(node, data, starts, size, opens, closes, tokens):
     """Span of a positionless joint node, from its positioned children."""
     spec = HULL_KINDS.get(type(node).__name__)
     if spec is None:
@@ -197,8 +248,15 @@ def hull_span(node, data, starts, size, opens, closes):
     if hi < 0:
         return None
     lo, hi = balance(data, lo, hi, opens, closes)
+    if type(node).__name__ == "withitem":
+        original = (lo, hi)
+        for _ in range(64):
+            pair = enclosing_pair(lo, hi, opens, tokens)
+            if pair is None or outer_with_list(pair, node, lo, hi, original, tokens):
+                break
+            lo, hi = pair[2], pair[3]
     if words:
-        lo2 = extend_left(data, lo, words)
+        lo2 = extend_left(lo, words, tokens)
         if lo2 is None:
             return None
         lo = lo2
@@ -252,7 +310,7 @@ def tokens_of(data, starts, size, text_lines):
     out = []
     try:
         for t in tokenize.tokenize(io.BytesIO(data).readline):
-            if t.type in LAYOUT:
+            if t.type in LAYOUT or t.string.isspace():
                 continue
             if t.start[0] >= len(starts) or t.end[0] >= len(starts):
                 continue
@@ -267,7 +325,7 @@ def tokens_of(data, starts, size, text_lines):
     return out
 
 
-def spans_of(tree, starts, size, data, opens, closes):
+def spans_of(tree, starts, size, data, opens, closes, tokens):
     out = []
     for node in ast.walk(tree):
         lineno = getattr(node, "lineno", None)
@@ -276,7 +334,7 @@ def spans_of(tree, starts, size, data, opens, closes):
             # Contexts (Load/Store), operators and a few others carry no
             # position. They have no boundary to compare -- except the
             # joint nodes, whose extent their children imply.
-            hull = hull_span(node, data, starts, size, opens, closes)
+            hull = hull_span(node, data, starts, size, opens, closes, tokens)
             if hull is not None:
                 out.append([hull[0], hull[1], type(node).__name__])
             continue
@@ -324,7 +382,9 @@ def main():
             continue
 
         try:
-            tree = ast.parse(data, filename=path)
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                tree = ast.parse(data, filename=path)
         except (SyntaxError, ValueError, TypeError, RecursionError) as exc:
             # Only clean parses have meaningful boundaries. python2-only
             # files land here and are skipped, not counted as agreement.
@@ -347,8 +407,10 @@ def main():
             try:
                 starts = line_starts(data)
                 text_lines0 = [""] + data.decode("utf-8", "replace").split("\n")
-                opens, closes = bracket_pairs(data, starts, text_lines0)
-                record["spans"] = spans_of(tree, starts, len(data), data, opens, closes)
+                opens, closes, tokens = bracket_pairs(data, starts, text_lines0)
+                record["spans"] = spans_of(
+                    tree, starts, len(data), data, opens, closes, tokens
+                )
                 record["edges"] = edges_of(tree, starts, len(data))
                 # Split on "\n" ONLY, and 1-index to match `starts`.
                 # `splitlines()` also breaks on \r\n, \x0c and \u2028, while

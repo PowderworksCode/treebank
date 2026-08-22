@@ -292,3 +292,80 @@ fn parse_jsonl(lines: &[String], srcroot: &Path) -> Result<HashMap<String, FileS
     }
     Ok(out)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{PythonSpans, SpanOracle};
+    use std::path::Path;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    fn temp_source(name: &str, source: &[u8]) -> std::path::PathBuf {
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let dir =
+            std::env::temp_dir().join(format!("treebank-py-spans-{}-{nonce}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join(name), source).unwrap();
+        dir
+    }
+
+    fn byte_span(source: &[u8], needle: &[u8]) -> (usize, usize) {
+        let start = source
+            .windows(needle.len())
+            .position(|window| window == needle)
+            .unwrap();
+        (start, start + needle.len())
+    }
+
+    #[test]
+    fn python_positionless_hulls_follow_tokens_and_with_grammar() {
+        let source = br#"[
+    value
+    for  # for
+    item
+    in source
+]
+with (first, second):
+    pass
+with (item := 42,):
+    pass
+"#;
+        let dir = temp_source("joins.py", source);
+        let files = PythonSpans
+            .spans(Path::new(&dir), &["joins.py".to_string()])
+            .unwrap();
+        let spans = &files["joins.py"].spans;
+        let has = |kind: &str, span: (usize, usize)| {
+            spans
+                .iter()
+                .any(|got| got.kind == kind && (got.start, got.end) == span)
+        };
+
+        let comp_start = byte_span(source, b"for  # for").0;
+        let comp_end = byte_span(source, b"source").1;
+        assert!(has("comprehension", (comp_start, comp_end)));
+        assert!(has("withitem", byte_span(source, b"first")));
+        assert!(has("withitem", byte_span(source, b"second")));
+        assert!(has("withitem", byte_span(source, b"(item := 42,)")));
+
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn python_lexer_does_not_report_bare_cr_whitespace_as_an_operator() {
+        let source = b"\"\" % {\n  'first': '',\r  'second': '',\n}\n";
+        let dir = temp_source("mixed_newlines.py", source);
+        let files = PythonSpans
+            .spans(Path::new(&dir), &["mixed_newlines.py".to_string()])
+            .unwrap();
+
+        assert!(files["mixed_newlines.py"]
+            .tokens
+            .iter()
+            .all(|&(start, end)| !source[start..end].iter().all(u8::is_ascii_whitespace)));
+
+        std::fs::remove_dir_all(dir).unwrap();
+    }
+}
