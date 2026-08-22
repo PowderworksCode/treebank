@@ -10,12 +10,22 @@ set -euo pipefail
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 cd "$ROOT"
 OUT=${TREEBANK_WASM_OUT:-dist/wasm}
-GRAMMARS=${*:-python rust typescript}
 PY=${TREEBANK_WASM_PYTHON:-python3}
+GRAMMARS=("$@")
+if [ ${#GRAMMARS[@]} -eq 0 ]; then
+  while IFS= read -r grammar; do
+    GRAMMARS+=("$grammar")
+  done < <(./tools/wasm-pack/list-grammars.sh)
+fi
 
 fail() { echo "wasm-check: FAIL — $*" >&2; exit 1; }
 
-for g in $GRAMMARS; do
+for g in "${GRAMMARS[@]}"; do
+  fixtures=("test/sweep-smoke/$g/src/sweep-smoke/"[Vv]alid.*)
+  if [ ${#fixtures[@]} -ne 1 ] || [ ! -f "${fixtures[0]}" ]; then
+    fail "$g: expected exactly one test/sweep-smoke valid fixture"
+  fi
+
   ./tools/wasm-pack/build.sh "$g" --out "$OUT" >/dev/null
 
   # 1. A pack must be byte-reproducible: build it twice and compare. This is
@@ -29,11 +39,11 @@ for g in $GRAMMARS; do
   #    what it is. A pack built from the wrong grammar would otherwise look
   #    fine: the name is the one fact that catches it, and grammar.json is
   #    its authority, not the directory.
-  "$PY" - "$g" "$OUT/treebank-$g.wasm" <<'PY'
+  "$PY" - "$g" "$OUT/treebank-$g.wasm" "${fixtures[0]}" <<'PY'
 import json, tomllib, sys
 from wasmtime import Engine, Linker, Module, Store, WasiConfig
 
-lang, path = sys.argv[1:3]
+lang, path, fixture = sys.argv[1:4]
 eng = Engine(); store = Store(eng); store.set_wasi(WasiConfig())
 lk = Linker(eng); lk.define_wasi()
 e = lk.instantiate(store, Module.from_file(eng, path)).exports(store)
@@ -55,15 +65,14 @@ for field in ("language", "vocabulary", "generate_cli"):
 roles = blob(e["tb_roles"](store), e["tb_roles_len"](store))
 assert roles == json.load(open(f"crates/treebank-{lang}/roles.json")), f"{lang}: roles.json does not match the pack"
 
-# And it must actually parse.
-src = b"" if lang != "python" else b"def f():\n    pass\n"
-if lang == "rust":       src = b"fn f() {}\n"
-if lang == "typescript": src = b"const f = <T>(x: T) => x;\n"
+# And it must actually parse a checked-in program. These are the same valid
+# fixtures the native sweep smoke sends through the production parser path.
+src = open(fixture, "rb").read()
 p = e["tb_alloc"](store, len(src)); mem.write(store, src, p)
 tree = e["tb_parse"](store, p, len(src)); e["tb_free"](store, p)
 node = e["tb_node_new"](store); e["tb_tree_root"](store, tree, node)
-assert not (e["tb_node_flags"](store, node) & 4), f"{lang}: pack failed to parse its own smoke source"
-print(f"  {lang}: loads, names itself {got_name}, provenance and roles match, parses")
+assert not (e["tb_node_flags"](store, node) & 4), f"{lang}: pack failed to parse {fixture}"
+print(f"  {lang}: loads, names itself {got_name}, provenance and roles match, parses {fixture}")
 PY
 done
 echo "wasm-check: OK"

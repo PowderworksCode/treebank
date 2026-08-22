@@ -12,8 +12,8 @@
 #   2. serves the staging directory over localhost, so consumers fetch by URL
 #      rather than reading the build tree — what a real consumer does;
 #   3. verifies SHA256SUMS against the FETCHED bytes, then runs BOTH example
-#      consumers against them, asserting each grammar's own corpus fixture
-#      parses clean and its negative fixture is still rejected;
+#      consumers against them, asserting each grammar's sweep-smoke valid
+#      fixture parses clean and its invalid fixture is still rejected;
 #   4. asserts packs.json lists every pack, with a sha256 matching the
 #      artifact and a URL naming the real tag rather than the rehearsal one;
 #   5. asserts a re-run releases nothing, because everything is tagged.
@@ -39,10 +39,30 @@ trap cleanup EXIT
 
 fail() { echo "test-release: FAIL — $*" >&2; exit 1; }
 
-GRAMMARS=(python rust typescript)
+GRAMMARS=()
+while IFS= read -r grammar; do
+  GRAMMARS+=("$grammar")
+done < <(./tools/wasm-pack/list-grammars.sh)
+[ ${#GRAMMARS[@]} -gt 0 ] || fail "no grammars discovered"
+
+fixture() {
+  local lang=$1 kind=$2
+  local matches
+  case $kind in
+    valid) matches=("test/sweep-smoke/$lang/src/sweep-smoke/"[Vv]alid.*) ;;
+    invalid) matches=("test/sweep-smoke/$lang/src/sweep-smoke/"[Ii]nvalid.*) ;;
+    *) fail "unknown fixture kind: $kind" ;;
+  esac
+  if [ ${#matches[@]} -ne 1 ] || [ ! -f "${matches[0]}" ]; then
+    fail "$lang: expected exactly one $kind sweep-smoke fixture"
+  fi
+  printf '%s\n' "${matches[0]}"
+}
 
 # ---- 1. stage, and tag as a real release would -------------------------
-TREEBANK_WASM_PYTHON="$PY" ./tools/wasm-pack/release.sh --stage "$STAGE" --tag-prefix "$PREFIX" "${GRAMMARS[@]}" >/dev/null
+# Deliberately pass no grammar arguments: this rehearses release.sh's
+# discovery-driven default, not merely the same list copied into its caller.
+TREEBANK_WASM_PYTHON="$PY" ./tools/wasm-pack/release.sh --stage "$STAGE" --tag-prefix "$PREFIX" >/dev/null
 for lang in "${GRAMMARS[@]}"; do
   v=$(grep -m1 '^version = ' "crates/treebank-$lang/Cargo.toml" | cut -d'"' -f2)
   [ -d "$STAGE/treebank-$lang-v$v" ] || fail "$lang: nothing staged"
@@ -68,20 +88,20 @@ for lang in "${GRAMMARS[@]}"; do
   # ---- 3. checksums, against the FETCHED bytes ------------------------
   ( cd "$FETCHED/$rel" && sha256sum -c SHA256SUMS >/dev/null ) || fail "$lang: SHA256SUMS mismatch after fetch"
 
-  # Both consumers, on the fetched pack. Each grammar's negative corpus is
-  # the fixture: it must still be REJECTED after crossing the wasm boundary,
-  # which is the direction a build problem would silently break.
-  neg=$(find "crates/treebank-$lang/test/negative" -name '*' -type f | head -1)
+  # Both consumers, on the fetched pack. The fixtures also drive the native
+  # sweep smoke, so this proves that crossing the wasm boundary preserves
+  # both acceptance and rejection for every shipped grammar.
+  neg=$(fixture "$lang" invalid)
+  valid=$(fixture "$lang" valid)
   out_py=$("$PY" tools/wasm-pack/examples/parse.py "$FETCHED/$rel/treebank-$lang.wasm" "$neg")
   out_js=$(node tools/wasm-pack/examples/parse.mjs "$FETCHED/$rel/treebank-$lang.wasm" "$neg")
   echo "$out_py" | grep -q "error(s)" || fail "$lang: python consumer did not reject the negative fixture"
   echo "$out_js" | grep -q "error(s)" || fail "$lang: node consumer did not reject the negative fixture"
 
-  # And a file that must parse clean: the rosetta program, which every
-  # grammar has and which the rosetta gate already pins the shape of.
-  ext=$(case $lang in python) echo py ;; rust) echo rs ;; typescript) echo ts ;; esac)
-  ok_py=$("$PY" tools/wasm-pack/examples/parse.py "$FETCHED/$rel/treebank-$lang.wasm" "test/rosetta/branching/program.$ext")
-  echo "$ok_py" | grep -q "clean" || fail "$lang: rosetta program did not parse clean through the pack"
+  ok_py=$("$PY" tools/wasm-pack/examples/parse.py "$FETCHED/$rel/treebank-$lang.wasm" "$valid")
+  ok_js=$(node tools/wasm-pack/examples/parse.mjs "$FETCHED/$rel/treebank-$lang.wasm" "$valid")
+  echo "$ok_py" | grep -q "clean" || fail "$lang: python consumer did not accept the valid fixture"
+  echo "$ok_js" | grep -q "clean" || fail "$lang: node consumer did not accept the valid fixture"
 done
 
 # ---- 4. the index describes what was actually staged -------------------
@@ -100,7 +120,7 @@ for lang in "${GRAMMARS[@]}"; do
 done
 
 # ---- 5. a re-run must release nothing ----------------------------------
-again=$(TREEBANK_WASM_PYTHON="$PY" ./tools/wasm-pack/release.sh --stage "$STAGE" --tag-prefix "$PREFIX" "${GRAMMARS[@]}")
+again=$(TREEBANK_WASM_PYTHON="$PY" ./tools/wasm-pack/release.sh --stage "$STAGE" --tag-prefix "$PREFIX")
 echo "$again" | grep -q "0 pack(s) staged" || fail "a re-run released something; releases must be immutable"
 
 echo "test-release: OK — ${#GRAMMARS[@]} packs staged, fetched over HTTP, checksummed, parsed by both consumers, indexed"

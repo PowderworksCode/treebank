@@ -159,5 +159,5 @@ mkdir -p "$OUT"
 
 printf 'pack: %s  %s bytes (pre-opt %s)\n' \
   "$OUT/treebank-$LANG.wasm" \
-  "$(stat -c%s "$OUT/treebank-$LANG.wasm")" \
-  "$(stat -c%s "$WORK/pack.wasm")"
+  "$(wc -c < "$OUT/treebank-$LANG.wasm" | tr -d '[:space:]')" \
+  "$(wc -c < "$WORK/pack.wasm" | tr -d '[:space:]')"
