@@ -46,6 +46,9 @@ failed = 15
 gap_files = 2
 noise_files = 13
 pass_rate = '99.95%'
+corpus_lock_sha256 = '49d8663643ba20cd2fb3de8e526295ba3d0d3b2a87878e561ffa0e72737de00a'
+grammar_sha256 = '57bd2020853d1f02b438feae01f6078b38d547439bbf152f516a16c39e323861'
+grammar_revision = '53fc002dbf9aaf152929d35678806be16d236a18'
 
 [[oracles]]
 family = 'rust'

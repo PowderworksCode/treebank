@@ -80,9 +80,12 @@ cargo run -p treebank-cli -- status --github
 
 The default table shows corpus pass/gap evidence, exact corpus/negative/shape
 fixture counts, declared known-gap/widening/deviation queues, reference-tool
-capabilities, locks, canaries and known deviations for every grammar. Warnings
-name coverage that exists but is not reproducible or enforced. Configuration
-errors are separate; `--check` exits non-zero on those and is what CI runs.
+capabilities, locks, evidence freshness, canaries and known deviations for
+every grammar. Evidence is `current` only when its recorded corpus-lock and
+generated-grammar hashes match the checkout and it names a committed grammar
+revision; a complete older binding is `stale`, while legacy or incomplete
+evidence is `unbound`. Configuration errors are separate; `--check` exits
+non-zero on malformed or contradictory configuration and is what CI runs.
 
 `--github` is deliberately opt-in so the ordinary inventory stays offline and
 deterministic. With an authenticated `gh` it adds open issues and pull
@@ -143,6 +146,15 @@ archive and extracted file matches. It refuses to overwrite a non-empty
 corpus and refuses older manifests without archive provenance; those describe
 a past run but cannot reproduce one. See [`corpus-locks/README.md`](corpus-locks/README.md)
 for the lock update contract.
+
+`treebank sweep` writes the binding into the language's `[corpus.*sweep]`
+ledger block: an exact-byte SHA-256 of the corpus lock, a SHA-256 of the generated
+`parser.c` plus `scanner.c`, and the last committed revision that changed those
+grammar inputs. If the grammar inputs are dirty there is no honest Git revision
+to name; the same is true in a shallow checkout without their history. The
+sweep records the content hashes but omits the revision in either case. Commit
+the grammar in a full checkout, rerun the cached sweep, and then commit the
+bound ledger update.
 
 ### Reference-tool capabilities
 
