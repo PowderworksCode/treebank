@@ -3,7 +3,7 @@
     {
       "name": "bash",
       "camelcase": "Bash",
-      "scope": "source.rust",
+      "scope": "source.bash",
       "file-types": [
         "sh",
         "bash",

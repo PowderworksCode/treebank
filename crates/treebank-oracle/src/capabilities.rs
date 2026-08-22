@@ -39,6 +39,25 @@ pub(crate) struct Capabilities {
     pub unparse: Option<&'static dyn Unparser>,
 }
 
+/// Configuration-only capability flags. Unlike `reformatter_for`, this does
+/// not probe whether an optional executable such as Black is installed on the
+/// current machine; it answers what the registry says the language supports.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CapabilityFlags {
+    pub spans: bool,
+    pub formatter: bool,
+    pub printer: bool,
+}
+
+pub fn configured(name: LangName) -> CapabilityFlags {
+    let capabilities = get(name);
+    CapabilityFlags {
+        spans: capabilities.spans.is_some(),
+        formatter: capabilities.reformat.is_some(),
+        printer: capabilities.unparse.is_some(),
+    }
+}
+
 static TS_SPANS: spans::TypeScriptSpans = spans::TypeScriptSpans;
 static PY_SPANS: spans::PythonSpans = spans::PythonSpans;
 static RS_SPANS: rust_spans::RustSpans = rust_spans::RustSpans;
@@ -86,8 +105,15 @@ pub(crate) fn get(name: LangName) -> Capabilities {
 
 #[cfg(test)]
 mod tests {
-    use super::{get, LangName};
+    use super::{configured, get, LangName};
 
+    #[test]
+    fn configured_capabilities_do_not_depend_on_local_executables() {
+        let python = configured(LangName::Python);
+        assert!(python.spans);
+        assert!(python.formatter);
+        assert!(python.printer);
+    }
     #[test]
     fn formatter_capabilities_are_registered_for_supported_toolchains() {
         for lang in [
@@ -100,7 +126,6 @@ mod tests {
             assert!(get(lang).reformat.is_some(), "missing formatter for {lang}");
         }
     }
-
 
     #[test]
     fn c_family_span_capabilities_are_registered() {
