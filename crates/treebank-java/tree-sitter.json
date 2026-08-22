@@ -3,7 +3,7 @@
     {
       "name": "java",
       "camelcase": "Java",
-      "scope": "source.rust",
+      "scope": "source.java",
       "file-types": [
         "java"
       ],

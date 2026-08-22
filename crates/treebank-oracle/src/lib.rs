@@ -41,6 +41,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 
+pub use capabilities::{configured as capabilities_for, CapabilityFlags};
 pub use reformat::{get as reformatter_for, Reformatted, Reformatter};
 pub use spans::{get as spans_for, Edge, FileSpans, Span, SpanOracle};
 pub use treebank_lang::LangName;

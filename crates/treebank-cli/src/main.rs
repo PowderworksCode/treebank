@@ -11,6 +11,7 @@ mod rosetta;
 mod roundtrip;
 mod routing;
 mod shape;
+mod status;
 mod sweep;
 mod verify;
 
@@ -30,6 +31,25 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Cmd {
+    /// Show every language's configuration, evidence and test coverage in
+    /// one inventory. Offline by default; --github adds live issues, pull
+    /// requests, workflows and branch protection through the GitHub CLI.
+    Status {
+        /// Repository root
+        #[arg(long, default_value = ".")]
+        root: PathBuf,
+        #[arg(long, value_enum, default_value_t = status::OutputFormat::Table)]
+        format: status::OutputFormat,
+        /// Enrich the inventory with live GitHub state (requires authenticated gh)
+        #[arg(long)]
+        github: bool,
+        /// GitHub OWNER/REPO; detected from the checkout when omitted
+        #[arg(long, requires = "github")]
+        repo: Option<String>,
+        /// Exit non-zero when required configuration is missing or inconsistent
+        #[arg(long)]
+        check: bool,
+    },
     /// Build the top-K package list for a language's ecosystem
     Rank {
         #[arg(long, value_enum, default_value_t = LangName::Rust)]
@@ -499,6 +519,13 @@ fn main() -> anyhow::Result<()> {
         .context("configure the rayon worker pool")?;
 
     match Cli::parse().cmd {
+        Cmd::Status {
+            root,
+            format,
+            github,
+            repo,
+            check,
+        } => status::run(&root, format, github, repo.as_deref(), check),
         Cmd::Rank { lang, db, k, out } => treebank_corpus::rank::run(
             treebank_corpus::get(lang),
             &lang_path(lang, db, "db"),

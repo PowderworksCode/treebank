@@ -33,7 +33,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
 | `crates/treebank-oracle` | reference-parser oracles behind one trait, carrying their own oracle programs |
-| `crates/treebank-cli` | `treebank` — `rank` · `fetch` · `hydrate` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
+| `crates/treebank-cli` | `treebank` — `status` · `rank` · `fetch` · `hydrate` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
 | `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors: `__cplusplus` undefined for C and `201703L` for C++, which is what makes the `extern "C" {`-split-across-`#ifdef` class legible as something other than a grammar bug |
 | `test/rosetta` | the same program in every participating language, with the role counts all four must produce |
 
@@ -63,6 +63,31 @@ derivations, so they cannot be supertypes; they ship as `ROLES` and are
 expanded before the query runs.
 
 ## What is checked, on every change
+
+### Status at a glance
+
+`treebank status` joins the repository's existing sources of truth rather
+than introducing another configuration file: the language registry,
+`tree-sitter.json`, `roles.json`, every `ledger.toml`, fixture and policy
+directories, corpus locks and canary workflows.
+
+```sh
+cargo run -p treebank-cli -- status
+cargo run -p treebank-cli -- status --format json
+cargo run -p treebank-cli -- status --format markdown
+cargo run -p treebank-cli -- status --github
+```
+
+The default table shows corpus pass/gap evidence, exact corpus/negative/shape
+fixture counts, declared known-gap/widening/deviation queues, reference-tool
+capabilities, locks, canaries and policy ratchets for every grammar. Warnings
+name coverage that exists but is not reproducible or enforced. Configuration
+errors are separate; `--check` exits non-zero on those and is what CI runs.
+
+`--github` is deliberately opt-in so the ordinary inventory stays offline and
+deterministic. With an authenticated `gh` it adds open issues and pull
+requests, workflow state and default-branch protection. `--repo OWNER/REPO`
+overrides checkout-based repository detection.
 
 Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 
