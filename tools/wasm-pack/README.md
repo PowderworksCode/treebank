@@ -7,7 +7,7 @@ C compiler, and no emscripten glue at the far end.
 
 ```sh
 ./tools/wasm-pack/build.sh python          # -> dist/wasm/treebank-python.wasm
-./tools/wasm-pack/check.sh                 # build + verify all three
+./tools/wasm-pack/check.sh                 # build + verify every grammar
 ```
 
 ## Why not `tree-sitter build --wasm`
@@ -109,12 +109,16 @@ Versions are plain semver from each crate's `Cargo.toml`. The vendoring era's
 `<upstream>-treebank.N` scheme tracked an upstream version and a build
 counter; treebank owns these grammars, so neither exists.
 
+`list-grammars.sh` is the shared source for CI, default releases and release
+rehearsals: every `crates/treebank-*/grammar.js` creates a pack obligation.
+There is no release matrix to remember to extend when a grammar is added.
+
 `test-release.sh` closes what publishing leaves untestable — the tag, the
 skip on a re-run, and a consumer actually fetching over HTTP. It stages
 every pack under a `rehearsal-wasm/` tag namespace, serves it over
 localhost, fetches **by URL**, verifies `SHA256SUMS` against the fetched
-bytes, runs both example consumers (asserting each grammar's negative
-fixture is still rejected and its rosetta program parses clean), checks the
+bytes, runs both example consumers (asserting each grammar's sweep-smoke
+invalid fixture is rejected and its valid fixture parses clean), checks the
 index's hashes and that its URLs name the real tag rather than the rehearsal
 one, and asserts a re-run releases nothing. It publishes nothing and deletes
 its tags on exit.

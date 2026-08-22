@@ -33,7 +33,12 @@ while [ $# -gt 0 ]; do
     *)  GRAMMARS+=("$1"); shift ;;
   esac
 done
-[ ${#GRAMMARS[@]} -gt 0 ] || GRAMMARS=(python rust typescript)
+if [ ${#GRAMMARS[@]} -eq 0 ]; then
+  while IFS= read -r grammar; do
+    GRAMMARS+=("$grammar")
+  done < <(./tools/wasm-pack/list-grammars.sh)
+fi
+[ ${#GRAMMARS[@]} -gt 0 ] || { echo "release: no grammars discovered" >&2; exit 1; }
 
 released=0
 for lang in "${GRAMMARS[@]}"; do
