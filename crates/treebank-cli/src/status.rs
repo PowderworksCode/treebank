@@ -42,6 +42,9 @@ pub struct Summary {
     pub grammars: usize,
     pub corpus_locks: usize,
     pub corpus_canaries: usize,
+    pub current_corpus_evidence: usize,
+    pub stale_corpus_evidence: usize,
+    pub unbound_corpus_evidence: usize,
     pub lint_ratchets: usize,
     pub shape_fixture_grammars: usize,
     pub wasm_packs: usize,
@@ -66,6 +69,7 @@ pub struct GrammarStatus {
     pub external_scanner: bool,
     pub corpus_lock: bool,
     pub corpus_canary: bool,
+    pub evidence_freshness: EvidenceFreshness,
 }
 
 #[derive(Debug, Serialize)]
@@ -103,7 +107,6 @@ pub struct EvidenceStatus {
     pub known_gaps: Vec<DeclaredItem>,
     pub known_widenings: Vec<DeclaredItem>,
     pub deviations: Vec<DeclaredItem>,
-    pub grammar_revision: Option<String>,
     pub configuration_files: Option<u64>,
     pub indeterminate_files: Option<u64>,
 }
@@ -117,6 +120,19 @@ pub struct CorpusStatus {
     pub grammar_gaps: u64,
     pub noise: u64,
     pub pass_rate: Option<String>,
+    pub corpus_lock_sha256: Option<String>,
+    pub grammar_sha256: Option<String>,
+    pub grammar_revision: Option<String>,
+    pub freshness: EvidenceFreshness,
+    pub freshness_reasons: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvidenceFreshness {
+    Current,
+    Stale,
+    Unbound,
 }
 
 #[derive(Debug, Serialize)]
@@ -362,7 +378,24 @@ pub fn collect(root: &Path) -> Result<Report> {
 
         let manifest = read_manifest(&dir.join("tree-sitter.json"), &languages, &mut errors);
         let roles = read_roles(&dir, &mut errors);
-        let evidence = read_evidence(&ledger, grammar_lang.as_str());
+        let grammar_sha256 = match crate::grammar::source_sha256(&dir) {
+            Ok(sha256) => sha256,
+            Err(error) => {
+                errors.push(format!(
+                    "{}: cannot fingerprint grammar: {error:#}",
+                    dir.display()
+                ));
+                String::new()
+            }
+        };
+        let mut evidence = read_evidence(&ledger, grammar_lang.as_str());
+        bind_evidence(
+            &mut evidence,
+            &grammar_sha256,
+            &locked_languages,
+            &dir.join("ledger.toml"),
+            &mut errors,
+        );
         if evidence.corpora.is_empty() {
             errors.push(format!(
                 "{}: ledger has no corpus sweep evidence",
@@ -393,8 +426,9 @@ pub fn collect(root: &Path) -> Result<Report> {
         };
         let corpus_lock = languages
             .iter()
-            .all(|lang| locked_languages.contains(lang.as_str()));
+            .all(|lang| locked_languages.contains_key(lang.as_str()));
         let corpus_canary = languages.iter().any(|lang| has_canary(root, lang.as_str()));
+        let evidence_freshness = aggregate_freshness(&evidence);
 
         grammars.push(GrammarStatus {
             grammar,
@@ -421,6 +455,7 @@ pub fn collect(root: &Path) -> Result<Report> {
             external_scanner: dir.join("src/scanner.c").is_file(),
             corpus_lock,
             corpus_canary,
+            evidence_freshness,
         });
     }
 
@@ -444,6 +479,9 @@ pub fn collect(root: &Path) -> Result<Report> {
         grammars: grammars.len(),
         corpus_locks: locked_languages.len(),
         corpus_canaries: grammars.iter().filter(|g| g.corpus_canary).count(),
+        current_corpus_evidence: count_freshness(&grammars, EvidenceFreshness::Current),
+        stale_corpus_evidence: count_freshness(&grammars, EvidenceFreshness::Stale),
+        unbound_corpus_evidence: count_freshness(&grammars, EvidenceFreshness::Unbound),
         lint_ratchets: grammars.iter().filter(|g| g.known_deviations.lint).count(),
         shape_fixture_grammars: grammars.iter().filter(|g| g.tests.shape_files > 0).count(),
         wasm_packs: grammars.iter().filter(|g| g.distribution.wasm_pack).count(),
@@ -486,15 +524,23 @@ pub fn collect(root: &Path) -> Result<Report> {
             missing_shape.join(", ")
         ));
     }
-    let untracked = grammars
-        .iter()
-        .filter(|g| g.evidence.grammar_revision.is_none())
-        .count();
-    if untracked > 0 {
+    let corpus_measurements: usize = grammars.iter().map(|g| g.evidence.corpora.len()).sum();
+    if summary.unbound_corpus_evidence > 0 {
         warnings.push(format!(
-            "{untracked} of {} ledgers do not identify the grammar revision measured; evidence freshness cannot be checked",
-            summary.grammars
+            "{} of {corpus_measurements} corpus measurements are unbound; rerun their locked sweep to record corpus and grammar provenance",
+            summary.unbound_corpus_evidence
         ));
+    }
+    for grammar in &grammars {
+        for corpus in &grammar.evidence.corpora {
+            if corpus.freshness == EvidenceFreshness::Stale {
+                warnings.push(format!(
+                    "{} corpus evidence is stale: {}",
+                    corpus.language,
+                    corpus.freshness_reasons.join("; ")
+                ));
+            }
+        }
     }
     for g in &grammars {
         if g.corpus_lock && !g.corpus_canary {
@@ -516,8 +562,132 @@ pub fn collect(root: &Path) -> Result<Report> {
     })
 }
 
-fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeSet<String> {
-    let mut valid = BTreeSet::new();
+fn count_freshness(grammars: &[GrammarStatus], wanted: EvidenceFreshness) -> usize {
+    grammars
+        .iter()
+        .flat_map(|grammar| &grammar.evidence.corpora)
+        .filter(|corpus| corpus.freshness == wanted)
+        .count()
+}
+
+fn aggregate_freshness(evidence: &EvidenceStatus) -> EvidenceFreshness {
+    if evidence
+        .corpora
+        .iter()
+        .any(|corpus| corpus.freshness == EvidenceFreshness::Stale)
+    {
+        EvidenceFreshness::Stale
+    } else if evidence.corpora.is_empty()
+        || evidence
+            .corpora
+            .iter()
+            .any(|corpus| corpus.freshness == EvidenceFreshness::Unbound)
+    {
+        EvidenceFreshness::Unbound
+    } else {
+        EvidenceFreshness::Current
+    }
+}
+
+fn bind_evidence(
+    evidence: &mut EvidenceStatus,
+    current_grammar_sha256: &str,
+    locks: &BTreeMap<String, String>,
+    ledger_path: &Path,
+    errors: &mut Vec<String>,
+) {
+    for corpus in &mut evidence.corpora {
+        for (field, value, valid) in [
+            (
+                "corpus_lock_sha256",
+                corpus.corpus_lock_sha256.as_deref(),
+                corpus.corpus_lock_sha256.as_deref().is_none_or(is_sha256),
+            ),
+            (
+                "grammar_sha256",
+                corpus.grammar_sha256.as_deref(),
+                corpus.grammar_sha256.as_deref().is_none_or(is_sha256),
+            ),
+            (
+                "grammar_revision",
+                corpus.grammar_revision.as_deref(),
+                corpus
+                    .grammar_revision
+                    .as_deref()
+                    .is_none_or(is_git_revision),
+            ),
+        ] {
+            if !valid {
+                errors.push(format!(
+                    "{}: {} sweep has invalid {field} {:?}",
+                    ledger_path.display(),
+                    corpus.language,
+                    value
+                ));
+            }
+        }
+
+        if corpus.corpus_lock_sha256.is_none() {
+            corpus
+                .freshness_reasons
+                .push("no corpus lock SHA-256 recorded".to_string());
+        }
+        if corpus.grammar_sha256.is_none() {
+            corpus
+                .freshness_reasons
+                .push("no grammar SHA-256 recorded".to_string());
+        }
+        if corpus.grammar_revision.is_none() {
+            corpus
+                .freshness_reasons
+                .push("no committed grammar revision recorded".to_string());
+        }
+        if !locks.contains_key(&corpus.language) {
+            corpus
+                .freshness_reasons
+                .push("no valid committed corpus lock".to_string());
+        }
+        let (Some(recorded_lock), Some(recorded_grammar), Some(current_lock), Some(_)) = (
+            corpus.corpus_lock_sha256.as_deref(),
+            corpus.grammar_sha256.as_deref(),
+            locks.get(&corpus.language),
+            corpus.grammar_revision.as_deref(),
+        ) else {
+            continue;
+        };
+
+        if recorded_lock != current_lock {
+            corpus.freshness_reasons.push(format!(
+                "corpus lock changed (recorded {}, current {})",
+                short_hash(recorded_lock),
+                short_hash(current_lock)
+            ));
+        }
+        if recorded_grammar != current_grammar_sha256 {
+            corpus.freshness_reasons.push(format!(
+                "grammar changed (recorded {}, current {})",
+                short_hash(recorded_grammar),
+                short_hash(current_grammar_sha256)
+            ));
+        }
+        corpus.freshness = if corpus.freshness_reasons.is_empty() {
+            EvidenceFreshness::Current
+        } else {
+            EvidenceFreshness::Stale
+        };
+    }
+}
+
+fn is_git_revision(value: &str) -> bool {
+    matches!(value.len(), 40 | 64) && value.bytes().all(|byte| byte.is_ascii_hexdigit())
+}
+
+fn short_hash(value: &str) -> &str {
+    &value[..value.len().min(12)]
+}
+
+fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeMap<String, String> {
+    let mut valid = BTreeMap::new();
     for language in LangName::ALL {
         let path = root
             .join("corpus-locks")
@@ -525,16 +695,17 @@ fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeSet<Stri
         if !path.is_file() {
             continue;
         }
-        let manifest = match treebank_corpus::fetch::Manifest::load(&path) {
-            Ok(manifest) => manifest,
-            Err(error) => {
-                errors.push(format!(
-                    "{}: invalid corpus lock: {error:#}",
-                    path.display()
-                ));
-                continue;
-            }
-        };
+        let (manifest, lock_sha256) =
+            match treebank_corpus::fetch::Manifest::load_with_sha256(&path) {
+                Ok(loaded) => loaded,
+                Err(error) => {
+                    errors.push(format!(
+                        "{}: invalid corpus lock: {error:#}",
+                        path.display()
+                    ));
+                    continue;
+                }
+            };
         let mut lock_errors = Vec::new();
         if manifest.language.as_deref() != Some(language.as_str()) {
             lock_errors.push(format!(
@@ -566,7 +737,7 @@ fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeSet<Stri
             }
         }
         if lock_errors.is_empty() {
-            valid.insert(language.as_str().to_string());
+            valid.insert(language.as_str().to_string(), lock_sha256);
         } else {
             errors.push(format!(
                 "{}: invalid corpus lock: {}",
@@ -697,11 +868,6 @@ fn read_evidence(ledger: &toml::Value, grammar: &str) -> EvidenceStatus {
         known_gaps: declared_items(ledger.get("known_gaps")),
         known_widenings: declared_items(ledger.get("known_widenings")),
         deviations: declared_items(ledger.get("deviations")),
-        grammar_revision: ledger
-            .get("grammar_revision")
-            .or_else(|| ledger.get("measured_commit"))
-            .and_then(toml::Value::as_str)
-            .map(str::to_string),
         ..EvidenceStatus::default()
     };
     let Some(corpus) = ledger.get("corpus").and_then(toml::Value::as_table) else {
@@ -743,6 +909,20 @@ fn read_evidence(ledger: &toml::Value, grammar: &str) -> EvidenceStatus {
                 .get("pass_rate")
                 .and_then(toml::Value::as_str)
                 .map(str::to_string),
+            corpus_lock_sha256: table
+                .get("corpus_lock_sha256")
+                .and_then(toml::Value::as_str)
+                .map(str::to_string),
+            grammar_sha256: table
+                .get("grammar_sha256")
+                .and_then(toml::Value::as_str)
+                .map(str::to_string),
+            grammar_revision: table
+                .get("grammar_revision")
+                .and_then(toml::Value::as_str)
+                .map(str::to_string),
+            freshness: EvidenceFreshness::Unbound,
+            freshness_reasons: Vec::new(),
         });
     }
     evidence.corpora.sort_by(|a, b| a.language.cmp(&b.language));
@@ -1126,6 +1306,14 @@ fn distribution_cell(distribution: &DistributionStatus) -> String {
     values.join(",")
 }
 
+fn freshness_label(freshness: EvidenceFreshness) -> &'static str {
+    match freshness {
+        EvidenceFreshness::Current => "current",
+        EvidenceFreshness::Stale => "STALE",
+        EvidenceFreshness::Unbound => "unbound",
+    }
+}
+
 pub fn render_table(report: &Report) -> String {
     let mut out = String::new();
     let revision = report.revision.as_deref().unwrap_or("unknown");
@@ -1137,7 +1325,7 @@ pub fn render_table(report: &Report) -> String {
     .unwrap();
     writeln!(
         out,
-        "{:<12} {:<17} {:<33} {:<18} {:<11} {:<7} {:<5} {:<14} {:<13} {:<5} {}",
+        "{:<12} {:<17} {:<33} {:<18} {:<11} {:<7} {:<5} {:<14} {:<13} {:<5} {:<9} {}",
         "GRAMMAR",
         "LANGUAGES",
         "CORPUS PASS",
@@ -1148,6 +1336,7 @@ pub fn render_table(report: &Report) -> String {
         "CAPS",
         "DIST",
         "LOCK",
+        "EVIDENCE",
         "KNOWN DEVIATIONS"
     )
     .unwrap();
@@ -1170,7 +1359,7 @@ pub fn render_table(report: &Report) -> String {
         .join(",");
         writeln!(
             out,
-            "{:<12} {:<17} {:<33} {:<18} {:<11} {:<7} {:<5} {:<14} {:<13} {:<5} {}",
+            "{:<12} {:<17} {:<33} {:<18} {:<11} {:<7} {:<5} {:<14} {:<13} {:<5} {:<9} {}",
             grammar.grammar,
             languages,
             corpus_table_cell(grammar),
@@ -1189,6 +1378,7 @@ pub fn render_table(report: &Report) -> String {
             capability_cell(&grammar.capabilities),
             distribution_cell(&grammar.distribution),
             if grammar.corpus_lock { "yes" } else { "no" },
+            freshness_label(grammar.evidence_freshness),
             if known_deviations.is_empty() {
                 "—"
             } else {
@@ -1205,8 +1395,11 @@ pub fn render_table(report: &Report) -> String {
     .unwrap();
     writeln!(
         out,
-        "configuration: {} lock(s), {} canary(s), {} lint ratchet(s), {} shape-fixture grammar(s), {} wasm pack(s), {} query file(s)",
+        "configuration: {} lock(s), evidence {} current / {} stale / {} unbound, {} canary(s), {} lint ratchet(s), {} shape-fixture grammar(s), {} wasm pack(s), {} query file(s)",
         report.summary.corpus_locks,
+        report.summary.current_corpus_evidence,
+        report.summary.stale_corpus_evidence,
+        report.summary.unbound_corpus_evidence,
         report.summary.corpus_canaries,
         report.summary.lint_ratchets,
         report.summary.shape_fixture_grammars,
@@ -1263,15 +1456,22 @@ pub fn render_markdown(report: &Report) -> String {
     writeln!(out, "# Treebank status\n").unwrap();
     writeln!(
         out,
-        "Revision `{revision}` · {} languages · {} grammars · {} corpus lock(s) · {} canary(s)\n",
+        "Revision `{revision}` · {} languages · {} grammars · {} corpus lock(s) · evidence {} current / {} stale / {} unbound · {} canary(s)\n",
         report.summary.languages,
         report.summary.grammars,
         report.summary.corpus_locks,
+        report.summary.current_corpus_evidence,
+        report.summary.stale_corpus_evidence,
+        report.summary.unbound_corpus_evidence,
         report.summary.corpus_canaries
     )
     .unwrap();
-    writeln!(out, "| Grammar | Languages | Corpus pass | Grammar gaps | Tests C/N/S | Declared K/W/D | Measured | Capabilities | Distribution | Lock | Known deviations |").unwrap();
-    writeln!(out, "|---|---|---:|---:|---:|---:|---|---|---|---:|---|").unwrap();
+    writeln!(out, "| Grammar | Languages | Corpus pass | Grammar gaps | Tests C/N/S | Declared K/W/D | Measured | Capabilities | Distribution | Lock | Evidence | Known deviations |").unwrap();
+    writeln!(
+        out,
+        "|---|---|---:|---:|---:|---:|---|---|---|---:|---|---|"
+    )
+    .unwrap();
     for grammar in &report.grammars {
         let languages = grammar
             .languages
@@ -1291,7 +1491,7 @@ pub fn render_markdown(report: &Report) -> String {
         .join(", ");
         writeln!(
             out,
-            "| {} | {} | {} | {} | {}/{}/{} | {}/{}/{} | {} | {} | {} | {} | {} |",
+            "| {} | {} | {} | {} | {}/{}/{} | {}/{}/{} | {} | {} | {} | {} | {} | {} |",
             grammar.grammar,
             languages,
             corpus_cell(grammar),
@@ -1306,6 +1506,7 @@ pub fn render_markdown(report: &Report) -> String {
             capability_cell(&grammar.capabilities),
             distribution_cell(&grammar.distribution),
             if grammar.corpus_lock { "yes" } else { "no" },
+            freshness_label(grammar.evidence_freshness),
             if known_deviations.is_empty() {
                 "—"
             } else {
@@ -1389,7 +1590,10 @@ pub fn render_markdown(report: &Report) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{collect, declared_items, one_line, read_evidence, render_markdown};
+    use super::{
+        bind_evidence, collect, declared_items, one_line, read_evidence, render_markdown,
+        EvidenceFreshness,
+    };
 
     #[test]
     fn evidence_reads_one_or_several_sweeps() {
@@ -1437,6 +1641,80 @@ mod tests {
         let items = declared_items(value.get("items"));
         assert_eq!(items[0].summary, "one two");
         assert_eq!(one_line(" a\n b "), "a b");
+    }
+
+    #[test]
+    fn evidence_is_current_stale_or_unbound_from_exact_identities() {
+        let lock = "a".repeat(64);
+        let grammar = "b".repeat(64);
+        let revision = "c".repeat(40);
+        let ledger: toml::Value = toml::from_str(&format!(
+            r#"
+            [corpus.sweep]
+            files = 10
+            passed = 10
+            failed = 0
+            gap_files = 0
+            noise_files = 0
+            corpus_lock_sha256 = "{lock}"
+            grammar_sha256 = "{grammar}"
+            grammar_revision = "{revision}"
+            "#,
+        ))
+        .unwrap();
+        let mut locks = std::collections::BTreeMap::from([("rust".to_string(), lock.clone())]);
+        let mut evidence = read_evidence(&ledger, "rust");
+        let mut errors = Vec::new();
+        bind_evidence(
+            &mut evidence,
+            &grammar,
+            &locks,
+            std::path::Path::new("ledger.toml"),
+            &mut errors,
+        );
+        assert_eq!(evidence.corpora[0].freshness, EvidenceFreshness::Current);
+        assert!(errors.is_empty());
+
+        locks.insert("rust".to_string(), "d".repeat(64));
+        bind_evidence(
+            &mut evidence,
+            &grammar,
+            &locks,
+            std::path::Path::new("ledger.toml"),
+            &mut errors,
+        );
+        assert_eq!(evidence.corpora[0].freshness, EvidenceFreshness::Stale);
+        assert!(evidence.corpora[0].freshness_reasons[0].contains("corpus lock changed"));
+
+        let legacy: toml::Value = toml::from_str(
+            "[corpus.sweep]\nfiles=1\npassed=1\nfailed=0\ngap_files=0\nnoise_files=0\n",
+        )
+        .unwrap();
+        let mut evidence = read_evidence(&legacy, "rust");
+        bind_evidence(
+            &mut evidence,
+            &grammar,
+            &locks,
+            std::path::Path::new("ledger.toml"),
+            &mut errors,
+        );
+        assert_eq!(evidence.corpora[0].freshness, EvidenceFreshness::Unbound);
+        assert_eq!(evidence.corpora[0].freshness_reasons.len(), 3);
+
+        let invalid: toml::Value = toml::from_str(
+            "[corpus.sweep]\nfiles=1\npassed=1\nfailed=0\ngap_files=0\nnoise_files=0\ncorpus_lock_sha256='not-a-hash'\ngrammar_sha256='not-a-hash'\ngrammar_revision='not-a-revision'\n",
+        )
+        .unwrap();
+        let mut evidence = read_evidence(&invalid, "rust");
+        let mut invalid_errors = Vec::new();
+        bind_evidence(
+            &mut evidence,
+            &grammar,
+            &locks,
+            std::path::Path::new("ledger.toml"),
+            &mut invalid_errors,
+        );
+        assert_eq!(invalid_errors.len(), 3);
     }
 
     #[test]

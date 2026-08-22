@@ -16,6 +16,10 @@ and admitted file digests all affect the sweep population. Do not hand-edit a
 lock or copy an old `corpus/<language>/manifest.json`; manifests from before
 archive provenance was recorded cannot recreate their inputs.
 
+Sweep ledgers identify this exact population with `corpus_lock_sha256`, computed
+over the lock file's exact committed bytes. Hydration preserves Treebank's
+canonical representation, so its `manifest.json` has the same identity.
+
 Recreate an exact corpus on a clean machine with:
 
 ```sh

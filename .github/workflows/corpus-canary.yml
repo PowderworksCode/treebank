@@ -20,7 +20,11 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
+      # Sweep provenance names the last commit that changed the generated
+      # grammar inputs. A shallow checkout cannot answer that honestly.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: restore verified package archives

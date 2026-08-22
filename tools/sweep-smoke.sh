@@ -69,6 +69,9 @@ jq -e --arg lang "$lang" '
   .failed == 1 and
   .gap_files == 0 and
   .noise_files == 1 and
+  (.provenance.corpus_lock_sha256 | test("^[0-9a-f]{64}$")) and
+  (.provenance.grammar_sha256 | test("^[0-9a-f]{64}$")) and
+  (.provenance | has("grammar_revision") | not) and
   (.clusters | length) == 1 and
   .clusters[0].verdict == "noise"
 ' "$report" >/dev/null
@@ -78,6 +81,9 @@ grep -Fq 'failed = 1' "$grammar/ledger.toml"
 grep -Fq 'gap_files = 0' "$grammar/ledger.toml"
 grep -Fq 'noise_files = 1' "$grammar/ledger.toml"
 grep -Fq "pass_rate = '50.00%'" "$grammar/ledger.toml"
+grep -Eq "^corpus_lock_sha256 = '[0-9a-f]{64}'$" "$grammar/ledger.toml"
+grep -Eq "^grammar_sha256 = '[0-9a-f]{64}'$" "$grammar/ledger.toml"
+! grep -Fq 'grammar_revision' "$grammar/ledger.toml"
 jq -e '.passed_sha256 | length == 1' "$corpus/sweep-cache.json" >/dev/null
 
 if [[ "$lang" == rust ]]; then

@@ -52,7 +52,16 @@ pub struct Manifest {
 
 impl Manifest {
     pub fn load(path: &Path) -> Result<Manifest> {
-        Ok(serde_json::from_str(&std::fs::read_to_string(path)?)?)
+        Ok(Self::load_with_sha256(path)?.0)
+    }
+
+    /// Load a lock and return the SHA-256 of its exact committed bytes with
+    /// it. Hydration writes the same canonical representation, so the corpus
+    /// manifest and committed lock have the same identity.
+    pub fn load_with_sha256(path: &Path) -> Result<(Manifest, String)> {
+        let text = std::fs::read_to_string(path)?;
+        let sha256 = format!("{:x}", Sha256::digest(text.as_bytes()));
+        Ok((serde_json::from_str(&text)?, sha256))
     }
 
     /// One entry per corpus file.
@@ -918,6 +927,31 @@ mod hydrate_tests {
             std::fs::read(corpus.join("manifest.json")).unwrap(),
             std::fs::read(lock).unwrap()
         );
+    }
+
+    #[test]
+    fn lock_identity_is_the_exact_file_sha256() {
+        let manifest = Manifest {
+            language: Some("rust".to_string()),
+            packages: vec![ManifestPackage {
+                package: "fixture".to_string(),
+                version: "1.0.0".to_string(),
+                downloads: 42,
+                artifact: Some(ManifestArtifact {
+                    url: "https://registry.invalid/fixture.tar.gz".to_string(),
+                    bytes: 7,
+                    sha256: "a".repeat(64),
+                }),
+                files: vec![file("src/lib.rs", b"fn f() {}\n")],
+            }],
+        };
+        let root = TempRoot::new();
+        let path = root.0.join("lock.json");
+        let bytes = serde_json::to_vec_pretty(&manifest).unwrap();
+        std::fs::write(&path, &bytes).unwrap();
+        let (loaded, identity) = Manifest::load_with_sha256(&path).unwrap();
+        assert_eq!(loaded, manifest);
+        assert_eq!(identity, format!("{:x}", Sha256::digest(bytes)));
     }
 
     #[test]
