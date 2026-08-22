@@ -45,6 +45,8 @@ static RS_SPANS: rust_spans::RustSpans = rust_spans::RustSpans;
 static JAVA_SPANS: spans::JavaSpans = spans::JavaSpans;
 static BASH_SPANS: spans::BashSpans = spans::BashSpans;
 static RB_SPANS: spans::RubySpans = spans::RubySpans;
+static C_SPANS: spans::CSpans = spans::CSpans;
+static CPP_SPANS: spans::CppSpans = spans::CppSpans;
 
 static RUSTFMT: reformat::RustFmt = reformat::RustFmt;
 static BLACK: reformat::BlackFmt = reformat::BlackFmt;
@@ -97,5 +99,12 @@ mod tests {
         ] {
             assert!(get(lang).reformat.is_some(), "missing formatter for {lang}");
         }
+    }
+
+
+    #[test]
+    fn c_family_span_capabilities_are_registered() {
+        assert!(get(LangName::C).spans.is_some());
+        assert!(get(LangName::Cpp).spans.is_some());
     }
 }

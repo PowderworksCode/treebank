@@ -104,8 +104,8 @@ macro_rules! for_each_language {
             Javascript => "javascript", ["js", "jsx", "mjs", "cjs"], Typescript, false, javascript::JavaScript, javascript::JavaScript, (TS_SPANS, TS_FORMAT, TS_PRINT);
             Java => "java", ["java"], Java, false, java::Java, java::Java, (JAVA_SPANS, NONE, NONE);
             Bash => "bash", ["sh", "bash"], Bash, false, bash::Bash, bash::Bash, (BASH_SPANS, NONE, NONE);
-            C => "c", ["c", "h"], C, false, c::C, c::C, (NONE, NONE, NONE);
-            Cpp => "cpp", ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], Cpp, false, cxx::Cxx, c::Cpp, (NONE, NONE, NONE);
+            C => "c", ["c", "h"], C, false, c::C, c::C, (C_SPANS, NONE, NONE);
+            Cpp => "cpp", ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], Cpp, false, cxx::Cxx, c::Cpp, (CPP_SPANS, NONE, NONE);
             Ruby => "ruby", ["rb"], Ruby, true, ruby::Ruby, ruby::Ruby, (RB_SPANS, NONE, NONE);
             Zig => "zig", ["zig", "zon"], Zig, false, zig::Zig, zig::Zig, (NONE, ZIG_FORMAT, NONE);
         }

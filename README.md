@@ -95,15 +95,15 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | Java | yes | — | — |
 | Bash | yes | — | — |
 | Ruby | yes | — | — |
-| C / C++ | — | — | — |
+| C / C++ | yes | — | — |
 | Zig | — | `zig fmt` | — |
 
 The remaining dashes are real toolchain gaps, not forgotten registrations:
 the project does not substitute a third-party style formatter for a
 language-owned formatter, and does not call a token-preserving formatter an
-AST printer. C/C++ source extents and a stable Zig AST surface are the next
-span work when their adapters can make the same guarantees as the existing
-oracles.
+AST printer. A stable Zig AST surface is the next span dependency; the Zig
+toolchain currently exposes formatting and validation but no supported tree
+dump carrying source extents.
 
 ## Adding a language
 

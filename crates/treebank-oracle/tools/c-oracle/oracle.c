@@ -11,10 +11,12 @@
  * so the dialect and the -I list live in the caller (and thus in the
  * ledger), not in here. stdout: one JSON object per line, same order.
  *
- * The verdict is computed from clang's own diagnostic categories and
- * nothing else — no message text is ever matched. CXTranslationUnit_KeepGoing
- * is what makes this possible: a missing #include stays non-fatal, so the
- * rest of the file is still parsed and still judged.
+ * With --spans, the same request emits cursor byte extents instead of a
+ * verdict for `treebank shape`. The verdict is computed from clang's own
+ * diagnostic categories and nothing else — no message text is ever matched.
+ * CXTranslationUnit_KeepGoing is what makes this possible: a missing
+ * #include stays non-fatal, so the rest of the file is still parsed and
+ * still judged.
  */
 #include <clang-c/Index.h>
 #include <stdio.h>
@@ -40,6 +42,39 @@
 struct counts {
     unsigned parse, sema, lexpp, userdef, other;
 };
+
+struct span_output {
+    FILE *out;
+    CXFile main_file;
+    int first;
+};
+
+static void put_json_string(FILE *out, const char *s);
+
+static enum CXChildVisitResult emit_span(CXCursor cursor, CXCursor parent,
+                                          CXClientData data) {
+    (void)parent;
+    struct span_output *ctx = data;
+    CXSourceRange range = clang_getCursorExtent(cursor);
+    CXFile start_file = NULL, end_file = NULL;
+    unsigned start = 0, end = 0;
+    clang_getSpellingLocation(clang_getRangeStart(range), &start_file,
+                              NULL, NULL, &start);
+    clang_getSpellingLocation(clang_getRangeEnd(range), &end_file,
+                              NULL, NULL, &end);
+    if (start_file && end_file && start < end &&
+        clang_File_isEqual(start_file, ctx->main_file) &&
+        clang_File_isEqual(end_file, ctx->main_file)) {
+        if (!ctx->first) fputc(',', ctx->out);
+        ctx->first = 0;
+        fprintf(ctx->out, "[%u,%u,", start, end);
+        CXString kind = clang_getCursorKindSpelling(clang_getCursorKind(cursor));
+        put_json_string(ctx->out, clang_getCString(kind));
+        clang_disposeString(kind);
+        fputc(']', ctx->out);
+    }
+    return CXChildVisit_Recurse;
+}
 
 static void put_json_string(FILE *out, const char *s) {
     fputc('"', out);
@@ -68,7 +103,12 @@ static const char *verdict_of(const struct counts *c) {
     return "indeterminate";
 }
 
-int main(void) {
+int main(int argc, char **argv) {
+    int spans_mode = argc == 2 && strcmp(argv[1], "--spans") == 0;
+    if (argc > 1 && !spans_mode) {
+        fprintf(stderr, "usage: %s [--spans]\n", argv[0]);
+        return 2;
+    }
     CXIndex index = clang_createIndex(/*excludeDeclsFromPCH=*/0,
                                      /*displayDiagnostics=*/0);
     if (!index) {
@@ -188,6 +228,29 @@ int main(void) {
             }
             clang_disposeString(cat_s);
             clang_disposeDiagnostic(d);
+        }
+        if (spans_mode) {
+            fputs("{\"path\":", stdout);
+            put_json_string(stdout, path);
+            if (n.parse > 0) {
+                fputs(",\"spans\":[],\"has_edges\":false,"
+                      "\"skipped\":\"parse errors\"}\n", stdout);
+            } else {
+                fputs(",\"spans\":[", stdout);
+                struct span_output ctx = {
+                    .out = stdout,
+                    .main_file = clang_getFile(tu, path),
+                    .first = 1,
+                };
+                clang_visitChildren(clang_getTranslationUnitCursor(tu),
+                                    emit_span, &ctx);
+                fputs("],\"has_edges\":false}\n", stdout);
+            }
+            fflush(stdout);
+            clang_disposeTranslationUnit(tu);
+            free(fields);
+            free((void *)argv);
+            continue;
         }
         clang_disposeTranslationUnit(tu);
 
