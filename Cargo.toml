@@ -6,3 +6,9 @@
 # untested rather than loudly missing.
 members = ["crates/*"]
 resolver = "2"
+
+# Corpus locks are hundreds of megabytes of content-addressed evidence. Keep
+# `treebank status` interactive in ordinary debug builds while it verifies
+# their SHA-256 identities.
+[profile.dev.package.sha2]
+opt-level = 3

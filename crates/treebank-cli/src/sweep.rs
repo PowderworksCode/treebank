@@ -1,5 +1,6 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use std::process::Command;
 
 use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
@@ -58,6 +59,7 @@ pub struct Cluster {
 pub struct Report {
     pub lang: String,
     pub grammar: String,
+    pub provenance: EvidenceProvenance,
     pub files: usize,
     pub passed: usize,
     pub failed: usize,
@@ -85,6 +87,20 @@ pub struct Report {
     pub hidden_gaps: Vec<String>,
     pub noise_files: usize,
     pub clusters: Vec<Cluster>,
+}
+
+#[derive(Debug, Default, Serialize, Deserialize)]
+pub struct EvidenceProvenance {
+    /// SHA-256 of the manifest's exact bytes. Hydration preserves the
+    /// committed lock's canonical representation.
+    pub corpus_lock_sha256: String,
+    /// SHA-256 of parser.c plus scanner.c (when present): the exact generated
+    /// sources whose behaviour this sweep measured.
+    pub grammar_sha256: String,
+    /// Last commit that changed the generated grammar inputs. Absent when
+    /// those inputs are dirty or the grammar is outside a Git checkout.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grammar_revision: Option<String>,
 }
 
 /// Signatures a grammar declares it rejects on purpose, from
@@ -324,13 +340,20 @@ fn write_ledger_block(grammar_dir: &Path, lang: treebank_lang::LangName, r: &Rep
         return Ok(());
     };
     let block_body = format!(
-        "\nfiles = {}\npassed = {}\nfailed = {}\ngap_files = {}\nnoise_files = {}\npass_rate = '{:.2}%'\n",
+        "\nfiles = {}\npassed = {}\nfailed = {}\ngap_files = {}\nnoise_files = {}\npass_rate = '{:.2}%'\ncorpus_lock_sha256 = '{}'\ngrammar_sha256 = '{}'\n{}",
         r.files,
         r.passed,
         r.failed,
         r.gap_files,
         r.noise_files,
         100.0 * r.passed as f64 / r.files.max(1) as f64,
+        r.provenance.corpus_lock_sha256,
+        r.provenance.grammar_sha256,
+        r.provenance
+            .grammar_revision
+            .as_deref()
+            .map(|revision| format!("grammar_revision = '{revision}'\n"))
+            .unwrap_or_default(),
     );
     // One grammar may carry several corpora (typescript also sweeps the
     // javascript corpus), so a per-language block name is tried first.
@@ -363,6 +386,45 @@ fn write_ledger_block(grammar_dir: &Path, lang: treebank_lang::LangName, r: &Rep
     Ok(())
 }
 
+/// The last committed change to the generated inputs is useful provenance,
+/// but it is not the freshness key: the content hash above is. When those
+/// inputs are dirty there is no honest commit to name, so omit the revision
+/// and let status call the evidence unbound until the post-commit rerun.
+fn committed_grammar_revision(grammar_dir: &Path) -> Option<String> {
+    const INPUTS: [&str; 3] = ["grammar.js", "src/parser.c", "src/scanner.c"];
+    let shallow = Command::new("git")
+        .arg("-C")
+        .arg(grammar_dir)
+        .args(["rev-parse", "--is-shallow-repository"])
+        .output()
+        .ok()?;
+    if !shallow.status.success() || shallow.stdout.starts_with(b"true") {
+        return None;
+    }
+    let status = Command::new("git")
+        .arg("-C")
+        .arg(grammar_dir)
+        .args(["status", "--porcelain", "--"])
+        .args(INPUTS)
+        .output()
+        .ok()?;
+    if !status.status.success() || !status.stdout.is_empty() {
+        return None;
+    }
+    let output = Command::new("git")
+        .arg("-C")
+        .arg(grammar_dir)
+        .args(["log", "-1", "--format=%H", "--"])
+        .args(INPUTS)
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let revision = String::from_utf8(output.stdout).ok()?.trim().to_string();
+    (!revision.is_empty()).then_some(revision)
+}
+
 pub fn run(
     lang: treebank_lang::LangName,
     grammar_dir: &Path,
@@ -370,7 +432,8 @@ pub fn run(
     out: &Path,
 ) -> Result<()> {
     let (language, fingerprint) = grammar::load(grammar_dir)?;
-    let manifest = Manifest::load(manifest_path)?;
+    let (manifest, corpus_lock_sha256) = Manifest::load_with_sha256(manifest_path)?;
+    let grammar_revision = committed_grammar_revision(grammar_dir);
     let corpus_root = manifest_path.parent().unwrap();
     let corpus_src = corpus_root.join("src");
     let files = manifest.files();
@@ -440,7 +503,7 @@ pub fn run(
     std::fs::write(
         &cache_path,
         serde_json::to_string(&SweepCache {
-            grammar: fingerprint,
+            grammar: fingerprint.clone(),
             passed_sha256,
         })?,
     )?;
@@ -758,6 +821,11 @@ pub fn run(
     let report = Report {
         lang: lang.to_string(),
         grammar: grammar_dir.display().to_string(),
+        provenance: EvidenceProvenance {
+            corpus_lock_sha256,
+            grammar_sha256: fingerprint,
+            grammar_revision,
+        },
         files: files.len(),
         passed: files.len() - failures.len(),
         failed: failures.len(),
@@ -814,14 +882,24 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
         md,
         "# Grammar sweep report — {}\n\n\
          - Grammar: `{}`\n\
+         - Grammar SHA-256: `{}`{}\n\
          - Corpus: `{}` ({} files)\n\
+         - Corpus lock SHA-256: `{}`\n\
          - Result: **{} passed, {} failed** — {} files are valid {} the \
          grammar rejects (grammar gaps), {} are invalid (corpus noise, \
          ignore){}\n\n",
         report.lang,
         report.grammar,
+        report.provenance.grammar_sha256,
+        report
+            .provenance
+            .grammar_revision
+            .as_deref()
+            .map(|revision| format!(" at `{revision}`"))
+            .unwrap_or_default(),
         corpus_root.display(),
         report.files,
+        report.provenance.corpus_lock_sha256,
         report.passed,
         report.failed,
         report.gap_files,
