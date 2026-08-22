@@ -23,6 +23,7 @@ enum TokenType {
   HEREDOC_START_DASH,
   HEREDOC_BODY,
   HEREDOC_END,
+  HEREDOC_NEWLINE,
   CONCAT,
   ASSIGNMENT_NAME,
   FILE_DESCRIPTOR,
@@ -34,14 +35,36 @@ enum TokenType {
 };
 
 #define MAX_DELIM 64
+#define MAX_HEREDOCS 15
 
 typedef struct {
   char delimiter[MAX_DELIM];
   unsigned length;
   bool allows_indent;   // `<<-` strips leading tabs from the terminator
   bool started;         // the body has been consumed; the end is next
+} Heredoc;
+
+typedef struct {
+  Heredoc heredocs[MAX_HEREDOCS];
+  unsigned heredoc_count;
+  bool needs_heredoc_newline; // another queued body follows an end marker
   bool in_backtick;     // between the opening backtick and its close
 } Scanner;
+
+static Heredoc *current_heredoc(Scanner *s) {
+  return s->heredoc_count > 0 ? &s->heredocs[0] : NULL;
+}
+
+static void pop_heredoc(Scanner *s) {
+  if (s->heredoc_count == 0) return;
+  s->heredoc_count--;
+  if (s->heredoc_count > 0) {
+    memmove(&s->heredocs[0], &s->heredocs[1],
+            s->heredoc_count * sizeof(Heredoc));
+  }
+  memset(&s->heredocs[s->heredoc_count], 0, sizeof(Heredoc));
+  s->needs_heredoc_newline = s->heredoc_count > 0;
+}
 
 void *tree_sitter_bash_external_scanner_create(void) {
   Scanner *s = calloc(1, sizeof(Scanner));
@@ -53,12 +76,17 @@ void tree_sitter_bash_external_scanner_destroy(void *payload) { free(payload); }
 unsigned tree_sitter_bash_external_scanner_serialize(void *payload, char *buffer) {
   Scanner *s = (Scanner *)payload;
   unsigned n = 0;
-  buffer[n++] = (char)s->length;
-  buffer[n++] = (char)s->allows_indent;
-  buffer[n++] = (char)s->started;
+  buffer[n++] = (char)s->heredoc_count;
+  buffer[n++] = (char)s->needs_heredoc_newline;
   buffer[n++] = (char)s->in_backtick;
-  memcpy(buffer + n, s->delimiter, s->length);
-  n += s->length;
+  for (unsigned i = 0; i < s->heredoc_count; i++) {
+    Heredoc *h = &s->heredocs[i];
+    buffer[n++] = (char)h->length;
+    buffer[n++] = (char)h->allows_indent;
+    buffer[n++] = (char)h->started;
+    memcpy(buffer + n, h->delimiter, h->length);
+    n += h->length;
+  }
   return n;
 }
 
@@ -66,14 +94,29 @@ void tree_sitter_bash_external_scanner_deserialize(void *payload, const char *bu
                                                    unsigned length) {
   Scanner *s = (Scanner *)payload;
   memset(s, 0, sizeof(Scanner));
-  if (length == 0) return;
+  if (length < 3) return;
   unsigned n = 0;
-  s->length = (unsigned char)buffer[n++];
-  s->allows_indent = buffer[n++];
-  s->started = buffer[n++];
+  s->heredoc_count = (unsigned char)buffer[n++];
+  s->needs_heredoc_newline = buffer[n++];
   s->in_backtick = buffer[n++];
-  if (s->length > MAX_DELIM) s->length = MAX_DELIM;
-  memcpy(s->delimiter, buffer + n, s->length);
+  if (s->heredoc_count > MAX_HEREDOCS) s->heredoc_count = MAX_HEREDOCS;
+  for (unsigned i = 0; i < s->heredoc_count; i++) {
+    if (n + 3 > length) {
+      s->heredoc_count = i;
+      return;
+    }
+    Heredoc *h = &s->heredocs[i];
+    h->length = (unsigned char)buffer[n++];
+    h->allows_indent = buffer[n++];
+    h->started = buffer[n++];
+    if (h->length >= MAX_DELIM) h->length = MAX_DELIM - 1;
+    if (n + h->length > length) {
+      s->heredoc_count = i;
+      return;
+    }
+    memcpy(h->delimiter, buffer + n, h->length);
+    n += h->length;
+  }
 }
 
 static void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
@@ -87,47 +130,48 @@ static bool is_word_char(int32_t c) {
 // quoting decides whether the body expands, which the grammar does not
 // model yet.
 static bool scan_heredoc_start(Scanner *s, TSLexer *lexer, bool dash) {
+  if (s->heredoc_count >= MAX_HEREDOCS) return false;
+  Heredoc *h = &s->heredocs[s->heredoc_count];
+  memset(h, 0, sizeof(Heredoc));
   while (lexer->lookahead == ' ' || lexer->lookahead == '\t') skip(lexer);
   int32_t quote = 0;
   if (lexer->lookahead == '"' || lexer->lookahead == '\'') {
     quote = lexer->lookahead;
     advance(lexer);
   }
-  s->length = 0;
-  while (s->length < MAX_DELIM - 1 &&
+  while (h->length < MAX_DELIM - 1 &&
          (quote ? (lexer->lookahead != quote && lexer->lookahead != 0)
                 : is_word_char(lexer->lookahead))) {
-    s->delimiter[s->length++] = (char)lexer->lookahead;
+    h->delimiter[h->length++] = (char)lexer->lookahead;
     advance(lexer);
   }
   if (quote) {
     if (lexer->lookahead != quote) return false;
     advance(lexer);
   }
-  if (s->length == 0) return false;
-  s->started = false;
-  s->allows_indent = dash;
+  if (h->length == 0) return false;
+  h->allows_indent = dash;
+  s->heredoc_count++;
   lexer->result_symbol = dash ? HEREDOC_START_DASH : HEREDOC_START;
   return true;
 }
 
 // Everything up to the line that is exactly the delimiter.
-static bool scan_heredoc_body(Scanner *s, TSLexer *lexer) {
-  if (s->length == 0) return false;
+static bool scan_heredoc_body(Heredoc *h, TSLexer *lexer) {
+  if (h == NULL || h->length == 0) return false;
   bool any = false;
   for (;;) {
     // At the start of a line: is this the terminator?
     lexer->mark_end(lexer);
-    if (s->allows_indent) {
+    if (h->allows_indent) {
       while (lexer->lookahead == '\t') advance(lexer);
     }
     unsigned i = 0;
-    while (i < s->length && lexer->lookahead == (int32_t)s->delimiter[i]) {
+    while (i < h->length && lexer->lookahead == (int32_t)h->delimiter[i]) {
       advance(lexer);
       i++;
     }
-    if (i == s->length && (lexer->lookahead == '\n' || lexer->lookahead == 0)) {
-      if (!any) return false;      // the body is empty; let HEREDOC_END run
+    if (i == h->length && (lexer->lookahead == '\n' || lexer->lookahead == 0)) {
       lexer->result_symbol = HEREDOC_BODY;
       return true;
     }
@@ -144,18 +188,17 @@ static bool scan_heredoc_body(Scanner *s, TSLexer *lexer) {
   }
 }
 
-static bool scan_heredoc_end(Scanner *s, TSLexer *lexer) {
-  if (s->length == 0) return false;
-  if (s->allows_indent) {
+static bool scan_heredoc_end(Heredoc *h, TSLexer *lexer) {
+  if (h == NULL || h->length == 0) return false;
+  if (h->allows_indent) {
     while (lexer->lookahead == '\t') skip(lexer);
   }
-  for (unsigned i = 0; i < s->length; i++) {
-    if (lexer->lookahead != (int32_t)s->delimiter[i]) return false;
+  for (unsigned i = 0; i < h->length; i++) {
+    if (lexer->lookahead != (int32_t)h->delimiter[i]) return false;
     advance(lexer);
   }
   if (lexer->lookahead != '\n' && lexer->lookahead != 0) return false;
   lexer->mark_end(lexer);
-  s->length = 0;
   lexer->result_symbol = HEREDOC_END;
   return true;
 }
@@ -209,6 +252,23 @@ bool tree_sitter_bash_external_scanner_scan(void *payload, TSLexer *lexer,
   // that keeps being offered it never advances and the whole sweep hangs
   // on one file. Decline the scanner there and let ordinary recovery run.
   if (valid[ERROR_SENTINEL]) return false;
+
+  // This token is valid only after a COMPLETE statement that registered a
+  // heredoc. Consuming the newline here creates a parser state in which the
+  // body is legal; before it, redirects, arguments and pipeline tails remain
+  // ordinary syntax on the opening line.
+  if (valid[HEREDOC_NEWLINE] && s->heredoc_count > 0) {
+    if (lexer->lookahead == '\r') {
+      advance(lexer);
+      if (lexer->lookahead != '\n') return false;
+    }
+    if (lexer->lookahead == '\n') {
+      advance(lexer);
+      lexer->mark_end(lexer);
+      lexer->result_symbol = HEREDOC_NEWLINE;
+      return true;
+    }
+  }
 
   // CONCAT is zero-width and judged on the RAW lookahead -- it says only
   // that the previous token ended exactly where this one begins -- so it
@@ -369,18 +429,34 @@ not_brace:;
   }
 
 
-  if (valid[HEREDOC_END] && s->length > 0 && s->started) {
-    if (scan_heredoc_end(s, lexer)) return true;
+  Heredoc *h = current_heredoc(s);
+  if (h != NULL && s->needs_heredoc_newline) {
+    if (lexer->lookahead == '\r') {
+      skip(lexer);
+      if (lexer->lookahead != '\n') return false;
+    }
+    if (lexer->lookahead != '\n') return false;
+    skip(lexer);
+    s->needs_heredoc_newline = false;
   }
-  if (valid[HEREDOC_BODY] && s->length > 0) {
-    if (scan_heredoc_body(s, lexer)) {
-      s->started = true;
+  if (valid[HEREDOC_END] && h != NULL && h->started) {
+    if (scan_heredoc_end(h, lexer)) {
+      pop_heredoc(s);
       return true;
     }
-    s->started = true;
   }
-  if (valid[HEREDOC_END] && s->length > 0) {
-    if (scan_heredoc_end(s, lexer)) return true;
+  if (valid[HEREDOC_BODY] && h != NULL) {
+    if (scan_heredoc_body(h, lexer)) {
+      h->started = true;
+      return true;
+    }
+    h->started = true;
+  }
+  if (valid[HEREDOC_END] && h != NULL) {
+    if (scan_heredoc_end(h, lexer)) {
+      pop_heredoc(s);
+      return true;
+    }
   }
   if (valid[HEREDOC_START] || valid[HEREDOC_START_DASH]) {
     return scan_heredoc_start(s, lexer, valid[HEREDOC_START_DASH]);

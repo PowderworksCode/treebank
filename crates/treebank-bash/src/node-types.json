@@ -487,6 +487,14 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
+          "named": true
         }
       ]
     }
@@ -596,6 +604,14 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
+          "named": true
         }
       ]
     }
@@ -610,6 +626,14 @@
       "types": [
         {
           "type": "_statement",
+          "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
           "named": true
         },
         {
@@ -730,6 +754,14 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
+          "named": true
         }
       ]
     }
@@ -745,6 +777,14 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
+          "named": true
         }
       ]
     }
@@ -759,6 +799,14 @@
       "types": [
         {
           "type": "_statement",
+          "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
           "named": true
         }
       ]
@@ -910,17 +958,9 @@
       }
     },
     "children": {
-      "multiple": true,
+      "multiple": false,
       "required": true,
       "types": [
-        {
-          "type": "heredoc_body",
-          "named": true
-        },
-        {
-          "type": "heredoc_end",
-          "named": true
-        },
         {
           "type": "heredoc_start",
           "named": true
@@ -965,6 +1005,14 @@
           {
             "type": "_statement",
             "named": true
+          },
+          {
+            "type": "heredoc_body",
+            "named": true
+          },
+          {
+            "type": "heredoc_end",
+            "named": true
           }
         ]
       },
@@ -986,6 +1034,14 @@
           },
           {
             "type": "_statement",
+            "named": true
+          },
+          {
+            "type": "heredoc_body",
+            "named": true
+          },
+          {
+            "type": "heredoc_end",
             "named": true
           }
         ]
@@ -1108,6 +1164,14 @@
         {
           "type": "_statement",
           "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
+          "named": true
         }
       ]
     }
@@ -1123,6 +1187,14 @@
       "types": [
         {
           "type": "_statement",
+          "named": true
+        },
+        {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
           "named": true
         }
       ]
@@ -1354,6 +1426,14 @@
           "named": true
         },
         {
+          "type": "heredoc_body",
+          "named": true
+        },
+        {
+          "type": "heredoc_end",
+          "named": true
+        },
+        {
           "type": "redirect",
           "named": true
         }
@@ -1427,6 +1507,14 @@
           },
           {
             "type": "_statement",
+            "named": true
+          },
+          {
+            "type": "heredoc_body",
+            "named": true
+          },
+          {
+            "type": "heredoc_end",
             "named": true
           }
         ]
@@ -1546,6 +1634,14 @@
           },
           {
             "type": "_statement",
+            "named": true
+          },
+          {
+            "type": "heredoc_body",
+            "named": true
+          },
+          {
+            "type": "heredoc_end",
             "named": true
           }
         ]

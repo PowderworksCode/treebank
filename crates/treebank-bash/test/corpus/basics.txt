@@ -65,9 +65,104 @@ EOF
         (word)
         (redirect
           (heredoc_redirect
-            (heredoc_start)
-            (heredoc_body)
-            (heredoc_end)))))))
+            (heredoc_start))))
+      (heredoc_body)
+      (heredoc_end))))
+
+================================================================================
+heredocs wait for the complete opening statement
+================================================================================
+
+cat <<EOF > out
+redirect body
+EOF
+cat <<EOF | tee out
+pipeline body
+EOF
+cat <<EOF; echo same-line
+semicolon body
+EOF
+
+--------------------------------------------------------------------------------
+
+(program
+  (command
+    (word)
+    (redirect
+      (heredoc_redirect
+        (heredoc_start)))
+    (redirect
+      (word)))
+  (heredoc_body)
+  (heredoc_end)
+  (pipeline
+    (command
+      (word)
+      (redirect
+        (heredoc_redirect
+          (heredoc_start))))
+    (command
+      (word)
+      (word)))
+  (heredoc_body)
+  (heredoc_end)
+  (command
+    (word)
+    (redirect
+      (heredoc_redirect
+        (heredoc_start))))
+  (command
+    (word)
+    (word))
+  (heredoc_body)
+  (heredoc_end))
+
+================================================================================
+empty, indented and queued heredocs
+================================================================================
+
+cat <<EMPTY
+EMPTY
+cat <<-TABBED > out
+	tabbed body
+	TABBED
+cat <<LEFT <<RIGHT
+left body
+LEFT
+right body
+RIGHT
+
+--------------------------------------------------------------------------------
+
+(program
+  (command
+    (word)
+    (redirect
+      (heredoc_redirect
+        (heredoc_start))))
+  (heredoc_body)
+  (heredoc_end)
+  (command
+    (word)
+    (redirect
+      (heredoc_redirect
+        (heredoc_start)))
+    (redirect
+      (word)))
+  (heredoc_body)
+  (heredoc_end)
+  (command
+    (word)
+    (redirect
+      (heredoc_redirect
+        (heredoc_start)))
+    (redirect
+      (heredoc_redirect
+        (heredoc_start))))
+  (heredoc_body)
+  (heredoc_end)
+  (heredoc_body)
+  (heredoc_end))
 
 ================================================================================
 the overnight constructs: comments, redirects, substitutions

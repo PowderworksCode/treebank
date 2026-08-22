@@ -44,6 +44,7 @@ module.exports = grammar({
     $._heredoc_start_dash,
     $.heredoc_body,
     $.heredoc_end,
+    $._heredoc_newline,
     $._concat,
     $._assignment_name,
     $._file_descriptor,
@@ -106,11 +107,31 @@ module.exports = grammar({
     // more than one line does not parse, which is most of them.
     _statements: $ => prec.right(seq(
       repeat('\n'),
-      repeat(seq($._statement, $._terminator, repeat('\n'))),
+      repeat(seq($._statement, $._statement_end)),
       $._statement,
-      optional($._terminator),
-      repeat('\n'),
+      optional($._statement_end),
     )),
+
+    // A normal terminator closes one statement. When a heredoc is pending,
+    // the scanner claims the newline as `_heredoc_newline` instead, proving
+    // that the complete redirect/list/pipeline line has ended before any
+    // payload token becomes valid. This is what keeps `; echo still-here`
+    // on the opening line out of the body.
+    _statement_end: $ => choice(
+      seq($._terminator, repeat('\n')),
+      seq($._heredoc_newline, repeat1($._heredoc), repeat('\n')),
+    ),
+
+    // A heredoc's payload starts only after the NEWLINE that terminates the
+    // complete statement containing `<<word`. Keeping this tail beside the
+    // statement, rather than inside `heredoc_redirect`, lets redirects,
+    // arguments, lists and pipelines finish before the scanner is allowed
+    // to consume body text. The choice is non-nullable so several pending
+    // heredocs can be drained in their source order after one terminator.
+    _heredoc: $ => choice(
+      seq($.heredoc_body, $.heredoc_end),
+      $.heredoc_end,
+    ),
 
     // `;;` is NOT here. It terminates a case ITEM, not a statement, and
     // listing it meant `optional($._statements)` inside a case_item ate the
@@ -373,8 +394,6 @@ module.exports = grammar({
         seq('<<', $.heredoc_start),
         seq('<<-', alias($._heredoc_start_dash, $.heredoc_start)),
       ),
-      optional($.heredoc_body),
-      optional($.heredoc_end),
     ),
 
 
