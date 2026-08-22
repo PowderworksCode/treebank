@@ -450,7 +450,12 @@ pub fn run(
     limit: usize,
     corpus: &Path,
     lock_out: Option<&Path>,
+    lock_only: bool,
 ) -> Result<()> {
+    anyhow::ensure!(
+        !lock_only || lock_out.is_some(),
+        "fetch: --lock-only requires a lock output path"
+    );
     let ranked: Vec<RankedCrate> = serde_json::from_str(&std::fs::read_to_string(list)?)?;
     let cache = corpus.join("cache");
     let srcroot = corpus.join("src");
@@ -507,6 +512,15 @@ pub fn run(
             }),
             files,
         });
+        if lock_only {
+            let extracted = srcroot.join(&stem);
+            if extracted.exists() {
+                std::fs::remove_dir_all(&extracted)
+                    .with_context(|| format!("remove extracted package {stem}"))?;
+            }
+            std::fs::remove_file(&tarball)
+                .with_context(|| format!("remove downloaded package {stem}"))?;
+        }
     }
 
     let manifest = Manifest {
@@ -515,7 +529,9 @@ pub fn run(
     };
     let total: usize = manifest.packages.iter().map(|p| p.files.len()).sum();
     let json = format!("{}\n", serde_json::to_string_pretty(&manifest)?);
-    std::fs::write(corpus.join("manifest.json"), &json)?;
+    if !lock_only {
+        std::fs::write(corpus.join("manifest.json"), &json)?;
+    }
     if let Some(lock_out) = lock_out {
         if let Some(parent) = lock_out.parent().filter(|p| !p.as_os_str().is_empty()) {
             std::fs::create_dir_all(parent)?;
@@ -887,7 +903,7 @@ mod hydrate_tests {
         std::fs::write(corpus.join("cache/fixture-1.0.0.tar.gz"), &bytes).unwrap();
         let lock = root.0.join("locks/rust.json");
 
-        run(&RustFixture, &list, 1, &corpus, Some(&lock)).unwrap();
+        run(&RustFixture, &list, 1, &corpus, Some(&lock), false).unwrap();
 
         let written = Manifest::load(&lock).unwrap();
         assert_eq!(written.language.as_deref(), Some("rust"));
@@ -902,6 +918,36 @@ mod hydrate_tests {
             std::fs::read(corpus.join("manifest.json")).unwrap(),
             std::fs::read(lock).unwrap()
         );
+    }
+
+    #[test]
+    fn lock_only_does_not_retain_the_corpus_or_archive() {
+        let root = TempRoot::new();
+        let source = b"fn fetched() {}\n";
+        let bytes = archive(&[("src/lib.rs", source)]);
+        let list = root.0.join("top-k.json");
+        std::fs::write(
+            &list,
+            serde_json::to_string(&vec![RankedCrate {
+                rank: 1,
+                name: "fixture".to_string(),
+                version: String::new(),
+                downloads: 42,
+            }])
+            .unwrap(),
+        )
+        .unwrap();
+        let corpus = root.0.join("corpus");
+        std::fs::create_dir_all(corpus.join("cache")).unwrap();
+        std::fs::write(corpus.join("cache/fixture-1.0.0.tar.gz"), &bytes).unwrap();
+        let lock = root.0.join("locks/rust.json");
+
+        run(&RustFixture, &list, 1, &corpus, Some(&lock), true).unwrap();
+
+        assert!(lock.is_file());
+        assert!(!corpus.join("manifest.json").exists());
+        assert!(!corpus.join("src/fixture-1.0.0").exists());
+        assert!(!corpus.join("cache/fixture-1.0.0.tar.gz").exists());
     }
 
     #[test]

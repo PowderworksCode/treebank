@@ -68,8 +68,8 @@ expanded before the query runs.
 
 `treebank status` joins the repository's existing sources of truth rather
 than introducing another configuration file: the language registry,
-`tree-sitter.json`, `roles.json`, every `ledger.toml`, fixture and policy
-directories, corpus locks and canary workflows.
+`tree-sitter.json`, `roles.json`, every `ledger.toml`, fixture and known-deviation
+declarations, corpus locks and canary workflows.
 
 ```sh
 cargo run -p treebank-cli -- status
@@ -80,7 +80,7 @@ cargo run -p treebank-cli -- status --github
 
 The default table shows corpus pass/gap evidence, exact corpus/negative/shape
 fixture counts, declared known-gap/widening/deviation queues, reference-tool
-capabilities, locks, canaries and policy ratchets for every grammar. Warnings
+capabilities, locks, canaries and known deviations for every grammar. Warnings
 name coverage that exists but is not reproducible or enforced. Configuration
 errors are separate; `--check` exits non-zero on those and is what CI runs.
 
@@ -122,8 +122,17 @@ cargo run -p treebank-cli -- fetch --lang rust \
   --lock-out corpus-locks/rust.json
 ```
 
-The corpus itself stays under the ignored `corpus/` directory. A clean
-machine recreates it from the lock without resolving package versions again:
+When only the committable identity is needed, `--lock-only` discards each
+downloaded package after hashing it instead of retaining a multi-gigabyte
+working corpus:
+
+```sh
+cargo run -p treebank-cli -- fetch --lang rust \
+  --lock-out corpus-locks/rust.json --lock-only
+```
+
+A clean machine recreates the corpus from the lock without resolving package
+versions again:
 
 ```sh
 cargo run -p treebank-cli -- hydrate --lang rust

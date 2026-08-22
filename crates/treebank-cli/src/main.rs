@@ -80,6 +80,10 @@ enum Cmd {
         /// Also write a committable exact corpus lock here
         #[arg(long)]
         lock_out: Option<PathBuf>,
+        /// Build only the lock, discarding each downloaded package after it
+        /// has been extracted, admitted and hashed
+        #[arg(long, requires = "lock_out")]
+        lock_only: bool,
     },
     /// Recreate and verify the exact corpus pinned by a committed lock
     Hydrate {
@@ -538,12 +542,14 @@ fn main() -> anyhow::Result<()> {
             limit,
             corpus,
             lock_out,
+            lock_only,
         } => treebank_corpus::fetch::run(
             treebank_corpus::get(lang),
             &lang_path(lang, list, "top-k.json"),
             limit,
             &lang_path(lang, corpus, ""),
             lock_out.as_deref(),
+            lock_only,
         ),
         Cmd::Hydrate { lang, lock, corpus } => treebank_corpus::fetch::hydrate(
             treebank_corpus::get(lang),
