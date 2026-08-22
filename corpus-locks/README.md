@@ -27,3 +27,10 @@ the archive byte count and SHA-256, extracts through the language's normal
 admission rules, and verifies that the resulting file set has no missing,
 extra, or changed entries. Only then does it publish `corpus/<language>/src`
 and its `manifest.json`.
+
+`rust.json` is the first release canary: 1,000 pinned crates and 27,307 source
+files. The weekly and manually dispatchable `corpus-canary.yml` workflow
+hydrates it from scratch, performs the production sweep, and requires the
+generated `[corpus.sweep]` block to remain byte-for-byte equal to the committed
+Rust ledger. A grammar or oracle change that improves or regresses the result
+therefore needs an explicit, reviewed evidence update.

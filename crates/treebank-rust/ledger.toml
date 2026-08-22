@@ -12,7 +12,7 @@ roles_note = '''
 toolchain_note = '''
 RESOLVED by bumping the generate CLI to 0.26.12, so the version that generates and the version that runs are the same and the rule below is simply the rule. Kept because the rule itself still governs what a consumer can write. Under 0.26 a field pattern whose PARENT is a supertype accepts only a SUPERTYPE child; a concrete child is an 'impossible pattern'. 0.25.10 accepted both, which is how the split was found. Measured on identical parsers: `(_declaration name: (_name))` valid in both; `(_declaration name: (identifier))` valid in 0.25, impossible in 0.26; same for `(_loop body: (_body))` vs `(_loop body: (block))`. A concrete parent is unaffected — `(if_statement alternative: (else_clause))` is valid in both. TWO CONSEQUENCES FOR THE VOCABULARY. First, its positional terms are load-bearing rather than decorative: `(_declaration name: (_name))` is writable ONLY because `_name` is a term, so `_name`, `_body`, `_pattern`, `_parameter`, `_argument` and `_type` are what make the supertype layer composable under a field at all — drop one and the corresponding cross-language field query becomes unwritable without naming concrete nodes per language, which is the thing the vocabulary exists to avoid. Second, FACET children cannot sit under a supertype parent: `(_branch alternative: (_clause))` expands to a concrete alternation and is impossible, while `(_branch alternative: (_body))` is fine. Facets are queryable in their own right, not as the child of a supertype field.'''
 shape_check = '''
-`treebank shape` compares our node BOUNDARIES against syn's over the whole corpus: 58,476,153 oracle nodes across 61,753 files, 275 missed, 2 kind mismatches. The missed rate is 4.703 per million against 4.690 on the old 1,000-crate corpus, so the raise from 148 is corpus growth and nothing else. syn runs in-process with proc-macro2's `span-locations`, so there is no subprocess. HIR was considered and rejected: it is post-desugaring, so `for` and `while` become `loop` plus `match` and `?` becomes a match on Try, and every one of those would read as a disagreement. Declared granularity differences are in shape_policy.toml, including the two that say we parse attribute-macro input structurally where syn parks it as Verbatim.'''
+`treebank shape` on the previous expanded corpus compared our node BOUNDARIES against syn's: 58,476,153 oracle nodes across 61,753 files, 275 missed, 2 kind mismatches. The missed rate was 4.703 per million against 4.690 on its earlier 1,000-crate corpus, so the raise from 148 was corpus growth and nothing else. This is retained as historical shape evidence, not attributed to the current lock. syn runs in-process with proc-macro2's `span-locations`, so there is no subprocess. HIR was considered and rejected: it is post-desugaring, so `for` and `while` become `loop` plus `match` and `?` becomes a match on Try, and every one of those would read as a disagreement. Declared granularity differences are in shape_policy.toml, including the two that say we parse attribute-macro input structurally where syn parks it as Verbatim.'''
 mutation_check = '''
 `treebank mutate` — 3,904 mutants over 500 corpus files, 143 widenings in 80 clusters.'''
 error_positions = '''
@@ -31,20 +31,20 @@ what = '''
 `pub impl<T> Cell<T> { … }` parses. It is not an item rustc would accept on its own, but an attribute macro receives its item as a token stream, so `#[ext] pub impl …` reaches the macro without rustc's item parser ever seeing it — and `easy_ext` is widely enough used that 22 files in the expanded corpus depend on it. Accepting a visibility modifier on `impl` is the narrowest way to parse them; declared here rather than left as 22 gaps.'''
 [corpus]
 source = '''
-top-1000 crates.io crates by all-time downloads (crates.io db dump, fetched 2026-08-16), .crate tarballs'''
-files = 61801
-packages = 2500
+top-1000 crates.io crates by all-time downloads, with versions and archive identities pinned in corpus-locks/rust.json (lock generated 2026-08-22), .crate archives'''
+files = 27307
+packages = 1000
 blind_to = '''
 pre-2018 idioms are underrepresented (top crates track current editions); no rustc test-suite torture cases; macro-heavy DSLs appear only as token trees'''
 mutation_falsification = '''
-the same corpus swept with while_expression deleted from _loop reports 2,323 gap files (vs 2); restored, 2 again. The number is a measurement, not a silence.'''
+on the previous expanded corpus, deleting while_expression from _loop reported 2,323 gap files (vs 2); restored, 2 again. Retained as historical pipeline falsification rather than attributed to the current lock. The number is a measurement, not a silence.'''
 
 [corpus.sweep]
-files = 61801
-passed = 61772
-failed = 29
-gap_files = 12
-noise_files = 17
+files = 27307
+passed = 27292
+failed = 15
+gap_files = 2
+noise_files = 13
 pass_rate = '99.95%'
 
 [[oracles]]
