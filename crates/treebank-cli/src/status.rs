@@ -2,8 +2,9 @@
 //!
 //! The repository already has authoritative sources for each individual fact:
 //! the language registry, tree-sitter manifests, roles, ledgers, fixtures,
-//! policies and workflows. What it lacked was the join. This module deliberately
-//! reads those sources rather than introducing a second configuration file.
+//! known-deviation declarations and workflows. What it lacked was the join.
+//! This module deliberately reads those sources rather than introducing a
+//! second configuration file.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
@@ -60,7 +61,7 @@ pub struct GrammarStatus {
     pub roles: RolesStatus,
     pub evidence: EvidenceStatus,
     pub tests: TestStatus,
-    pub policies: PolicyStatus,
+    pub known_deviations: KnownDeviationStatus,
     pub distribution: DistributionStatus,
     pub external_scanner: bool,
     pub corpus_lock: bool,
@@ -132,7 +133,7 @@ pub struct TestStatus {
 }
 
 #[derive(Debug, Serialize)]
-pub struct PolicyStatus {
+pub struct KnownDeviationStatus {
     pub shape: bool,
     pub fuzz: bool,
     pub lint: bool,
@@ -258,6 +259,7 @@ pub fn collect(root: &Path) -> Result<Report> {
     let crates_dir = root.join("crates");
     let mut errors = Vec::new();
     let mut grammars = Vec::new();
+    let locked_languages = validate_corpus_locks(root, &mut errors);
 
     let grammar_languages: Vec<LangName> = LangName::ALL
         .iter()
@@ -389,11 +391,9 @@ pub fn collect(root: &Path) -> Result<Report> {
             formatter: configured.iter().any(|caps| caps.formatter),
             printer: configured.iter().any(|caps| caps.printer),
         };
-        let corpus_lock = languages.iter().any(|lang| {
-            root.join("corpus-locks")
-                .join(format!("{}.json", lang.as_str()))
-                .is_file()
-        });
+        let corpus_lock = languages
+            .iter()
+            .all(|lang| locked_languages.contains(lang.as_str()));
         let corpus_canary = languages.iter().any(|lang| has_canary(root, lang.as_str()));
 
         grammars.push(GrammarStatus {
@@ -407,7 +407,7 @@ pub fn collect(root: &Path) -> Result<Report> {
             roles,
             evidence,
             tests,
-            policies: PolicyStatus {
+            known_deviations: KnownDeviationStatus {
                 shape: dir.join("shape_policy.toml").is_file(),
                 fuzz: dir.join("fuzz_policy.toml").is_file(),
                 lint: dir.join("lint_policy.toml").is_file(),
@@ -442,9 +442,9 @@ pub fn collect(root: &Path) -> Result<Report> {
     let summary = Summary {
         languages: LangName::ALL.len(),
         grammars: grammars.len(),
-        corpus_locks: grammars.iter().filter(|g| g.corpus_lock).count(),
+        corpus_locks: locked_languages.len(),
         corpus_canaries: grammars.iter().filter(|g| g.corpus_canary).count(),
-        lint_ratchets: grammars.iter().filter(|g| g.policies.lint).count(),
+        lint_ratchets: grammars.iter().filter(|g| g.known_deviations.lint).count(),
         shape_fixture_grammars: grammars.iter().filter(|g| g.tests.shape_files > 0).count(),
         wasm_packs: grammars.iter().filter(|g| g.distribution.wasm_pack).count(),
         query_files: grammars.iter().map(|g| g.distribution.query_files).sum(),
@@ -455,11 +455,11 @@ pub fn collect(root: &Path) -> Result<Report> {
     };
 
     let mut warnings = Vec::new();
-    let unlocked = summary.grammars.saturating_sub(summary.corpus_locks);
+    let unlocked = LangName::ALL.len().saturating_sub(summary.corpus_locks);
     if unlocked > 0 {
         warnings.push(format!(
-            "{unlocked} of {} grammar corpora have no committed lock; their evidence is not mechanically reproducible",
-            summary.grammars
+            "{unlocked} of {} language corpora have no valid committed lock; their inputs are not mechanically reproducible",
+            LangName::ALL.len()
         ));
     }
     let unratcheted = summary.grammars.saturating_sub(summary.lint_ratchets);
@@ -514,6 +514,72 @@ pub fn collect(root: &Path) -> Result<Report> {
         errors,
         github: None,
     })
+}
+
+fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeSet<String> {
+    let mut valid = BTreeSet::new();
+    for language in LangName::ALL {
+        let path = root
+            .join("corpus-locks")
+            .join(format!("{}.json", language.as_str()));
+        if !path.is_file() {
+            continue;
+        }
+        let manifest = match treebank_corpus::fetch::Manifest::load(&path) {
+            Ok(manifest) => manifest,
+            Err(error) => {
+                errors.push(format!(
+                    "{}: invalid corpus lock: {error:#}",
+                    path.display()
+                ));
+                continue;
+            }
+        };
+        let mut lock_errors = Vec::new();
+        if manifest.language.as_deref() != Some(language.as_str()) {
+            lock_errors.push(format!(
+                "language is {:?}, expected {}",
+                manifest.language, language
+            ));
+        }
+        if manifest.packages.is_empty() {
+            lock_errors.push("contains no packages".to_string());
+        }
+        let mut file_paths = BTreeSet::new();
+        for package in &manifest.packages {
+            let package_name = treebank_corpus::fetch::pkg_dir(&package.package, &package.version);
+            let Some(artifact) = &package.artifact else {
+                lock_errors.push(format!("{package_name} has no archive provenance"));
+                continue;
+            };
+            if artifact.url.is_empty() || artifact.bytes == 0 || !is_sha256(&artifact.sha256) {
+                lock_errors.push(format!("{package_name} has invalid archive provenance"));
+            }
+            for file in &package.files {
+                let identity = format!("{package_name}/{}", file.path);
+                if file.path.is_empty() || !is_sha256(&file.sha256) {
+                    lock_errors.push(format!("{identity} has invalid file provenance"));
+                }
+                if !file_paths.insert(identity.clone()) {
+                    lock_errors.push(format!("duplicate file identity {identity}"));
+                }
+            }
+        }
+        if lock_errors.is_empty() {
+            valid.insert(language.as_str().to_string());
+        } else {
+            errors.push(format!(
+                "{}: invalid corpus lock: {}",
+                path.display(),
+                lock_errors.join("; ")
+            ));
+        }
+    }
+    valid
+}
+
+fn is_sha256(value: &str) -> bool {
+    value.len() == 64 && value.bytes().all(|byte| byte.is_ascii_hexdigit())
 }
 
 fn read_toml(path: &Path, errors: &mut Vec<String>) -> toml::Value {
@@ -1082,7 +1148,7 @@ pub fn render_table(report: &Report) -> String {
         "CAPS",
         "DIST",
         "LOCK",
-        "POLICIES"
+        "KNOWN DEVIATIONS"
     )
     .unwrap();
     for grammar in &report.grammars {
@@ -1092,11 +1158,11 @@ pub fn render_table(report: &Report) -> String {
             .map(|lang| lang.name.as_str())
             .collect::<Vec<_>>()
             .join(",");
-        let policies = [
-            ("shape", grammar.policies.shape),
-            ("fuzz", grammar.policies.fuzz),
-            ("lint", grammar.policies.lint),
-            ("version", grammar.policies.version),
+        let known_deviations = [
+            ("shape", grammar.known_deviations.shape),
+            ("fuzz", grammar.known_deviations.fuzz),
+            ("lint", grammar.known_deviations.lint),
+            ("version", grammar.known_deviations.version),
         ]
         .into_iter()
         .filter_map(|(name, yes)| yes.then_some(name))
@@ -1123,10 +1189,10 @@ pub fn render_table(report: &Report) -> String {
             capability_cell(&grammar.capabilities),
             distribution_cell(&grammar.distribution),
             if grammar.corpus_lock { "yes" } else { "no" },
-            if policies.is_empty() {
+            if known_deviations.is_empty() {
                 "—"
             } else {
-                &policies
+                &known_deviations
             },
         )
         .unwrap();
@@ -1204,7 +1270,7 @@ pub fn render_markdown(report: &Report) -> String {
         report.summary.corpus_canaries
     )
     .unwrap();
-    writeln!(out, "| Grammar | Languages | Corpus pass | Grammar gaps | Tests C/N/S | Declared K/W/D | Measured | Capabilities | Distribution | Lock | Policies |").unwrap();
+    writeln!(out, "| Grammar | Languages | Corpus pass | Grammar gaps | Tests C/N/S | Declared K/W/D | Measured | Capabilities | Distribution | Lock | Known deviations |").unwrap();
     writeln!(out, "|---|---|---:|---:|---:|---:|---|---|---|---:|---|").unwrap();
     for grammar in &report.grammars {
         let languages = grammar
@@ -1213,11 +1279,11 @@ pub fn render_markdown(report: &Report) -> String {
             .map(|lang| lang.name.as_str())
             .collect::<Vec<_>>()
             .join(", ");
-        let policies = [
-            ("shape", grammar.policies.shape),
-            ("fuzz", grammar.policies.fuzz),
-            ("lint", grammar.policies.lint),
-            ("version", grammar.policies.version),
+        let known_deviations = [
+            ("shape", grammar.known_deviations.shape),
+            ("fuzz", grammar.known_deviations.fuzz),
+            ("lint", grammar.known_deviations.lint),
+            ("version", grammar.known_deviations.version),
         ]
         .into_iter()
         .filter_map(|(name, yes)| yes.then_some(name))
@@ -1240,10 +1306,10 @@ pub fn render_markdown(report: &Report) -> String {
             capability_cell(&grammar.capabilities),
             distribution_cell(&grammar.distribution),
             if grammar.corpus_lock { "yes" } else { "no" },
-            if policies.is_empty() {
+            if known_deviations.is_empty() {
                 "—"
             } else {
-                &policies
+                &known_deviations
             },
         )
         .unwrap();
