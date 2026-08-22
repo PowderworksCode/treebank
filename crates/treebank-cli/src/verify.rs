@@ -245,4 +245,31 @@ mod tests {
             );
         }
     }
+
+    /// Every registered language has a checked-in micro-corpus. This keeps
+    /// the CI matrix exhaustive without duplicating the registry in YAML:
+    /// adding or removing a language changes LangName::ALL, and this test
+    /// then demands the matching fixture directory.
+    #[test]
+    fn the_registry_and_sweep_smoke_fixtures_agree() {
+        let fixtures = crates_dir().join("../test/sweep-smoke");
+        let mut found: Vec<String> = std::fs::read_dir(&fixtures)
+            .unwrap()
+            .filter_map(|entry| {
+                let entry = entry.ok()?;
+                entry.file_type().ok()?.is_dir().then(|| {
+                    entry.file_name().to_string_lossy().into_owned()
+                })
+            })
+            .collect();
+        found.sort();
+
+        let mut registered: Vec<String> = LangName::ALL
+            .iter()
+            .map(|lang| lang.as_str().to_string())
+            .collect();
+        registered.sort();
+
+        assert_eq!(found, registered, "sweep-smoke fixtures must match LangName::ALL");
+    }
 }

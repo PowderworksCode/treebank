@@ -1,9 +1,0 @@
-language = 'rust'
-
-[corpus.sweep]
-files = 2
-passed = 1
-failed = 1
-gap_files = 0
-noise_files = 1
-pass_rate = '50.00%'
