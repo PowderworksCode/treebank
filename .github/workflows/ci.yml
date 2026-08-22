@@ -24,6 +24,11 @@ jobs:
       # and runs their load + manifest tests.
       - run: cargo build --workspace
       - run: cargo test --workspace
+      # A tiny checked-in corpus exercises the production sweep path on every
+      # change: parser loading, oracle adjudication, reports, ledger rewrite,
+      # and the passing-file cache. Full ecosystem sweeps stay out of PR CI.
+      - name: small corpus sweep
+        run: ./tools/sweep-smoke.sh
 
   # The grammar list, read off the repository rather than written down.
   # A hand-maintained matrix means a new grammar's gates are green because

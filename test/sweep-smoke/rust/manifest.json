@@ -1,0 +1,21 @@
+{
+  "packages": [
+    {
+      "package": "sweep-smoke",
+      "version": "1.0.0",
+      "downloads": 0,
+      "files": [
+        {
+          "path": "valid.rs",
+          "bytes": 62,
+          "sha256": "52afbc3ffb2965909fcce30f1a117768d679c4ac76f4efc6d917a966670d8a74"
+        },
+        {
+          "path": "invalid.rs",
+          "bytes": 19,
+          "sha256": "ef66d6c8ef95eaa8ead52336fdc4280544741b0990ba9edb9ced77630ff9f931"
+        }
+      ]
+    }
+  ]
+}
