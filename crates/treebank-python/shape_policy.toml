@@ -133,6 +133,10 @@ why = '''
 CPython flattens try/except/else/finally into ONE node with four statement lists. We use `finally_clause` and `else_clause` nodes, so the finally body is under a clause rather than under the try.'''
 
 [[field_mismatch_ignore]]
+signature = 'TryStar.finalbody => (no field)'
+why = 'See `Try.finalbody`.'
+
+[[field_mismatch_ignore]]
 signature = 'Assign.targets => (no field)'
 why = '''
 `i = j = 0` — CPython gives one Assign with two targets; we nest, so the second target is under the inner assignment's `left` rather than the outer's.'''
