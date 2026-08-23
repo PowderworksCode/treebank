@@ -3,22 +3,61 @@ name: corpus canary
 on:
   workflow_dispatch:
   schedule:
-    # Weekly, outside the per-change CI path: the locked Rust corpus is about
-    # 500 MB extracted and the sweep parses every file from scratch.
+    # Weekly, outside the per-change CI path: every job recreates one exact
+    # locked corpus and parses every admitted file from scratch.
     - cron: "17 5 * * 1"
 
 permissions:
   contents: read
 
 concurrency:
-  group: corpus-canary-rust
+  group: corpus-canary
   cancel-in-progress: false
 
 jobs:
-  rust:
-    name: rust corpus evidence
+  sweep:
+    name: ${{ matrix.language }} corpus evidence
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          # sweep_args are executable configuration, not status annotations:
+          # treebank status finds these exact --lang declarations when it
+          # reports canary coverage.
+          - language: bash
+            ledger: crates/treebank-bash/ledger.toml
+            sweep_args: --lang bash --grammar crates/treebank-bash
+          - language: c
+            ledger: crates/treebank-c/ledger.toml
+            sweep_args: --lang c --grammar crates/treebank-c
+          - language: cpp
+            ledger: crates/treebank-cpp/ledger.toml
+            sweep_args: --lang cpp --grammar crates/treebank-cpp
+          - language: java
+            ledger: crates/treebank-java/ledger.toml
+            sweep_args: --lang java --grammar crates/treebank-java
+          - language: javascript
+            ledger: crates/treebank-typescript/ledger.toml
+            sweep_args: --lang javascript --grammar crates/treebank-typescript
+          - language: python
+            ledger: crates/treebank-python/ledger.toml
+            sweep_args: --lang python --grammar crates/treebank-python
+          - language: ruby
+            ledger: crates/treebank-ruby/ledger.toml
+            sweep_args: --lang ruby --grammar crates/treebank-ruby
+          - language: rust
+            ledger: crates/treebank-rust/ledger.toml
+            sweep_args: --lang rust --grammar crates/treebank-rust
+          - language: typescript
+            ledger: crates/treebank-typescript/ledger.toml
+            sweep_args: --lang typescript --grammar crates/treebank-typescript
+          - language: zig
+            ledger: crates/treebank-zig/ledger.toml
+            sweep_args: --lang zig --grammar crates/treebank-zig
+
     steps:
       # Sweep provenance names the last commit that changed the generated
       # grammar inputs. A shallow checkout cannot answer that honestly.
@@ -27,13 +66,72 @@ jobs:
           fetch-depth: 0
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
+
+      - uses: actions/setup-node@v4
+        if: matrix.language == 'typescript' || matrix.language == 'javascript'
+        with:
+          node-version: "22"
+      - name: install TypeScript oracle dependencies
+        if: matrix.language == 'typescript'
+        working-directory: crates/treebank-oracle/tools/ts-oracle
+        run: npm ci --no-audit --no-fund
+      - name: install JavaScript oracle dependencies
+        if: matrix.language == 'javascript'
+        working-directory: crates/treebank-oracle/tools/js-oracle
+        run: npm ci --no-audit --no-fund
+
+      # Python and Zig are union grammars. Their legacy oracle legs are
+      # mandatory: omitting one makes old-version syntax look like noise.
+      - uses: actions/setup-python@v5
+        if: matrix.language == 'python'
+        with:
+          python-version: "pypy-2.7"
+      - name: expose Python 2 under the oracle's required name
+        if: matrix.language == 'python'
+        run: |
+          ln -s "$(command -v python)" "$RUNNER_TEMP/python2"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+
+      - uses: actions/setup-java@v4
+        if: matrix.language == 'java'
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - uses: ruby/setup-ruby@v1
+        if: matrix.language == 'ruby'
+        with:
+          ruby-version: "3.3.6"
+
+      - name: install libclang oracle
+        if: matrix.language == 'c' || matrix.language == 'cpp'
+        run: sudo apt-get update -qq && sudo apt-get install -y libclang-dev
+
+      - uses: step-security/setup-zig@v2
+        if: matrix.language == 'zig'
+        with:
+          version: 0.11.0
+          cache-key: corpus-canary-legacy
+      - name: preserve the legacy Zig oracle
+        if: matrix.language == 'zig'
+        run: |
+          legacy=$(command -v zig)
+          printf '#!/usr/bin/env bash\nexec %q "$@"\n' "$legacy" > "$RUNNER_TEMP/zig-0.11"
+          chmod +x "$RUNNER_TEMP/zig-0.11"
+          echo "$RUNNER_TEMP" >> "$GITHUB_PATH"
+      - uses: step-security/setup-zig@v2
+        if: matrix.language == 'zig'
+        with:
+          version: 0.16.0
+          cache-key: corpus-canary-current
+
+      - run: cargo build -p treebank-cli
+
       - name: restore verified package archives
         uses: actions/cache@v4
         with:
-          path: corpus/rust/cache
-          key: rust-corpus-${{ hashFiles('corpus-locks/rust.json') }}
-
-      - run: cargo build -p treebank-cli
+          path: corpus/${{ matrix.language }}/cache
+          key: ${{ matrix.language }}-corpus-${{ hashFiles(format('corpus-locks/{0}.json', matrix.language)) }}
 
       # A transient registry failure may interrupt a clean hydrate. Successful
       # archives are already digest-verified in the cache, so retrying resumes
@@ -41,7 +139,7 @@ jobs:
       - name: hydrate the exact locked corpus
         run: |
           for attempt in 1 2 3; do
-            if ./target/debug/treebank hydrate --lang rust; then
+            if ./target/debug/treebank hydrate --lang "${{ matrix.language }}"; then
               exit 0
             fi
             echo "hydrate attempt $attempt failed" >&2
@@ -51,13 +149,11 @@ jobs:
 
       - name: sweep and enforce the committed evidence
         run: |
-          ./target/debug/treebank sweep \
-            --lang rust \
-            --grammar crates/treebank-rust \
-            --manifest corpus/rust/manifest.json \
-            --out corpus/rust/reports/sweep.json
-          if ! git diff --exit-code -- crates/treebank-rust/ledger.toml; then
-            echo "::error::Rust corpus evidence differs from the committed ledger"
+          ./target/debug/treebank sweep ${{ matrix.sweep_args }} \
+            --manifest "corpus/${{ matrix.language }}/manifest.json" \
+            --out "corpus/${{ matrix.language }}/reports/sweep.json"
+          if ! git diff --exit-code -- "${{ matrix.ledger }}"; then
+            echo "::error::${{ matrix.language }} corpus evidence differs from the committed ledger"
             echo "Update the lock or grammar deliberately, rerun the full sweep, and review the new evidence."
             exit 1
           fi
@@ -66,6 +162,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: rust-corpus-report
-          path: corpus/rust/reports/
+          name: ${{ matrix.language }}-corpus-report
+          path: corpus/${{ matrix.language }}/reports/
           if-no-files-found: ignore
