@@ -60,12 +60,15 @@ corpus_composition_note = '''
 4 grammar gaps and 12 version-policy rejections. ruff, ty and ast-serialize each vendor ruff's parser test corpus, so every ruff fixture is counted three times: the 4 gaps are 2 distinct sources and the 12 rejections are 3. Exactly one gap file (dill/source.py) is ordinary library code; everything else here is an adversarial parser fixture.'''
 
 [corpus.sweep]
-files = 297612
-passed = 296513
-failed = 1099
+files = 298354
+passed = 297252
+failed = 1102
 gap_files = 7
-noise_files = 1080
+noise_files = 1083
 pass_rate = '99.63%'
+corpus_lock_sha256 = 'caa6ed0d03bb58fb0dfd209ba3e6df7308753c88ddb9a8e8f8fc6d5e8257569b'
+grammar_sha256 = 'e661ebf3f7dec634938e1c044ae072f8b5d3cb7cd070ecdc140ea1a1ac5c1e18'
+grammar_revision = '80fdf0e837bebbcfb91b5a4d7c35622058c51c0c'
 
 [[oracles]]
 family = 'python3'
