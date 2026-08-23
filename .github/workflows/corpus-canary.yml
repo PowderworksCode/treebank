@@ -103,9 +103,15 @@ jobs:
         with:
           ruby-version: "3.3.6"
 
-      - name: install libclang oracle
+      - name: install the evidence-pinned LLVM and libclang
         if: matrix.language == 'c' || matrix.language == 'cpp'
-        run: sudo apt-get update -qq && sudo apt-get install -y libclang-dev
+        uses: KyleMayes/install-llvm-action@ebc0426251bc40c7cd31162802432c68818ab8f0 # v2.0.9
+        with:
+          version: "21.1.8"
+          directory: ${{ runner.temp }}/llvm-21.1.8
+      - name: expose the pinned libclang to the oracle build
+        if: matrix.language == 'c' || matrix.language == 'cpp'
+        run: echo "TREEBANK_LLVM_DIR=$LLVM_PATH" >> "$GITHUB_ENV"
 
       - uses: step-security/setup-zig@v2
         if: matrix.language == 'zig'
