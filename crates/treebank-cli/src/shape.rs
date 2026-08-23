@@ -331,7 +331,20 @@ fn our_edges(
             // ...and minus a SUFFIX, for the same reason from the other end.
             // CPython's `arg` is `x: int` where our `parameter` is
             // `x: int = 1`, because the default belongs to a parallel list in
-            // its model and to the parameter in ours.
+            // its model and to the parameter in ours. Include every directly
+            // fielded child: comments may sit between the annotation and the
+            // default, so a fixed number of trailing children is not enough
+            // to reach the `type` field reliably.
+            for (i, child) in kids.iter().enumerate() {
+                if node.field_name_for_child(i as u32).is_none() {
+                    continue;
+                }
+                let ce = child.end_byte();
+                if ce > pa && ce < pb {
+                    parents.push((pa, ce));
+                    parents.push((pa, trim_end(src, pa, ce.min(src.len()))));
+                }
+            }
             for child in kids.iter().rev().take(4) {
                 let ce = child.end_byte();
                 if ce > pa && ce < pb {

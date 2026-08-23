@@ -135,7 +135,8 @@
       "subject>"
     ],
     "MatchAs.pattern": [
-      "pattern"
+      "pattern",
+      "pattern>"
     ],
     "MatchClass.cls": [
       "class"
@@ -206,17 +207,26 @@
     "Try.finalbody": [
       "body>"
     ],
-    "For.orelse": [
+    "TryStar.finalbody": [
       "body>"
     ],
+    "For.orelse": [
+      "alternative>"
+    ],
+    "AsyncFor.orelse": [
+      "alternative>"
+    ],
     "While.orelse": [
-      "body>"
+      "alternative>"
     ],
     "If.orelse": [
       "alternative",
       "alternative>"
     ],
     "Try.orelse": [
+      "alternative>"
+    ],
+    "TryStar.orelse": [
       "alternative>"
     ],
     "Call.args": [],

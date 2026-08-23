@@ -128,6 +128,44 @@ with open(p) as f, lock:
       (pass_statement))))
 
 ================================================================================
+parenthesized with-item list versus parenthesized expression
+================================================================================
+
+with (first, second):
+    pass
+with (item := 42,):
+    pass
+with ((assigned := 1)):
+    pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (with_statement
+    (with_item
+      value: (identifier))
+    (with_item
+      value: (identifier))
+    body: (block
+      (pass_statement)))
+  (with_statement
+    (with_item
+      value: (tuple
+        (named_expression
+          name: (identifier)
+          value: (integer))))
+    body: (block
+      (pass_statement)))
+  (with_statement
+    (with_item
+      value: (parenthesized_expression
+        (named_expression
+          name: (identifier)
+          value: (integer))))
+    body: (block
+      (pass_statement))))
+
+================================================================================
 match statement
 ================================================================================
 

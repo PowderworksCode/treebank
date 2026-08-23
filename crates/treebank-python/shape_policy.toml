@@ -133,15 +133,7 @@ why = '''
 CPython flattens try/except/else/finally into ONE node with four statement lists. We use `finally_clause` and `else_clause` nodes, so the finally body is under a clause rather than under the try.'''
 
 [[field_mismatch_ignore]]
-signature = 'Try.orelse => (no field)'
-why = 'See `Try.finalbody`.'
-
-[[field_mismatch_ignore]]
-signature = 'For.orelse => (no field)'
-why = 'See `Try.finalbody`; a for-else body is under our `else_clause`.'
-
-[[field_mismatch_ignore]]
-signature = 'While.orelse => (no field)'
+signature = 'TryStar.finalbody => (no field)'
 why = 'See `Try.finalbody`.'
 
 [[field_mismatch_ignore]]
