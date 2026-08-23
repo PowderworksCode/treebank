@@ -24,7 +24,7 @@ lexical_check = '''
 roundtrip_check = '''
 `treebank roundtrip` — 139,205 files re-rendered through `ast.unparse` and reparsed: 137,968 rendered (1,237 declined by the printer, mostly python2-only sources), 3 failures. All three are the same ruff fixture vendored three times, and what it exposed is not a round-trip problem at all: `case y if a if True else b:` is a real gap, and the sweep had filed it as NOISE because the validity oracle uses `compile()`, which ALSO rejects the file for `'yield' outside function` -- a semantic check, not a syntactic one. `ast.parse` accepts the file. The oracle is stricter than a parser and has been understating gaps; correcting that is its own change.'''
 oracle_blind_spot = '''
-check.py judges with `compile()` deliberately -- its header sets out why, and states the cost: a file invalid for a POST-PARSE reason and holding a real grammar gap is recorded as noise rather than a gap. The sweep now measures that cost instead of assuming it small, by asking `ast.parse` about every noise file: the ones it accepts are syntactically valid, so our rejection of them is a gap the oracle cannot see. Measured at THREE files, one distinct construct -- a conditional expression as a match guard -- which is now fixed. The count is zero and is reported on every sweep, so it cannot grow unnoticed.'''
+check.py judges with `compile()` deliberately -- its header sets out why, and states the cost: a file invalid for a POST-PARSE reason and holding a parser-level difference is recorded as noise rather than a gap. The sweep measures that cost instead of assuming it small, by asking `ast.parse` about every noise file. The current locked corpus has 21 such files, all starred-expression placement fixtures (several vendored copies): `ast.parse` accepts them but compilation rejects them. They remain noise to the primary compile oracle, but `hidden_gap_files` reports them on every sweep so that disagreement cannot grow unnoticed.'''
 argument_ordering_analysis = '''
 Enforcing `f(a=1, b)` as an error needs the argument list split into a positional group and a keyword group with DIFFERENT element sets -- that is what makes a positional after a keyword unreachable, and no precedence or dynamic precedence substitutes for it, because both readings are complete parses. Two element sets means two hidden rules. `_argument` is a TABLE-tier supertype and DESIGN.md §2 fact 4 records that supertype queries are derivation-based, so a rule can carry the role only where the parse flowed through it: whichever group is not `_argument` stops answering `(_argument)`. Verified by building it -- the grammar rejected `f(a=1, b)` correctly and the roles gate then failed on `keyword_argument` and `splat_argument`. The facet tier does not help either: facets are type-level, and a positional argument is a bare expression with no distinguishing node type, so no list of types can name it. The only shape that works is to give positional arguments a node of their own -- an `argument` wrapper -- and move `_argument` from the table tier to the facet tier over {argument, keyword_argument, splat_argument}, which are types that occur nowhere else. That is coherent and it is a cross-language vocabulary change: TypeScript and Rust have no keyword arguments and so need none of the ordering, but they would carry the wrapper and the tier move anyway. Recorded rather than taken.'''
 fuzz_check = '''
@@ -50,14 +50,14 @@ note = '''
 [corpus]
 source = '''
 top-1000 PyPI packages by download rank (hugovk top-pypi-packages), sdists only; 951 of 1000 publish one'''
-files = 297612
-packages = 1914
+files = 298354
+packages = 1915
 blind_to = '''
 python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half of the union leans entirely on the corpus tests and batteries); notebooks; scripts without .py extension'''
 mutation_falsification = '''
 while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified.'''
 corpus_composition_note = '''
-4 grammar gaps and 12 version-policy rejections. ruff, ty and ast-serialize each vendor ruff's parser test corpus, so every ruff fixture is counted three times: the 4 gaps are 2 distinct sources and the 12 rejections are 3. Exactly one gap file (dill/source.py) is ordinary library code; everything else here is an adversarial parser fixture.'''
+7 grammar-gap files across 5 clusters and 12 version-policy rejections. ruff, ty and ast-serialize each vendor ruff's parser test corpus: one backslash-continuation gap fixture is therefore counted three times, and the 12 version-policy files are three distinct constructs repeated across those copies. The other four gap clusters occur once each.'''
 
 [corpus.sweep]
 files = 298354
