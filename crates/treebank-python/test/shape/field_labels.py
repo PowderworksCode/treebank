@@ -32,6 +32,22 @@ def handle():
     else:
         completed()
 
+    try:
+        work()
+    except* ValueError:
+        recover()
+    finally:
+        cleaned_up()
+
+
+def commented_default(
+    value: int#=
+    = #
+    #
+    123
+):
+    use(value)
+
 
 match subject:
     case (((Point())) as point):

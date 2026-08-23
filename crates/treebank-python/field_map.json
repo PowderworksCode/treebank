@@ -207,6 +207,9 @@
     "Try.finalbody": [
       "body>"
     ],
+    "TryStar.finalbody": [
+      "body>"
+    ],
     "For.orelse": [
       "alternative>"
     ],
