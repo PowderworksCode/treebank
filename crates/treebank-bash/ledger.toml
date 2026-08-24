@@ -12,19 +12,19 @@ roles_note = '''
 
 [corpus]
 source = 'top-600 GitHub repositories by stars with `language:Shell` (fetched 2026-08-19), tarball at the pinned commit'
-files = 76830
+files = 77205
 packages = 588
 ranking_note = '''
 Stars, which is attention rather than use, and the weakest popularity metric in this repository — a star costs nothing and never decays. It is used because GitHub publishes no download counts and shell has no registry at all. The consequence is a different POPULATION from the Debian path the ecosystem also supports: GitHub shell is dotfile frameworks, installers and self-contained tools where shell is the whole product, while Debian shell is configure scripts, init scripts and test harnesses inside projects written in C. A gap number from one is not a gap number from the other. `TREEBANK_BASH_CORPUS=debian` selects the other.'''
 
 [corpus.sweep]
-files = 0
-passed = 0
-failed = 0
-gap_files = 0
-noise_files = 0
-pass_rate = '0.00%'
-corpus_lock_sha256 = '10b734c1c2190bc8e61050fecbe1679651f377cc186bd7ac261fa4aba7099e61'
+files = 77205
+passed = 75640
+failed = 1565
+gap_files = 975
+noise_files = 590
+pass_rate = '97.97%'
+corpus_lock_sha256 = '7b6f8eb2fa9e59bac6b8b840f362acf773fc6f48ab243ae28427a1fbe0514b73'
 grammar_sha256 = '1287cfb0cc5b22e9f61e72d2ca44b45386c278b58c8e9405da508d51036c5222'
 grammar_revision = 'bed91cf21f911a27be4ca3d8865d4d30af838e31'
 

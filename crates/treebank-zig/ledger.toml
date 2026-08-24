@@ -56,6 +56,18 @@ corpus_lock_sha256 = '8c3a6f09a0662dcab94793892ebc26827ceb3c7b93f23189c228f1ec3d
 grammar_sha256 = 'f49b929e09bd60b116e5d2f2e869810e832202ce3c4b3b1cd30ee1f7ff91e8dd'
 grammar_revision = '282b605b4b37e34c56151738ef1ee1f47f8a14b0'
 
+[corpus.sweep_history]
+note = '''
+Six sweeps: 88.11% -> 96.93% -> 98.12% -> 98.71% -> 98.98% -> 99.00%, and every step was the corpus naming a construct rather than a guess about one.
+
+The first sweep's four largest clusters were, in order, `comptime var` as a statement (336 files), a capture list of more than two elements (232), a type chosen at comptime by an `if` or a `switch` (220) and destructuring assignment (230) -- none of them exotic, all of them things a grammar written without a corpus simply does not think of. The second sweep's largest was the labelled switch and its `continue :sw value` dispatch (58), which is Zig 0.14 syntax the standard library now writes state machines in.
+
+Two of the rounds were about being too STRICT rather than too permissive. Zig's tokenizer emits one permissive `number_literal` token and leaves `0x`, `1_x0.0` and `0x1.0p1ab1` to AstGen, and it takes a whole `'…'` without validating the escape; a grammar that validated either reported gaps on files the reference PARSER accepts. Both tokens are now as permissive as Zig's, with the `integer`/`float` split kept because a query wants it and Zig's single token does not give it.
+
+The last two rounds were the tail, and both were shapes a first pass would not invent. A LABELLED BLOCK is a type expression -- `pub fn remap(…) t: { … break :t T; }` is how `std.mem.Allocator` declares its return type -- and closing it needed the labelled and unlabelled forms split into separate RULES, because one rule carrying `optional(label)` makes any second rule admitting `label { … }` a duplicate derivation the table cannot choose between. An error set can be COMPUTED by a `switch` on an argument's type, which is how `std.zig.llvm` writes its formatters. And Zig's parser accepts a prototype with the name in the wrong place -- `fn () void {}`, `const aFunc = fn someFunc(x: i32) void;` -- reporting it afterwards, so `zig fmt` calls those files valid and they were ours to parse; the anonymous form is admitted at container level only, where the function TYPE is unreachable and the name can be dropped without ambiguity.
+
+4 files remain, all one construct, and it is a version conflict rather than a gap: see known_gaps.'''
+
 [[oracles]]
 family = 'zig'
 tool = 'zig fmt --stdin, via tools/zig-oracle/check.sh'

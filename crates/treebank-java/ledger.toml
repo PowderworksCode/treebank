@@ -12,7 +12,7 @@ roles_note = '''
 
 [corpus]
 source = 'top-1000 maven artifacts by dependent_repos_count (ecosyste.ms over repo1.maven.org, fetched 2026-08-19), -sources.jar per artifact'
-files = 243573
+files = 243576
 packages = 889
 ranking_note = '''
 Maven Central publishes no download counts, so popularity has to come from elsewhere: ecosyste.ms exposes how many public repositories depend on each artifact. That is a dependency-graph proxy rather than traffic, and it differs from the crates.io and npm metrics in a way worth stating -- it over-weights libraries everything depends on transitively and under-weights applications. For a SYNTAX corpus that is the harmless direction, since what it selects is library code and library code is where the less common constructs live.'''

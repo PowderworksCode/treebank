@@ -36,7 +36,7 @@ npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heav
 mutation_falsification = '''
 javascript with while_statement deleted from _loop: 429 gap files (vs 8). typescript with the _type_member_end token removed: 20 gap files (vs 13). Both the oldest and the newest rules can be falsified.'''
 widening_note = '''
-Widened from the top-300 to the top-1000: typescript 1,598 -> 11,988 files, javascript 4,801 -> 25,297. It found six real families the narrow corpus had no instance of, the largest of which invalidates a claim this ledger used to make (see dialect_decision).'''
+Widened from the top-300 to the locked top-1000 populations: typescript 1,598 -> 11,991 files, javascript 4,801 -> 25,300. It found six real families the narrow corpus had no instance of, the largest of which invalidates a claim this ledger used to make (see dialect_decision).'''
 
 [corpus.typescript_sweep]
 files = 11991
