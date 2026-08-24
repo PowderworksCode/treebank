@@ -111,6 +111,15 @@ rather than by reasoning about it. It is now named and counted, and treated
 as missing context, because a `#error` is precisely the author stating that
 this configuration is unsupported. `other` is back to being a pure tripwire.
 
+The native oracle is isolated at the request boundary too. If pinned
+libclang crashes while parsing one translation unit, the Rust driver keeps
+every complete preceding verdict, restarts the subprocess, and retries the
+first unanswered file once. A second crash on that same file records it as
+`indeterminate` with `oracle_crash = true` in `oracle-verdicts.json`, then
+continues with the remaining requests. A libclang crash can therefore never
+become either evidence of validity or a grammar gap, and one hostile source
+file cannot discard a multi-hour sweep.
+
 The cost of being purely categorical is that any semantic or preprocessor
 error at all demotes a genuine syntax error to indeterminate. That direction
 is deliberate: it never invents invalidity.

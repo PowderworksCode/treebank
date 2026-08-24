@@ -36,23 +36,29 @@ npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heav
 mutation_falsification = '''
 javascript with while_statement deleted from _loop: 429 gap files (vs 8). typescript with the _type_member_end token removed: 20 gap files (vs 13). Both the oldest and the newest rules can be falsified.'''
 widening_note = '''
-Widened from the top-300 to the top-1000: typescript 1,598 -> 11,988 files, javascript 4,801 -> 25,297. It found six real families the narrow corpus had no instance of, the largest of which invalidates a claim this ledger used to make (see dialect_decision).'''
+Widened from the top-300 to the locked top-1000 populations: typescript 1,598 -> 11,991 files, javascript 4,801 -> 25,300. It found six real families the narrow corpus had no instance of, the largest of which invalidates a claim this ledger used to make (see dialect_decision).'''
 
 [corpus.typescript_sweep]
-files = 11988
-passed = 11976
+files = 11991
+passed = 11979
 failed = 12
 gap_files = 6
 noise_files = 6
 pass_rate = '99.90%'
+corpus_lock_sha256 = '7c97b264724385594886133afe74586fb1637e10facc6fe612236b6887b1e64e'
+grammar_sha256 = 'cdc95300960bab90c2116dcc2c4628f172811d7fcc842798118dd7a31d189152'
+grammar_revision = 'de79449d858531198822a7092ff3fbef67d0662f'
 
 [corpus.javascript_sweep]
-files = 25297
-passed = 25289
+files = 25300
+passed = 25292
 failed = 8
 gap_files = 8
 noise_files = 0
 pass_rate = '99.97%'
+corpus_lock_sha256 = 'e778b2a357c9b10a5f2b37362a83706bb314c1c930d516b0da491763f7bef89c'
+grammar_sha256 = 'cdc95300960bab90c2116dcc2c4628f172811d7fcc842798118dd7a31d189152'
+grammar_revision = 'de79449d858531198822a7092ff3fbef67d0662f'
 
 [[oracles]]
 family = 'typescript'

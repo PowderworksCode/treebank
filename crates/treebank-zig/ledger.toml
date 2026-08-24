@@ -52,6 +52,11 @@ failed = 171
 gap_files = 4
 noise_files = 167
 pass_rate = '99.00%'
+corpus_lock_sha256 = '8c3a6f09a0662dcab94793892ebc26827ceb3c7b93f23189c228f1ec3d8993c3'
+grammar_sha256 = 'f49b929e09bd60b116e5d2f2e869810e832202ce3c4b3b1cd30ee1f7ff91e8dd'
+grammar_revision = '282b605b4b37e34c56151738ef1ee1f47f8a14b0'
+
+[corpus.sweep_history]
 note = '''
 Six sweeps: 88.11% -> 96.93% -> 98.12% -> 98.71% -> 98.98% -> 99.00%, and every step was the corpus naming a construct rather than a guess about one.
 

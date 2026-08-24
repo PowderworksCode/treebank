@@ -16,11 +16,9 @@ Two placements are worth stating because they are choices and not oversights. `c
 
 [corpus]
 source = '''
-**A stand-in, and it is named rather than dressed up.** The corpus swept here is the 3,662 `.c` and `.h` files present on the build machine — glibc, X11, php, openssl, glib and the linux UAPI headers under `/usr/include`, plus mypyc's vendored C. It is header-heavy where a real C corpus is source-heavy, it is one distribution's installed set rather than a ranked sample of what a distribution ships, and gap numbers from it are not gap numbers from Debian.
-
-The Debian path is BUILT and unrun: `treebank rank --lang c` and `treebank fetch --lang c` work today, ranking sid source packages by popcon installs and filtering to packages with >=2000 SLOC of C and more C than C++, taking upstream `.orig.tar.*` only. What has not happened is the fetch, which is tens of gigabytes. When it does, these numbers are replaced rather than added to.'''
-files = 3662
-packages = 2
+The locked corpus is the 100 admitted Debian sid source packages selected by popcon rank, filtered to packages with at least 2,000 SLOC of C and at least as much C as C++, using only the recorded upstream source archives. Its 84,473 admitted `.c` and C-classified `.h` files are digest-pinned in `corpus-locks/c.json`; this replaces the former 3,662-file installed-header stand-in.'''
+files = 84473
+packages = 100
 ranking_note = '''
 C has no registry, so popularity has to be borrowed, and Debian is the only source that supplies a popularity signal and a source tarball for the same name — which is why it beats vcpkg and Conan (no download counts) and a GitHub star scrape (no version identity). popcon counts machines, which is the same kind of metric as crates.io downloads rather than java's dependent-repos proxy. The bias is explicit and it is the point: that corpus is the C a distribution SHIPS — system libraries, daemons, autotools trees, decades-old code that still runs everything — and not trending C on GitHub, which would give different numbers. The SLOC filter exists because popcon ranks everything Debian ships: without one the top of the list spends its bandwidth on LibreOffice (4.4M lines of C++ to 34k of C) and gcc (no C at all).
 
@@ -30,31 +28,35 @@ blind_to = '''
 
 No build system is run, so a generated `config.h` is simply absent. That is the largest single reason the oracle answers `indeterminate` as often as it does, and it shows up as an unadjudicable file rather than a fabricated verdict. Resolving more would mean executing arbitrary upstream build scripts.
 
-The stand-in corpus above is blind to something else again, and it matters more: it is almost all HEADERS. Declaration syntax is over-represented and statement syntax is under-represented, so the gap clusters below are a fair picture of what breaks in a header and a poor one of what breaks in a `.c`.'''
+The lock remains popularity-weighted distribution source rather than a uniform sample of C ever written, and generated sources absent from Debian's upstream archives remain outside it.'''
 
 [corpus.sweep]
-files = 3662
-passed = 2648
-failed = 1014
-gap_files = 119
-noise_files = 547
-pass_rate = '72.31%'
+files = 84473
+passed = 62539
+failed = 21934
+gap_files = 6392
+noise_files = 11320
+pass_rate = '74.03%'
+corpus_lock_sha256 = 'ee451b935f9702b14650dc21efe7ed4d74df1a11f6dbc6ce8fb245b958d51432'
+grammar_sha256 = 'acc7cef16f413f07ba1009cdcbdeb9e9b92fbc28173c031ad708cb85afb4bb57'
+grammar_revision = '96bea7cf5629e506d24e7db8a89556e71baa7bab'
 
 [corpus.gaps]
 # Everything the sweep's ledger writer does not carry. It owns
 # `[corpus.sweep]` above and replaces that block wholesale on every run —
 # prose included, and up to the next section header — so anything written
 # between the two sections is eaten. Here, past the header, it survives.
-config_files = 348
-indeterminate_files = 506
-clusters = 91
-gap_clusters = 51
+config_files = 4222
+indeterminate_files = 11102
+clusters = 2086
 note = """
-The four buckets are the point. Of 1,014 failures: **119 are grammar gaps** — valid C this grammar rejects, the number to drive down — **348 are configuration-inherent**, valid C that cannot be represented as written because a preprocessor conditional splits a construct, and **547 are noise**, where the reference parser did not vouch for the file.
+The locked Debian sweep leaves four distinct buckets. Of 21,934 tree-sitter failures, **6,392 are verified grammar gaps**, **4,222 are configuration-inherent** files whose preprocessor branches split a construct, and **11,320 are noise** where libclang did not vouch for the source. The oracle detail is 10,614 valid, 218 invalid and **11,102 indeterminate**. Indeterminate collapses to false, so no fix agent is aimed at a file whose missing build context prevents a verdict; `gap_files` is deliberately a floor and must be read with this count.
 
-The noise bucket is inflated and by how much is recorded: the oracle answered 467 valid, 41 invalid and **506 indeterminate** over the 1,014, and `Oracle::validate` collapses indeterminate to false so that no fix agent is ever aimed at a file whose validity nobody can vouch for. So 506 of the 547 noise files are "we could not tell" and only 41 are "the reference rejected it". A C gap number quoted without its indeterminate count is not a claim this crate makes — and the sweep now says so itself, because more files are unadjudicable than are known-valid. That ratio inverted as the grammar improved rather than because anything changed about the oracle: the files that still fail are the ones a build system would have configured.
+Read the other way: 62,539 + 4,222 = **66,761 of 84,473 files, 79.03%, are either parsed or accounted for**, and 6,392 are the verified grammar queue.
+"""
 
-Read the other way: 2,648 + 348 = **2,996 of 3,662 files, 81.8%, are either parsed or accounted for**, and 119 are the queue.
+[corpus.stand_in_history]
+note = """
 
 **Where these numbers came from.** The grammar as first shipped passed 2,184 and left 422 gaps in 157 clusters. Nearly every one of those clusters was the same thing — an unexpanded macro standing where the preprocessor would have put a keyword — and the ledger named three positions for it and refused all three, on the grounds that a bare identifier admitted after a declarator makes `int x y;` parse. That was true of the rule being refused and not of the rule: each position is now admitted only where the parse has already committed to something a juxtaposed pair of names cannot reach. The five negative files under `test/negative/` that pin those boundaries — `two-names-juxtaposed.c`, `two-names-juxtaposed-in-a-block.c`, `tag-with-two-names.c`, `macro-suffix-on-a-plain-name.c` and the older `two-expressions-juxtaposed.c` — are all still rejected, and clang rejects all of them too.
 
@@ -65,7 +67,7 @@ Two contributions are worth separating out. Dead-branch elimination is load-bear
 For calibration on what 119 is worth: the patched upstream tree-sitter-c this grammar replaces passed 43,089 of 84,455 files on the real Debian corpus, 51%, with 13,826 gap files. The two are over different populations and must not be subtracted.
 """
 
-[corpus.recovery]
+[corpus.stand_in_recovery]
 note = """
 `treebank recovery` needs no oracle — it deletes one token from a file that parses cleanly and measures how much of the file lands inside an ERROR — so it is the one distribution here that the local corpus can produce honestly. Over 2,634 files and 8,067 breaking deletions: **median blast radius 0.1%, p90 10.8%, p99 90%, 250 shredded**. For the shape of that, DESIGN.md §5.12 records python at 0.3 / 17.1 / 99.1 and typescript at 0.5 / 17.5 / 94.1 over their own corpora.
 
@@ -76,7 +78,7 @@ note = """
 The worst case is the brace, as it is everywhere: 98 of the 250 shreds are a deleted `}` and 62 a deleted `;`. A C file is one long run of declarations with no statement-level resynchronisation point, so a lost brace has nothing to recover ONTO until the next one — which is a fact about C rather than about this parse table.
 """
 
-[corpus.kinds]
+[corpus.stand_in_kinds]
 note = """
 `treebank kinds` over the same 3,662 files, which measures the CORPUS rather than the grammar: 101 of 117 named kinds appear in the 2,637 files it can read, 16 never do, 12 fewer than twenty times. The sixteen absent ones say what this corpus is blind to rather than what the grammar lacks, and the list is shorter than it was — `asm_statement`, `generic_expression`, `typeof_specifier`, `static_assert_declaration`, `compound_literal_expression` and `atomic_type_specifier` were absent before and are counted now, because the files carrying them were the files failing for the macro reasons above.
 
@@ -86,7 +88,7 @@ That is the second view of the same fix and it is worth stating plainly: `kinds`
 [[oracles]]
 family = 'c'
 tool = 'tools/c-oracle — libclang, parse-only, verdict from clang’s own diagnostic categories'
-version = 'libclang 18 or newer; the build pins one and ORACLE.md says why the pin matters'
+version = 'libclang 21.1.8; the build pins it and ORACLE.md says why the pin matters'
 role = '''
 primary and only, and the only THREE-VALUED oracle here: valid / invalid / indeterminate. See ORACLE.md for the full argument; the short version is that the claim is "no C syntax error, in GNU C, given these include paths", NOT "this compiles".
 

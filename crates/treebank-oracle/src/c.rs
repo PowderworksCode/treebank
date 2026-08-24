@@ -15,7 +15,7 @@
 //! reports clang's own diagnostic CATEGORY, which is data rather than
 //! prose.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufRead, BufReader, Write};
 use std::path::Path;
 use std::process::{Command, Stdio};
@@ -50,7 +50,12 @@ impl Oracle for Cpp {
     /// working library headers as invalid. C++17 is the dialect a
     /// distribution's C++ is actually written against.
     fn validate(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, bool>> {
-        run(LangName::Cpp, &["-x", "c++", "-std=gnu++17"], srcroot, paths)
+        run(
+            LangName::Cpp,
+            &["-x", "c++", "-std=gnu++17"],
+            srcroot,
+            paths,
+        )
     }
 }
 
@@ -71,12 +76,6 @@ fn run(
 ) -> Result<HashMap<String, bool>> {
     let oracle = ensure_oracle()?;
 
-    let mut child = Command::new(&oracle)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .spawn()
-        .with_context(|| format!("spawn {}", oracle.display()))?;
-
     let requests: Vec<String> = paths
         .iter()
         .map(|p| {
@@ -89,38 +88,19 @@ fn run(
         })
         .collect();
 
-    let mut stdin = child.stdin.take().context("oracle stdin")?;
-    let writer = std::thread::spawn(move || -> std::io::Result<()> {
-        for line in &requests {
-            writeln!(stdin, "{line}")?;
-        }
-        stdin.flush()
-    });
+    let verdicts = collect_verdicts(&oracle, &requests)?;
 
-    let mut verdicts: Vec<serde_json::Value> = Vec::new();
     let mut map = HashMap::new();
     let mut counts: HashMap<String, usize> = HashMap::new();
-    {
-        let stdout = child.stdout.take().context("oracle stdout")?;
-        for line in BufReader::new(stdout).lines() {
-            let line = line?;
-            let v: serde_json::Value = serde_json::from_str(&line)
-                .with_context(|| format!("c-oracle emitted non-JSON: {line}"))?;
-            let verdict = v["verdict"].as_str().unwrap_or("error").to_string();
-            let rel = crate::stdin_oracle::relativize(v["path"].as_str().unwrap_or_default(), srcroot);
-            *counts.entry(verdict.clone()).or_default() += 1;
-            if let Some(cat) = v["unknown_category"].as_str() {
-                eprintln!("oracle: unrecognised clang category {cat:?} on {rel} — check ORACLE.md");
-            }
-            map.insert(rel, verdict == "valid");
-            verdicts.push(v);
+    for v in &verdicts {
+        let verdict = v["verdict"].as_str().unwrap_or("error").to_string();
+        let rel = crate::stdin_oracle::relativize(v["path"].as_str().unwrap_or_default(), srcroot);
+        *counts.entry(verdict.clone()).or_default() += 1;
+        if let Some(cat) = v["unknown_category"].as_str() {
+            eprintln!("oracle: unrecognised clang category {cat:?} on {rel} — check ORACLE.md");
         }
+        map.insert(rel, verdict == "valid");
     }
-    let status = child.wait()?;
-    let _ = writer
-        .join()
-        .map_err(|_| anyhow::anyhow!("oracle stdin thread panicked"))?;
-    anyhow::ensure!(status.success(), "c-oracle exited with {status}");
 
     let get = |k: &str| counts.get(k).copied().unwrap_or(0);
     eprintln!(
@@ -152,6 +132,86 @@ fn run(
         eprintln!("oracle: verdict detail at {}", sidecar.display());
     }
     Ok(map)
+}
+
+fn collect_verdicts(oracle: &Path, requests: &[String]) -> Result<Vec<serde_json::Value>> {
+    let mut verdicts = Vec::new();
+    let mut next = 0usize;
+    let mut crash_retries = HashSet::new();
+    while next < requests.len() {
+        let mut child = Command::new(oracle)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .with_context(|| format!("spawn {}", oracle.display()))?;
+
+        let mut stdin = child.stdin.take().context("oracle stdin")?;
+        let batch = requests[next..].to_vec();
+        let writer = std::thread::spawn(move || -> std::io::Result<()> {
+            for line in &batch {
+                writeln!(stdin, "{line}")?;
+            }
+            stdin.flush()
+        });
+
+        let before = verdicts.len();
+        {
+            let stdout = child.stdout.take().context("oracle stdout")?;
+            for line in BufReader::new(stdout).lines() {
+                let line = line?;
+                let v: serde_json::Value = serde_json::from_str(&line)
+                    .with_context(|| format!("c-oracle emitted non-JSON: {line}"))?;
+                verdicts.push(v);
+            }
+        }
+        let status = child.wait()?;
+        let writer_result = writer
+            .join()
+            .map_err(|_| anyhow::anyhow!("oracle stdin thread panicked"))?;
+        let answered = verdicts.len() - before;
+        next += answered;
+
+        if status.success() {
+            writer_result?;
+            anyhow::ensure!(
+                next == requests.len(),
+                "c-oracle exited successfully after answering {next} of {} requests",
+                requests.len()
+            );
+            break;
+        }
+
+        // libclang is native code operating on adversarially varied source.
+        // A crash in one translation unit must not discard hours of prior
+        // verdicts or silently bless that file. Output is ordered and flushed
+        // per request, so the first unanswered request is the crash site.
+        anyhow::ensure!(
+            next < requests.len(),
+            "c-oracle exited with {status} after answering every request"
+        );
+        let path = requests[next].split('\t').next().unwrap_or_default();
+        if crash_retries.insert(path.to_string()) {
+            eprintln!(
+                "oracle: c-oracle exited with {status} while adjudicating {path}; \
+                 retrying that file once in a fresh process"
+            );
+            continue;
+        }
+        eprintln!(
+            "oracle: c-oracle exited with {status} again on {path}; \
+             recording that file as indeterminate and continuing"
+        );
+        verdicts.push(serde_json::json!({
+            "path": path,
+            "verdict": "indeterminate",
+            "oracle_crash": true,
+            "detail": format!("c-oracle exited with {status} twice"),
+        }));
+        next += 1;
+        // A closed stdin pipe is expected after a native crash.
+        let _ = writer_result;
+    }
+    Ok(verdicts)
 }
 
 fn ensure_oracle() -> Result<std::path::PathBuf> {
@@ -280,8 +340,55 @@ fn package_includes(srcroot: &Path, pkgdir: &str) -> Arc<Vec<String>> {
 /// directory walk gives for free.
 fn is_header(path: &Path) -> bool {
     match path.extension().and_then(|e| e.to_str()) {
-        Some(e) => matches!(e, "h" | "hpp" | "hh" | "hxx" | "h++" | "inl" | "ipp" | "tcc"),
+        Some(e) => matches!(
+            e,
+            "h" | "hpp" | "hh" | "hxx" | "h++" | "inl" | "ipp" | "tcc"
+        ),
         None => false,
+    }
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::collect_verdicts;
+    use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn a_repeat_native_crash_is_one_indeterminate_verdict_not_a_lost_batch() {
+        let dir = std::env::temp_dir().join(format!(
+            "treebank-c-oracle-crash-test-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        let oracle = dir.join("fake-oracle.sh");
+        std::fs::write(
+            &oracle,
+            r#"#!/usr/bin/env bash
+while IFS=$'\t' read -r path _; do
+  if [[ "$path" == crash ]]; then
+    kill -s SEGV "$$"
+  fi
+  printf '{"path":"%s","verdict":"valid"}\n' "$path"
+done
+"#,
+        )
+        .unwrap();
+        let mut permissions = std::fs::metadata(&oracle).unwrap().permissions();
+        permissions.set_mode(0o755);
+        std::fs::set_permissions(&oracle, permissions).unwrap();
+
+        let requests = vec!["before".into(), "crash".into(), "after".into()];
+        let verdicts = collect_verdicts(&oracle, &requests).unwrap();
+        assert_eq!(verdicts.len(), 3);
+        assert_eq!(verdicts[0]["path"], "before");
+        assert_eq!(verdicts[0]["verdict"], "valid");
+        assert_eq!(verdicts[1]["path"], "crash");
+        assert_eq!(verdicts[1]["verdict"], "indeterminate");
+        assert_eq!(verdicts[1]["oracle_crash"], true);
+        assert_eq!(verdicts[2]["path"], "after");
+        assert_eq!(verdicts[2]["verdict"], "valid");
+
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }
 

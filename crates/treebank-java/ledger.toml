@@ -12,7 +12,7 @@ roles_note = '''
 
 [corpus]
 source = 'top-1000 maven artifacts by dependent_repos_count (ecosyste.ms over repo1.maven.org, fetched 2026-08-19), -sources.jar per artifact'
-files = 243573
+files = 243576
 packages = 889
 ranking_note = '''
 Maven Central publishes no download counts, so popularity has to come from elsewhere: ecosyste.ms exposes how many public repositories depend on each artifact. That is a dependency-graph proxy rather than traffic, and it differs from the crates.io and npm metrics in a way worth stating -- it over-weights libraries everything depends on transitively and under-weights applications. For a SYNTAX corpus that is the harmless direction, since what it selects is library code and library code is where the less common constructs live.'''
@@ -20,12 +20,15 @@ blind_to = '''
 Sources jars, so anything that ships no `-sources.jar` is absent: 111 of the top 1,000 artifacts, mostly pom-only aggregators and relocated coordinates. Generated code is under-represented for the same reason -- an annotation processor's output is not in the sources jar.'''
 
 [corpus.sweep]
-files = 243573
-passed = 243406
+files = 243576
+passed = 243409
 failed = 167
 gap_files = 167
 noise_files = 0
 pass_rate = '99.93%'
+corpus_lock_sha256 = '224a7f2adb284f3c7f1158d18cde872d75f8cf3de3b062f1f95a181012ef319a'
+grammar_sha256 = 'f2089dcfc3615f507abbfa5057441648f69eb6163ddbac0ba2f7654fe6a80875'
+grammar_revision = '2769c501beb46d93b7eb4fd9d1852d6499107099'
 
 [[oracles]]
 family = 'java'

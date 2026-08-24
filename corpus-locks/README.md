@@ -52,10 +52,9 @@ Package counts are what the fetch actually admitted, not the ranking limit:
 packages with no matching source distribution or no admitted files are absent,
 as are Debian source archives over the ecosystem's safety cap.
 
-`rust.json` remains the release canary: 1,000 pinned crates and 27,307 source
-files. The weekly and manually
-dispatchable `corpus-canary.yml` workflow hydrates it from scratch, performs
-the production sweep, and requires the generated `[corpus.sweep]` block to
-remain byte-for-byte equal to the committed Rust ledger. A grammar or oracle
-change that improves or regresses the result therefore needs an explicit,
+Every lock is a release canary. The weekly and manually dispatchable
+`corpus-canary.yml` matrix hydrates each one from scratch, performs the
+production sweep, and requires the generated sweep block to remain
+byte-for-byte equal to the committed grammar ledger. A grammar, oracle or lock
+change that improves or regresses a result therefore needs an explicit,
 reviewed evidence update.

@@ -96,6 +96,19 @@ if [[ "$lang" == rust ]]; then
   grep -Fq '(1 unchanged-and-passing, 1 to parse)' "$scratch/second-run.stderr"
   cmp "$report" "$scratch/first-report.json"
   cmp "$grammar/ledger.toml" "$scratch/first-ledger.toml"
+
+  # Hosted canaries may sample a locked corpus whose full adjudication needs
+  # more memory than the runner. Sampling must be deterministic and must not
+  # replace the authoritative full-corpus ledger block.
+  "$treebank_bin" sweep \
+    --lang "$lang" \
+    --grammar "$grammar" \
+    --manifest "$corpus/manifest.json" \
+    --out "$report" \
+    --limit 1 \
+    --no-write-ledger
+  jq -e '.files == 1' "$report" >/dev/null
+  cmp "$grammar/ledger.toml" "$scratch/first-ledger.toml"
 fi
 
 echo "sweep smoke ($lang): OK"
