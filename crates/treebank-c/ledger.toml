@@ -33,12 +33,15 @@ No build system is run, so a generated `config.h` is simply absent. That is the 
 The stand-in corpus above is blind to something else again, and it matters more: it is almost all HEADERS. Declaration syntax is over-represented and statement syntax is under-represented, so the gap clusters below are a fair picture of what breaks in a header and a poor one of what breaks in a `.c`.'''
 
 [corpus.sweep]
-files = 3662
-passed = 2648
-failed = 1014
-gap_files = 119
-noise_files = 547
-pass_rate = '72.31%'
+files = 84473
+passed = 62539
+failed = 21934
+gap_files = 6392
+noise_files = 11320
+pass_rate = '74.03%'
+corpus_lock_sha256 = 'ee451b935f9702b14650dc21efe7ed4d74df1a11f6dbc6ce8fb245b958d51432'
+grammar_sha256 = 'acc7cef16f413f07ba1009cdcbdeb9e9b92fbc28173c031ad708cb85afb4bb57'
+grammar_revision = '96bea7cf5629e506d24e7db8a89556e71baa7bab'
 
 [corpus.gaps]
 # Everything the sweep's ledger writer does not carry. It owns
