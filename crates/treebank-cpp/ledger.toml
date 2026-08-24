@@ -16,74 +16,60 @@ Two placements are worth stating. `throw_expression` is NOT a `_jump`, for the s
 
 [corpus]
 source = '''
-**A stand-in, and the hardest one available.** The corpus swept here is the 791 files of libstdc++ 13's installed headers. That is the C++ standard library's own implementation: template metaprogramming, SFINAE, concepts, and a `_GLIBCXX_*` macro on very nearly every line. It is not what a distribution's C++ looks like — an application is ordinary by comparison — and a gap number from it is a floor rather than a typical case.
-
-The Debian path is built and unrun, exactly as C's is: `treebank rank --lang cpp` and `treebank fetch --lang cpp` work today, ranking sid source packages by popcon installs and filtering to packages with at least 2000 SLOC of C++ and more C++ than C.'''
-files = 791
-packages = 1
+The locked corpus is the 97 admitted Debian sid source packages selected by popcon rank, filtered to packages with at least 2,000 SLOC of C++ and more C++ than C, using only the recorded upstream source archives. Its 121,957 admitted `.cpp`, C++-specific header and content-classified `.h` files are digest-pinned in `corpus-locks/cpp.json`; this replaces the former 791-file installed-libstdc++ stand-in.'''
+files = 121957
+packages = 97
 ranking_note = '''
 The C and C++ filters are written as a PARTITION and tested as one: C wants `ansic >= 2000 && ansic >= cpp`, C++ wants `cpp >= 2000 && cpp > ansic`. Without that second half glibc would enter the C++ corpus on its fringe exactly as LibreOffice would enter the C one on its. `.h` belongs to both languages and the extension cannot say which, so `header_is_cxx` decides it by content and is SHARED between the two ecosystems — the corpora divide the headers between them rather than each answering the question its own way.'''
 blind_to = '''
-One package, and a pathological one. Every measurement below is about libstdc++ and should be read that way: the failure clusters are the standard library's idioms, not C++'s.
+`.h` is shared by C and C++ and the extension cannot tell them apart, so the corpus filter reads the file. The content classifier is deliberately only a corpus boundary, not a complete language detector, and may exclude C++ headers without its distinguishing tokens or include C-compatible headers from C++-dominant packages.
+
+No build system is run. Generated headers, package include paths, feature macros and dependency configuration are therefore absent, which is why libclang returns `indeterminate` for much of distribution source rather than fabricating a syntax verdict. Resolving that bucket would require executing arbitrary upstream build systems.
 
 `__cplusplus` is declared DEFINED at `201703L` rather than merely defined, and the value matters: the sweep and the oracle have to agree on a dialect, or a `#if __cplusplus >= 202002L` branch is deleted by one and compiled by the other, and the grammar is measured against a file neither of them read.'''
 
 [corpus.sweep]
-files = 791
-passed = 224
-failed = 567
-gap_files = 449
-noise_files = 116
-pass_rate = '28.32%'
+files = 121957
+passed = 30123
+failed = 91834
+gap_files = 15601
+noise_files = 75966
+pass_rate = '24.70%'
+corpus_lock_sha256 = 'a93921d6f4c21adab6a703414bd23db7204f668f1723d7ceb06105cb9852f679'
+grammar_sha256 = 'bb5a8327289255d296d8c3b063a93017e7b126e0294604da06239e961bc010cb'
+grammar_revision = '96bea7cf5629e506d24e7db8a89556e71baa7bab'
 
 [corpus.gaps]
 # Everything the sweep's ledger writer does not carry. It owns
 # `[corpus.sweep]` above and replaces that block wholesale on every run —
 # prose included, and up to the next section header — so anything written
 # between the two sections is eaten. Here, past the header, it survives.
-config_files = 2
-indeterminate_files = 111
-clusters = 143
+config_files = 267
+indeterminate_files = 75725
+clusters = 4635
 note = """
-FIRST PASS, adjudicated by the libclang oracle at `-x c++ -std=gnu++17`, and the number says so. Of 567 failures, **449 are grammar gaps**, 2 are configuration-inherent and 116 are noise — of which 111 are `indeterminate` rather than `invalid`, because `Oracle::validate` collapses "could not tell" to false so that no fix agent is ever aimed at a file nobody can vouch for.
+The locked Debian sweep leaves four distinct buckets. Of 91,834 tree-sitter failures, **15,601 are verified grammar gaps**, **267 are configuration-inherent** files whose preprocessor branches split a construct, and **75,966 are noise** where libclang did not vouch for the source. The oracle detail is 15,868 valid, 238 invalid, 75,725 indeterminate and 3 errors. Indeterminate collapses to false, so no fix agent is aimed at a file whose missing build context prevents a verdict; `gap_files` is deliberately a floor and must be read with this count.
 
-The corpus is the reason to read 28.3% carefully rather than as a verdict. libstdc++ is the most macro- and template-dense C++ there is; the largest cluster, 129 files, is an ERROR that opens at the file's first comment, which means the parse failed somewhere below and the report has nowhere better to point. The named clusters behind it are `PB_DS_CLASS_T_DEC` (a macro standing for a whole `template<…>` head), `_GLIBCXX_NOEXCEPT` after a declarator, and partial specialisations whose names are instantiations.
+Read the other way: 30,123 + 267 = **30,390 of 121,957 files, 24.92%, are either parsed or accounted for**, and 15,601 are the verified grammar queue. The generated report groups them into 4,635 clusters and keeps concrete examples for agents rather than promoting a few first-error shapes to permanent hand-written counts.
 
-Dead-branch elimination is worth almost nothing here — 2 files — and that is itself a finding rather than a disappointment: the `extern "C" {`-split-across-`#ifdef` class that costs C 696 files is a C problem, because compiling as C++ is the configuration in which those braces are LIVE.
+One WebKit file, `Tools/TestWebKitAPI/Tests/WebCore/SerializedScriptValue.cpp`, reproducibly crashed libclang 21.1.8. The oracle driver retried it in a fresh process, recorded it as indeterminate after the second SIGSEGV and continued. A native-oracle crash can therefore reduce evidence for that file, but cannot abort the corpus measurement or become a grammar gap.
+"""
 
-For calibration on what a first pass looks like in this repository, bash shipped at 43.8% over a corpus of shell scripts. This is 28.3% over the C++ standard library.
+[corpus.stand_in_history]
+note = """
+The superseded first pass used 791 installed libstdc++ 13 headers: 224 passed, 449 were adjudicated as grammar gaps, 2 were configuration-inherent and 116 were noise, including 111 indeterminate, in 143 clusters. That population was intentionally pathological — template metaprogramming, SFINAE, concepts and `_GLIBCXX_*` macros — and was useful while the Debian acquisition path was unfinished, but its 28.32% pass rate and per-construct counts are not measurements of the locked corpus.
 
-**What the C grammar's macro work moved here, and what it did not.** C grew rules for the unexpanded macro in five positions; C++ inherits four of them — after a declarator that ends in `)` or `]`, beside a pointer's qualifiers, on an enumerator, inside a typedef — and the measured return is 222 files becoming 224, at 46.8 MB of table and 90 seconds of generation becoming 48.4 MB and 2m08s. Two files is a thin return and it is recorded as one. It stays because the corpus that would show its worth is the one the source note above already calls a floor: libstdc++ fails on templates long before it fails on macros, so a macro fix cannot show up until the template gaps are closed.
-
-Three of C's rules are WRITTEN OUT here instead, joining `_top_level_item` and `_member` in the list of things this grammar declines to inherit. Each was tried, generated and reverted on what the table did:
-
-- C's leading `macro_modifier` makes the two halves of `_declaration_specifiers` different repeat symbols, and a parser that has just reduced a modifier can no longer tell which half it is in. It asked for a conflict on `_out_of_line_definition`, then on both member forms, then on `macro_modifier` against `_expression` in four widening combinations — the runaway shape DESIGN.md §8.1 records, still going when the loop was stopped at six.
-- The declarator-INITIAL macro form and the one in front of a parenthesised declarator's star collide with a lambda's init-capture and with multiplication: `[x](…` and `(a * b)` are the states the generator named.
-- `field_declaration`'s trailing macro run and `unexpanded_macro` as a member both collide with what a C++ member list holds that a C one does not — a function definition, and `f() const`.
-
-C pays for all five and C++ for none, which is the difference between a struct body and a class body rather than a difference of opinion.
+It also established which C macro rules C++ could inherit without making the parse table diverge. The rejected leading modifier, declarator-initial and trailing-member forms collide with out-of-line definitions, lambda captures, multiplication and function definitions; DESIGN.md §8.1 retains that design evidence.
 """
 
 [[oracles]]
 family = 'cpp'
 tool = 'crates/treebank-oracle/tools/c-oracle — the same libclang program C uses, at `-x c++ -std=gnu++17`'
-version = 'libclang 18 or newer; build.sh pins one and ORACLE.md says why the pin matters'
+version = 'libclang 21.1.8; the build pins it and ORACLE.md says why the pin matters'
 role = '''
 primary and only, three-valued (valid / invalid / indeterminate), and the argument for it is C's — see `crates/treebank-oracle/tools/c-oracle/ORACLE.md`. The verdict is read from clang's own diagnostic CATEGORIES and no message text at all.
 
 `gnu++17` rather than the newest standard clang knows, and that is a decision rather than a default. C++20 and C++23 REMOVE things: `throw()` exception specifications were dropped in C++20 and are all over the corpus, and judging by the newest dialect would book working library headers as invalid. C++17 is what a distribution's C++ is written against.'''
-
-[[known_gaps]]
-construct = 'a macro standing for a whole template head or a qualified name'
-files = 27
-note = '''
-`PB_DS_CLASS_T_DEC` and `PB_DS_CLASS_C_DEC::` in libstdc++'s policy-based data structures: one expands to `template<typename Key, typename Mapped, …>` and the other to `PB_DS_CLASS_NAME<Key, Mapped, …>`, and unexpanded there is no template head and no qualified name to match. Not fixable by a rule, because the tokens that would form one are not present.'''
-
-[[known_gaps]]
-construct = 'an unexpanded macro after a declarator'
-files = 74
-note = '''
-`_GLIBCXX_NOEXCEPT`, `_GLIBCXX_CONSTEXPR` and their siblings where `noexcept` or `constexpr` would go. This is C's largest gap in the same position — `__THROW` after every glibc declaration — and it is rejected here for C's reason: admitting a bare identifier after a declarator makes `int x y;` parse, which is the accepts-invalid direction the negative corpus exists to catch.'''
 
 [[deviations]]
 what = '''
