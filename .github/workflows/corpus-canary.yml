@@ -35,7 +35,11 @@ jobs:
             sweep_args: --lang c --grammar crates/treebank-c
           - language: cpp
             ledger: crates/treebank-cpp/ledger.toml
-            sweep_args: --lang cpp --grammar crates/treebank-cpp
+            # Full C++ evidence is produced on the remote evidence host: the
+            # 121,957-file run reaches ~16 GiB while adjudicating WebKit and
+            # cannot fit a standard hosted runner. This deterministic spread
+            # still exercises locked acquisition, parsing and libclang.
+            sweep_args: --lang cpp --grammar crates/treebank-cpp --limit 2000 --no-write-ledger
           - language: java
             ledger: crates/treebank-java/ledger.toml
             sweep_args: --lang java --grammar crates/treebank-java

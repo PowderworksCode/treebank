@@ -430,13 +430,26 @@ pub fn run(
     grammar_dir: &Path,
     manifest_path: &Path,
     out: &Path,
+    limit: Option<usize>,
+    write_ledger: bool,
 ) -> Result<()> {
     let (language, fingerprint) = grammar::load(grammar_dir)?;
     let (manifest, corpus_lock_sha256) = Manifest::load_with_sha256(manifest_path)?;
     let grammar_revision = committed_grammar_revision(grammar_dir);
     let corpus_root = manifest_path.parent().unwrap();
     let corpus_src = corpus_root.join("src");
-    let files = manifest.files();
+    let all_files = manifest.files();
+    let files = match limit {
+        Some(limit) => {
+            anyhow::ensure!(limit > 0, "--limit must be greater than zero");
+            // Spread the canary across the ordered manifest rather than
+            // taking one package-heavy prefix. The same lock and limit
+            // therefore select the same files on every runner.
+            let step = (all_files.len() / limit).max(1);
+            all_files.into_iter().step_by(step).take(limit).collect()
+        }
+        None => all_files,
+    };
 
     // Incremental sweeps: files whose content already passed under this
     // exact grammar build are skipped. Any grammar change changes the
@@ -839,7 +852,9 @@ pub fn run(
     };
     std::fs::create_dir_all(out.parent().unwrap_or(Path::new(".")))?;
     std::fs::write(out, serde_json::to_string_pretty(&report)?)?;
-    write_ledger_block(grammar_dir, lang, &report)?;
+    if write_ledger {
+        write_ledger_block(grammar_dir, lang, &report)?;
+    }
     let report_md = out.with_file_name("REPORT.md");
     std::fs::write(&report_md, markdown(&report, corpus_root))?;
 

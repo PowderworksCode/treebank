@@ -300,6 +300,15 @@ enum Cmd {
         /// alongside]
         #[arg(long)]
         out: Option<PathBuf>,
+        /// Deterministic, evenly spread corpus sample. The full manifest is
+        /// still the provenance identity; sampled sweeps are canaries, not
+        /// replacement evidence.
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Produce reports without replacing the committed full-corpus
+        /// ledger block.
+        #[arg(long)]
+        no_write_ledger: bool,
     },
     /// Check a grammar for the structural smells FIELD_GUIDE.md names:
     /// declared-conflict growth, early commits between parallel tiers,
@@ -690,11 +699,15 @@ fn main() -> anyhow::Result<()> {
             grammar,
             manifest,
             out,
+            limit,
+            no_write_ledger,
         } => sweep::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             &lang_path(lang, out, "reports/sweep.json"),
+            limit,
+            !no_write_ledger,
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
