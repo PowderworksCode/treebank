@@ -2445,20 +2445,79 @@
               "value": "class"
             },
             {
+              "type": "FIELD",
+              "name": "name",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_name"
+              }
+            },
+            {
+              "type": "FIELD",
+              "name": "type_parameters",
+              "content": {
+                "type": "CHOICE",
+                "members": [
+                  {
+                    "type": "SYMBOL",
+                    "name": "type_parameters"
+                  },
+                  {
+                    "type": "BLANK"
+                  }
+                ]
+              }
+            },
+            {
               "type": "CHOICE",
               "members": [
                 {
-                  "type": "FIELD",
-                  "name": "name",
-                  "content": {
-                    "type": "SYMBOL",
-                    "name": "_name"
-                  }
+                  "type": "SYMBOL",
+                  "name": "class_heritage"
                 },
                 {
                   "type": "BLANK"
                 }
               ]
+            },
+            {
+              "type": "FIELD",
+              "name": "body",
+              "content": {
+                "type": "SYMBOL",
+                "name": "class_body"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "_anonymous_class": {
+      "type": "PREC_DYNAMIC",
+      "value": 1,
+      "content": {
+        "type": "PREC_RIGHT",
+        "value": 0,
+        "content": {
+          "type": "SEQ",
+          "members": [
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_attribute"
+              }
+            },
+            {
+              "type": "REPEAT",
+              "content": {
+                "type": "SYMBOL",
+                "name": "_modifier"
+              }
+            },
+            {
+              "type": "STRING",
+              "value": "class"
             },
             {
               "type": "FIELD",
@@ -4144,6 +4203,15 @@
         {
           "type": "SYMBOL",
           "name": "class_definition"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_anonymous_class"
+          },
+          "named": true,
+          "value": "class_definition"
         },
         {
           "type": "SYMBOL",
@@ -5894,6 +5962,15 @@
         {
           "type": "SYMBOL",
           "name": "class_definition"
+        },
+        {
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_anonymous_class"
+          },
+          "named": true,
+          "value": "class_definition"
         },
         {
           "type": "SYMBOL",
@@ -10544,7 +10621,7 @@
     ],
     [
       "_reserved_property",
-      "class_definition"
+      "_anonymous_class"
     ],
     [
       "throw_statement",
