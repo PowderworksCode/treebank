@@ -56,6 +56,13 @@ pub struct ShapeReport {
     pub grammar: String,
     pub files_checked: usize,
     pub files_skipped: usize,
+    /// Which files were skipped, recorded for a fixture directory only. A
+    /// corpus run skips tens of thousands of files by design — that is the
+    /// sweep's business — and listing them here would bloat every report
+    /// for no reader. A fixture directory skips none, so the list is short
+    /// and it is the one place the names are worth having.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<String>,
     pub oracle_nodes: usize,
     pub missed_nodes: usize,
     pub files_with_misses: usize,
@@ -718,6 +725,7 @@ pub fn run(
         grammar: grammar_dir.display().to_string(),
         files_checked: 0,
         files_skipped: 0,
+        skipped_files: Vec::new(),
         oracle_nodes: 0,
         missed_nodes: 0,
         files_with_misses: 0,
@@ -1084,11 +1092,14 @@ pub fn run(
             })
             .collect::<Result<_>>()?;
 
-        for r in results {
+        for (rel, r) in batch.iter().zip(results) {
             report.oracle_nodes += r.oracle_nodes;
             report.missed_nodes += r.missed;
             if r.skipped {
                 report.files_skipped += 1;
+                if dir.is_some() {
+                    report.skipped_files.push(rel.clone());
+                }
             } else {
                 report.files_checked += 1;
             }
@@ -1268,9 +1279,27 @@ pub fn run(
             grammar_dir.display(),
         );
     }
+    // A file that does not parse is skipped, because comparing shapes
+    // against an error tree is noise and parse failures are the SWEEP's
+    // business. In a fixture directory there is no sweep to hand them to:
+    // CI has no corpus, and this is the only check that reads these files.
+    // A fixture that regressed into an ERROR would drop out of the set in
+    // silence and the zero ceiling below would pass over the hole, so here
+    // a skip is the finding rather than the absence of one.
+    if dir.is_some() {
+        anyhow::ensure!(
+            report.files_skipped == 0,
+            "shape: {} fixture(s) did not parse cleanly and were skipped: {}. A fixture that \
+             errors measures nothing -- every file in a fixture directory must parse. Fix the \
+             parse, or move the file to test/negative/ if rejecting it is the point.",
+            report.files_skipped,
+            report.skipped_files.join(", "),
+        );
+    }
     // A fixture directory is a ZERO ratchet -- every file in it is there
-    // because a specific mis-parse was fixed, so any miss is that mis-parse
-    // coming back.
+    // because a specific mis-parse was fixed, or because it pins a
+    // construct family nothing else was guarding. Either way any miss is a
+    // regrouping that was not there before.
     let ceiling = if dir.is_some() { Some(0) } else { baseline };
     // Only meaningful over the whole set; a --limit run checks a prefix and
     // would trip the ratchet for no reason.
