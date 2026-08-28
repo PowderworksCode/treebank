@@ -364,7 +364,7 @@
         "named": true
       },
       {
-        "type": "inner_attribute_item",
+        "type": "function_definition",
         "named": true
       },
       {
@@ -490,10 +490,6 @@
         "named": true
       },
       {
-        "type": "inner_attribute_item",
-        "named": true
-      },
-      {
         "type": "let_declaration",
         "named": true
       }
@@ -537,10 +533,6 @@
       },
       {
         "type": "pointer_type",
-        "named": true
-      },
-      {
-        "type": "qualified_type",
         "named": true
       },
       {
@@ -877,6 +869,10 @@
         },
         {
           "type": "_statement",
+          "named": true
+        },
+        {
+          "type": "inner_attribute_item",
           "named": true
         }
       ]
@@ -1356,6 +1352,18 @@
       "types": [
         {
           "type": "_member",
+          "named": true
+        },
+        {
+          "type": "inner_attribute_item",
+          "named": true
+        },
+        {
+          "type": "static_definition",
+          "named": true
+        },
+        {
+          "type": "type_alias",
           "named": true
         }
       ]
@@ -4178,6 +4186,10 @@
           "named": true
         },
         {
+          "type": "lifetime",
+          "named": true
+        },
+        {
           "type": "raw_string",
           "named": true
         },
@@ -4201,7 +4213,11 @@
       "required": true,
       "types": [
         {
-          "type": "_type",
+          "type": "function_type",
+          "named": true
+        },
+        {
+          "type": "generic_type",
           "named": true
         },
         {
@@ -4210,6 +4226,22 @@
         },
         {
           "type": "lifetime",
+          "named": true
+        },
+        {
+          "type": "macro_invocation",
+          "named": true
+        },
+        {
+          "type": "scoped_type_identifier",
+          "named": true
+        },
+        {
+          "type": "trait_bounds",
+          "named": true
+        },
+        {
+          "type": "type_identifier",
           "named": true
         },
         {

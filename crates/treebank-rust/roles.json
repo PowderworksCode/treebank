@@ -130,6 +130,10 @@
       "reason": "generics machinery below the role layer (for<'a> prefix of fn types)"
     },
     {
+      "node": "inner_attribute_item",
+      "reason": "an attribute on the thing it is written INSIDE, admitted only at the head of a file, module, block, match or declaration list. `_attribute` is the repeated OUTER-attribute prefix every item carries, and inner attributes are not that; sharing the supertype is what let them appear between items."
+    },
+    {
       "node": "let_chain",
       "reason": "the `let pat = e && cond` chain form of a condition; its members carry their own roles"
     },
@@ -152,6 +156,10 @@
     {
       "node": "parameters",
       "reason": "container node; its elements carry the role (_parameter)"
+    },
+    {
+      "node": "qualified_type",
+      "reason": "a path QUALIFIER (`<T>::`, `<T as Tr>::`), not a type: it occurs only as the `path` field of a scoped name. Offered as a `_type` member it filled `impl`'s self-type slot."
     },
     {
       "node": "scoped_use_list",
