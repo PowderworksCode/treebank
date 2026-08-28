@@ -1,0 +1,55 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). Two, the lowest of the nine
+# grammars: zig's syntax is close to LR(1) by design, and the grammar has
+# stayed that way. Two is near enough to zero that any increase deserves
+# an argument, not a baseline bump.
+declared_conflicts = 2
+
+# Conflicts naming a supertype. None. This is the value to protect —
+# zig is the only grammar of the nine with no early commit between
+# parallel tiers.
+early_commit_conflicts = 0
+
+# prec.dynamic sites. None. Weights are the tool of last resort and zig
+# has never needed one; the first will need the cull analysis
+# FIELD_GUIDE.md §2 describes, because a weight on a construct CORRECT
+# parses contain re-ranks whole versions at the cull.
+dynamic_weights = 0
+
+# One spelling, two tokens (§4). None — keep it that way.
+same_text_tokens = 0
+
+# Keyword-shaped tokens outside every reserved set: addrspace, align,
+# allowzero, and, anyframe, anytype, asm, async, await, break, callconv,
+# catch, comptime, const, continue, defer, else, enum, errdefer, error,
+# export, extern, false, fn, for, if, inline, linksection, noalias,
+# noinline, nosuspend, null, opaque, or, orelse, packed, pub, resume,
+# return, struct, suspend, switch, test, threadlocal, true, try,
+# undefined, union, unreachable, usingnamespace, var, volatile, while.
+#
+# THIS BASELINE IS NOT A CLAIM THAT THESE ARE SOFT KEYWORDS. They are
+# not. Zig reserves these words; using one as a name requires `@"const"`.
+# The grammar declares `word: identifier` and no reserved set at all, so
+# the whole vocabulary is unreserved by omission, and the leak is real
+# and measured — see issue #198. Our grammar parses `x.const`, `.fn` and
+# `error.const` with zero ERROR nodes; `treebank oracle --lang zig` calls
+# all three invalid, with `x.field` valid as the control.
+#
+# The number is frozen at today's value so the debt cannot grow while the
+# fix — populating `reserved` — is owned by the zig grammar lane. Drop it
+# when the reserved set lands; do not raise it.
+unreserved_keywords = 53
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does. Zig's table is large
+# relative to its two conflicts, which is the shape of a big flat
+# vocabulary rather than of ambiguity.
+state_count = 8339

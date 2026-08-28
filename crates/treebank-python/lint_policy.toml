@@ -1,0 +1,61 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). Python's forks are overwhelmingly
+# the match-statement pattern tier: patterns are spelled exactly like
+# expressions and only the `case` context distinguishes them, so every
+# pattern shape forks against its expression twin.
+declared_conflicts = 47
+
+# Conflicts naming a supertype — parallel-tier early commits. `_access`
+# in 4, `_access`+`_pattern` in 2, `_name`+`_pattern` in 2, `_literal` in
+# 2, `_expression` in 1. The pattern-versus-expression family is one
+# factoring problem; PEP 634 made patterns a separate tier over the same
+# spellings, and the grammar currently mirrors that split rather than
+# sharing a derivation.
+early_commit_conflicts = 11
+
+# prec.dynamic sites. Weights are the tool of last resort. These six are
+# all soft-keyword disambiguation, which is what python actually needs
+# them for: `print_statement` (-1) and `exec_statement` (-1) rank the
+# python-2 statement readings under the ordinary call, so `print(x)` is a
+# call; `type_alias_statement` (-1) does the same for `type X = ...`
+# against a plain assignment; `match_statement` (+1) ranks the match
+# reading over a call to a function named `match`; and the two
+# comprehension/with sites (`_parenthesized_with_items`,
+# `_comma_expressions`, both +1) resolve `with (a, b):` between a tuple
+# and a parenthesized item list. A weight on a construct CORRECT parses
+# contain re-ranks whole versions at the cull, so new weights need that
+# analysis first (FIELD_GUIDE.md §2).
+dynamic_weights = 6
+
+# One spelling, two tokens (§4): `{`. The f-string interpolation brace
+# against the dict/set brace — the two sides are disjoint by
+# construction, since one only occurs inside a formatted string body.
+same_text_tokens = 1
+
+# Keyword-shaped tokens outside every reserved set: and, as, assert,
+# async, await, break, case, class, continue, def, del, elif, else,
+# except, exec, finally, for, from, global, if, import, in, is, lambda,
+# match, nonlocal, not, or, pass, print, raise, return, try, type, while,
+# with, yield.
+#
+# The grammar declares `word: identifier` and NO reserved set, so this is
+# the whole vocabulary, not a documented residue like ruby's five.
+# Python's own soft keywords (`match`, `case`, `type`, and the python-2
+# `print`/`exec`) genuinely belong outside a reserved set — those five
+# are handled by the dynamic weights above. The other 32 are hard
+# keywords, unreserved by omission. Nobody has probed which positions
+# leak; see issue #198 for the same defect confirmed in zig. Frozen at
+# today's value so it cannot grow while that check is outstanding.
+unreserved_keywords = 37
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does.
+state_count = 2496

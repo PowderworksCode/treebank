@@ -1,0 +1,62 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). Rust's forks are the generic-
+# argument ambiguity (`a < b` is a comparison or the start of a type
+# argument list, resolved in real rustc by the turbofish), patterns
+# sharing spellings with expressions, and macro invocation, whose token
+# trees can be anything.
+declared_conflicts = 58
+
+# Conflicts naming a supertype — parallel-tier early commits, spread
+# across `_name` (4), `_control_flow` (2), `_invocation` (2), `_type`
+# (2), `_pattern`, `_access`, and five mixed families that pair
+# `_invocation`, `_pattern` and `_type`. The mixed ones are the
+# interesting group: they are the sites where a token could still turn
+# out to be a macro call, a pattern or a type, and the grammar commits to
+# a tier before it knows.
+early_commit_conflicts = 17
+
+# prec.dynamic sites. Only two, both on `expression_statement` (+1 and
+# -1), which is the block-expression-versus-statement rule: `match x {}`
+# at statement position ends the statement at the closing brace, while
+# the same text in value position continues into a binary operator. Rust
+# defines this asymmetry in its own grammar, so the weights encode a real
+# language rule rather than papering over a fork. A weight on a construct
+# CORRECT parses contain re-ranks whole versions at the cull, so new
+# weights need that analysis first.
+dynamic_weights = 2
+
+# One spelling, two tokens (§4): `!`. The immediate form is
+# `macro_definition` only — `macro_rules!` requires the bang to abut —
+# against the plain `!` of macro invocation, unary negation, the never
+# type, `impl !Trait` and inner attributes. Disjoint by construction: the
+# immediate form occurs in no other rule.
+same_text_tokens = 1
+
+# Keyword-shaped tokens outside every reserved set: as, async, auto,
+# await, break, const, continue, crate, default, dyn, else, enum, extern,
+# false, fn, for, if, impl, in, let, loop, macro_rules, match, mod, move,
+# mut, pub, raw, ref, return, safe, self, static, struct, super, trait,
+# true, type, union, unsafe, use, where, while.
+#
+# Rust is the only grammar besides ruby that declares a reserved set at
+# all, but it holds exactly two words — `box` and `yield`, the
+# reserved-for-future-use pair — so the 43 above are the ACTUAL keywords,
+# left unreserved. That is nearly the opposite of what the set is for.
+# A handful genuinely are contextual (`auto`, `default`, `union`, `raw`,
+# `safe`, `macro_rules`); the rest are hard keywords, unreserved by
+# omission. Nobody has probed which positions leak; see issue #198 for
+# the same defect confirmed in zig. Frozen at today's value so it cannot
+# grow while that check is outstanding.
+unreserved_keywords = 43
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does.
+state_count = 5214

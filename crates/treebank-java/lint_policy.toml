@@ -1,0 +1,53 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). Java's forks are dominated by one
+# ambiguity: a dotted name is a package prefix, a type, or a field
+# access, and nothing decides which until the token after the name ends.
+declared_conflicts = 38
+
+# Conflicts naming a supertype — parallel-tier early commits. The
+# distribution says the same thing: `_name` in 7, `_type` in 2,
+# `_name`+`_type` together in 1, plus `_member` and `_modifier` once
+# each. The `_name`/`_type` family is one factoring problem, not eight;
+# it is the java analogue of the `[_name, _callee]` family ruby factored
+# away (FIELD_GUIDE.md §1), and it should go the same way.
+early_commit_conflicts = 12
+
+# prec.dynamic sites. Weights are the tool of last resort; these four are
+# `annotation_type_declaration` (+1, `@interface` over an annotated
+# declaration), `generic_type` (+1, `<` as type arguments over the
+# comparison reading), `annotated_type` (-1) and `cast_expression` (-1,
+# `(Foo)` as a cast ranked under the parenthesized-expression reading).
+# All four are the same shape: one spelling that only context separates.
+# New weights need the cull analysis FIELD_GUIDE.md §2 describes first.
+dynamic_weights = 4
+
+# One spelling, two tokens (§4). None — keep it that way.
+same_text_tokens = 0
+
+# Keyword-shaped tokens outside every reserved set: 66, the full java
+# keyword vocabulary plus the contextual words (exports, module, open,
+# opens, permits, provides, record, requires, sealed, to, transitive,
+# uses, when, with, yield).
+#
+# The grammar declares `word: identifier` and NO reserved set, so unlike
+# ruby's five this is not a documented soft-keyword residue — it is the
+# whole vocabulary, unreserved by omission. Java genuinely reserves most
+# of these (`class`, `int`, `static`); only the module-system and pattern
+# words are contextual. Nobody has probed which positions leak; see
+# issue #198 for the same defect confirmed in zig. Frozen at today's
+# value so it cannot grow while that check is outstanding.
+unreserved_keywords = 66
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does. Java's is the smallest of
+# the nine, which is what a regular language with a big vocabulary and
+# one bad ambiguity looks like.
+state_count = 1245
