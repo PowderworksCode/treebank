@@ -27,7 +27,24 @@ recovery_check = '''
 `treebank recovery` — 1993 files, 11435 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.5%, p90 17.5%, p99 94.1%; 60 deletions put more than half of a file of at least 1 KiB inside an error, most often `}` x15, `{` x13, `import` x8, `/` x5. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
 
 fuzz_check = '''
-`treebank fuzz` — the first runs over this grammar. 8 distinct shrunk programs, all confirmed against tsc: `try { }` with neither catch nor finally, `for await (x in y)`, `override var x`, and a `function ( ) ;` family. Four are fixed and the count is 4. What remains is one cause: the keyword-less method form is reachable at STATEMENT level, so `function ( ) ;` and `foo ( ) { }` both parse — `function` lexes as an identifier where the keyword is not valid, and the method form picks it up. The fix is the `_declaration` refactor the grammar already carries a note about, and that note understates it: class members route through `_declaration` on purpose so a method answers `(_declaration)`, and splitting the rule drops that.'''
+`treebank fuzz` — 5,000 derivations, seed 701089105, per dialect. The two legs are not equally sharp, and the difference decides what this check can see. The javascript leg judges with V8, which rejects everything the language rejects. The typescript leg judges with `ts.createSourceFile` parseDiagnostics, which is silent on tsc's GRAMMAR checks — TS1211 among them — so an anonymous class DECLARATION reads as valid to the typescript oracle and invalid to the javascript one, over the same grammar.
+
+That asymmetry is the whole history of the last finding. `class { }` and `class { } ;` were 615 widenings in 2 distinct programs and the javascript run's ENTIRE undeclared surface (#191), while the typescript run could not see them at all. `class_definition` now requires its name; both are rejected, as are `class extends A { }` and `export class { }`, which shrink to the same defect.
+
+Counts are not comparable across a grammar change and nothing here compares them: the generator walks the grammar itself, so changing a rule changes what a seed derives. The class family dominated the old walk at 615 of 615 seeds; with it gone the same seed reaches 9 other programs, 516 seeds, and every one of the 9 is accepted by the PREVIOUS grammar too — checked, one by one. They are two known things and no new one:
+
+  497 seeds   `enum XX { }`, `enum XX { } ;`, and 11 more for `public var XX ;`
+              — TypeScript spelled in a .js file. That is the union grammar
+                working as the dialect_decision above says it does, and it is
+                what a fuzz_policy.toml is for.
+    4 seeds   `export default function ( ) ;` — the bodiless anonymous default
+                function this ledger records as deliberate, judged in .js.
+    4 seeds   `break ;` at top level — V8's "Illegal break statement" is a
+                COMPILER check. The js oracle has no syntax-only mode, so the
+                report says "parser and compiler together", and this is the
+                cost of that.
+
+Every earlier finding is closed: `try { }` with neither catch nor finally, `for await (x in y)`, `override var x`, and the `function ( ) ;` family the `_method_definition` split ended — `function ( ) ;`, `foo ( ) { }` and `declare foo(): void` are all rejected, checked. The `_declaration` refactor those notes called blocked has landed.'''
 [corpus]
 source = '''
 top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)'''
@@ -46,8 +63,8 @@ gap_files = 6
 noise_files = 6
 pass_rate = '99.90%'
 corpus_lock_sha256 = '7c97b264724385594886133afe74586fb1637e10facc6fe612236b6887b1e64e'
-grammar_sha256 = 'cdc95300960bab90c2116dcc2c4628f172811d7fcc842798118dd7a31d189152'
-grammar_revision = 'de79449d858531198822a7092ff3fbef67d0662f'
+grammar_sha256 = '35bb4a8bf09f345834b6174b671e5fc7bed3ffdc104c7d7c4f4e5d152206e300'
+grammar_revision = '83b4b0bb44daee53ee9eb22764bf8eb4b6c69318'
 
 [corpus.javascript_sweep]
 files = 25300
@@ -57,8 +74,8 @@ gap_files = 8
 noise_files = 0
 pass_rate = '99.97%'
 corpus_lock_sha256 = 'e778b2a357c9b10a5f2b37362a83706bb314c1c930d516b0da491763f7bef89c'
-grammar_sha256 = 'cdc95300960bab90c2116dcc2c4628f172811d7fcc842798118dd7a31d189152'
-grammar_revision = 'de79449d858531198822a7092ff3fbef67d0662f'
+grammar_sha256 = '35bb4a8bf09f345834b6174b671e5fc7bed3ffdc104c7d7c4f4e5d152206e300'
+grammar_revision = '83b4b0bb44daee53ee9eb22764bf8eb4b6c69318'
 
 [[oracles]]
 family = 'typescript'
@@ -210,11 +227,11 @@ now = '''
 note = '''
 SILENT and invisible to the shape check too: `function_definition` and `expression_statement` span the same bytes and only the KINDS differ. Found by reading a shape fixture's tree by eye. Recorded because it marks the boundary of what a boundary check can do.'''
 
-[[known_widenings]]
-construct = '''
-a top-level declaration with no `function` keyword, `declare foo(): void`'''
-found_by = 'mutate (delete `function`)'
-why_accepted = '''
-the keyword-less method form of `function_definition` is reachable at statement level, because class members route through `_declaration` and statements use the same rule.'''
-why_not_fixed = '''
-the same shape as the `f(a=1, b)` problem in python, and blocked on the same thing. Splitting the method form out of `_declaration` means a second hidden rule, and `_declaration` is a table-tier supertype -- derivation-based -- so whichever side does not route through it stops answering `(_declaration)`. Methods answering `(_declaration)` is deliberate and documented in the grammar. Left as a decision to take rather than one to slip in.'''
+[[deviations]]
+construct = '`class { }` — an anonymous class DECLARATION'
+was = '''
+accepted anywhere a declaration is: statement position, a class body, after `export`. `class_definition` carried `optional(field('name'))` because the expression tier needs it, and the same rule answered for `_declaration`.'''
+now = '''
+the name is required on `class_definition`; `_anonymous_class`, which has no name slot at all, sits in the expression tier and is aliased back to the same kind. `export default class { }` — ClassDeclaration with [+Default], the one anonymous declaration the language has — reaches it through `export default <expression>` and ASI.'''
+note = '''
+615 widenings in 2 shrunk programs, found by the javascript fuzz leg and invisible to the typescript one: TS1211 is a tsc grammar-CHECK diagnostic, not a parse diagnostic, so `parseDiagnostics` is empty for all four spellings. `mutate` was equally blind — it had been scoring `declare class  implements ResourceDetector` (the name deleted from a real .d.ts) as AGREED, which is what a widening looks like when the oracle cannot see it.'''
