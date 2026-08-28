@@ -208,3 +208,53 @@ match command:
         (identifier)
         body: (block
           (pass_statement))))))
+
+================================================================================
+backslash continuation in the leading whitespace fixes the indent at the backslash
+================================================================================
+
+if True:
+    \
+        1
+    2
+else:\
+    3
+
+--------------------------------------------------------------------------------
+
+(module
+  (if_statement
+    condition: (true)
+    body: (block
+      (expression_statement
+        (integer))
+      (expression_statement
+        (integer)))
+    alternative: (else_clause
+      body: (block
+        (expression_statement
+          (integer))))))
+
+================================================================================
+a backslash at column zero fixes nothing: the continuation line's own indent wins
+================================================================================
+
+class Plotter:
+\
+    pass
+
+class C:
+ \
+pass
+
+--------------------------------------------------------------------------------
+
+(module
+  (class_definition
+    name: (identifier)
+    body: (block
+      (pass_statement)))
+  (class_definition
+    name: (identifier)
+    body: (block
+      (pass_statement))))
