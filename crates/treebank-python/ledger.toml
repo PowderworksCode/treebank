@@ -36,17 +36,15 @@ incremental_check = '''
 recovery_check = '''
 `treebank recovery` — 1978 files, 10920 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.3%, p90 17.1%, p99 99.1%; 240 deletions put more than half of a file of at least 1 KiB inside an error, most often `"""` x59, `:` x34, `(` x23, `)` x22. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
 
+indentation_and_continuations = '''
+Indentation is not the column the first TOKEN sits at. A backslash continuation inside a line's leading whitespace moves the token without moving the indent, and CPython settles it while scanning that whitespace, in `cont_line_col` (Parser/tokenizer.c): a backslash reached at a NON-ZERO column fixes the indent there and nothing after it on the continuation line is indentation; a backslash at column ZERO fixes nothing and the scan continues onto the next physical line. The corpus holds a fixture for each half and they pull opposite ways — ruff's backslash_continuation_indentation needs the first, black's backslash_before_indent needs the second — which is why this was carried as a gap where fixing one broke the other. It is the non-zero test that reconciles them, and it is the whole fix: sweep 297,252 -> 297,256 passing, gap files 7 -> 3, closing two gap clusters (issue #194). Scanner only; grammar.js and the parse table did not move. What remains in this area is the tab gap below, which is a different rule (tab EXPANSION, not continuations).'''
+
 [[known_gaps]]
 construct = 'indentation that mixes tabs and spaces'
 files = 1
 note = '''
 `def apply(self, inst, t):` indented with four spaces and its body with a tab. CPython's tokenizer expands a tab to the next multiple of eight when it measures indentation; the scanner asks tree-sitter for `get_column`, which counts CHARACTERS, so it reads the tab as column 1, sees 1 < 4, and dedents out of the body. The fix is to measure the indent run directly with CPython's rules (space +1, tab to the next multiple of 8, form feed resets to 0) instead of calling get_column. One file in 297,612, against the riskiest code in the repository to change, so it is written down rather than attempted.'''
 
-[[known_gaps]]
-construct = 'backslash continuation as the first line of a block'
-files = 2
-note = '''
-`class C:` followed by a line holding only ` \\`, then `pass` at column 0 — the continuation joins them into one logical line indented by one space. Same scanner area as the tab gap: the indent is measured before the continuation is resolved. Also covers the `else:\\` fixture.'''
 [corpus]
 source = '''
 top-1000 PyPI packages by download rank (hugovk top-pypi-packages), sdists only; 951 of 1000 publish one'''
@@ -57,18 +55,18 @@ python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half 
 mutation_falsification = '''
 while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified.'''
 corpus_composition_note = '''
-7 grammar-gap files across 5 clusters and 12 version-policy rejections. ruff, ty and ast-serialize each vendor ruff's parser test corpus: one backslash-continuation gap fixture is therefore counted three times, and the 12 version-policy files are three distinct constructs repeated across those copies. The other four gap clusters occur once each.'''
+3 grammar-gap files across 3 clusters and 12 version-policy rejections, one file per gap cluster. The 12 version-policy files are three distinct constructs repeated across the copies of ruff's parser test corpus that ruff, ty and ast-serialize each vendor. That vendoring is why the backslash-continuation gap counted three times while it was open: one fixture, three copies.'''
 
 [corpus.sweep]
 files = 298354
-passed = 297252
-failed = 1102
-gap_files = 7
+passed = 297256
+failed = 1098
+gap_files = 3
 noise_files = 1083
 pass_rate = '99.63%'
 corpus_lock_sha256 = 'caa6ed0d03bb58fb0dfd209ba3e6df7308753c88ddb9a8e8f8fc6d5e8257569b'
-grammar_sha256 = 'e661ebf3f7dec634938e1c044ae072f8b5d3cb7cd070ecdc140ea1a1ac5c1e18'
-grammar_revision = '80fdf0e837bebbcfb91b5a4d7c35622058c51c0c'
+grammar_sha256 = '4f65c896e791151d92d92ff5f1d7162a00175890d1eb28d903921b390d73beed'
+grammar_revision = 'e999a80702847ab0f6129db459df1ce7da0ba267'
 
 [[oracles]]
 family = 'python3'
@@ -91,12 +89,6 @@ battery = '''
 test/negative-oracle/py3/ (print statement, backticks, 0777, except-comma) verified live: python3 rejects all four, python2 accepts all four. test/negative-oracle/py2/ (f-string, nonlocal, walrus) verified live in the reverse direction. The battery caught its own bad fixture on first run: bare `nonlocal x` with no enclosing binding is a SyntaxError in py3 as well, so the fixture gained the enclosing function it needed.'''
 bug_found_by_widening = '''
 The wider corpus crashed the py2 leg: a file with a NUL byte makes py2's compile() raise TypeError where py3 raises ValueError, and check2.py caught only the latter, so the oracle died instead of returning a verdict. A NUL in the source is a VERDICT (the bytes were read fine, they are just not python), not an oracle failure, so both are now caught. The loud-failure discipline worked exactly as designed — the sweep aborted rather than silently booking every python2 file as noise.'''
-
-[[known_gaps]]
-construct = "backslash continuations that change a suite's indentation"
-files = 3
-note = '''
-CPython's rule here is neither 'the indent of the first physical line' nor 'the indent of the token'. Taking it from the first physical line (captured at the backslash) FIXES ruff's backslash_continuation_indentation (3 files) and BREAKS black's backslash_before_indent (6 files); the committed behaviour is the reverse trade. Measured both ways, kept the better one.'''
 
 [[known_gaps]]
 construct = 'TWO OR MORE consecutive comment lines after an inline suite'
