@@ -1036,10 +1036,17 @@ Hidden rules are deliberately *not* inlined. The `_or_test` → `_and_test` →
 most informative part of the page, and it is exactly what a manual shows as
 `expr → boolean_primary → predicate → bit_expr → simple_expr`.
 
-CI renders every grammar on every change (`emit.py --check`). The renderer
-is total over grammar.json's node kinds and raises on one it does not know,
-so a grammar that starts using an unfamiliar DSL construct fails the build
-rather than silently losing part of a production from its documentation.
+CI renders every grammar on every change (`emit.py --check`), as a step of
+the per-grammar gates — so the same `discover` job that decides what gets
+gated decides what gets documented, and a grammar cannot arrive with its
+reference silently unrendered. The renderer is total over grammar.json's
+node kinds and raises on one it does not know, so a grammar that starts
+using an unfamiliar DSL construct fails the build rather than silently
+losing part of a production from its documentation.
+
+That totality is the claim worth testing, and six of the nine grammars were
+written after the renderer was: bash, c, cpp, java, ruby and zig all render
+without a line of per-language code, 1,569 productions across the nine.
 
 ## 7. Design decisions
 

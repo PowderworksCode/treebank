@@ -5,7 +5,15 @@ its entry line, and how far BELOW. Layout is then a matter of parents
 asking children for those and handing back x/y. Radius-10 arcs join the
 pieces, which is the convention every railroad renderer since Wirth has
 used.
+
+Widths accumulate with `math.fsum`, not `sum`. CPython 3.12 gave `sum`
+compensated (Neumaier) summation over floats and older versions add
+left-to-right, so the same grammar drew coordinates that differed in the
+last few ulps depending on the interpreter. `fsum` is correctly rounded on
+every version, which makes a rendered page a function of the grammar alone.
 """
+
+from math import fsum
 
 AR = 10          # arc radius
 CH = 7.23       # DejaVu Sans Mono advance (0.60205 em) at 12px, embedded
@@ -72,7 +80,7 @@ class Seq(Node):
     def __init__(self, items):
         super().__init__()
         self.items = [i for i in items if not isinstance(i, Skip)] or [Skip()]
-        self.width = sum(i.width for i in self.items) + 10 * (len(self.items) - 1)
+        self.width = fsum(i.width for i in self.items) + 10 * (len(self.items) - 1)
         self.up = max(i.up for i in self.items)
         self.down = max(i.down for i in self.items)
 

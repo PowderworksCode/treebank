@@ -9,7 +9,8 @@ python3 tools/grammardoc/emit.py crates/treebank-python /tmp/python.html
 python3 tools/grammardoc/emit.py --check crates/treebank-python   # what CI runs
 ```
 
-No dependencies beyond the standard library. Roughly 70 ms per grammar.
+No dependencies beyond the standard library, and no floor above Python 3.9.
+Under 50 ms per grammar; about 0.3 s to check all nine.
 
 ## Why it is small
 
@@ -21,7 +22,10 @@ tree over sixteen node kinds — `SEQ`, `CHOICE`, `REPEAT`, `REPEAT1`,
 `IMMEDIATE_TOKEN`, `RESERVED`, and the four `PREC` forms.
 
 So rendering is a fold over those sixteen cases, not a parse. There is no
-per-language code: the same fold produces Python, Rust and TypeScript.
+per-language code: the same fold produces all nine grammars — bash, c, cpp,
+java, python, ruby, rust, typescript and zig, 1,569 productions between
+them. Six of the nine were written after this renderer was, and none of
+them needed a line of it changed.
 
 Because it reads the generated grammar rather than the source, the page
 cannot drift from the parser. If a production is on the page, the parse
@@ -52,6 +56,14 @@ half the diagrams are unreadable.
 express precedence at all, which is why every language manual prints it
 separately. Levels are also drawn around the production they apply to, so
 you do not have to cross-reference.
+
+**A page is a function of the grammar alone.** Box widths accumulate with
+`math.fsum` rather than `sum`, because CPython 3.12 gave `sum` compensated
+summation over floats while older versions add left to right — the same
+grammar drew coordinates differing in the last few ulps depending on which
+interpreter ran it. With `fsum` every supported version emits the same
+bytes, which is checked by rendering all nine under two interpreters and
+comparing.
 
 **The monospace face is embedded, and that is not decoration.** The SVG box
 widths are computed here, from a fixed character advance (DejaVu Sans Mono,

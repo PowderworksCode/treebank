@@ -169,10 +169,11 @@ def build(crate: Path, out: Path, embed_fonts=True):
     for lvl in sorted(precs, reverse=True):
         kinds = sorted({k for k, _ in precs[lvl]})
         rules = sorted({r for _, r in precs[lvl]})
-        o.append(
-            f'<tr><td class="lvl">{lvl}</td>'
-            f'<td class="kind">{" ".join(f"<code>{E(k)}</code>" for k in kinds)}</td>'
-            f'<td>{"".join(f'<a href="#r-{E(r)}">{E(r)}</a>' for r in rules)}</td></tr>')
+        kind_cells = ' '.join(f'<code>{E(k)}</code>' for k in kinds)
+        rule_links = ''.join(f'<a href="#r-{E(r)}">{E(r)}</a>' for r in rules)
+        o.append(f'<tr><td class="lvl">{lvl}</td>'
+                 f'<td class="kind">{kind_cells}</td>'
+                 f'<td>{rule_links}</td></tr>')
     o.append('</tbody></table></div>')
 
     # ---- productions ---------------------------------------------------
