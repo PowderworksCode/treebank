@@ -22,19 +22,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
       # Compiles every grammar's parser.c and scanner.c as a real crate,
       # and runs their load + manifest tests.
-      # Every CI run contributes this build to the public compile-time census
-      # at <https://cratebank.io/>. It builds what the steps below would have
-      # built anyway, measured, so what is added here is mostly the measuring.
-      #
-      # `strict` because this is the build. A measurement that quietly did not
-      # happen would mean nothing built the project either, and a green check
-      # would be saying so about work that never ran.
-      - uses: PowderworksCode/cratebank/action@v0.1.1
-        with:
-          args: --workspace
-          org-id: powderworks
-          strict: "true"
-
+      - run: cargo build --workspace
       # One generated inventory joins registry configuration, ledgers,
       # fixtures, policies, locks and canaries. --check makes missing or
       # contradictory required configuration fail; warnings remain visible
