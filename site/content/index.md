@@ -51,9 +51,10 @@ Ruby, Rust or a browser with no toolchain at the far end:
 curl -O https://treebank.dev/packs/treebank-python.wasm
 ```
 
-From Rust that is `cargo add treebank` and three lines. From anywhere else it
-is a WASI runtime and about twenty lines — [Using a grammar](/integrate/) has
-both, and the complete examples.
+From Rust that is `cargo add treebank` and `Pack::fetch("python")`, which
+downloads and verifies the grammar for you. From anywhere else it is a WASI
+runtime and about twenty lines — [Using a grammar](/integrate/) has both, and
+the complete examples.
 
 There is one package per language you write in, not one per language you
 parse. Every file is content-addressed, so `treebank-python-<hash>.wasm` is a

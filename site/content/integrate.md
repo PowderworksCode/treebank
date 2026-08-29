@@ -14,18 +14,17 @@ step, and a release of your tool every time any of them moved.
 
 ## The whole thing, in Rust
 
-Two commands and eight lines. Nothing is elided.
+One command and seven lines. Nothing is elided.
 
 ```sh
 cargo add treebank
-curl -O https://treebank.dev/packs/treebank-python.wasm
 ```
 
 ```rust
 use treebank::Pack;
 
 fn main() -> anyhow::Result<()> {
-    let pack = Pack::from_path("treebank-python.wasm")?;
+    let pack = Pack::fetch("python")?;
     let tree = pack.parse("def greet(name):\n    return f'hi {name}'\n")?;
 
     println!("{}", tree.root().sexp()?);
@@ -40,9 +39,34 @@ fn main() -> anyhow::Result<()> {
   (string_end))))))
 ```
 
-That is the entire integration. The `.wasm` is data your program reads —
-ship it beside your binary, embed it with `include_bytes!`, or fetch it at
-startup with [`Pack::from_bytes`](https://docs.rs/treebank/latest/treebank/pack/struct.Pack.html).
+That is the entire integration. `fetch` downloads the grammar, checks it
+against the sha256 the manifest publishes, and caches it — so it happens once
+rather than on every run, and a substituted or corrupted download is an error
+rather than a strange parse later.
+
+If you would rather hold the file yourself — vendored, embedded with
+`include_bytes!`, or shipped beside your binary — `Pack::from_path` and
+`Pack::from_bytes` take it directly and never reach the network.
+
+### Pinning
+
+`fetch` follows the grammar as it improves. Where that must not happen, name
+the version:
+
+```rust
+let pack = Pack::fetch_pinned("python", "d82f4fd5c5a9")?;
+```
+
+That consults no manifest, so it is reproducible and works offline once the
+bytes are cached. It is also what the playground's permalink names, which is
+why a hash is the useful thing to quote in a bug report.
+
+### Speed
+
+A grammar is compiled the first time it is loaded, which takes a few seconds,
+and the compiled form is cached — subsequent loads are about fifty
+milliseconds. Nothing is needed to enable this.
+`TREEBANK_NO_COMPILE_CACHE=1` turns it off and `TREEBANK_CACHE` moves it.
 
 ## Walking the tree
 
@@ -97,13 +121,25 @@ The expansion uses the manifest the pack carries, so nothing has to be
 shipped beside the parser. [The vocabulary](/concepts/two-tiers/) explains why
 there are two kinds.
 
-## Without a parser
+## Features
 
-The `pack` feature is on by default and brings a WASI runtime with it. If you
-only want the vocabulary and the query expansion:
+Both are on by default.
+
+| feature | |
+| --- | --- |
+| `pack` | load and parse with a grammar; brings a WASI runtime |
+| `fetch` | download grammars; implies `pack` |
+
+For a build that must not reach the network, keep `pack` and drop `fetch`:
 
 ```toml
-treebank = { version = "0.1", default-features = false }
+treebank = { version = "0.2", default-features = false, features = ["pack"] }
+```
+
+For the vocabulary and query expansion alone, with no runtime:
+
+```toml
+treebank = { version = "0.2", default-features = false }
 ```
 
 ## Any other language
