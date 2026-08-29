@@ -35,6 +35,39 @@ use wasmtime::{Engine, Instance, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime_wasi::p1::WasiP1Ctx;
 use wasmtime_wasi::WasiCtxBuilder;
 
+/// wasmtime carries its own error type. It is near-identical to anyhow's, but
+/// deliberately not a `std::error::Error` -- and `anyhow::Context` is
+/// implemented over that trait, so it does not reach a wasmtime result. This
+/// carries one across into anyhow, where the rest of the crate lives, and
+/// leaves the call sites reading as they always did.
+trait WasmtimeContext<T> {
+    fn context<C>(self, context: C) -> Result<T>
+    where
+        C: std::fmt::Display + Send + Sync + 'static;
+
+    fn with_context<C, F>(self, f: F) -> Result<T>
+    where
+        C: std::fmt::Display + Send + Sync + 'static,
+        F: FnOnce() -> C;
+}
+
+impl<T> WasmtimeContext<T> for std::result::Result<T, wasmtime::Error> {
+    fn context<C>(self, context: C) -> Result<T>
+    where
+        C: std::fmt::Display + Send + Sync + 'static,
+    {
+        self.map_err(anyhow::Error::from).context(context)
+    }
+
+    fn with_context<C, F>(self, f: F) -> Result<T>
+    where
+        C: std::fmt::Display + Send + Sync + 'static,
+        F: FnOnce() -> C,
+    {
+        self.map_err(anyhow::Error::from).with_context(f)
+    }
+}
+
 /// What a pack says about itself, read out of the module rather than from a
 /// file beside it. A pack copied somewhere else still answers.
 #[derive(Debug, Clone, Deserialize)]
@@ -561,7 +594,7 @@ impl Abi {
 
 /// Compiling a pack costs a few hundred milliseconds; loading an
 /// already-compiled one costs a few. Measured on a release build: python
-/// 296ms cold against 4ms warm, C++ 370ms against 25ms. Everything else here
+/// 297ms cold against 1ms warm, C++ 362ms against 15ms. Everything else here
 /// is far cheaper -- reading the file and parsing a small program are both
 /// under a millisecond -- so this is the whole startup cost of using a
 /// grammar, paid on every run of a tool without it.

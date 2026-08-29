@@ -69,8 +69,8 @@ this.
 
 | | cold | warm |
 | --- | --- | --- |
-| python, 673 KB | 296 ms | 4 ms |
-| C++, 5.0 MB | 370 ms | 25 ms |
+| python, 673 KB | 297 ms | 1 ms |
+| C++, 5.0 MB | 362 ms | 15 ms |
 
 Parsing itself is well under a millisecond, so this is the whole startup cost.
 Measure it in a **release** build: in a debug build cranelift is unoptimised
@@ -155,6 +155,11 @@ Both are on by default.
 | --- | --- |
 | `pack` | load and parse with a grammar; brings a WASI runtime |
 | `fetch` | download grammars; implies `pack` |
+
+`pack` brings wasmtime, which needs Rust 1.95. That floor is wasmtime's rather
+than this crate's, and it goes away with the runtime. It is kept current
+deliberately: a pack is code from the network, and the sandbox running it is
+the thing standing between a grammar and the machine.
 
 For a build that must not reach the network, keep `pack` and drop `fetch`:
 

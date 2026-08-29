@@ -11,32 +11,44 @@ Only the Rust API is versioned.
 
 ## [Unreleased]
 
-### Added
-
-- `Pack::query` runs a query and returns its captures. Until now the shared
-  vocabulary could be *expanded* but not *executed*: `expand_query` handed
-  back a string and nothing in a pack could run it, so the one operation the
-  vocabulary exists for was the one a consumer could not perform. Needs a pack
-  built at `pack_abi` 3 or later.
-
 ## [0.2.0] - 2026-08-29
+
+The first version to carry a runtime, and so the first with a dependency that
+can carry a vulnerability. See Security.
 
 ### Added
 
 - `Pack::fetch("python")` downloads a grammar, verifies it against the
   published sha256, and caches it. Using a grammar no longer needs a build
   step or a `curl`.
+- `Pack::query` runs a query and returns its captures. Until now the shared
+  vocabulary could be *expanded* but not *executed*: `expand_query` handed
+  back a string and nothing in a pack could run it, so the one operation the
+  vocabulary exists for was the one a consumer could not perform. Needs a pack
+  built at `pack_abi` 3 or later.
 - `Pack::fetch_pinned("python", "<hash>")` loads an exact version. It consults
   no manifest, so it is reproducible and works offline once the bytes are
   cached — which is what a build that must not vary should call.
 - Compiled modules are cached, so loading a grammar is a few milliseconds
-  rather than a few hundred. Release-build measurements: python 296ms cold
-  against 4ms warm, C++ 370ms against 25ms. The artifact is keyed by the wasm
+  rather than a few hundred. Release-build measurements: python 297ms cold
+  against 1ms warm, C++ 362ms against 15ms. The artifact is keyed by the wasm
   bytes and the host, and wasmtime rejects one built by an incompatible
   version, so a stale entry is rebuilt rather than mis-loaded.
   `TREEBANK_NO_COMPILE_CACHE=1` disables it.
 - A `fetch` feature, on by default and implying `pack`. Turn it off for a
   build that must not reach the network.
+
+### Security
+
+- `wasmtime` and `wasmtime-wasi` are held at 48, not 38. The versions this
+  crate first used are covered by two advisories -- a miscompiled guest heap
+  access that allows a sandbox escape (fixed in 42.0.2) and a Winch/aarch64
+  issue (fixed in 44.0.2) -- and a sandbox escape is the whole of what a pack
+  loader is trusting the runtime for. No release ever shipped the affected
+  versions: they were replaced before 0.2.0 was tagged.
+- Loading a grammar therefore needs Rust 1.95, which is wasmtime's floor
+  rather than this crate's. `default-features = false` drops the runtime along
+  with that floor, and still gives the vocabulary and query expansion.
 
 ### Changed
 

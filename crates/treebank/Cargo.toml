@@ -24,8 +24,8 @@ serde_json = "1"
 # The pack loader. Optional because the vocabulary half of this crate is
 # useful without a parser, and wasmtime is a large dependency to impose on
 # someone who only wants to expand a facet query.
-wasmtime = { version = "38", optional = true, default-features = false, features = ["runtime", "cranelift", "std"] }
-wasmtime-wasi = { version = "38", optional = true }
+wasmtime = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "std", "anyhow"] }
+wasmtime-wasi = { version = "48", optional = true }
 
 # Fetching grammars. Same versions the rest of the workspace already uses, so
 # a checkout does not carry two HTTP stacks.
