@@ -29,6 +29,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
+use sha2::{Digest, Sha256};
 use serde::Deserialize;
 use wasmtime::{Engine, Instance, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime_wasi::p1::WasiP1Ctx;
@@ -112,7 +113,7 @@ impl Pack {
     /// HTTP has.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let engine = Engine::default();
-        let module = Module::new(&engine, bytes).context("not a valid wasm module")?;
+        let module = compile_cached(&engine, bytes)?;
 
         let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
         wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |c| c)
@@ -380,4 +381,83 @@ impl Abi {
             cstr_free: f!("tb_cstr_free"),
         })
     }
+}
+
+/// Compiling a pack takes about four seconds; loading an already-compiled one
+/// takes milliseconds. Everything else here is fast enough not to matter --
+/// reading the file and parsing a small program are both under a millisecond
+/// -- so without this, every run of a tool that loads a grammar pays four
+/// seconds of cranelift.
+///
+/// The key covers the wasm bytes and the host. It does NOT cover the wasmtime
+/// version, because wasmtime writes its own version into the artifact and
+/// refuses to deserialize one from a different major -- so an entry that has
+/// gone stale that way fails to load, is deleted here, and is rebuilt. Adding
+/// a version to the key would duplicate a check that already exists, using a
+/// number this crate has no reliable way to read.
+///
+/// Set TREEBANK_NO_COMPILE_CACHE=1 to skip it.
+fn compile_cached(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+    if std::env::var_os("TREEBANK_NO_COMPILE_CACHE").is_some() {
+        return Module::new(engine, bytes).context("not a valid wasm module");
+    }
+
+    let key = {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hasher.update(std::env::consts::ARCH.as_bytes());
+        hasher.update(std::env::consts::OS.as_bytes());
+        hasher.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()
+    };
+    let path = compile_cache_dir().join(format!("{}.cwasm", &key[..32]));
+
+    if let Ok(precompiled) = std::fs::read(&path) {
+        // SAFETY: the file was produced by `precompile_module` on this
+        // machine, under a key that covers the wasm bytes, the wasmtime
+        // version and the host. Wasmtime validates its own header as well and
+        // returns Err rather than misbehaving if any of that is wrong, which
+        // is why a failure here falls through to compiling instead of
+        // propagating.
+        if let Ok(module) = unsafe { Module::deserialize(engine, &precompiled) } {
+            return Ok(module);
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // Compile ONCE. `precompile_module` does the work and hands back the
+    // artifact, which deserializes in milliseconds -- so this is the compile,
+    // not an extra one beside it. Calling `Module::new` as well doubled the
+    // cold path from 3.8s to 7.6s, which is the kind of thing that only shows
+    // up if you measure the miss as well as the hit.
+    match engine.precompile_module(bytes) {
+        Ok(precompiled) => {
+            // Best effort: a read-only or full cache directory must not stop a
+            // parse, so a failure to store is ignored.
+            if let Some(dir) = path.parent() {
+                if std::fs::create_dir_all(dir).is_ok() {
+                    let tmp = dir.join(format!(".{}.cwasm", std::process::id()));
+                    if std::fs::write(&tmp, &precompiled).is_ok() {
+                        let _ = std::fs::rename(&tmp, &path);
+                    }
+                }
+            }
+            // SAFETY: produced by this engine, moments ago, in this process.
+            unsafe { Module::deserialize(engine, &precompiled) }
+                .context("loading the module just compiled")
+        }
+        Err(_) => Module::new(engine, bytes).context("not a valid wasm module"),
+    }
+}
+
+fn compile_cache_dir() -> std::path::PathBuf {
+    if let Ok(dir) = std::env::var("TREEBANK_CACHE") {
+        return std::path::PathBuf::from(dir).join("compiled");
+    }
+    if let Ok(dir) = std::env::var("XDG_CACHE_HOME") {
+        return std::path::PathBuf::from(dir).join("treebank").join("compiled");
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        return std::path::PathBuf::from(home).join(".cache").join("treebank").join("compiled");
+    }
+    std::env::temp_dir().join("treebank").join("compiled")
 }

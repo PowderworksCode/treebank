@@ -77,3 +77,41 @@ fn expands_a_facet_query_against_the_packs_own_manifest() {
     assert!(!expanded.contains(term), "facet should be expanded away: {expanded}");
     assert!(expanded.contains(&members[0]), "expected {} in {expanded}", members[0]);
 }
+
+/// Compiling a pack is ~3.8s and deserializing a cached one is ~50ms, so the
+/// cache is not an optimisation but the difference between a tool that is
+/// usable and one that is not. This asserts it is actually being hit, in a
+/// clean cache directory rather than whatever the developer's happens to hold.
+#[test]
+fn a_second_load_uses_the_compiled_cache() {
+    let Some(path) = a_pack() else { return };
+    let dir = std::env::temp_dir().join(format!("treebank-cachetest-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+
+    // SAFETY: single-threaded test; the variable is read on the next line's
+    // call and nothing else in this process depends on it.
+    unsafe { std::env::set_var("TREEBANK_CACHE", &dir) };
+
+    let cold = std::time::Instant::now();
+    Pack::from_path(&path).expect("cold load");
+    let cold = cold.elapsed();
+
+    let warm = std::time::Instant::now();
+    Pack::from_path(&path).expect("warm load");
+    let warm = warm.elapsed();
+
+    let cached: Vec<_> = std::fs::read_dir(dir.join("compiled"))
+        .expect("the cache directory should exist")
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().is_some_and(|x| x == "cwasm"))
+        .collect();
+    assert_eq!(cached.len(), 1, "one compiled artifact, got {}", cached.len());
+
+    // Deliberately loose. The point is that the second load does not recompile,
+    // not that it hits a particular number on a particular machine.
+    assert!(
+        warm * 4 < cold,
+        "a cached load should be far faster than compiling: cold {cold:?}, warm {warm:?}"
+    );
+    let _ = std::fs::remove_dir_all(&dir);
+}
