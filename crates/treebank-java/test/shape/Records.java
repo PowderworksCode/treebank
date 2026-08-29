@@ -54,7 +54,7 @@ record Pair<A, B>(A first, B second) {
 record Varargs(String name, int... values) {
 }
 
-record Annotated(@Deprecated String name, java.util.@SuppressWarnings("x") List<String> items) {
+record Annotated(@Deprecated String name, java.util.@Nullable List<String> items) {
 }
 
 interface Shape {

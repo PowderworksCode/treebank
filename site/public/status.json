@@ -260,7 +260,7 @@
    },
    "tests": {
     "corpus_cases": 5,
-    "negative_files": 7,
+    "negative_files": 10,
     "shape_files": 7
    },
    "known_deviations": {
@@ -285,24 +285,24 @@
     {
      "language": "java",
      "files": 243576,
-     "passed": 243409,
-     "failed": 167,
-     "grammar_gaps": 167,
+     "passed": 243462,
+     "failed": 114,
+     "grammar_gaps": 114,
      "noise": 0,
-     "pass_rate": "99.93%",
+     "pass_rate": "99.95%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "2769c501beb46d93b7eb4fd9d1852d6499107099"
+     "grammar_revision": "19d9d02d42e4e6371098cfe374257b14ffcca6be"
     }
    ],
    "known_gaps": [
     {
-     "summary": "`case A -> …` where the case constant is a bare identifier",
-     "files": 539
+     "summary": "`record` and `when` used as ordinary identifiers",
+     "files": 85
     },
     {
-     "summary": "module declarations (`module-info.java`)",
-     "files": 83
+     "summary": "a trailing empty dimension on an array creation",
+     "files": 13
     }
    ],
    "known_widenings": [],
