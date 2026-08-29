@@ -31,6 +31,25 @@ jobs:
         run: |
           ./target/debug/treebank status --format markdown --check > "$RUNNER_TEMP/treebank-status.md"
           cat "$RUNNER_TEMP/treebank-status.md" >> "$GITHUB_STEP_SUMMARY"
+
+      # Every grammar's queries/*.scm is generated from queries/ at the root,
+      # with facets expanded into that grammar's own node types. This fails on
+      # a file edited in place, and on a source that expands into a pattern the
+      # grammar cannot compile -- which is how a role threaded in eight
+      # grammars and forgotten in the ninth shows up.
+      - name: generated queries are current
+        run: ./target/debug/treebank queries --check
+
+      - name: how much one query file covers
+        run: |
+          {
+            echo '### Query coverage'
+            echo
+            echo '```'
+            ./target/debug/treebank queries --coverage
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - run: cargo test --workspace
 
       # The publish path runs on every change, uploading nothing. Otherwise it
