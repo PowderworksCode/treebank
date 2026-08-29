@@ -4,23 +4,8 @@ description: Use a grammar, or build the repository and run the gates.
 order: 5
 ---
 
-## Using a grammar
-
-Each grammar is one WebAssembly file with no dependencies:
-
-```sh
-curl -O https://treebank.dev/packs/treebank-python.wasm
-```
-
-It imports only WASI, so it loads from Python, Go, Ruby, Rust or a browser
-with no toolchain at the far end. The
-[examples](https://github.com/PowderworksCode/treebank/tree/main/tools/wasm-pack/examples)
-are complete bindings in about a hundred lines each, and the
-[playground](/playground/) is the same file running in a browser.
-
-`https://treebank.dev/packs/index.json` lists the current file for every
-grammar with its sha256. Each is also available at a content-addressed URL,
-`treebank-python-<hash>.wasm`, which never changes.
+Treebank is a Rust workspace. To *use* a grammar rather than work on one, see
+[Using a grammar](/integrate/) — you do not need any of this.
 
 ## Building the repository
 

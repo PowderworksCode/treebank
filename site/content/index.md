@@ -51,11 +51,13 @@ Ruby, Rust or a browser with no toolchain at the far end:
 curl -O https://treebank.dev/packs/treebank-python.wasm
 ```
 
-Binding to it takes about twenty lines — the
-[examples](https://github.com/PowderworksCode/treebank/tree/main/tools/wasm-pack/examples)
-are complete, one in Python and one in JavaScript. Every file is
-content-addressed, so `treebank-python-<hash>.wasm` is a version you can pin
-and never see change.
+From Rust that is `cargo add treebank` and three lines. From anywhere else it
+is a WASI runtime and about twenty lines — [Using a grammar](/integrate/) has
+both, and the complete examples.
+
+There is one package per language you write in, not one per language you
+parse. Every file is content-addressed, so `treebank-python-<hash>.wasm` is a
+version you can pin and never see change.
 
 ## What is here
 
