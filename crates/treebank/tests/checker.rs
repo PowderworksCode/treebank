@@ -1,7 +1,7 @@
 use std::collections::BTreeMap;
 
 use treebank::check::{check, dead_roles};
-use treebank::expand::expand;
+use treebank::expand::{expand, expand_with_types};
 use treebank::node_types::NodeTypes;
 use treebank::roles::RolesManifest;
 use treebank::vocabulary;
@@ -231,6 +231,53 @@ fn facet_body_is_copied_into_every_branch() {
         q,
         "[(function_definition name: (_name) @n) (lambda name: (_name) @n)]"
     );
+}
+
+/// `_` is tree-sitter's wildcard, not a node type. Read as a type name it
+/// matches nothing any field declares, so filtering drops every member and a
+/// perfectly ordinary query dies with "no member satisfies the field
+/// constraint".
+///
+/// A differential against the browser port cannot catch this: both sides
+/// agreed, because both had it. Parity is agreement, not correctness, so the
+/// expected answer is written out here.
+#[test]
+fn a_wildcard_field_value_constrains_presence_only() {
+    let types = node_types_for_wildcards();
+    let facets = facets();
+
+    // `lambda` has no `name` and is dropped; `function_definition` has one and
+    // survives, whatever type the wildcard stands for.
+    let q = expand_with_types("(_callable name: (_) @n)", &facets, Some(&types)).unwrap();
+    assert_eq!(q, "[(function_definition name: (_) @n)]");
+
+    // A wildcard anywhere in an alternation makes the whole constraint
+    // presence-only.
+    let q = expand_with_types("(_callable name: [(_) (identifier)])", &facets, Some(&types))
+        .unwrap();
+    assert_eq!(q, "[(function_definition name: [(_) (identifier)])]");
+
+    // A bare `_` with no parens was already presence-only; it stays that way.
+    let q = expand_with_types("(_callable name: _)", &facets, Some(&types)).unwrap();
+    assert_eq!(q, "[(function_definition name: _)]");
+
+    // And a real type name still filters on the type, not merely presence.
+    let q = expand_with_types("(_callable name: (identifier) @n)", &facets, Some(&types))
+        .unwrap();
+    assert_eq!(q, "[(function_definition name: (identifier) @n)]");
+}
+
+/// Two members, one of which has a `name` field.
+fn node_types_for_wildcards() -> NodeTypes {
+    NodeTypes::parse(
+        r#"[
+          {"type": "function_definition", "named": true,
+           "fields": {"name": {"types": [{"type": "identifier", "named": true}]}}},
+          {"type": "lambda", "named": true, "fields": {}},
+          {"type": "identifier", "named": true, "fields": {}}
+        ]"#,
+    )
+    .unwrap()
 }
 
 #[test]

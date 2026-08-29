@@ -109,6 +109,12 @@ pub struct Pack {
     f: Abi,
     provenance: Provenance,
     roles: PackRoles,
+    /// node-types.json as it ships inside the module. Held as bytes and
+    /// parsed on demand: it is 40-70 KB, and parsing it on every load would
+    /// cost more than the warm load itself, for something only a facet query
+    /// with a field constraint ever reads.
+    node_types_raw: Option<String>,
+    node_types: std::cell::OnceCell<Option<crate::node_types::NodeTypes>>,
 }
 
 struct Abi {
@@ -185,8 +191,19 @@ impl Pack {
 
         let provenance = read_json(&mut store, &memory, &instance, "tb_provenance")?;
         let roles = read_json(&mut store, &memory, &instance, "tb_roles")?;
+        // Optional: a pack built before this export exists still parses and
+        // still expands facets, just without the filtering.
+        let node_types_raw = read_string(&mut store, &memory, &instance, "tb_node_types").ok();
 
-        Ok(Self { store: std::cell::RefCell::new(store), memory, f, provenance, roles })
+        Ok(Self {
+            store: std::cell::RefCell::new(store),
+            memory,
+            f,
+            provenance,
+            roles,
+            node_types_raw,
+            node_types: std::cell::OnceCell::new(),
+        })
     }
 
     /// What the pack says about itself.
@@ -197,6 +214,20 @@ impl Pack {
     /// The facet manifest, for [`crate::expand`].
     pub fn roles(&self) -> &PackRoles {
         &self.roles
+    }
+
+    /// The node manifest this pack carries, parsed on first use.
+    ///
+    /// This is what tells `expand_query` that `lambda` has no `name` field.
+    /// `None` when the pack predates the export or the manifest will not
+    /// parse -- in which case expansion still happens, just unfiltered.
+    pub fn node_types(&self) -> Option<&crate::node_types::NodeTypes> {
+        self.node_types
+            .get_or_init(|| {
+                let raw = self.node_types_raw.as_deref()?;
+                crate::node_types::NodeTypes::parse(raw).ok()
+            })
+            .as_ref()
     }
 
     /// The language this pack parses.
@@ -210,7 +241,7 @@ impl Pack {
     /// makes a query portable across grammars: the facet is the same word
     /// everywhere and its members are whatever this grammar calls them.
     pub fn expand_query(&self, query: &str) -> Result<String> {
-        crate::expand::expand(query, &self.roles.facets)
+        crate::expand::expand_with_types(query, &self.roles.facets, self.node_types())
     }
 
     /// Parse source text.
@@ -567,6 +598,27 @@ fn read_json<T: for<'de> Deserialize<'de>>(
     let mut buf = vec![0u8; len];
     memory.read(&mut *store, ptr as usize, &mut buf)?;
     serde_json::from_slice(&buf).with_context(|| format!("parsing {name}"))
+}
+
+/// The same shape as [`read_json`], stopping at the bytes. Used for a
+/// manifest that is expensive to parse and not always needed.
+fn read_string(
+    store: &mut Store<WasiP1Ctx>,
+    memory: &Memory,
+    instance: &Instance,
+    name: &str,
+) -> Result<String> {
+    let ptr = instance
+        .get_typed_func::<(), u32>(&mut *store, name)
+        .with_context(|| format!("pack has no {name}"))?
+        .call(&mut *store, ())?;
+    let len = instance
+        .get_typed_func::<(), u32>(&mut *store, &format!("{name}_len"))
+        .with_context(|| format!("pack has no {name}_len"))?
+        .call(&mut *store, ())? as usize;
+    let mut buf = vec![0u8; len];
+    memory.read(&mut *store, ptr as usize, &mut buf)?;
+    String::from_utf8(buf).with_context(|| format!("{name} is not utf-8"))
 }
 
 impl QueryAbi {
