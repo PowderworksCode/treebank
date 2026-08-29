@@ -334,9 +334,9 @@
     "uncategorised": 20
    },
    "tests": {
-    "corpus_cases": 16,
-    "negative_files": 32,
-    "shape_files": 7
+    "corpus_cases": 18,
+    "negative_files": 33,
+    "shape_files": 8
    },
    "known_deviations": {
     "shape": true,
@@ -360,28 +360,20 @@
     {
      "language": "python",
      "files": 298354,
-     "passed": 297252,
-     "failed": 1102,
-     "grammar_gaps": 7,
+     "passed": 297256,
+     "failed": 1098,
+     "grammar_gaps": 3,
      "noise": 1083,
      "pass_rate": "99.63%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "80fdf0e837bebbcfb91b5a4d7c35622058c51c0c"
+     "grammar_revision": "e999a80702847ab0f6129db459df1ce7da0ba267"
     }
    ],
    "known_gaps": [
     {
      "summary": "indentation that mixes tabs and spaces",
      "files": 1
-    },
-    {
-     "summary": "backslash continuation as the first line of a block",
-     "files": 2
-    },
-    {
-     "summary": "backslash continuations that change a suite's indentation",
-     "files": 3
     },
     {
      "summary": "TWO OR MORE consecutive comment lines after an inline suite",
@@ -560,11 +552,11 @@
     "supertypes": 19,
     "facets": 9,
     "named_nodes": 138,
-    "uncategorised": 29
+    "uncategorised": 31
    },
    "tests": {
-    "corpus_cases": 5,
-    "negative_files": 26,
+    "corpus_cases": 6,
+    "negative_files": 42,
     "shape_files": 3
    },
    "known_deviations": {
@@ -596,7 +588,7 @@
      "pass_rate": "99.95%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "53fc002dbf9aaf152929d35678806be16d236a18"
+     "grammar_revision": "aa6019482082dbeddfe6a8d534f72ee5aad25b37"
     }
    ],
    "known_gaps": [
@@ -698,7 +690,7 @@
     "uncategorised": 30
    },
    "tests": {
-    "corpus_cases": 4,
+    "corpus_cases": 5,
     "negative_files": 22,
     "shape_files": 10
    },
