@@ -74,7 +74,12 @@ fn sources(dir: &Path) -> Result<BTreeMap<String, String>> {
 }
 
 /// What `<grammar>/queries/<name>` should contain.
-fn render(name: &str, lang: LangName, source: &str, crates_dir: &Path) -> Result<String> {
+fn render(
+    name: &str,
+    lang: LangName,
+    source: &str,
+    crates_dir: &Path,
+) -> Result<(String, Vec<String>)> {
     let dir = crates_dir.join(lang.grammar_crate());
     let roles: RolesManifest = {
         let path = dir.join("roles.json");
@@ -85,18 +90,148 @@ fn render(name: &str, lang: LangName, source: &str, crates_dir: &Path) -> Result
     let node_types = NodeTypes::load(&dir.join("src/node-types.json"))
         .with_context(|| format!("reading node-types.json for {}", lang.as_str()))?;
 
+    // Terms this grammar delivers, either tier. A supertype is a rule with
+    // subtypes; a facet is a list in roles.json.
+    let mut known: HashSet<String> = roles.facets.keys().cloned().collect();
+    known.extend(node_types.supertypes.keys().cloned());
+
     // The source's own preamble explains the source -- that it is the file to
     // edit, what the two tiers are. Repeating it above an expanded copy tells
     // a reader the opposite of the truth, so the leading comment block is
     // dropped and the generated header speaks instead. Section comments
     // further down survive: those describe the patterns, which are still here.
     let body = strip_leading_comment(source);
+    let (body, dropped) = apply_conditionals(body, &known);
+    let body = &body;
 
-    let expanded = expand_with_types(body, &roles.facets, Some(&node_types))
-        .with_context(|| format!("expanding {name} for {}", lang.as_str()))?;
+    // Expanded a block at a time rather than whole-file, so a pattern this
+    // grammar cannot express can be omitted and NAMED. Expansion is local to
+    // each pattern, so the result is the same as expanding the whole file.
+    //
+    // The one tolerated failure is a field constraint no member can satisfy:
+    // C's parameters are declarators with no `name` field, so
+    // `(_parameter name: (_))` filters every member away. That is a fact
+    // about C rather than a mistake in the query, and the alternative --
+    // failing the build for all nine -- would mean writing to the least
+    // expressive grammar. Every other expansion error still propagates.
+    let mut pieces: Vec<String> = Vec::new();
+    let mut inexpressible: Vec<String> = Vec::new();
+    for block in body.split("\n\n") {
+        match expand_with_types(block, &roles.facets, Some(&node_types)) {
+            Ok(expanded) => pieces.push(expanded),
+            Err(e) => {
+                let message = e.to_string();
+                if let Some(term) = message
+                    .strip_prefix("facet `")
+                    .and_then(|r| r.split('`').next())
+                    .filter(|_| message.contains("no member satisfies"))
+                {
+                    if !inexpressible.contains(&term.to_string()) {
+                        inexpressible.push(term.to_string());
+                    }
+                    continue;
+                }
+                return Err(e).with_context(|| {
+                    format!("expanding {name} for {}", lang.as_str())
+                });
+            }
+        }
+    }
+    let expanded = pieces.join("\n\n");
 
-    let header = HEADER.replace("%NAME%", name).replace("%LANG%", lang.as_str());
-    Ok(format!("{header}\n{expanded}"))
+    let mut header = HEADER.replace("%NAME%", name).replace("%LANG%", lang.as_str());
+    // Named in the file rather than only in the tool's output: someone reading
+    // this grammar's queries should see what it does not have without running
+    // anything. The two reasons are different and are not run together --
+    // "no such term" and "the term is here but no member takes that field"
+    // point at different work.
+    if !dropped.is_empty() {
+        header.push_str(&format!(
+            ";\n; Omitted: {} has no {}.\n",
+            lang.as_str(),
+            dropped.join(", ")
+        ));
+    }
+    if !inexpressible.is_empty() {
+        header.push_str(&format!(
+            ";\n; Omitted: {} has {}, but no member of it takes\n; the field the pattern asks for.\n",
+            lang.as_str(),
+            inexpressible.join(", ")
+        ));
+    }
+    let mut reported = dropped;
+    reported.extend(inexpressible);
+    Ok((format!("{header}\n{expanded}"), reported))
+}
+
+/// A pattern that only some grammars can express.
+///
+/// `_scope`, `_binding` and `_identifier` exist everywhere, but `_parameter`
+/// does not: bash functions take `$1`, not a named parameter, so there is no
+/// term for one and a pattern naming it cannot compile there. Requiring every
+/// pattern to be universal would mean dropping parameter definitions from the
+/// eight grammars that DO have them, which is the worse trade.
+///
+/// So a block may be marked:
+///
+/// ```scm
+/// ; treebank: only-if _parameter
+/// (_parameter name: (_) @local.definition.parameter)
+/// ```
+///
+/// and is omitted for a grammar lacking any named term. Omissions are
+/// reported, and written into the generated file's header: a pattern that
+/// vanishes silently is how a grammar ends up quietly worse than its
+/// neighbours, which is the failure this whole arrangement exists to prevent.
+///
+/// The block runs from the directive to the next blank line.
+const ONLY_IF: &str = "; treebank: only-if";
+
+fn apply_conditionals(source: &str, known: &HashSet<String>) -> (String, Vec<String>) {
+    let mut out = String::with_capacity(source.len());
+    let mut dropped: Vec<String> = Vec::new();
+    let mut lines = source.lines().peekable();
+
+    while let Some(line) = lines.next() {
+        let trimmed = line.trim_start();
+        let Some(rest) = trimmed.strip_prefix(ONLY_IF) else {
+            out.push_str(line);
+            out.push('\n');
+            continue;
+        };
+        let wanted: Vec<String> = rest
+            .split_whitespace()
+            .map(|t| t.trim_matches(|c: char| !(c.is_alphanumeric() || c == '_')).to_string())
+            .filter(|t| !t.is_empty())
+            .collect();
+        let missing: Vec<String> =
+            wanted.iter().filter(|t| !known.contains(*t)).cloned().collect();
+
+        // The directive line never reaches the output either way.
+        let keep = missing.is_empty();
+        for term in missing {
+            if !dropped.contains(&term) {
+                dropped.push(term);
+            }
+        }
+        while let Some(next) = lines.peek() {
+            if next.trim().is_empty() {
+                break;
+            }
+            let next = lines.next().unwrap();
+            if keep {
+                out.push_str(next);
+                out.push('\n');
+            }
+        }
+        // A dropped block leaves its blank line behind, which would stack up.
+        if !keep {
+            while lines.peek().is_some_and(|l| l.trim().is_empty()) {
+                lines.next();
+            }
+        }
+    }
+    (out, dropped)
 }
 
 /// Everything after the FIRST block of `;` comments, and the blank lines
@@ -148,7 +283,7 @@ pub fn run(source_dir: &Path, crates_dir: &Path, check: bool) -> Result<()> {
             .0;
 
         for (name, source) in &sources {
-            let want = render(name, lang, source, crates_dir)?;
+            let (want, _) = render(name, lang, source, crates_dir)?;
             let path = out_dir.join(name);
 
             tree_sitter::Query::new(&language, &want).map_err(|e| {
@@ -267,6 +402,7 @@ fn corpus_files(dir: &Path) -> Vec<PathBuf> {
 /// tokens are keywords and punctuation, which no vocabulary term reaches and
 /// which a per-grammar supplement is for.
 pub fn coverage(crates_dir: &Path, name: &str) -> Result<()> {
+    println!("{name}\n");
     println!("{:<12} {:>9} {:>12} {:>12}  {}", "grammar", "examples", "named nodes", "captured", "share");
     let mut total_named = 0usize;
     let mut total_captured = 0usize;

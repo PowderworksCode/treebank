@@ -11,7 +11,7 @@
   "lint_ratchets": 9,
   "shape_fixture_grammars": 7,
   "wasm_packs": 9,
-  "query_files": 9,
+  "query_files": 18,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
@@ -54,7 +54,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -113,7 +113,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -206,7 +206,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -274,7 +274,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -347,7 +347,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -505,7 +505,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -564,7 +564,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -699,7 +699,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -860,7 +860,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 1
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
