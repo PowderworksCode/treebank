@@ -12,6 +12,8 @@
 // Node against `node:wasi`. The only difference here is that the six imports
 // are written out rather than borrowed from a runtime the browser lacks.
 
+import { parseNodeTypes } from "./expand.mjs";
+
 const ENOSYS = 52;
 
 // The pack's whole import surface. Five of these can never be reached: a pack
@@ -88,6 +90,24 @@ export class Pack {
 
   get language() {
     return this.cstr(this.e.tb_language_name());
+  }
+
+  // node-types.json, which ships inside the module beside roles. Parsed on
+  // first use and kept: it is 40-70 KB, and only a facet query with a field
+  // constraint ever reads it, so parsing it on load would cost more than the
+  // load. `null` on a pack built before the export existed -- expansion then
+  // happens unfiltered, which is what the crate does in the same case.
+  get nodeTypes() {
+    if (this._nodeTypes === undefined) {
+      try {
+        this._nodeTypes = parseNodeTypes(
+          this.json(this.e.tb_node_types(), this.e.tb_node_types_len()),
+        );
+      } catch {
+        this._nodeTypes = null;
+      }
+    }
+    return this._nodeTypes;
   }
 
   // Whether this pack can run queries at all. Adding exports does not break a

@@ -113,8 +113,11 @@ typescript  function_definition, class_definition
 productions, so the match is by derivation rather than by node name.
 `_callable`, `_binding`, `_scope` and `_clause` are **facets**: lists that
 cross-cut derivations and cannot be supertypes, so `query` expands them
-against the manifest each pack carries before running. Either way you write
-the same query.
+against the manifest each pack carries before running. Where the pattern
+constrains a field, members that cannot take it are dropped — `(_callable
+name: (_) @n)` keeps `function_definition` and not `lambda`, because
+tree-sitter rejects an alternation with one impossible branch in it. Either
+way you write the same query.
 
 `expand_query` returns the rewritten query without running it, if you have
 your own query engine.

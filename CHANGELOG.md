@@ -11,6 +11,22 @@ Only the Rust API is versioned.
 
 ## [Unreleased]
 
+### Fixed
+
+- `Pack::expand_query` now drops facet members that cannot take a field the
+  pattern constrains, which is what makes a field-constrained facet query
+  compile at all: tree-sitter rejects a whole alternation if any one branch is
+  impossible, so `(_callable name: (_) @n)` used to fail wherever a member had
+  no `name`. Seven of the nine grammars rejected that query outright; all nine
+  run it now. The evidence was already in the pack — `tb_node_types` has
+  shipped since `pack_abi` 3 — and is read only when a query needs it, so
+  loading a grammar is unchanged.
+- `_` in a field's value pattern is the wildcard, not a node type named `_`.
+  Read as a type it matched nothing any field declares, so filtering dropped
+  every member and `(_callable name: (_) @n)` failed with "no member satisfies
+  the field constraint". It constrains presence only, in an alternation too.
+  Reachable only through `expand_with_types` before now.
+
 ## [0.2.0] - 2026-08-29
 
 The first version to carry a runtime, and so the first with a dependency that

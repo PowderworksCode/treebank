@@ -96,6 +96,14 @@ fn top_level_field_constraints(body: &str) -> Vec<(String, Vec<String>)> {
                             break;
                         }
                     }
+                    // `_` is the WILDCARD, not a node type. A field whose
+                    // value pattern is `(_)`, or an alternation containing
+                    // one, constrains nothing but presence -- and treating it
+                    // as a type named `_` filtered every member out, because
+                    // no field declares one.
+                    if names.iter().any(|n| n == "_") {
+                        names.clear();
+                    }
                     out.push((field, names));
                 }
             }

@@ -38,10 +38,13 @@ happens here in the browser, and the crate does exactly the same thing in
 fails on any difference, because a query that means two things is worse than
 one that fails.
 
-One consequence is visible: an expanded facet is rejected as a whole if any
-one member cannot take a field the pattern asks for. `(_callable name: (_) @n)`
-fails in Python because `lambda` has no `name`. The expansion is shown when a
-query fails, so the reason is on screen rather than guessed at.
+A pattern with a field constraint needs one more step. tree-sitter rejects a
+whole alternation if any one branch is impossible, so `(_callable name: (_)
+@n)` would die in Python on account of `lambda`, which has no `name`. Members
+that cannot take the field are therefore dropped before the query runs — the
+expansion shows `[(function_definition name: (_) @n)]` and no `lambda`. Every
+pack carries `node-types.json` inside it, so the browser knows which fields
+each node type declares without downloading anything else.
 
 ## Using the same file
 

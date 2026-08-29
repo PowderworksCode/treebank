@@ -34,8 +34,9 @@ fn have_node() -> bool {
         .unwrap_or(false)
 }
 
-/// Every grammar in the repository, by the facets it actually declares.
-fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>)> {
+/// Every grammar in the repository: the facets it declares, and the node
+/// manifest the filtering reads.
+fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>, Option<String>)> {
     let mut out = Vec::new();
     let crates = root().join("crates");
     let Ok(entries) = std::fs::read_dir(&crates) else { return out };
@@ -51,7 +52,8 @@ fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>)> {
             continue;
         };
         let name = dir.file_name().unwrap().to_string_lossy().replace("treebank-", "");
-        out.push((name, roles.facets));
+        let node_types = std::fs::read_to_string(dir.join("src/node-types.json")).ok();
+        out.push((name, roles.facets, node_types));
     }
     out
 }
@@ -80,6 +82,28 @@ const CORPUS: &[&str] = &[
     "(identifier) @id",
     "[(a) (b)] @alt",
     "(x (#match? @a \"({facet})\"))",
+    // Field constraints, which is what member filtering turns on. A member
+    // that cannot take the field must be dropped, and dropping all of them is
+    // an error rather than an empty alternation.
+    "({facet} body: (block))",
+    "({facet} name: (_) @n)",
+    "({facet} name: [(identifier) (attribute)])",
+    "({facet} name: [(_) (identifier)])",
+    "({facet} name: (_) body: (_))",
+    "({facet} name: (identifier) body: (block))",
+    "({facet} nonexistent_field: (a))",
+    // A field whose value names no node type at all, so the constraint is
+    // "present" rather than "of these types". A mutant that treated an empty
+    // constraint as unsatisfiable survived the corpus without these.
+    "({facet} name: _)",
+    "({facet} name: \"literal\")",
+    "({facet} name: _ body: (block))",
+    "({facet} body: _)",
+    "({facet} name: (nonexistent_type))",
+    "(x ({facet} name: (identifier)))",
+    "({facet} body: ({facet}))",
+    "({facet} (#eq? @a \"name: (x)\"))",
+    "({facet} name: (identifier) @n (#match? @n \"^_\"))",
     // Anchors, wildcards, negation, quantifiers.
     "({facet} . (a) (b))",
     "(_ ({facet}))",
@@ -105,9 +129,25 @@ const CORPUS: &[&str] = &[
 ];
 
 #[derive(serde::Serialize)]
-struct Case<'a> {
-    query: String,
+struct Grammar<'a> {
     facets: &'a BTreeMap<String, Vec<String>>,
+    node_types: Option<&'a str>,
+}
+
+#[derive(serde::Serialize)]
+struct Case {
+    grammar: usize,
+    query: String,
+    /// Whether to expand WITH node-types. Both modes are compared, because
+    /// `expand` and `expand_with_types` are both public and a consumer can
+    /// reach either.
+    filtered: bool,
+}
+
+#[derive(serde::Serialize)]
+struct Payload<'a> {
+    grammars: Vec<Grammar<'a>>,
+    cases: &'a [Case],
 }
 
 #[derive(serde::Deserialize)]
@@ -127,27 +167,57 @@ fn the_browsers_expander_agrees_with_this_one() {
     }
     let grammars = grammars();
     assert!(!grammars.is_empty(), "no roles.json found; the corpus would be vacuous");
+    assert!(
+        grammars.iter().any(|(_, _, nt)| nt.is_some()),
+        "no node-types.json found; the filtering half would not be exercised"
+    );
 
     // Build every case first, so node is started once.
     let mut cases: Vec<Case> = Vec::new();
-    let mut labels: Vec<(String, String)> = Vec::new();
-    for (grammar, facets) in &grammars {
+    let mut labels: Vec<(String, String, bool)> = Vec::new();
+    for (index, (grammar, facets, node_types)) in grammars.iter().enumerate() {
         let Some(facet) = facets.keys().next() else { continue };
-        for template in CORPUS {
-            let query = template.replace("{facet}", facet);
-            labels.push((grammar.clone(), query.clone()));
-            cases.push(Case { query, facets });
-        }
-        // Also every facet this grammar has, on its own, so a grammar with an
-        // odd member list is covered rather than only its alphabetical first.
-        for name in facets.keys() {
-            let query = format!("({name} name: (a) @n)");
-            labels.push((grammar.clone(), query.clone()));
-            cases.push(Case { query, facets });
+        // Both modes: without node-types (what `expand` does) and with them
+        // (what `Pack::expand_query` now does).
+        let modes: &[bool] = if node_types.is_some() { &[false, true] } else { &[false] };
+        for &filtered in modes {
+            for template in CORPUS {
+                let query = template.replace("{facet}", facet);
+                labels.push((grammar.clone(), query.clone(), filtered));
+                cases.push(Case { grammar: index, query, filtered });
+            }
+            // Every facet on its own, with a field constraint, so a grammar
+            // with an odd member list is covered rather than only its first.
+            for name in facets.keys() {
+                for query in [format!("({name})"), format!("({name} name: (a) @n)")] {
+                    labels.push((grammar.clone(), query.clone(), filtered));
+                    cases.push(Case { grammar: index, query, filtered });
+                }
+            }
         }
     }
 
-    let payload = serde_json::to_string(&cases).expect("serialising cases");
+    let payload = Payload {
+        grammars: grammars
+            .iter()
+            .map(|(_, facets, nt)| Grammar { facets, node_types: nt.as_deref() })
+            .collect(),
+        cases: &cases,
+    };
+    // The driver reads `nodeTypes`; serde would send `node_types`.
+    let json = serde_json::to_value(&payload).expect("serialising");
+    let json = {
+        let mut v = json;
+        if let Some(gs) = v.get_mut("grammars").and_then(|g| g.as_array_mut()) {
+            for g in gs {
+                if let Some(nt) = g.as_object_mut().and_then(|o| o.remove("node_types")) {
+                    g.as_object_mut().unwrap().insert("nodeTypes".into(), nt);
+                }
+            }
+        }
+        serde_json::to_string(&v).expect("serialising")
+    };
+
     let mut child = Command::new("node")
         .arg(root().join("site/tools/expand-parity.mjs"))
         .stdin(Stdio::piped())
@@ -155,7 +225,7 @@ fn the_browsers_expander_agrees_with_this_one() {
         .stderr(Stdio::inherit())
         .spawn()
         .expect("spawning node");
-    child.stdin.take().unwrap().write_all(payload.as_bytes()).expect("writing cases");
+    child.stdin.take().unwrap().write_all(json.as_bytes()).expect("writing cases");
     let output = child.wait_with_output().expect("running the parity driver");
     assert!(output.status.success(), "the parity driver failed");
 
@@ -163,16 +233,29 @@ fn the_browsers_expander_agrees_with_this_one() {
         serde_json::from_slice(&output.stdout).expect("parsing the driver's answers");
     assert_eq!(answers.len(), cases.len(), "driver answered a different number of cases");
 
+    // Parse each grammar's node-types once, as the crate does.
+    let parsed: Vec<Option<treebank::node_types::NodeTypes>> = grammars
+        .iter()
+        .map(|(_, _, nt)| nt.as_deref().and_then(|j| treebank::node_types::NodeTypes::parse(j).ok()))
+        .collect();
+
     let mut differences = Vec::new();
+    let mut filtered_cases = 0;
     for (i, case) in cases.iter().enumerate() {
-        let (grammar, query) = &labels[i];
-        let mine = treebank::expand::expand(&case.query, case.facets);
+        let (grammar, query, filtered) = &labels[i];
+        if *filtered {
+            filtered_cases += 1;
+        }
+        let facets = &grammars[case.grammar].1;
+        let types = if *filtered { parsed[case.grammar].as_ref() } else { None };
+        let mine = treebank::expand::expand_with_types(&case.query, facets, types);
         let theirs = &answers[i];
+        let mode = if *filtered { "filtered" } else { "plain" };
         match (&mine, theirs.ok) {
             (Ok(rust), true) => {
                 if *rust != theirs.value {
                     differences.push(format!(
-                        "{grammar}: {query:?}\n    rust: {rust:?}\n    js:   {:?}",
+                        "{grammar} [{mode}]: {query:?}\n    rust: {rust:?}\n    js:   {:?}",
                         theirs.value
                     ));
                 }
@@ -181,11 +264,11 @@ fn the_browsers_expander_agrees_with_this_one() {
             // query is usable is what a caller acts on.
             (Err(_), false) => {}
             (Ok(rust), false) => differences.push(format!(
-                "{grammar}: {query:?}\n    rust accepted: {rust:?}\n    js rejected:  {}",
+                "{grammar} [{mode}]: {query:?}\n    rust accepted: {rust:?}\n    js rejected:  {}",
                 theirs.error
             )),
             (Err(e), true) => differences.push(format!(
-                "{grammar}: {query:?}\n    rust rejected: {e}\n    js accepted:  {:?}",
+                "{grammar} [{mode}]: {query:?}\n    rust rejected: {e}\n    js accepted:  {:?}",
                 theirs.value
             )),
         }
@@ -198,5 +281,9 @@ fn the_browsers_expander_agrees_with_this_one() {
         cases.len(),
         differences.join("\n\n")
     );
-    eprintln!("{} cases agree across {} grammars", cases.len(), grammars.len());
+    eprintln!(
+        "{} cases agree across {} grammars ({filtered_cases} with node-types filtering)",
+        cases.len(),
+        grammars.len()
+    );
 }

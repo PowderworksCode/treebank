@@ -150,6 +150,13 @@ cross-cut derivations — and `query` expands them against the manifest the pack
 carries before running, so nothing has to be shipped beside the parser.
 Either way you write the same query.
 
+Where a pattern constrains a field, members that cannot take that field are
+dropped from the alternation: `(_callable name: (_) @n)` keeps
+`function_definition` and not `lambda`. Without that the query would not
+compile at all, because tree-sitter rejects an alternation with one impossible
+branch. The pack carries `node-types.json`, so this needs nothing beside the
+parser either.
+
 `expand_query` returns the rewritten query without running it, for a caller
 with its own query engine. [The vocabulary](/concepts/two-tiers/) explains why
 there are two kinds.

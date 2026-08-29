@@ -333,7 +333,10 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
 
     let expanded, query;
     try {
-      expanded = expandQuery(source, this.pack.roles.facets ?? {});
+      // With node-types, so a member that cannot take a field the pattern
+      // asks for is dropped rather than making the whole alternation an
+      // impossible pattern. Same call the crate makes.
+      expanded = expandQuery(source, this.pack.roles.facets ?? {}, this.pack.nodeTypes);
       query = this.compile(expanded);
     } catch (error) {
       this.dropQuery();
