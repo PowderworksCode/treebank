@@ -109,6 +109,7 @@ pub struct Pack {
     f: Abi,
     provenance: Provenance,
     roles: PackRoles,
+    roles_raw: String,
     /// node-types.json as it ships inside the module. Held as bytes and
     /// parsed on demand: it is 40-70 KB, and parsing it on every load would
     /// cost more than the warm load itself, for something only a facet query
@@ -190,7 +191,8 @@ impl Pack {
         let f = Abi::bind(&instance, &mut store)?;
 
         let provenance = read_json(&mut store, &memory, &instance, "tb_provenance")?;
-        let roles = read_json(&mut store, &memory, &instance, "tb_roles")?;
+        let roles_raw = read_string(&mut store, &memory, &instance, "tb_roles")?;
+        let roles = serde_json::from_str(&roles_raw).context("parsing tb_roles")?;
         // Optional: a pack built before this export exists still parses and
         // still expands facets, just without the filtering.
         let node_types_raw = read_string(&mut store, &memory, &instance, "tb_node_types").ok();
@@ -201,6 +203,7 @@ impl Pack {
             f,
             provenance,
             roles,
+            roles_raw,
             node_types_raw,
             node_types: std::cell::OnceCell::new(),
         })
@@ -214,6 +217,24 @@ impl Pack {
     /// The facet manifest, for [`crate::expand`].
     pub fn roles(&self) -> &PackRoles {
         &self.roles
+    }
+
+    /// The facet manifest as it ships inside the module.
+    ///
+    /// [`Pack::roles`] is the same document parsed. This is for a consumer
+    /// that has its own representation of the vocabulary and would otherwise
+    /// have to convert out of ours and back — which is how two consumers come
+    /// to disagree about what a `_callable` is.
+    pub fn roles_json(&self) -> &str {
+        &self.roles_raw
+    }
+
+    /// The node manifest as it ships inside the module, for the same reason.
+    ///
+    /// `None` when the pack predates the export. [`Pack::node_types`] is the
+    /// parsed form this crate uses itself.
+    pub fn node_types_json(&self) -> Option<&str> {
+        self.node_types_raw.as_deref()
     }
 
     /// The node manifest this pack carries, parsed on first use.

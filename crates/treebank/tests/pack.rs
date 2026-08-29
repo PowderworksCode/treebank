@@ -172,3 +172,41 @@ fn an_older_pack_still_works_without_queries() {
     assert!(err.contains("pack_abi"), "should name the version: {err}");
     assert!(err.contains("expand_query"), "should offer the way round it: {err}");
 }
+
+#[test]
+fn hands_out_the_manifests_as_they_ship() {
+    let Some(path) = a_pack() else {
+        eprintln!("no treebank-python.wasm; run tools/wasm-pack/build.sh python");
+        return;
+    };
+    let pack = Pack::from_path(&path).expect("load");
+
+    // roles_json is the document roles() parsed, for a consumer that has its
+    // own representation of the vocabulary.
+    let roles: serde_json::Value =
+        serde_json::from_str(pack.roles_json()).expect("roles_json is json");
+    let facets = roles["facets"].as_object().expect("facets");
+    assert_eq!(facets.len(), pack.roles().facets.len());
+
+    // And the node manifest, which is where table-tier membership lives.
+    let raw = pack.node_types_json().expect("an ABI 2 pack carries node types");
+    let node_types: serde_json::Value = serde_json::from_str(raw).expect("node_types_json is json");
+    assert!(node_types.as_array().is_some_and(|a| !a.is_empty()));
+}
+
+#[test]
+fn the_raw_node_manifest_agrees_with_the_parsed_one() {
+    let Some(path) = a_pack() else {
+        eprintln!("no treebank-python.wasm; run tools/wasm-pack/build.sh python");
+        return;
+    };
+    let pack = Pack::from_path(&path).expect("load");
+    let raw = pack.node_types_json().expect("node types");
+    let parsed = pack.node_types().expect("node types parse");
+
+    // Whatever a consumer derives from the bytes must match what this crate
+    // derived from them, or the two disagree about the same pack.
+    let reparsed = treebank::node_types::NodeTypes::parse(raw).expect("reparse");
+    assert_eq!(reparsed.supertypes, parsed.supertypes);
+    assert!(parsed.closure("_loop").contains("while_statement"));
+}
