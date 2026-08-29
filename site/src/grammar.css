@@ -270,3 +270,14 @@ ul.ledger { margin: .4rem 0 1.25rem; padding-left: 1.1rem; font-size: .88rem; }
 ul.ledger li { margin: .3rem 0; }
 p.note { font-size: .82rem; margin: .35rem 0 1rem; }
 .dim { color: var(--dim); }
+
+/* The policy files a grammar keeps. A declaration is not decoration: an
+   undeclared deviation is a failing gate, so "none" here means the grammar
+   has nothing to declare rather than that nobody looked. */
+dl.declared { margin: .5rem 0 1.5rem; }
+dl.declared dt {
+  display: flex; align-items: baseline; gap: .45rem; margin-top: .6rem;
+  font-family: var(--font-mono); font-size: .82rem;
+}
+dl.declared dt.off code { color: var(--dim); }
+dl.declared dd { margin: .1rem 0 0; font-size: .84rem; color: var(--dim); }

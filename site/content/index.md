@@ -1,6 +1,6 @@
 ---
 title: Treebank
-description: Tree-sitter grammars, with the evidence attached.
+description: A growing collection of well-tested Tree-sitter grammars
 ---
 
 <style>
