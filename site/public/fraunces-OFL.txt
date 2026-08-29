@@ -91,3 +91,11 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+--
+Note for this repository: fraunces-latin.woff2 and fraunces-wonk-italic.ttf
+are subsets/instances of Fraunces-Italic[SOFT,WONK,opsz,wght].ttf from
+github.com/google/fonts, pinned at opsz=144, wght=600, SOFT=50, WONK=1.
+The .ttf exists because Pillow cannot read woff2 and does not set variation
+axes, so the social card would otherwise be drawn in the variable font's
+default instance (opsz=9, wght=900) rather than the face the site sets.
