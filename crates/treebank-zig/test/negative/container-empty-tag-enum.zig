@@ -1,0 +1,1 @@
+const E = enum() { a };

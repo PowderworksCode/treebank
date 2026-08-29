@@ -678,7 +678,20 @@ module.exports = grammar({
       // `union(enum)` and `union(enum(u8))`: the tag type is INFERRED from
       // the union's own fields, so the `enum` there declares nothing and
       // is not a container declaration — it is a word in a slot.
-      optional(seq('(', optional(field('tag', choice($._expression, $.inferred_enum_tag))), ')')),
+      //
+      // The parens are optional; what is INSIDE them is not. Zig spells
+      // this `KEYWORD_struct (LPAREN Expr RPAREN)?` — the expression is
+      // part of the group, so there is no empty pair to write. An
+      // `optional` on the tag as well made `struct () {}` a program, and
+      // it was the single heaviest finding in this grammar: 371 of the
+      // 1,348 widenings in issue #183, across `struct`, `extern struct`
+      // and `comptime struct`. Both zig 0.16.0 and 0.11.0 reject every
+      // spelling of it, so it is over-acceptance and not the version
+      // union. Note the rule is NOT "only `packed` may carry a backing
+      // integer" — `zig fmt` parses `struct(u32) {}` on both versions and
+      // leaves that to AstGen, so requiring `packed` here would open a gap
+      // rather than close one.
+      optional(seq('(', field('tag', choice($._expression, $.inferred_enum_tag)), ')')),
       field('body', $.container_body),
     ),
 
