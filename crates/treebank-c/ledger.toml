@@ -34,12 +34,12 @@ The lock remains popularity-weighted distribution source rather than a uniform s
 files = 84473
 passed = 62539
 failed = 21934
-gap_files = 6392
+gap_files = 6393
 noise_files = 11320
 pass_rate = '74.03%'
 corpus_lock_sha256 = 'ee451b935f9702b14650dc21efe7ed4d74df1a11f6dbc6ce8fb245b958d51432'
-grammar_sha256 = 'acc7cef16f413f07ba1009cdcbdeb9e9b92fbc28173c031ad708cb85afb4bb57'
-grammar_revision = '96bea7cf5629e506d24e7db8a89556e71baa7bab'
+grammar_sha256 = '8607527a794d17147731910373808aca1f6a27bfa9541246882685f992b4531e'
+grammar_revision = 'bf95c39d6d6ceae2acb8d612e3ff86df72c7fbe7'
 
 [corpus.gaps]
 # Everything the sweep's ledger writer does not carry. It owns
