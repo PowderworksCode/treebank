@@ -81,18 +81,36 @@ for i in 0..node.child_count(false)? {
 
 ## One query, several languages
 
-Every grammar carries the same vocabulary. Some roles are real supertypes,
-threaded through the productions and queryable directly; others are *facets*,
-lists that expand against the manifest each pack carries:
+This is the reason the grammars are written rather than collected. Every one
+carries the same vocabulary, so a query written once runs against all of them
+and finds whatever that language calls the thing:
 
 ```rust
-Pack::fetch("python")?.expand_query("(_callable)")?;
-// [(function_definition) (lambda)]
-
-Pack::fetch("rust")?.expand_query("(_callable)")?;
-// [(function_definition) (closure_expression)]
+for lang in ["python", "rust", "typescript"] {
+    let pack = Pack::fetch(lang)?;
+    let tree = pack.parse(source)?;
+    for capture in pack.query(&tree, "(_declaration) @decl")? {
+        println!("{lang} {} {:?}", capture.kind, capture.range);
+    }
+}
 # Ok::<(), anyhow::Error>(())
 ```
+
+```
+python      function_definition, class_definition
+rust        function_definition, struct_definition
+typescript  function_definition, class_definition
+```
+
+`_declaration` is a **supertype** — a real rule threaded through the
+productions, so the match is by derivation rather than by node name.
+`_callable`, `_binding`, `_scope` and `_clause` are **facets**: lists that
+cross-cut derivations and cannot be supertypes, so `query` expands them
+against the manifest each pack carries before running. Either way you write
+the same query.
+
+`expand_query` returns the rewritten query without running it, if you have
+your own query engine.
 
 ## Speed
 

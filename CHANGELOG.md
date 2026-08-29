@@ -11,6 +11,14 @@ Only the Rust API is versioned.
 
 ## [Unreleased]
 
+### Added
+
+- `Pack::query` runs a query and returns its captures. Until now the shared
+  vocabulary could be *expanded* but not *executed*: `expand_query` handed
+  back a string and nothing in a pack could run it, so the one operation the
+  vocabulary exists for was the one a consumer could not perform. Needs a pack
+  built at `pack_abi` 3 or later.
+
 ## [0.2.0] - 2026-08-29
 
 ### Added

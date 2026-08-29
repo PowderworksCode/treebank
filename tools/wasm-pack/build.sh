@@ -86,7 +86,7 @@ corpus = ledger.get("corpus", {})
 sweeps = {k: v for k, v in corpus.items() if k.endswith("sweep")}
 
 prov = {
-    "pack_abi": 2,
+    "pack_abi": 3,
     "producer": "treebank",
     "language": ledger["language"],
     "grammar_name": grammar_name,

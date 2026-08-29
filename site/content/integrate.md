@@ -122,13 +122,29 @@ several. Some roles are real supertypes and queryable directly; others are
 *facets*, which are lists that must be expanded first:
 
 ```rust
-let query = pack.expand_query("(_callable)")?;
-// python -> [(function_definition) (lambda)]
-// rust   -> [(function_definition) (closure_expression)]
+for lang in ["python", "rust", "typescript"] {
+    let pack = Pack::fetch(lang)?;
+    let tree = pack.parse(source)?;
+    for capture in pack.query(&tree, "(_declaration) @decl")? {
+        println!("{lang} {} {:?}", capture.kind, capture.range);
+    }
+}
 ```
 
-The expansion uses the manifest the pack carries, so nothing has to be
-shipped beside the parser. [The vocabulary](/concepts/two-tiers/) explains why
+```
+python      function_definition, class_definition
+rust        function_definition, struct_definition
+typescript  function_definition, class_definition
+```
+
+`_declaration` is a supertype, matched by derivation rather than by node name.
+`_callable`, `_binding`, `_scope` and `_clause` are facets — lists that
+cross-cut derivations — and `query` expands them against the manifest the pack
+carries before running, so nothing has to be shipped beside the parser.
+Either way you write the same query.
+
+`expand_query` returns the rewritten query without running it, for a caller
+with its own query engine. [The vocabulary](/concepts/two-tiers/) explains why
 there are two kinds.
 
 ## Features

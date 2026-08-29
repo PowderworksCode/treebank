@@ -9,6 +9,11 @@ documentation = "https://docs.rs/treebank"
 keywords = ["tree-sitter", "parser", "grammar", "wasm", "syntax"]
 categories = ["parsing", "development-tools", "wasm"]
 readme = "README.md" 
+# The abi-2 regression fixture is 673 KB and exists to prove this crate still
+# drives a pack that predates queries. It is worth its weight in git, where it
+# is frozen on purpose, and worth nothing in the published tarball -- nobody
+# downloading the crate runs its tests.
+exclude = ["tests/fixtures/pack-abi-2.wasm"]
 description = "The treebank vocabulary as code and data: the closed term lists, the roles.json facet manifest schema, the vocabulary-conformance checker, and facet query expansion."
 
 [dependencies]
