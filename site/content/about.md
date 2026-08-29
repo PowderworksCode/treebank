@@ -28,24 +28,39 @@ every grammar and checked by the same gate.
 usable from any language with a WASI runtime. Not a native module per platform
 and not a package per language.
 
-## Where it came from
+## Written from scratch
 
-The grammars began from the upstream Tree-sitter grammars for each language,
-which are the work of many people over many years. Treebank owns its copies
-now — they have been changed enough that pointing at an upstream commit and a
-patch series would describe them less accurately than a hash of the source
-does. Each grammar keeps its own licence and records its own provenance.
+The grammars are not forks. There are no upstream grammar repositories, no
+vendored trees and no patch series anywhere in the project — each grammar was
+written for Treebank, which is what makes the rest of it possible.
+
+The shared vocabulary is the clearest case. `_declaration` and `_loop` are
+threaded through the productions and enforced when the parser is generated,
+so a query for them is answered by the parse table rather than by a naming
+convention. That is only available to someone who writes the grammar; it
+cannot be added to one from outside.
+
+It is also why a pack's provenance is a hash of its source rather than an
+upstream commit and a list of patches. There is no upstream to point at.
 
 ## Who maintains it
 
 Treebank is part of [Powderworks](https://powderworks.dev), and is MIT
 licensed. Most of its code is written by agents working against the gates
 described in [How it works](/concepts/) — a grammar change is only accepted
-with fresh evidence behind it, which is a rule that suits a machine
-contributor and a human one equally.
+with fresh evidence behind it, a rule that suits a machine contributor and a
+human one equally.
 
-Bug reports and pull requests are welcome on
-[GitHub](https://github.com/PowderworksCode/treebank). If you have found code
-that a grammar parses wrongly, the [playground](/playground/) will produce a
-link to the exact parser you were using, which is the most useful thing to put
-in an issue.
+Contributions are welcome on
+[GitHub](https://github.com/PowderworksCode/treebank). One concern per pull
+request, and a grammar change carries a fresh sweep: change what the grammar
+accepts and the committed evidence is stale until it is re-run.
+
+If you have found code that a grammar parses wrongly, the
+[playground](/playground/) produces a link to the exact parser you were using.
+That link is the most useful thing to put in an issue.
+
+This site sets two typefaces under the SIL Open Font License 1.1:
+[Fraunces](https://fonts.google.com/specimen/Fraunces) and [IM Fell English
+SC](https://fonts.google.com/specimen/IM+Fell+English+SC). Their licences ship
+beside them.
