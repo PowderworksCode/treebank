@@ -87,18 +87,18 @@ title: ${NAMES[name] ?? name}
 description: Every production in the ${NAMES[name] ?? name} parse table, as EBNF and as a railroad diagram.
 ---
 
-${productions} productions, rendered from \`crates/treebank-${name}/src/grammar.json\`
-— the normalised grammar tree-sitter itself consumes. Nothing here is a
-summary: if the parser does it, it is on this page.
+${productions} productions, generated from
+\`crates/treebank-${name}/src/grammar.json\`. Every production the parser has
+is on this page.
 
-The identifier every command wants is \`${name}\`, as in
-\`treebank verify --grammar crates/treebank-${name}\`.
+\`${name}\` is the identifier commands take, as in
+\`treebank verify --grammar crates/treebank-${name}\`. The grammar runs in a
+browser on the [playground](/playground/?g=${name}), and downloads as
+[\`treebank-${name}.wasm\`](/packs/treebank-${name}.wasm).
 
-The parse table itself is at [\`/grammars/${name}.json\`](/grammars/${name}.json)
-— \`grammar.json\`, \`node-types.json\` and \`roles.json\` joined and pruned to what
-a renderer reads. The diagrams below are drawn from exactly that file, so
-anything reading this page without running its JavaScript should read that
-instead of this.
+The parse table this page is drawn from is at
+[\`/grammars/${name}.json\`](/grammars/${name}.json) — read that instead if you
+are not running JavaScript.
 
 <link rel="stylesheet" href="/grammar.css">
 <div class="grammar-viewer" data-grammar="${name}">
