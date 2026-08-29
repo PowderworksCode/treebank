@@ -791,22 +791,28 @@ module.exports = grammar({
     _body: $ => choice($.block),
 
     block: $ => choice(
-      // The trailing `optional($._newline)` absorbs the SECOND newline that a
+      // The trailing `repeat($._newline)` absorbs the extra newline that EACH
       // COMMENT line after an inline suite produces:
       //
       //     elif n == 4: underline = True
       //     # Code 5: blinking
       //     elif n == 5: bold = True
       //
-      // is ordinary Python and appears in real code (fastcore, dill). A
-      // block suite absorbs the extra into its DEDENT; an inline suite opens
-      // no indent level, so there is nowhere else for it to go. Bounded at
-      // one, not `repeat1`: the scanner can emit a zero-width NEWLINE at
-      // EOF, and an unbounded repeat over it hangs the parser.
-      // `prec.right` resolves the shift/reduce on that second newline toward
-      // consuming it here. Safe because the tolerance is bounded at one; the
-      // same shape with `repeat1` hangs the parser.
-      prec.right(seq($._statement, repeat(seq(';', $._statement)), optional(';'), $._newline, optional($._newline))),
+      // is ordinary Python and appears in real code (fastcore, dill). A block
+      // suite absorbs the extras into its DEDENT; an inline suite opens no
+      // indent level, so there is nowhere else for them to go.
+      //
+      // One per comment line, so the run is unbounded — dill/source.py has
+      // three in a row. This was bounded at one for a long time because an
+      // unbounded repeat HUNG the parser: the newline closing the last
+      // logical line at EOF is zero width, so consuming it advanced nothing
+      // and the repeat asked for it forever. That is fixed where it belongs,
+      // in the scanner, which now answers the second such request with
+      // `false` (see `eof_newline_emitted`) — the final line ends once.
+      //
+      // `prec.right` resolves the shift/reduce on those newlines toward
+      // consuming them here.
+      prec.right(seq($._statement, repeat(seq(';', $._statement)), optional(';'), $._newline, repeat($._newline))),
       seq($._newline, $._indent, repeat1($._line), $._dedent),
     ),
 

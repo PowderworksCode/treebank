@@ -56,6 +56,11 @@ typedef struct {
   uint16_t indents[MAX_INDENTS];
   uint32_t string_count;
   OpenString strings[MAX_STRINGS];
+  // The NEWLINE that closes the last logical line at EOF is ZERO WIDTH, so
+  // nothing advances when it is emitted and a grammar rule that may take
+  // more than one newline in a row would ask for it forever. One is all the
+  // language can mean: the final line ends once. See the EOF branch.
+  bool eof_newline_emitted;
 } Scanner;
 
 static inline void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
@@ -451,7 +456,12 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
         lexer->result_symbol = DEDENT;
         return true;
       }
-      if (valid[NEWLINE]) {
+      // ONCE. This token is zero width, so emitting it advances nothing:
+      // a rule that accepts a run of newlines would ask again from the
+      // same position and never stop. The last logical line ends once, so
+      // the second request is answered with `false` and the run ends.
+      if (valid[NEWLINE] && !s->eof_newline_emitted) {
+        s->eof_newline_emitted = true;
         s->line_start_pending = true;
         lexer->result_symbol = NEWLINE;
         return true;
@@ -459,6 +469,9 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
     }
     return false;
   }
+  // Past EOF-handling with input still ahead: whatever we emit next consumes
+  // text, so a later end-of-file newline is a different one and is owed.
+  s->eof_newline_emitted = false;
 
   // Indentation only means anything at the start of a line. Mid-line the
   // grammar may still OFFER dedent (a GLR fork that has already closed a
@@ -558,6 +571,7 @@ unsigned tree_sitter_python_external_scanner_serialize(void *payload,
     buffer[i++] = (char)s->strings[k].flags;
     buffer[i++] = s->strings[k].quote;
   }
+  buffer[i++] = (char)s->eof_newline_emitted;
   return i;
 }
 
@@ -581,6 +595,7 @@ void tree_sitter_python_external_scanner_deserialize(void *payload,
     s->strings[k].flags = (uint8_t)buffer[i++];
     s->strings[k].quote = buffer[i++];
   }
+  if (i < length) s->eof_newline_emitted = buffer[i++] != 0;
 }
 
 void *tree_sitter_python_external_scanner_create(void) {
