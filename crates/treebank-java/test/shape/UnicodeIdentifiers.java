@@ -1,12 +1,20 @@
 // Identifiers are not ASCII. JLS 3.8 defines them by
-// `Character.isJavaIdentifierStart`/`Part`, so a letter from any script
-// starts one and digits, `_` and `$` continue one.
+// `Character.isJavaIdentifierStart`/`Part`, and BOTH are predicates over
+// Unicode general categories rather than character lists:
 //
-// What is deliberately NOT here: identifiers containing a combining mark
-// (Unicode `Mn`/`Mc`), such as Devanagari `चूंकि` or Tamil `ஆனால்`. Those
-// are issue #196 -- the grammar's identifier class omits both categories,
-// so those files do not parse cleanly yet and a fixture for them belongs
-// with the fix, not before it. Every script below is mark-free on purpose.
+//   start  L, Nl, Sc, Pc
+//   part   the above plus Nd, Mn, Mc, Cf
+//
+// Every category appears below, because the grammar's identifier rule was
+// written from what ASCII code looks like and had only L, Nd, `_` and `$`
+// until issue #196. The combining marks were the visible half of that: a
+// name like `चूंकि` ended at the first matra and 53 corpus files
+// did not parse. Nl, Sc, Pc and Cf were missing for the same reason and
+// are pinned here, since no corpus file spells them.
+//
+// The other side of the boundary -- a mark, a digit or a format character
+// trying to START a name -- is in test/negative/, where a fixture that
+// must be REJECTED belongs.
 package fixtures;
 
 class UnicodeIdentifiers {
@@ -68,6 +76,48 @@ class UnicodeIdentifiers {
     // the positive control for that issue.
     @SuppressWarnings("unused")
     int πηγή = fixtures.UnicodeIdentifiers.Ταξινόμηση.ΣΤΑΘΕΡΑ;
+
+    // ── the categories the rule used to omit ───────────────────────
+
+    // Mn (non-spacing) and Mc (combining spacing) marks, which is what
+    // issue #196 was. Devanagari, Tamil, Kannada, Malayalam, Telugu,
+    // Gujarati, Thai and an Arabic diacritic -- one per script that the
+    // cucumber corpus files failed on.
+    int चूंकि = 20;
+    int ஆனால் = 21;
+    int ನೀಡಿದ = 22;
+    int എപ്പോൾ = 23;
+    int మరియు = 24;
+    int આપેલછે = 25;
+    int ดังนั้น = 26;
+    int اذاً = 27;
+
+    // Nl (letter number), Sc (currency), Pc (connector) -- all three are
+    // identifier START characters, which is why `_` and `$` never needed
+    // naming separately.
+    int Ⅷ = 28;
+    int €uro = 29;
+    int ‿tie = 30;
+
+    // Cf (format): a zero-width joiner INSIDE a name. Part-only, and
+    // `Character.isIdentifierIgnorable` is why javac takes it.
+    int zero‍width = 31;
+
+    // The exact shape issue #196 reported: a scoped annotation argument
+    // whose type name carries a combining mark. Nothing about annotations
+    // was ever wrong -- the lexer simply ended the name early, and this is
+    // the line that proved it.
+    @संकेत(संकेत.संकेतs.class)
+    static class उपयोग {
+    }
+
+    @interface संकेत {
+        Class<?> value();
+
+        @interface संकेतs {
+            संकेत[] value();
+        }
+    }
 
     // Non-ASCII labels, type parameters and lambda parameters.
     <Τ> Τ ταυτότητα(Τ τιμή) {

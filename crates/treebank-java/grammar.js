@@ -1040,7 +1040,31 @@ module.exports = grammar({
       field('name', $.identifier),
     ),
 
-    identifier: _ => /[\p{L}_$][\p{L}\p{Nd}_$]*/,
+    // JLS 3.8 defines an identifier as a JavaLetter followed by
+    // JavaLetterOrDigit, and defines BOTH by a predicate rather than a
+    // character list: `Character.isJavaIdentifierStart` and
+    // `isJavaIdentifierPart`. Spelling the predicate out:
+    //
+    //   start  L, Nl, Sc, Pc
+    //   part   the above plus Nd, Mn, Mc, Cf
+    //
+    // `_` is Pc and `$` is Sc, so both fall out of the categories instead
+    // of being named. The two mark categories are what issue #196 was:
+    // without them the lexer ended an identifier at the first matra, so
+    // `चूंकि`, `ஆனால்` and `ನೀಡಿದ` lexed as a letter followed by rubbish,
+    // and 53 corpus files did not parse at all. Nl, Sc, Pc and Cf were
+    // missing from the same rule for the same reason -- the class was
+    // written from what ASCII code looks like rather than from 3.8 -- and
+    // are restored here with it, guarded by test/negative rather than by
+    // corpus files, because no corpus file spells them.
+    //
+    // NOT included: the ISO control characters `isIdentifierIgnorable`
+    // also accepts (U+0000-0008, U+000E-001B, U+007F-009F). javac takes
+    // them inside a name; nothing spells them, and admitting a control
+    // character into the lexer to match a predicate's edge case is a cost
+    // with no reader on the other side. A file using one is a rejected
+    // file we would rather reject.
+    identifier: _ => /[\p{L}\p{Nl}\p{Sc}\p{Pc}][\p{L}\p{Nl}\p{Sc}\p{Pc}\p{Nd}\p{Mn}\p{Mc}\p{Cf}]*/,
 
     // ── literals ─────────────────────────────────────────────────────
     _literal: $ => choice(
