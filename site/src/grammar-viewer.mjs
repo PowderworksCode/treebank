@@ -21,6 +21,7 @@ import {
   toRr,
 } from "./grammar.mjs";
 import { diagram, measureWith } from "./railroad.mjs";
+import { grammarStatus } from "./status.mjs";
 
 // The one measurement the layout engine needs. Taken against the face the
 // page will actually paint with, which is why the diagrams no longer carry a
@@ -192,7 +193,7 @@ function wire(root, g) {
   });
 }
 
-export function render(root, bundle) {
+export function render(root, bundle, status) {
   const g = new Grammar(bundle);
   const { table, facet } = roleIndex(g);
   const precs = precedences(g);
@@ -214,6 +215,7 @@ export function render(root, bundle) {
        aria-label="Filter productions">
 <div class="idx-scroll">${rail}</div></nav>
 <div class="grammar-main">
+${status ? grammarStatus(status.grammars?.[g.name], g.name) : ""}
 ${vocabulary(g, table, facet)}
 ${precedenceTable(precs)}
 <h2 id="productions">Productions</h2>
@@ -231,13 +233,19 @@ ${productions}
 async function mount(root) {
   const name = root.dataset.grammar;
   try {
-    const response = await fetch(`/grammars/${name}.json`);
+    // The inventory is a separate, much smaller request, and a missing or
+    // broken one must not cost the reader the parse table: the grammar is the
+    // page, the status is an addition to it.
+    const [response, status] = await Promise.all([
+      fetch(`/grammars/${name}.json`),
+      fetch("/status.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+    ]);
     if (!response.ok) throw new Error(`${response.status} fetching ${name}`);
     // Layout depends on text metrics, and metrics before the webfont lands
     // are the fallback's. Waiting means measuring what will be painted.
     await document.fonts?.ready;
     measureWith(measurer());
-    render(root, await response.json());
+    render(root, await response.json(), status);
   } catch (error) {
     root.innerHTML = `<p class="broken">Could not render ${E(name)}: ${E(error.message)}</p>`;
   }

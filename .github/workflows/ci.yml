@@ -33,6 +33,25 @@ jobs:
           cat "$RUNNER_TEMP/treebank-status.md" >> "$GITHUB_STEP_SUMMARY"
       - run: cargo test --workspace
 
+      # The site publishes a snapshot of the inventory above, because
+      # Cloudflare Workers Build has no Rust toolchain and cannot produce one
+      # at deploy time. Regenerating it here and failing on a difference is
+      # what stops treebank.dev from quoting pass rates, gap counts and
+      # evidence freshness that this repository has stopped agreeing with --
+      # the same guard the corpus ledgers get, for the same reason.
+      #
+      # `git status --porcelain`, not `git diff`: diff reports only tracked
+      # files, so a snapshot that went missing from the index would make this
+      # check pass by having nothing to compare.
+      - name: the site's inventory snapshot is current
+        run: |
+          node site/tools/build-status.mjs
+          if [ -n "$(git status --porcelain -- site/public/status.json)" ]; then
+            echo "::error::site/public/status.json is stale or untracked; run 'bun run status' in site/"
+            git diff -- site/public/status.json | head -40
+            exit 1
+          fi
+
   # The grammar and sweep lists, read off the repository rather than written down.
   # A hand-maintained matrix means a new grammar's gates are green because
   # nothing ran them, which is the one failure mode a gate cannot survive.

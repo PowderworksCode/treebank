@@ -7,6 +7,10 @@ order: 50
 The honest way to document a parser is to render its parse table rather than
 describe it.
 
+<link rel="stylesheet" href="/grammar.css">
+<div class="status-overview"><p class="grammar-loading">Loading the inventory…</p></div>
+<script type="module" src="/status-view.mjs"></script>
+
 Each page here is generated from that grammar's `src/grammar.json` — the
 normalised grammar tree-sitter consumes, not the hand-written `grammar.js`.
 `grammar.js` is arbitrary JavaScript, and reading it means running it.

@@ -209,3 +209,64 @@ svg.rr rect.prec { stroke: var(--g-accent); }
 .grammar-loading { color: var(--dim); font-style: italic; }
 .broken { color: #b3261e; font-family: var(--font-mono); font-size: .8rem; }
 @media (prefers-color-scheme: dark) { .broken { color: #f2b8b5; } }
+
+/* ---- the inventory --------------------------------------------------- */
+/* A pass rate is the number a project quotes when it wants to be trusted, so
+   it is never shown alone here: the gaps beside it say how many failures the
+   grammar actually owns, and the evidence flag says whether the measurement
+   is still bound to the grammar it was taken against. */
+
+table.status-table { border-collapse: collapse; width: 100%; font-size: .85rem; margin: .5rem 0; }
+table.status-table th, table.status-table td {
+  text-align: left; padding: .38rem .8rem .38rem 0;
+  border-bottom: 1px solid var(--line); vertical-align: baseline; white-space: nowrap;
+}
+table.status-table th {
+  font-size: .7rem; text-transform: uppercase; letter-spacing: .06em;
+  color: var(--dim); font-weight: 700;
+}
+table.status-table td.num, table.status-table th.num {
+  text-align: right; font-variant-numeric: tabular-nums;
+}
+table.status-table td.mono { font-family: var(--font-mono); font-size: .8rem; }
+table.status-table td a { font-family: var(--font-mono); font-size: .82rem; }
+table.status-table .rate { font-weight: 700; }
+/* Wide bands, and never colour alone: the figure is always the label. C++ at
+   24.70% is a fact about what macros do to a parse, not a failing grade. */
+table.status-table .rate.good { color: #2f6b3a; }
+table.status-table .rate.fair { color: #8a6212; }
+table.status-table .rate.thin { color: #9a4a2f; }
+@media (prefers-color-scheme: dark) {
+  table.status-table .rate.good { color: #86c894; }
+  table.status-table .rate.fair { color: #d6ab4e; }
+  table.status-table .rate.thin { color: #e0977a; }
+}
+
+.flag {
+  font-size: .68rem; text-transform: uppercase; letter-spacing: .05em;
+  padding: .1rem .35rem; border-radius: 3px; border: 1px solid var(--line);
+  color: var(--dim); white-space: nowrap;
+}
+.flag.on { color: #2f6b3a; border-color: #2f6b3a88; }
+.flag.warn { color: #8a6212; border-color: #8a621288; }
+.flag.off { color: var(--dim); }
+@media (prefers-color-scheme: dark) {
+  .flag.on { color: #86c894; border-color: #86c89466; }
+  .flag.warn { color: #d6ab4e; border-color: #d6ab4e66; }
+}
+
+.facts { display: flex; flex-wrap: wrap; gap: .5rem 1.6rem; margin: 1rem 0; }
+.facts > div { display: flex; align-items: center; gap: .4rem; font-size: .85rem; }
+.facts .k { color: var(--dim); font-size: .78rem; }
+.facts.counts > div { gap: .35rem; }
+.facts.counts b { font-variant-numeric: tabular-nums; }
+
+.count {
+  font-size: .7rem; font-weight: 400; color: var(--dim);
+  border: 1px solid var(--line); border-radius: 3px; padding: .05rem .3rem;
+  vertical-align: middle;
+}
+ul.ledger { margin: .4rem 0 1.25rem; padding-left: 1.1rem; font-size: .88rem; }
+ul.ledger li { margin: .3rem 0; }
+p.note { font-size: .82rem; margin: .35rem 0 1rem; }
+.dim { color: var(--dim); }

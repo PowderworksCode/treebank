@@ -1,0 +1,922 @@
+{
+ "schema_version": 1,
+ "revision": "4193cbd",
+ "summary": {
+  "languages": 10,
+  "grammars": 9,
+  "corpus_locks": 10,
+  "corpus_canaries": 9,
+  "current_corpus_evidence": 10,
+  "stale_corpus_evidence": 0,
+  "unbound_corpus_evidence": 0,
+  "lint_ratchets": 1,
+  "shape_fixture_grammars": 6,
+  "wasm_packs": 9,
+  "query_files": 0,
+  "non_rust_binding_grammars": 0
+ },
+ "warnings": [
+  "8 of 9 grammars run lint in advisory mode without lint_policy.toml",
+  "no tree-sitter query files are configured",
+  "no grammar has a binding directory beyond Rust",
+  "span oracle configured but no checked-in shape fixtures: bash, java"
+ ],
+ "errors": [],
+ "grammars": {
+  "bash": {
+   "versions": "GNU bash 5.x, which is the union that matters: `${x@Q}`, `[[ … =~ … ]]`, `((` arithmetic, process substitution, `;&` and `;;&` case terminators, and the `<<-` heredoc. POSIX sh is a subset and parses; zsh, ksh and fish are different languages and are not targeted.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "bash"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 13,
+    "facets": 7,
+    "named_nodes": 52,
+    "uncategorised": 8
+   },
+   "tests": {
+    "corpus_cases": 6,
+    "negative_files": 5,
+    "shape_files": 0
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "bash",
+     "files": 77205,
+     "passed": 75640,
+     "failed": 1565,
+     "grammar_gaps": 975,
+     "noise": 590,
+     "pass_rate": "97.97%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "bed91cf21f911a27be4ca3d8865d4d30af838e31"
+    }
+   ],
+   "known_gaps": [],
+   "known_widenings": [],
+   "deviations": []
+  },
+  "c": {
+   "versions": "C89 through C23 in one grammar, in the GNU dialect, because that is what a distribution's C is written in and there is no version of C in the corpus that is not. C99 brought `//` comments, declarations inside a `for`, designated initializers, compound literals, `_Complex` and variadic macros; C11 brought `_Static_assert`, `_Generic`, `_Atomic` in both its jobs and anonymous struct and union members; C23 brought `[[attributes]]`, `typeof`, `constexpr`, `bool` and `nullptr` as keywords, `#elifdef`, an enum's underlying type and a label at the end of a block. The GNU extensions are not a tier below those: statement expressions, `__attribute__`, case ranges, `__typeof__`, extended `asm`, `__auto_type`, computed `goto` and K&R definitions are all in the table, and a grammar without them parses none of glibc.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "c"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 19,
+    "facets": 8,
+    "named_nodes": 117,
+    "uncategorised": 32
+   },
+   "tests": {
+    "corpus_cases": 23,
+    "negative_files": 16,
+    "shape_files": 1
+   },
+   "known_deviations": {
+    "shape": false,
+    "fuzz": false,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": false,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "c",
+     "files": 84473,
+     "passed": 62539,
+     "failed": 21934,
+     "grammar_gaps": 6392,
+     "noise": 11320,
+     "pass_rate": "74.03%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "96bea7cf5629e506d24e7db8a89556e71baa7bab"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "a macro standing in for a whole parameter list",
+     "files": 9
+    },
+    {
+     "summary": "a macro inside a type descriptor",
+     "files": 4
+    },
+    {
+     "summary": "a parenthesised parameter list as a macro argument",
+     "files": 2
+    },
+    {
+     "summary": "an empty macro argument",
+     "files": 5
+    }
+   ],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "**A macro standing alone parses where the compiler wants a declaration, at file scope and inside a struct body.** `__BEGIN_DECLS`, `_XFUNCPROTOBEGIN`, `G_BEGIN_DECLS` and `BEGIN_EXTERN_C()` open a great many headers; `struct k_atm_aal_stats { __AAL_STAT_ITEMS };` is the same thing one level down, where the macro expands to several members. `unexpanded_macro` admits both at a negative dynamic precedence, so anything readable as a declaration still reads as one. The cost is stated rather than buried: `f();` at file scope now parses too, as this rule plus an `empty_declaration`, and clang calls that an error; inside a struct body a bare name parses as a member. It was measured before it was taken — `unexpanded_macro` and the empty-declarator-list rule beside it moved 580 of 1,367 remaining local failures between them — and the alternative was losing every header that opens with one.",
+     "files": null
+    },
+    {
+     "summary": "**A macro may stand where a keyword would, in five positions, and each one admits something C does not.** The rules are `macro_modifier` (a bare name) and `macro_attribute` (a name with an optional argument list), and the whole safety argument is where they are reachable FROM: - After a declarator that ENDS IN `)` OR `]`, which is `__THROW`, `__nonnull ((1))`, `__ul_attribute__((warn_unused_result))`. Admits `int f(void) g;` and `int a[3] g;`. Does not admit `int x y;`, because a name is not a function or array declarator. - In the declaration specifiers BEFORE the type, and in front of a function declarator. Admits `foo bar baz;` and `int x y();`. Does not admit `int x y;`, because `int` is a keyword and `y` carries no parameter list. - Beside a pointer's qualifiers and in front of a parenthesised declarator's star, which is `ZEND_FASTCALL` and `WINAPI`. Admits `int *x y;`. - On an enumerator, together with an argument list for the enumerator that IS a macro call. Admits `enum { A B };` and `enum { A(1) };`. - After `typedef`'s specifiers and after a struct member's declarator. Admits `typedef int x y;` and `struct { int x y; };`. Every one of those is inside a context the parser has already committed to, and none of them is `int x y;` at file scope or in a block. Four negative files pin that and clang rejects all four. One further consequence is not an over-acceptance but a wrong tree, and it is unavoidable: where two adjacent identifiers could be either name-then-macro or macro-then-name, the grammar has to pick. In a typedef it picks macro-then-name, so `typedef struct _GTrashStack GTrashStack GLIB_DEPRECATED_TYPE_IN_2_48;` parses with the `declarator` field naming the macro. At file scope a leading macro is read as a standalone `unexpanded_macro` rather than as a modifier, so `ZEND_API void ZEND_FASTCALL f(int);` gives `ZEND_API` its own node — which is right for `__BEGIN_DECLS` and wrong for `ZEND_API`, and there is nothing in the token stream that separates them.",
+     "files": null
+    },
+    {
+     "summary": "**A parameter list may contain another parameter list.** `extern int __REDIRECT_NTH (aio_read, (struct aiocb *__aiocbp), aio_read64);` — glibc's redirect macros hand the parser a parenthesised parameter list sitting where a parameter goes, and reading it as one is the only reading there is. It admits `int f(int a, (int b));`, which clang rejects. Narrow, because a parameter declaration cannot begin with `(`: nothing that parsed before parses differently now. Worth 46 files on the local corpus.",
+     "files": null
+    },
+    {
+     "summary": "**Two declarator hierarchies, not four.** A declarator ending in a name and one ending in nothing, where a grammar that also wanted `field_identifier` and `type_identifier` node types in declarator position would need four near-identical copies. The consequence is a naming one: a struct member's name and a typedef's name are both `identifier`, and what they name is carried by the field (`declarator:`) and by the enclosing node rather than by the node type. `type_identifier` still exists, as the alias used in type POSITION, where the position decides and no second hierarchy is needed.",
+     "files": null
+    }
+   ]
+  },
+  "cpp": {
+   "versions": "C++98 through C++23 in one grammar, in the GNU dialect, EXTENDING treebank-c through tree-sitter's own grammar inheritance rather than copying it. C++11 brought `auto`, `decltype`, lambdas, rvalue references, `nullptr`, scoped enums, `= default` and `= delete`, alias declarations, trailing return types, raw strings and variadic templates; C++14 generic lambdas; C++17 nested namespaces, structured bindings and `if constexpr`; C++20 concepts and `requires`, the three-way comparison and coroutines. The GNU extensions come with the base grammar and are not re-listed: `__attribute__`, statement expressions, `typeof`, `asm`, the alternate keyword spellings. The inheritance is not a convenience. C++ genuinely IS C's declarator grammar with more on top, and the alternative — a second copy of the declaration specifiers, the four declarator shapes, the whole preprocessor and every GNU extension — is a copy that drifts. A fix to the way `int (*f[3])(void)` parses has to land in both languages or in neither.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "cpp"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 20,
+    "facets": 8,
+    "named_nodes": 176,
+    "uncategorised": 41
+   },
+   "tests": {
+    "corpus_cases": 10,
+    "negative_files": 12,
+    "shape_files": 1
+   },
+   "known_deviations": {
+    "shape": false,
+    "fuzz": false,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "cpp",
+     "files": 121957,
+     "passed": 30123,
+     "failed": 91834,
+     "grammar_gaps": 15601,
+     "noise": 75966,
+     "pass_rate": "24.70%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "96bea7cf5629e506d24e7db8a89556e71baa7bab"
+    }
+   ],
+   "known_gaps": [],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "**Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern \"C\" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it. `T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern \"C\" { … }` all parse. DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.",
+     "files": null
+    },
+    {
+     "summary": "**A macro in a namespace head or body parses, and the compiler rejects it.** `namespace std _GLIBCXX_VISIBILITY(default) { … }` opens very nearly every libstdc++ header and `_GLIBCXX_BEGIN_NAMESPACE_VERSION` follows it; unexpanded, neither is anything. C admits the same shape at FILE SCOPE and C++ cannot afford to — a bare name where a declaration goes hands every `f(x)` a second reading, and that was measured: it was the last four declared conflicts before the table stopped converging. Here it is reachable from exactly two positions, both already committed by the `namespace` keyword before the macro appears. Measured before it was taken: the two positions are 200 and 73 files of 791.",
+     "files": null
+    }
+   ]
+  },
+  "java": {
+   "versions": "Java 8 through 21 in one grammar: lambdas and method references (8), modules (9), `var` (10), switch expressions and arrow rules (14), text blocks (15), `instanceof` patterns (16), records and sealed types (17), record patterns and pattern switches (21). The contextual keywords -- `record`, `sealed`, `permits`, `yield`, `when` -- are soft, so code predating each one keeps parsing.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "java"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 19,
+    "facets": 8,
+    "named_nodes": 122,
+    "uncategorised": 15
+   },
+   "tests": {
+    "corpus_cases": 5,
+    "negative_files": 7,
+    "shape_files": 0
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": false,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "java",
+     "files": 243576,
+     "passed": 243409,
+     "failed": 167,
+     "grammar_gaps": 167,
+     "noise": 0,
+     "pass_rate": "99.93%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "2769c501beb46d93b7eb4fd9d1852d6499107099"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "`case A -> …` where the case constant is a bare identifier",
+     "files": 539
+    },
+    {
+     "summary": "module declarations (`module-info.java`)",
+     "files": 83
+    }
+   ],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to a facet is the alternative if it ever matters.",
+     "files": null
+    }
+   ]
+  },
+  "python": {
+   "versions": "2.7 ∪ 3.x (through 3.13 syntax: match, PEP 695 type parameters and type aliases, except*, parenthesized with-items)",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "python"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": true,
+    "printer": true
+   },
+   "roles": {
+    "supertypes": 18,
+    "facets": 8,
+    "named_nodes": 104,
+    "uncategorised": 20
+   },
+   "tests": {
+    "corpus_cases": 16,
+    "negative_files": 32,
+    "shape_files": 7
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": true,
+    "lint": false,
+    "version": true
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "python",
+     "files": 298354,
+     "passed": 297252,
+     "failed": 1102,
+     "grammar_gaps": 7,
+     "noise": 1083,
+     "pass_rate": "99.63%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "80fdf0e837bebbcfb91b5a4d7c35622058c51c0c"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "indentation that mixes tabs and spaces",
+     "files": 1
+    },
+    {
+     "summary": "backslash continuation as the first line of a block",
+     "files": 2
+    },
+    {
+     "summary": "backslash continuations that change a suite's indentation",
+     "files": 3
+    },
+    {
+     "summary": "TWO OR MORE consecutive comment lines after an inline suite",
+     "files": 1
+    }
+   ],
+   "known_widenings": [
+    {
+     "summary": "`f(a=1, b)` — a positional argument after a keyword argument",
+     "files": null
+    },
+    {
+     "summary": "a malformed hex escape, `'\\x'`",
+     "files": null
+    },
+    {
+     "summary": "a keyword literal as an attribute name, `a.None` / `a.True`",
+     "files": null
+    },
+    {
+     "summary": "starred expression where only a plain expression belongs — `assert * XX`, `if * XX : XX`, `while * XX : XX`, `* XX if XX else XX`",
+     "files": null
+    },
+    {
+     "summary": "conditional expression where a target belongs — `del XX if XX else XX`",
+     "files": null
+    },
+    {
+     "summary": "augmented assignment to a tuple — `XX , += XX`",
+     "files": null
+    },
+    {
+     "summary": "`return yield`",
+     "files": null
+    },
+    {
+     "summary": "walrus with a conditional right-hand side at statement level — `XX := XX if XX else XX`",
+     "files": null
+    },
+    {
+     "summary": "starred operand tier differs by position — `[*a if b else c]`",
+     "files": null
+    },
+    {
+     "summary": "`del *a`",
+     "files": null
+    }
+   ],
+   "deviations": [
+    {
+     "summary": "py2 chevron print `print >> f, x` takes the expression reading (a tuple whose head is a right-shift) — it is valid py3 syntax too, and the union prefers the py3 reading whenever both parse (print_statement carries prec.dynamic(-1))",
+     "files": null
+    },
+    {
+     "summary": "keywords that were identifiers in some version (True/False/None in py2, async/await before 3.7) are hard keywords here; `True = 5` (py2-valid) does not parse. Soft-keyword machinery exists for print/exec/match/case/type, which carry real corpus weight; the others measured no corpus incidence",
+     "files": null
+    },
+    {
+     "summary": "`x = 1; if y: pass` (invalid in every version) is accepted when it ends the file: the zero-width NEWLINE the scanner hands out at EOF satisfies the line wrapper the inline suite already consumed. One negative-corpus candidate removed for it; fix wants a smarter EOF rule",
+     "files": null
+    },
+    {
+     "summary": "inconsistent partial dedents (`if a:` at 0, body at 8, next line at 4) parse; CPython's tokenizer raises IndentationError. The scanner dedents to the nearest enclosing level",
+     "files": null
+    },
+    {
+     "summary": "escape_sequence never consumes a brace. CPython reads `f\"\\{foo}\"` as a literal backslash followed by an interpolation that still opens, so an escape that swallowed the `{` lost the interpolation entirely; a lone backslash is its own (shorter) alternative, which tree-sitter's longest-match rule keeps out of the way of `\\n` and friends.",
+     "files": null
+    },
+    {
+     "summary": "a format specifier may contain newlines. PEP 701 makes the whole interpolation multi-line inside a triple-quoted f-string, so the closing brace ends the spec rather than the line ending.",
+     "files": null
+    },
+    {
+     "summary": "a BLANK line between an inline suite and its continuation clause, e.g. `if True: pass` / `` / `else:`",
+     "files": null
+    },
+    {
+     "summary": "`f\"{num:=10}\"` -- a format spec beginning with `=`",
+     "files": null
+    },
+    {
+     "summary": "`lambda x: A if c else B`",
+     "files": null
+    },
+    {
+     "summary": "`{lambda x: x: 1}`",
+     "files": null
+    },
+    {
+     "summary": "`x = int,` followed by another statement",
+     "files": null
+    },
+    {
+     "summary": "a comment between a block and the next statement",
+     "files": null
+    },
+    {
+     "summary": "a conditional expression as a match guard, `case y if a if True else b:`",
+     "files": null
+    }
+   ]
+  },
+  "ruby": {
+   "versions": "Ruby 3.x, plus the older spellings that cost nothing to keep (hash rockets, `for` loops, `=begin` comments, BEGIN/END blocks). The 3.x additions are in: endless methods and one-line pattern matching (3.0), hash shorthand `{x:}` and anonymous block/splat forwarding (3.1/3.2), case/in patterns with find/alternative/pin forms. `it` as an implicit block parameter (3.4) is not special-cased — it parses as the ordinary identifier it also is.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "ruby"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 18,
+    "facets": 7,
+    "named_nodes": 114,
+    "uncategorised": 16
+   },
+   "tests": {
+    "corpus_cases": 26,
+    "negative_files": 10,
+    "shape_files": 2
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": true,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": true,
+   "corpora": [
+    {
+     "language": "ruby",
+     "files": 6487,
+     "passed": 6480,
+     "failed": 7,
+     "grammar_gaps": 7,
+     "noise": 0,
+     "pass_rate": "99.89%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "05ac8c9c6842958e1cea4a50757331ab7e16b66c"
+    }
+   ],
+   "known_gaps": [],
+   "known_widenings": [],
+   "deviations": []
+  },
+  "rust": {
+   "versions": "editions 2015–2024 in one grammar: try!() coexists with ?, async/await/dyn are keywords, let-chains and let-else, labeled blocks, c\"…\" and cr\"…\" literals, &raw const/mut, PEP-nothing — plus `safe`/`raw`/`default`/`auto`/`union`/`box`/`macro_rules` handled as soft keywords so edition-crossing identifier uses keep parsing",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "rust"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": true,
+    "printer": true
+   },
+   "roles": {
+    "supertypes": 19,
+    "facets": 9,
+    "named_nodes": 138,
+    "uncategorised": 29
+   },
+   "tests": {
+    "corpus_cases": 5,
+    "negative_files": 26,
+    "shape_files": 3
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": true,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "rust",
+     "files": 27307,
+     "passed": 27292,
+     "failed": 15,
+     "grammar_gaps": 2,
+     "noise": 13,
+     "pass_rate": "99.95%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "53fc002dbf9aaf152929d35678806be16d236a18"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "ron's fuzzer fixture (a 2KB string of unbalanced braces with embedded blank lines) and json5's escape-soup test",
+     "files": 2
+    }
+   ],
+   "known_widenings": [
+    {
+     "summary": "`_:: Errno` — a doubled colon in a parameter",
+     "files": null
+    },
+    {
+     "summary": "`$x` metavariable outside a macro body — `$aa ! { }`, `use $aa ;`, `# ! [ $aa ]`",
+     "files": null
+    },
+    {
+     "summary": "`extern` ABI accepts a non-plain-string literal — `unsafe extern b\" \" { }`",
+     "files": null
+    },
+    {
+     "summary": "`mut` where only visibility belongs — `mut use r#XX ;`, `mut unsafe mod r#XX { }`",
+     "files": null
+    },
+    {
+     "summary": "reserved and path keywords as a macro name — `box ! { }`, `self ! { }`, `crate ! { }`",
+     "files": null
+    },
+    {
+     "summary": "brace macro invocation with a trailing `;` at item level — `r#XX ! { } ;`",
+     "files": null
+    },
+    {
+     "summary": "token tree accepts a malformed char literal — `r#XX ! { b ' a ' }`",
+     "files": null
+    },
+    {
+     "summary": "`;` accepted as an item in an item list — `unsafe extern { ; }`",
+     "files": null
+    },
+    {
+     "summary": "`impl` with `;` instead of a body — `unsafe impl :: r#XX ;`",
+     "files": null
+    }
+   ],
+   "deviations": [
+    {
+     "summary": "`pub impl<T> Cell<T> { … }` parses. It is not an item rustc would accept on its own, but an attribute macro receives its item as a token stream, so `#[ext] pub impl …` reaches the macro without rustc's item parser ever seeing it — and `easy_ext` is widely enough used that 22 files in the expanded corpus depend on it. Accepting a visibility modifier on `impl` is the narrowest way to parse them; declared here rather than left as 22 gaps.",
+     "files": null
+    },
+    {
+     "summary": "source_file accepts statements (not just items) at top level, so `(_statement)` matches top-level occurrences the same way it does in blocks; rustc rejects expression statements there. Union-widening, covered by test/negative would-be cases only in spirit",
+     "files": null
+    },
+    {
+     "summary": "struct literals in condition position (`if x == S{} {}`) parse where rustc requires parens; the ban is enforced only at the condition's top level, matching the grammar's structural restriction (_no_struct_expression)",
+     "files": null
+    },
+    {
+     "summary": "`1 +* 2` parses because `*` is unary deref in rust — the negative corpus uses `1 ++ 2` instead (no unary + in rust)",
+     "files": null
+    },
+    {
+     "summary": "macro token trees keep strings, chars and raw strings as real tokens (so quotes and braces inside them never unbalance the tree) but everything else is deliberate soup, fenced at whitespace, '/', and '@' — each fence bought by a measured corpus failure",
+     "files": null
+    },
+    {
+     "summary": "`else` is an else_clause node, not an inline tail of if_expression — the shared name python and typescript already used. Found by the rosetta gate on its first run: `alternative:` pointed at a block here and at an else_clause there, so no cross-language query on it worked, and `(_clause)` was a member short. Verdict-level sweep numbers are unchanged (27,511/27,526), as a pure node-level change must leave them.",
+     "files": null
+    },
+    {
+     "summary": "a block-like expression in statement position, followed by `*`, `-` or `&`",
+     "files": null
+    },
+    {
+     "summary": "a macro statement's semicolon",
+     "files": null
+    }
+   ]
+  },
+  "typescript": {
+   "versions": "the TypeScript ∪ JavaScript ∪ JSX union, every TS version through 5.x syntax (satisfies, const type params, accessor, infer constraints, template literal types, import attributes) in ONE parser",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "typescript",
+    "javascript"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": true,
+    "printer": true
+   },
+   "roles": {
+    "supertypes": 20,
+    "facets": 9,
+    "named_nodes": 154,
+    "uncategorised": 30
+   },
+   "tests": {
+    "corpus_cases": 4,
+    "negative_files": 22,
+    "shape_files": 10
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "javascript",
+     "files": 25300,
+     "passed": 25292,
+     "failed": 8,
+     "grammar_gaps": 8,
+     "noise": 0,
+     "pass_rate": "99.97%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "83b4b0bb44daee53ee9eb22764bf8eb4b6c69318"
+    },
+    {
+     "language": "typescript",
+     "files": 11991,
+     "passed": 11979,
+     "failed": 12,
+     "grammar_gaps": 6,
+     "noise": 6,
+     "pass_rate": "99.90%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "83b4b0bb44daee53ee9eb22764bf8eb4b6c69318"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "a parameter NAMED `never`/`unknown`/`symbol` inside a bare function type, e.g. `(symbol: ts.Symbol) => boolean`",
+     "files": 3
+    },
+    {
+     "summary": "ambient `declare class C { clear(): void\\n [Symbol.iterator]: ... }` — a bodyless method followed by an index signature",
+     "files": 2
+    },
+    {
+     "summary": "legacy `<T>x` angle-bracket casts",
+     "files": 1
+    },
+    {
+     "summary": "a generic arrow whose type parameter carries an `extends` constraint at the head of a call argument",
+     "files": 1
+    }
+   ],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "one parser instead of the typescript/tsx dialect pair; JSX is grammatical in .ts files (tsc rejects it there) — union-widening traded for a single table, justified by the zero measured cast incidence",
+     "files": null
+    },
+    {
+     "summary": "class methods are function_definition (python/rust precedent: same construct, same name), class members route through _declaration so a method answers (_declaration), (_member) and the _callable facet alike",
+     "files": null
+    },
+    {
+     "summary": "ASI is a static continuation set in the scanner (the flip side of the hazard list: ( [ ` + - * / % < > = & | ^ ? : , . in instanceof as satisfies extends), with ++/-- forcing insertion; spec-ASI's can-the-parse-continue rule is approximated, which costs exactly the one ledgered hazard file",
+     "files": null
+    },
+    {
+     "summary": "expression statements exclude function/class/{ at the first position structurally — the JS spec rule, enforced in the grammar rather than by dynamic precedence (which measured as unable to win the fork)",
+     "files": null
+    },
+    {
+     "summary": "`T?` is a tuple-ELEMENT form, not a general type. TS only allows it there, and admitting it to the type tier let `x < -1 ? p : q` fork into a type-argument reading that outlived the expression one — 3 corpus files.",
+     "files": null
+    },
+    {
+     "summary": "`void`, `never`, `unknown` and `symbol` are a predefined_type node rather than identifiers. `void` is a unary operator, so it can never arrive as an identifier and `f<void>()` previously had no reading at all.",
+     "files": null
+    },
+    {
+     "summary": "object-type members are separated by a scanner token (_type_member_end) as well as , and ;. It carries ASI's continuation set with exactly one token flipped: `[` CONTINUES an expression (`foo` newline `[0]` is a subscript) and BEGINS a type member (an index signature). That single difference is why it is a separate token rather than reusing ASI, and it is what finally closed the 5-file .d.ts family — a precedence attempt had regressed 20 files, and a first version of this token with NO continuation set regressed to 100 by severing every multi-line member type.",
+     "files": null
+    },
+    {
+     "summary": "`string` is a `_literal` here and is NOT one in python, and that asymmetry is correct rather than a drift: typescript's string is a single token that cannot interpolate, so it satisfies the vocabulary's per-rule test ('determined by its own text, for EVERY instance of the rule'), while python's `string` rule carries f-strings and so cannot. It was excluded here by oversight until vocabulary 0.3.0 measured it. The `_string` facet exists because of exactly this: `(_literal)` is not comparable across languages for strings, and `(_string)` is.",
+     "files": null
+    },
+    {
+     "summary": "`x as A & B` / `x as A | B`",
+     "files": null
+    },
+    {
+     "summary": "`a(): asserts this is X` inside an object type",
+     "files": null
+    },
+    {
+     "summary": "a comment between two object-type members",
+     "files": null
+    },
+    {
+     "summary": "object type members with no separator, e.g. `{ a: X b: Y }`",
+     "files": null
+    },
+    {
+     "summary": "`new Date().getFullYear()`",
+     "files": null
+    },
+    {
+     "summary": "`x as React.ReactElement`",
+     "files": null
+    },
+    {
+     "summary": "`try { } catch (e) { }`",
+     "files": null
+    },
+    {
+     "summary": "`readonly string[] | undefined`",
+     "files": null
+    },
+    {
+     "summary": "`foo();` — any zero-argument call statement",
+     "files": null
+    },
+    {
+     "summary": "`class { }` — an anonymous class DECLARATION",
+     "files": null
+    }
+   ]
+  },
+  "zig": {
+   "versions": "Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar. The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "zig"
+   ],
+   "capabilities": {
+    "spans": false,
+    "formatter": true,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 17,
+    "facets": 9,
+    "named_nodes": 98,
+    "uncategorised": 11
+   },
+   "tests": {
+    "corpus_cases": 18,
+    "negative_files": 8,
+    "shape_files": 0
+   },
+   "known_deviations": {
+    "shape": false,
+    "fuzz": false,
+    "lint": false,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 0
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": false,
+   "evidence_freshness": "current",
+   "lint_ratchet": false,
+   "corpora": [
+    {
+     "language": "zig",
+     "files": 17168,
+     "passed": 16997,
+     "failed": 171,
+     "grammar_gaps": 4,
+     "noise": 167,
+     "pass_rate": "99.00%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "282b605b4b37e34c56151738ef1ee1f47f8a14b0"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "`async` and `await` used as identifiers",
+     "files": 4
+    }
+   ],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "`Foo{}.bar` and `Foo{}(x)` need parentheses: `(Foo{}).bar`. An initializer is not admitted as the operand of a `.`, a `[` or a `(`. With it admitted, an initializer becomes reachable from inside every type position through `a.b` and `f()`, and `*[3]u8{ 1, 2 }` turns into a choice between a pointer to an initialised array and an initialised pointer type -- at every `{` in the language. The narrowing is what makes `[_]u8{ 1, 2 }` and `fn f() void {` parse at all. No corpus file needed the form.",
+     "files": null
+    },
+    {
+     "summary": "Destructuring is not admitted as the one-line body of an `if`, a `while`, a `for` or a switch prong. `a, b = c` and `a` followed by a comma are the same three tokens, so a body that could destructure eats the comma that ends a prong and the one that continues an outer destructuring. Zig's own parser is greedy and takes the destructuring; the parse table cannot be. No corpus file writes it.",
+     "files": null
+    },
+    {
+     "summary": "A container body accepts a member that Zig's own grammar orders more tightly: fields and declarations may interleave freely here, and a `fn` declaration is accepted inside a function body although Zig has no nested function declarations. Both are WIDENINGS -- they accept code Zig rejects -- so no corpus of real source can reveal them and the negative corpus is where they would be caught. Neither has a negative fixture yet; they are recorded here so that absence is deliberate rather than unnoticed.",
+     "files": null
+    }
+   ]
+  }
+ }
+}
