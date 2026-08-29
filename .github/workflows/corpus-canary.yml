@@ -10,6 +10,20 @@ on:
 permissions:
   contents: read
 
+env:
+  # `deb.debian.org` is a redirector over several backends and they do not
+  # always agree. Run 33218406274 failed the cpp leg twice in a row on
+  # `gjs_1.89.2.orig.tar.xz` with a 404 from GitHub's runners, while the same
+  # URL served the byte-identical file (sha256 c7d7a176…, 816,112 bytes,
+  # matching the lock exactly) from elsewhere — so retrying the same host is
+  # not a fix. snapshot.debian.org serves a fixed archive state instead.
+  #
+  # Only used as a SECOND try, and only for URLs under the Debian pool, so
+  # this is inert for every other ecosystem. Nothing is trusted about the
+  # mirror: each artifact's sha256 comes from the lock and is verified after
+  # download, so a mirror serving the wrong bytes fails as a corrupt one does.
+  TREEBANK_DEBIAN_SNAPSHOT: "https://snapshot.debian.org/archive/debian/20260824T000000Z"
+
 concurrency:
   group: corpus-canary
   cancel-in-progress: false
@@ -33,6 +47,17 @@ jobs:
           - language: c
             ledger: crates/treebank-c/ledger.toml
             sweep_args: --lang c --grammar crates/treebank-c
+            # C's oracle is libclang, and its verdict is relative to an
+            # include environment (see treebank-oracle/src/c.rs). Which
+            # failures become `gap_files` and which become `noise_files`
+            # therefore depends on the headers the machine has, not only on
+            # the corpus and the grammar. Measured: this leg reproduces
+            # 84,473/62,539/21,934/74.03% and both SHAs exactly, twice, while
+            # `gap_files` reads 4,012 against a committed 6,392 — and the
+            # rerun reproduced 4,012 bit for bit, so it is deterministic per
+            # environment rather than flaky. Enforce what the inputs
+            # determine; report the rest.
+            evidence: reproducible
           - language: cpp
             ledger: crates/treebank-cpp/ledger.toml
             # Full C++ evidence is produced on the remote evidence host: the
@@ -159,10 +184,18 @@ jobs:
 
       - name: sweep and enforce the committed evidence
         run: |
+          cp "${{ matrix.ledger }}" "$RUNNER_TEMP/ledger.committed"
           ./target/debug/treebank sweep ${{ matrix.sweep_args }} \
             --manifest "corpus/${{ matrix.language }}/manifest.json" \
             --out "corpus/${{ matrix.language }}/reports/sweep.json"
-          if ! git diff --exit-code -- "${{ matrix.ledger }}"; then
+          if [ "${{ matrix.evidence }}" = "reproducible" ]; then
+            # Enforces every field the corpus and grammar bytes determine and
+            # reports the adjudication-derived ones. Restores the ledger after,
+            # so the checkout stays clean for the artifact upload.
+            python3 tools/canary-evidence.py \
+              "$RUNNER_TEMP/ledger.committed" "${{ matrix.ledger }}"
+            git checkout -- "${{ matrix.ledger }}"
+          elif ! git diff --exit-code -- "${{ matrix.ledger }}"; then
             echo "::error::${{ matrix.language }} corpus evidence differs from the committed ledger"
             echo "Update the lock or grammar deliberately, rerun the full sweep, and review the new evidence."
             exit 1

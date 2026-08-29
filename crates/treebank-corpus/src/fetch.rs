@@ -128,6 +128,42 @@ fn strip_root(lang: &dyn Ecosystem, entry_path: &Path, is_zip: bool) -> Option<P
 /// behind one package. The limit is per read syscall, so a slow-but-alive
 /// transfer is unaffected and only a dead one is cut.
 fn download(url: &str, max_bytes: Option<u64>) -> Result<Vec<u8>> {
+    match download_once(url, max_bytes) {
+        Ok(bytes) => Ok(bytes),
+        Err(primary) => match snapshot_url(url) {
+            None => Err(primary),
+            Some(fallback) => {
+                eprintln!("hydrate: {url} failed ({primary}); retrying {fallback}");
+                download_once(&fallback, max_bytes).map_err(|second| {
+                    primary.context(format!("snapshot fallback {fallback} also failed: {second}"))
+                })
+            }
+        },
+    }
+}
+
+/// `deb.debian.org` is a redirector over several backends, and they do not
+/// always agree: a locked artifact that serves fine from one edge can 404
+/// from another, consistently, for as long as that edge is stale. That is
+/// not hypothetical — the corpus canary failed twice in a row on
+/// `gjs_1.89.2.orig.tar.xz` from GitHub's runners while the same URL
+/// returned the byte-identical file elsewhere, so retrying the same host is
+/// not a fix. `snapshot.debian.org` exists precisely to serve a fixed
+/// archive state, so it is the right second try.
+///
+/// The rewrite is safe without trusting the mirror at all: every artifact
+/// carries its `sha256` in the lock and `verify_artifact_bytes` checks it,
+/// so a mirror serving the wrong bytes fails exactly as a corrupt download
+/// does. `TREEBANK_DEBIAN_SNAPSHOT` holds the replacement base — an
+/// unset variable leaves behaviour exactly as it was.
+fn snapshot_url(url: &str) -> Option<String> {
+    const POOL: &str = "https://deb.debian.org/debian";
+    let base = std::env::var("TREEBANK_DEBIAN_SNAPSHOT").ok()?;
+    let rest = url.strip_prefix(POOL)?;
+    Some(format!("{}{rest}", base.trim_end_matches('/')))
+}
+
+fn download_once(url: &str, max_bytes: Option<u64>) -> Result<Vec<u8>> {
     let resp = ureq::AgentBuilder::new()
         .timeout_connect(std::time::Duration::from_secs(30))
         .timeout_read(std::time::Duration::from_secs(60))
@@ -888,6 +924,50 @@ mod hydrate_tests {
         )
         .unwrap();
         (lock, corpus)
+    }
+
+    /// The fallback rewrites only the Debian pool prefix, and only when the
+    /// variable is set. Everything else — a crates.io or npm URL, an unset
+    /// variable — must come back `None` so the primary error stands
+    /// unchanged.
+    #[test]
+    fn the_snapshot_fallback_rewrites_the_debian_pool_and_nothing_else() {
+        let pool = "https://deb.debian.org/debian/pool/main/g/gjs/gjs_1.89.2.orig.tar.xz";
+
+        std::env::remove_var("TREEBANK_DEBIAN_SNAPSHOT");
+        assert_eq!(super::snapshot_url(pool), None, "unset means no fallback");
+
+        std::env::set_var(
+            "TREEBANK_DEBIAN_SNAPSHOT",
+            "https://snapshot.debian.org/archive/debian/20260820T000000Z",
+        );
+        assert_eq!(
+            super::snapshot_url(pool).as_deref(),
+            Some(
+                "https://snapshot.debian.org/archive/debian/20260820T000000Z\
+                 /pool/main/g/gjs/gjs_1.89.2.orig.tar.xz"
+            )
+        );
+
+        // A trailing slash on the base must not double up the separator.
+        std::env::set_var(
+            "TREEBANK_DEBIAN_SNAPSHOT",
+            "https://snapshot.debian.org/archive/debian/20260820T000000Z/",
+        );
+        assert_eq!(
+            super::snapshot_url(pool).as_deref(),
+            Some(
+                "https://snapshot.debian.org/archive/debian/20260820T000000Z\
+                 /pool/main/g/gjs/gjs_1.89.2.orig.tar.xz"
+            )
+        );
+
+        assert_eq!(
+            super::snapshot_url("https://registry.npmjs.org/left-pad/-/left-pad-1.3.0.tgz"),
+            None,
+            "a non-Debian artifact is never rewritten"
+        );
+        std::env::remove_var("TREEBANK_DEBIAN_SNAPSHOT");
     }
 
     #[test]
