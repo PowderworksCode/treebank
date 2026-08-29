@@ -1,5 +1,12 @@
 #!/usr/bin/env bash
 # Parameter expansion: one `$` with a dozen different groupings behind it.
+#
+# Not a program: this file is never executed, it is parsed. The names are
+# deliberately unassigned because what is being pinned is the SHAPE of each
+# expansion, and assigning them first would add syntax without adding a
+# grouping. SC2320 likewise: `$?` here is a token to parse, not a status to
+# read.
+# shellcheck disable=SC2154,SC2034,SC2320
 
 echo "$plain"
 echo "${braced}"
