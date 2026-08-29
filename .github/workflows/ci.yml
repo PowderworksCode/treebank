@@ -378,15 +378,19 @@ jobs:
         working-directory: site
         run: bun run packs
 
-      # Both settings are read here rather than in an `if:`, so that a half
-      # configured repository FAILS instead of skipping. The likely mistake is
-      # putting the account id in secrets rather than variables, and a step
-      # that silently does nothing when that happens is a playground with no
-      # parsers and a green tick.
+      # The account id is taken from a variable or a secret, whichever is set.
+      # It is not sensitive -- it appears in every dashboard URL -- so which
+      # one it lives in is a matter of taste, and a workflow that only accepts
+      # one of them turns a matter of taste into a failed build.
+      #
+      # Both settings are read into the step rather than gating an `if:`, so a
+      # half configured repository FAILS instead of skipping. A step that
+      # silently does nothing here is a playground with no parsers and a green
+      # tick, which is the worst of the available outcomes.
       - name: upload to R2
         working-directory: site
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
@@ -395,7 +399,7 @@ jobs:
             exit 0
           fi
           if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] || [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::R2 is half configured. CLOUDFLARE_ACCOUNT_ID must be a repository VARIABLE and CLOUDFLARE_API_TOKEN a repository SECRET."
+            echo "::error::R2 is half configured. Set CLOUDFLARE_ACCOUNT_ID (variable or secret) and CLOUDFLARE_API_TOKEN (secret)."
             exit 1
           fi
           # Hashed objects first, manifest last. The manifest is the pointer,
