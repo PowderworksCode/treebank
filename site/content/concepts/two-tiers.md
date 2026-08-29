@@ -1,33 +1,31 @@
 ---
-title: Two tiers
-description: Why the vocabulary splits into supertypes and facets, and why the parse table decides.
-order: 10
+title: The vocabulary
+description: Supertypes and facets, and why there are two kinds.
+order: 15
 ---
 
-The vocabulary splits in two, and the split is forced by the parse table
-rather than chosen for tidiness.
+Treebank gives every grammar a shared vocabulary, so the same query can be
+written once and run against several languages. A query for `(_declaration)`
+finds declarations in Rust and in Java.
 
-**Supertypes** are occurrence-level and enforced when the parser is
-generated. A supertype is a real rule threaded through the productions, so a
-query for `(_expression)` matches where the parse actually went through it.
-Matching is by *derivation*, not by node type — which means a supertype can
-say something no type-level list can: that this position in this production
-is an expression.
+The vocabulary comes in two kinds, and the split is decided by what
+Tree-sitter can enforce rather than by what would read nicely.
 
-**Facets** are type-level. A facet is a list in `roles.json` that expands into
-a concrete alternation when a query is loaded. It cannot say anything about
-position, because it does not exist in the parse table at all.
+**Supertypes** are threaded through the productions and enforced when the
+parser is generated. A query for `(_expression)` matches where the parse
+actually went through it — matching is by derivation, not by node type. That
+lets a supertype say something a list cannot: that *this position in this
+production* is an expression.
 
-The reason for two tiers rather than one is that tree-sitter's supertypes can
-only express so much, and the boundary is measurable rather than a matter of
-taste. Where a term can be threaded, it is a supertype and the generator
-enforces it. Where it cannot, pretending otherwise would mean a role that
-looks enforced and is not — which is worse than a facet that is honest about
-being a list.
+**Facets** are lists of node types in `roles.json`, expanded into a concrete
+alternation when a query loads. A facet cannot say anything about position,
+because it does not exist in the parse table.
 
-A term's tier is therefore **per grammar**. The same word can be a supertype
-in one language and a facet in another, because the parse tables differ.
+Where a term can be threaded it is a supertype. Where it cannot, it is a
+facet, because a role that looks enforced and is not is worse than a list that
+is honest about being one. The same term can therefore be a supertype in one
+grammar and a facet in another — the parse tables differ.
 
-`treebank roles` checks conformance: declared supertypes come from the closed
-table tier, every named node is either covered or deliberately uncategorised,
-required containments hold, and every member of `roles.json` actually exists.
+`treebank roles` checks this: declared supertypes come from the closed list,
+every named node is either covered or deliberately uncategorised, and every
+member of `roles.json` exists.

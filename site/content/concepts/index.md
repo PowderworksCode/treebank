@@ -1,15 +1,13 @@
 ---
 title: How it works
-description: The machinery — tiers, oracles, sweeps, and why the evidence is committed.
+description: The corpus, the reference parsers, and what gets measured.
 order: 10
 ---
 
-A grammar is a claim about a language. Treebank's whole design is about making
-that claim expensive to make and cheap to check.
+Every grammar is run over a corpus of real code every day. Files that fail to
+parse are handed to the language's own compiler or parser, which decides
+whether the file was valid in the first place. A failure the reference parser
+also rejects is noise; a failure it accepts is the grammar's problem.
 
-Three things follow from taking it seriously. The **vocabulary** has to be
-split by what the parse table can actually enforce, not by what would read
-nicely. The **oracle** has to be the language's own toolchain, because
-anything else is a second opinion from a worse parser. And the **evidence**
-has to be committed next to the grammar, because a number in a README is a
-number nobody can reproduce.
+That split is what the numbers on each grammar page mean, and the pages below
+are the machinery behind them.

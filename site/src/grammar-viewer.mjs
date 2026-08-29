@@ -77,11 +77,10 @@ function vocabulary(g, table, facet) {
   }
   if (!parts.length) return "";
   return `<h2 id="vocabulary">Vocabulary</h2>
-<p>The roles a query may name. A <b>supertype</b> is a real rule threaded
-through the productions, so <code>(_expression)</code> matches where the parse
-actually went through it — matching is by derivation, not by node type. A
-<b>facet</b> is type-level: a list in <code>roles.json</code> that expands into
-a concrete alternation when the query is loaded.</p>${parts.join("")}`;
+<p>The roles a query may name. A <b>supertype</b> is threaded through the
+productions, so <code>(_expression)</code> matches where the parse went through
+it. A <b>facet</b> is a list of node types in <code>roles.json</code>, expanded
+when the query loads.</p>${parts.join("")}`;
 }
 
 function precedenceTable(precs) {
@@ -97,10 +96,10 @@ function precedenceTable(precs) {
     }</td></tr>`;
   });
   return `<h2 id="precedence">Precedence</h2>
-<p>The half of a grammar EBNF cannot show. Higher binds tighter;
-<code>prec.left</code> and <code>prec.right</code> also pick a side when levels
-tie. <code>prec.dynamic</code> is the only one consulted for a <em>declared</em>
-conflict — there, static precedence is ignored entirely.</p>
+<p>What EBNF cannot show. Higher binds tighter; <code>prec.left</code> and
+<code>prec.right</code> pick a side when levels tie. For a <em>declared</em>
+conflict only <code>prec.dynamic</code> applies — static precedence is ignored
+there.</p>
 <div class="scroll"><table class="prec"><thead><tr><th>level</th><th>kind</th>
 <th>productions</th></tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
 }

@@ -4,47 +4,42 @@ description: Every production in every grammar, as EBNF and as a railroad diagra
 order: 50
 ---
 
-The honest way to document a parser is to render its parse table rather than
-describe it.
+Every production in all nine grammars, drawn from the parse table.
+
+Each page is generated from that grammar's `src/grammar.json` — the file
+Tree-sitter itself consumes, rather than the hand-written `grammar.js`. So the
+page cannot drift from the parser: if a production is on the page, the parse
+table has it.
+
+Each page opens with that grammar's status — pass rate, known gaps, what it
+declares about itself — then its vocabulary, its precedence table, and every
+production.
 
 <link rel="stylesheet" href="/grammar.css">
 <div class="status-overview"><p class="grammar-loading">Loading the inventory…</p></div>
 <script type="module" src="/status-view.mjs"></script>
 
-Each page here is generated from that grammar's `src/grammar.json` — the
-normalised grammar tree-sitter consumes, not the hand-written `grammar.js`.
-`grammar.js` is arbitrary JavaScript, and reading it means running it.
-`grammar.json` is already an EBNF syntax tree over sixteen node kinds, so
-rendering is a fold over sixteen cases rather than a parse, and there is no
-per-language code anywhere in it.
-
-That last point is the one worth testing rather than asserting. The renderer
-was written when there were three grammars. Six of the nine were written
-afterwards — bash, C, C++, Java, Ruby and Zig — and every one of them renders
-without a line of the renderer changing.
-
-## What a page shows that a BNF listing cannot
+## What the diagrams show
 
 **Precedence**, drawn around the production it applies to as well as
-tabulated. EBNF cannot express precedence at all, which is why every language
-manual prints it separately.
+tabulated. EBNF cannot express precedence, so manuals normally print it
+separately.
 
 **Fields**, as captions inside the boxes, so the edge names a query can use
 sit next to the shape they attach to.
 
-**Externals**, in plum — the external scanner, the part no diagram can
-explain because it is hand-written C.
+**Externals**, in plum — the parts handed to the external scanner, which is
+hand-written C rather than grammar.
 
-**Vocabulary**, with productions grouped under the supertype they answer
-rather than listed alphabetically.
+**Vocabulary**, with productions grouped under the supertype they answer.
 
-## Two things deliberately not done
+## Two deliberate choices
 
-**Hidden rules are not inlined.** It is tempting to fold `_or_test` and
-friends away, but that chain *is* the precedence structure — the same thing a
-language manual shows as `expr → boolean_primary → predicate → bit_expr →
-simple_expr`. Inlining it would delete the most informative part of the page.
+**Hidden rules are not inlined.** The `_or_test` → `_and_test` → `_not_test`
+chain *is* the precedence structure — the same thing a language manual shows
+as `expr → boolean_primary → predicate → bit_expr → simple_expr`. Inlining it
+would remove the most informative part of the page.
 
-**The comma-list idiom is collapsed.** `seq(X, repeat(seq(',', X)))` is
-recognised and drawn as a single loop instead of a chain of five boxes.
-Without it about half the diagrams are unreadable.
+**Comma-lists are collapsed.** `seq(X, repeat(seq(',', X)))` is drawn as one
+loop rather than a chain of five boxes, without which about half the diagrams
+are unreadable.

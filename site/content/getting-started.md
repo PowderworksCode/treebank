@@ -1,11 +1,31 @@
 ---
 title: Getting started
-description: Build the workspace, run the gates, read the inventory.
+description: Use a grammar, or build the repository and run the gates.
 order: 5
 ---
 
-Treebank is a Rust workspace. Every grammar is a real crate compiling its own
-`parser.c` and `scanner.c`, so building the workspace builds all nine parsers.
+## Using a grammar
+
+Each grammar is one WebAssembly file with no dependencies:
+
+```sh
+curl -O https://treebank.dev/packs/treebank-python.wasm
+```
+
+It imports only WASI, so it loads from Python, Go, Ruby, Rust or a browser
+with no toolchain at the far end. The
+[examples](https://github.com/PowderworksCode/treebank/tree/main/tools/wasm-pack/examples)
+are complete bindings in about a hundred lines each, and the
+[playground](/playground/) is the same file running in a browser.
+
+`https://treebank.dev/packs/index.json` lists the current file for every
+grammar with its sha256. Each is also available at a content-addressed URL,
+`treebank-python-<hash>.wasm`, which never changes.
+
+## Building the repository
+
+Every grammar is a Rust crate that compiles its own `parser.c` and
+`scanner.c`, so building the workspace builds all nine parsers.
 
 ```sh
 git clone https://github.com/PowderworksCode/treebank
@@ -14,38 +34,21 @@ cargo build --workspace
 cargo test --workspace
 ```
 
-## The inventory
+## Running the gates
 
 ```sh
 ./target/debug/treebank status --check
-```
-
-One generated table joining registry configuration, ledgers, fixtures,
-policies, locks and canaries. `--check` fails on missing or contradictory
-required configuration; warnings remain visible without pretending optional
-coverage is broken.
-
-## Checking one grammar
-
-```sh
 ./target/debug/treebank verify --grammar crates/treebank-python
 ```
 
-`verify` runs every gate a grammar must pass: reproducible generation, the
-grammar's own corpus tests, the negative corpus, vocabulary conformance and
-the rosetta suite. The same gates run per grammar in CI, and the CI matrix is
-derived from the checkout — a directory under `crates/` with a `grammar.js` in
-it *is* a grammar — so a new one is gated the day it lands rather than the day
-somebody remembers to add it to a list.
+`status --check` prints the inventory: pass rates, gaps, test coverage, and
+whether each grammar's evidence is current. `verify` runs every gate one
+grammar must pass — reproducible generation, corpus tests, negative corpus,
+vocabulary conformance and the rosetta suite.
 
-## Running a sweep
-
-A sweep needs a corpus, and a corpus is pinned by a lock:
+A sweep needs the corpus the evidence was measured against:
 
 ```sh
 ./target/debug/treebank hydrate --lang python
 ./target/debug/treebank sweep --lang python --grammar crates/treebank-python
 ```
-
-`hydrate` recreates and verifies the exact corpus the lock names, so the sweep
-measures what the committed evidence measured.

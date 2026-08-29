@@ -1,30 +1,35 @@
 ---
-title: Oracles
-description: Why the reference parser is the language's own toolchain, and what that costs.
+title: Reference parsers
+description: The language's own toolchain decides who is right.
 order: 20
 ---
 
-When treebank and a grammar disagree about whether a file is valid, something
-has to adjudicate. That something is the language's own toolchain — CPython
-for Python, `javac` for Java, `clang` for C and C++, `ruby -c`, `zig ast-check`,
-`tsc`, `rustc`, `bash -n`.
+When Treebank and a grammar disagree about whether a file is valid, the
+language's own toolchain settles it: CPython for Python, `javac` for Java,
+`clang` for C and C++, `ruby -c`, `zig ast-check`, `tsc`, `rustc`, `bash -n`.
 
-The alternative — a second parser written for the purpose — is a second
-opinion from a worse parser, and when it disagrees you have learned nothing.
+Anything else would be a second parser's opinion, and a disagreement between
+two parsers tells you nothing about which is right.
 
-This costs more than it sounds. The oracle has to be installed, pinned, and
-run over the corpus, and some languages need **more than one**: Python's
-corpus contains code written for Python 2 and code written for Python 3, and
-a single oracle would mislabel one era's syntax as noise. Zig is the same
-across its 0.11 and 0.16 syntax. Those legacy legs are mandatory, not
-optional — omitting one makes a broken sweep look healthier than it is.
+## What this costs
 
-An oracle answers one question, `valid` or `invalid`, and `treebank oracle`
-exposes exactly that call and nothing else. It is the same call `sweep` uses
-to adjudicate its failures.
+Each oracle has to be installed, pinned to a version, and run over the whole
+corpus. Some languages need more than one. Python's corpus contains code
+written for Python 2 and code written for Python 3, and a single oracle would
+report one era's syntax as broken. Zig is the same across 0.11 and 0.16.
 
-Some oracles can do more. A **span oracle** reports node boundaries, which is
-what `treebank shape` compares against; a **formatter** is what `reformat` and
-`roundtrip` use. Not every toolchain offers them: Zig exposes formatting and a
-verdict but no supported tree dump, so it has no span oracle, and that absence
-is recorded rather than worked around.
+## What an oracle can be asked
+
+Every oracle answers one question: is this file valid? `treebank oracle`
+exposes exactly that and nothing more.
+
+Some can do more, and where they can, more is measured:
+
+- a **span oracle** reports node boundaries, which `treebank shape` compares
+  against ours
+- a **formatter** or **printer** rewrites the file, which `treebank reformat`
+  and `treebank roundtrip` use to check the tree does not move
+
+Zig has no span oracle — its toolchain exposes formatting and a verdict, but
+no supported tree dump — so it does not run the shape check. That is recorded
+on its page rather than worked around.
