@@ -119,10 +119,17 @@ anonymous, and named-only traversal skips exactly what you are looking for.
 
 Every grammar carries the same vocabulary, so one query can run against
 several. Some roles are real supertypes and queryable directly; others are
-*facets*, which are lists that must be expanded first:
+*facets*, which are lists that must be expanded first. The sources differ,
+because they must; the query does not:
 
 ```rust
-for lang in ["python", "rust", "typescript"] {
+let sources = [
+    ("python", "def f(): pass\nclass C: pass\n"),
+    ("rust", "fn f() {}\nstruct S;\n"),
+    ("typescript", "function f() {}\nclass C {}\n"),
+];
+
+for (lang, source) in sources {
     let pack = Pack::fetch(lang)?;
     let tree = pack.parse(source)?;
     for capture in pack.query(&tree, "(_declaration) @decl")? {
