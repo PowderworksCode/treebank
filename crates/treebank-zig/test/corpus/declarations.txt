@@ -388,3 +388,78 @@ pub fn named(x: i32) void {
         (assignment_expression
           left: (identifier)
           right: (identifier))))))
+
+================================================================================
+container tag types: present, absent, inferred
+================================================================================
+
+const Backed = packed struct(u32) { a: u16, b: u16 };
+const Plain = struct { a: u8 };
+const Tagged = enum(u8) { a, b };
+const Bare = enum { a };
+const Inferred = union(enum) { a: void };
+const InferredTagged = union(enum(u8)) { a: void };
+const Opaque = opaque {};
+const Empty = error{};
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      layout: (container_layout)
+      tag: (identifier)
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier))
+        (container_field
+          name: (identifier)
+          type: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      tag: (identifier)
+      body: (container_body
+        (container_field
+          name: (identifier))
+        (container_field
+          name: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body
+        (container_field
+          name: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      tag: (inferred_enum_tag)
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      tag: (inferred_enum_tag
+        (identifier))
+      body: (container_body
+        (container_field
+          name: (identifier)
+          type: (identifier)))))
+  (variable_declaration
+    name: (identifier)
+    value: (container_declaration
+      body: (container_body)))
+  (variable_declaration
+    name: (identifier)
+    value: (error_set_declaration)))
