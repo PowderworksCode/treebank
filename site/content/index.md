@@ -3,7 +3,21 @@ title: Treebank
 description: Tree-sitter grammars, with the evidence attached.
 ---
 
-<p class="cover cover-wide"><img src="/cover.png" alt="A plate of fifteen trees drawn to scale, each with a small figure beside it for size" width="560"></p>
+<style>
+/* The shared theme sizes a cover for an engraving beside a paragraph, at
+   16rem. This plate is fifteen trees to scale and the whole point of it is
+   the comparison, which does not survive being shrunk to a thumbnail. Scoped
+   to this page rather than pushed into the theme, because the theme's default
+   is right for the sites using it. */
+.cover-wide { max-width: 52%; }
+.cover-wide img { max-width: 26rem; }
+@media (max-width: 60rem) {
+  .cover-wide { float: none; max-width: 100%; margin: .5rem 0 1.5rem; }
+  .cover-wide img { max-width: 100%; }
+}
+</style>
+
+<p class="cover cover-wide"><img src="/cover.png" alt="A plate of fifteen trees drawn to scale, each with a small figure beside it for size"></p>
 
 Treebank owns nine tree-sitter grammars — bash, C, C++, Java, Python, Ruby,
 Rust, TypeScript and Zig — and treats each one as a claim that has to be paid
