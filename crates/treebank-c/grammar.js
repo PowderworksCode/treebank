@@ -32,7 +32,7 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank-core/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/supertypes.js');
 
 // C's own precedence ladder, from the standard's grammar. Nothing here is
 // invented: the numbers are the order of the productions in C11 6.5.

@@ -1,6 +1,9 @@
 [package]
 name = "treebank-corpus"
 version = "0.1.0"
+# Only the `treebank` crate is published. Everything else is a workspace
+# member: the grammars ship as wasm packs and the CLI is not a library.
+publish = false
 edition = "2021"
 license = "MIT"
 description = "Corpus acquisition: rank an ecosystem's packages, fetch their tarballs, extract source files, write the manifest sweeps consume. Self-contained so it can move out of this repo."

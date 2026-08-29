@@ -9,7 +9,7 @@
 //!
 //! Facet queries are expanded through the grammar's own `roles.json`
 //! before running, so `(_callable)` is testable here exactly as a
-//! consumer would use it through treebank-core.
+//! consumer would use it through treebank.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -78,9 +78,9 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
             }
             let grammar_dir = crates_dir.join(lang.grammar_crate());
             let (language, _) = crate::grammar::load(&grammar_dir)?;
-            let roles = treebank_core::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
+            let roles = treebank::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
             let facets: BTreeMap<String, Vec<String>> = roles.facets.into_iter().collect();
-            let node_types = treebank_core::node_types::NodeTypes::load(
+            let node_types = treebank::node_types::NodeTypes::load(
                 &grammar_dir.join("src/node-types.json"),
             )?;
 
@@ -98,7 +98,7 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
             }
 
             for (query_src, want) in &expected.queries {
-                let expanded = treebank_core::expand::expand_with_types(
+                let expanded = treebank::expand::expand_with_types(
                     query_src,
                     &facets,
                     Some(&node_types),

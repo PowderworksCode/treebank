@@ -1,0 +1,27 @@
+[package]
+name = "treebank"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+homepage = "https://treebank.dev"
+repository = "https://github.com/PowderworksCode/treebank"
+documentation = "https://docs.rs/treebank"
+keywords = ["tree-sitter", "parser", "grammar", "wasm", "syntax"]
+categories = ["parsing", "development-tools", "wasm"]
+readme = "README.md" 
+description = "The treebank vocabulary as code and data: the closed term lists, the roles.json facet manifest schema, the vocabulary-conformance checker, and facet query expansion."
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# The pack loader. Optional because the vocabulary half of this crate is
+# useful without a parser, and wasmtime is a large dependency to impose on
+# someone who only wants to expand a facet query.
+wasmtime = { version = "38", optional = true, default-features = false, features = ["runtime", "cranelift", "std"] }
+wasmtime-wasi = { version = "38", optional = true }
+
+[features]
+default = ["pack"]
+pack = ["dep:wasmtime", "dep:wasmtime-wasi"]

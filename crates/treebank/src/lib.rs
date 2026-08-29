@@ -28,7 +28,12 @@
 pub mod check;
 pub mod expand;
 pub mod node_types;
+#[cfg(feature = "pack")]
+pub mod pack;
 pub mod roles;
+
+#[cfg(feature = "pack")]
+pub use pack::Pack;
 
 use std::sync::OnceLock;
 
@@ -93,7 +98,7 @@ impl Vocabulary {
     }
 }
 
-/// The vocabulary this build of treebank-core carries. Parsing the embedded
+/// The vocabulary this build of treebank carries. Parsing the embedded
 /// JSON cannot fail for a released crate; the unit tests parse it too, so a
 /// malformed edit fails `cargo test` before it can fail a consumer.
 pub fn vocabulary() -> &'static Vocabulary {

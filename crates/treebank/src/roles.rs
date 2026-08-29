@@ -14,7 +14,7 @@ use serde::Deserialize;
 #[serde(deny_unknown_fields)]
 pub struct RolesManifest {
     /// The vocabulary version this manifest was written against; must
-    /// match the version treebank-core carries.
+    /// match the version treebank carries.
     pub vocabulary: String,
     /// Facet term -> member node types.
     #[serde(default)]

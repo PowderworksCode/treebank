@@ -101,7 +101,7 @@ tree-sitter consumer with no treebank machinery at all.
 `roles.json` manifest in each grammar crate: type-level membership,
 maintained next to the grammar, validated in CI against the generated
 `node-types.json` (every listed node must exist; every facet must be from
-the closed list). `treebank-core` expands facet queries at load time —
+the closed list). `treebank` expands facet queries at load time —
 `(_callable)` becomes the concrete alternation `[(function_definition)
 (lambda) …]` — so the query surface is uniform across tiers. Type-level is
 the *correct* semantics for facets: a `function_definition` is callable
@@ -146,7 +146,7 @@ using the parser through raw tree-sitter, with none of treebank's crates,
 can write `(_parameter)` against TypeScript and not against Python. This
 fails *loudly* — a supertype a grammar does not declare is a `QueryError`
 at `Query::new`, not a silent zero-match — and everything going through
-`treebank-core`, which expands facets at load time, sees no difference at
+`treebank`, which expands facets at load time, sees no difference at
 all. The rosetta suite asserts that directly: `(_parameter) @p` counts the
 same in all three languages with Python and Rust on the facet tier and
 TypeScript on the table tier.
@@ -172,7 +172,7 @@ indistinguishable from demoting one on purpose.
 The list is **closed**. A grammar may omit terms its language lacks
 (Python declares no `_type`; its annotations are ordinary expressions). It
 may not invent terms. Adding a term is a vocabulary change, versioned in
-`treebank-core`, applying to every language at once.
+`treebank`, applying to every language at once.
 
 All vocabulary names are underscore-prefixed (`_declaration`); concrete node
 names never are. Supertypes are hidden nodes either way, and hidden names
@@ -309,7 +309,7 @@ grade it.
   where the language demands an external scanner — all three initial
   languages do (indentation and f-strings; raw strings; template literals
   and JSX text).
-- Every `grammar.js` imports the vocabulary from `treebank-core`'s
+- Every `grammar.js` imports the vocabulary from `treebank`'s
   `vocabulary/supertypes.js`. The term list is shared *code*, not shared
   convention: the import provides the closed list and helpers for the
   standard nestings; the grammar supplies the members.
@@ -968,7 +968,7 @@ for the same reason. What is left after those is where improvement lives.
 
 ```
 crates/
-  treebank-core/              # the vocabulary, as code and as data:
+  treebank/              # the vocabulary, as code and as data:
     vocabulary/supertypes.js  #   the closed term list grammars import
     src/                      #   roles.json schema, facet query expansion,
                               #   the `treebank roles` checker
@@ -985,7 +985,7 @@ tools/consumer-test/          # downstream crate + wasm smoke tests
 test/rosetta/                 # parallel programs + expected-roles files
 ```
 
-- **treebank-core** is the single source of truth for the vocabulary: the JS
+- **treebank** is the single source of truth for the vocabulary: the JS
   module every grammar imports, the Rust library the CLI and consumers use,
   and — compiled to wasm — the same facet expansion in the browser.
   Vocabulary versions are semver on this crate.
@@ -993,7 +993,7 @@ test/rosetta/                 # parallel programs + expected-roles files
   honest. There is no build directory, no patch series, no vendored
   anything.
 - **wasm is a first-class artifact**: every grammar crate publishes
-  `tree-sitter-<lang>.wasm` alongside the Rust crate, and `treebank-core`
+  `tree-sitter-<lang>.wasm` alongside the Rust crate, and `treebank`
   ships a JS/wasm package that loads them and provides facet-aware queries.
   `roles.json` travels inside both the crate and the npm package.
 - **`ledger.toml`** is TOML rather than JSON because it is mostly prose. A
@@ -1014,7 +1014,7 @@ test/rosetta/                 # parallel programs + expected-roles files
 1. **Two tiers, because the parse table forces it.** Structural roles are
    supertypes (occurrence-level, generate-time-enforced); the three
    cross-cutting facets ship as a checked manifest with query expansion in
-   `treebank-core`. The alternative — restricting the vocabulary to only
+   `treebank`. The alternative — restricting the vocabulary to only
    what threads — was rejected to keep the facet queries; the other
    alternative — everything in query files — was rejected because it is
    exactly the drifting query layer this design exists to kill.
@@ -1043,7 +1043,7 @@ test/rosetta/                 # parallel programs + expected-roles files
 
 ## 8. Order of work
 
-`treebank-core` (vocabulary + checker + expansion) → **Python** → **Rust** →
+`treebank` (vocabulary + checker + expansion) → **Python** → **Rust** →
 **TypeScript**.
 
 Python first: the corpus infrastructure is cheapest to stand up, the oracle

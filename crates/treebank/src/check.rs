@@ -15,7 +15,7 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
     // Rule 0: the manifest was written against this vocabulary.
     if roles.vocabulary != vocab.version {
         findings.push(format!(
-            "roles.json targets vocabulary {} but treebank-core carries {}",
+            "roles.json targets vocabulary {} but treebank carries {}",
             roles.vocabulary, vocab.version
         ));
     }

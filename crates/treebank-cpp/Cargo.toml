@@ -1,6 +1,9 @@
 [package]
 name = "treebank-cpp"
 version = "0.1.0"
+# Only the `treebank` crate is published. Everything else is a workspace
+# member: the grammars ship as wasm packs and the CLI is not a library.
+publish = false
 edition = "2021"
 license = "MIT"
 description = "C++98 through C++23 in one grammar, extending treebank-c, carrying the treebank node vocabulary"

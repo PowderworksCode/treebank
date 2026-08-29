@@ -9,7 +9,7 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank-core/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/supertypes.js');
 
 // Java's binary operator ladder, loosest to tightest. The numbers are the
 // language's own table read upward; nothing here is tuned.
