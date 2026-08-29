@@ -8,17 +8,16 @@
   "current_corpus_evidence": 10,
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
-  "lint_ratchets": 1,
-  "shape_fixture_grammars": 6,
+  "lint_ratchets": 9,
+  "shape_fixture_grammars": 7,
   "wasm_packs": 9,
   "query_files": 0,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
-  "8 of 9 grammars run lint in advisory mode without lint_policy.toml",
   "no tree-sitter query files are configured",
   "no grammar has a binding directory beyond Rust",
-  "span oracle configured but no checked-in shape fixtures: bash, java"
+  "span oracle configured but no checked-in shape fixtures: bash"
  ],
  "errors": [],
  "grammars": {
@@ -48,7 +47,7 @@
    "known_deviations": {
     "shape": true,
     "fuzz": false,
-    "lint": false,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -62,7 +61,7 @@
    "corpus_canary": true,
    "external_scanner": true,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "bash",
@@ -107,7 +106,7 @@
    "known_deviations": {
     "shape": false,
     "fuzz": false,
-    "lint": false,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -121,7 +120,7 @@
    "corpus_canary": true,
    "external_scanner": false,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "c",
@@ -200,7 +199,7 @@
    "known_deviations": {
     "shape": false,
     "fuzz": false,
-    "lint": false,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -214,7 +213,7 @@
    "corpus_canary": true,
    "external_scanner": true,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "cpp",
@@ -263,12 +262,12 @@
    "tests": {
     "corpus_cases": 5,
     "negative_files": 7,
-    "shape_files": 0
+    "shape_files": 7
    },
    "known_deviations": {
     "shape": true,
     "fuzz": false,
-    "lint": false,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -282,7 +281,7 @@
    "corpus_canary": true,
    "external_scanner": false,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "java",
@@ -334,14 +333,14 @@
     "uncategorised": 20
    },
    "tests": {
-    "corpus_cases": 18,
-    "negative_files": 33,
-    "shape_files": 8
+    "corpus_cases": 19,
+    "negative_files": 34,
+    "shape_files": 9
    },
    "known_deviations": {
     "shape": true,
     "fuzz": true,
-    "lint": false,
+    "lint": true,
     "version": true
    },
    "distribution": {
@@ -355,28 +354,24 @@
    "corpus_canary": true,
    "external_scanner": true,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "python",
      "files": 298354,
-     "passed": 297256,
-     "failed": 1098,
-     "grammar_gaps": 3,
+     "passed": 297257,
+     "failed": 1097,
+     "grammar_gaps": 2,
      "noise": 1083,
      "pass_rate": "99.63%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "e999a80702847ab0f6129db459df1ce7da0ba267"
+     "grammar_revision": "a48f228adc59c586306ee9ba849de17d86feeefe"
     }
    ],
    "known_gaps": [
     {
      "summary": "indentation that mixes tabs and spaces",
-     "files": 1
-    },
-    {
-     "summary": "TWO OR MORE consecutive comment lines after an inline suite",
      "files": 1
     }
    ],
@@ -562,7 +557,7 @@
    "known_deviations": {
     "shape": true,
     "fuzz": true,
-    "lint": false,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -576,7 +571,7 @@
    "corpus_canary": true,
    "external_scanner": true,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "rust",
@@ -696,8 +691,8 @@
    },
    "known_deviations": {
     "shape": true,
-    "fuzz": false,
-    "lint": false,
+    "fuzz": true,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -711,7 +706,7 @@
    "corpus_canary": true,
    "external_scanner": true,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "javascript",
@@ -851,14 +846,14 @@
     "uncategorised": 11
    },
    "tests": {
-    "corpus_cases": 18,
-    "negative_files": 8,
+    "corpus_cases": 19,
+    "negative_files": 13,
     "shape_files": 0
    },
    "known_deviations": {
     "shape": false,
     "fuzz": false,
-    "lint": false,
+    "lint": true,
     "version": false
    },
    "distribution": {
@@ -872,7 +867,7 @@
    "corpus_canary": true,
    "external_scanner": false,
    "evidence_freshness": "current",
-   "lint_ratchet": false,
+   "lint_ratchet": true,
    "corpora": [
     {
      "language": "zig",
@@ -884,7 +879,7 @@
      "pass_rate": "99.00%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "282b605b4b37e34c56151738ef1ee1f47f8a14b0"
+     "grammar_revision": "fe5a7ff3cd9ad57c6c90967038bee4d72eb4e7f8"
     }
    ],
    "known_gaps": [
