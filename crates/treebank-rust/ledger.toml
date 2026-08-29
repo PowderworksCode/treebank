@@ -18,7 +18,7 @@ mutation_check = '''
 error_positions = '''
 `treebank errors` — 13 of 15 rejected files are comparable: 1 exact, 10 within 16 bytes, 2 further. Median |delta| 2 bytes.'''
 fuzz_check = '''
-`treebank fuzz` — programs derived from grammar.json and judged by syn. The first run over 3,000 derivations gave 703 widenings reducing to 222 distinct shrunk programs and eight causes; thirteen were sampled and put to rustc itself, and all thirteen were confirmed. Five of the eight are now fixed and the distinct count is 121. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not — which matters because real source is valid, so no amount of it can show that we reject what rust rejects.'''
+`treebank fuzz` — programs derived from grammar.json and judged by syn. The first run over 3,000 derivations gave 703 widenings reducing to 222 distinct shrunk programs and eight causes; thirteen were sampled and put to rustc itself, and all thirteen were confirmed. Five of the eight were fixed and the distinct count fell to 121. The 5,000-derivation run behind issue #186 (seed 403368370) then reported 398 widenings in 78 distinct programs at 94.8% alternative coverage; those 78 reduced to eight further causes — the literal escape set, attribute and macro paths taking a type path, `default` as an item rather than a member prefix, a bare `'` in a token tree, a doubled leading `::` in a use clause, inner attributes outside the head position, `qualified_type` and `?Trait` reaching `impl`'s self-type slot, and an extern block sharing its body with impls — each adjudicated against rustc 1.96.1 and all eight fixed, along with `$._type` spelled where a bound belongs and a turbofish on a `super`/`self` segment. Same seed after: 194 widenings, 82 distinct, 98.8% coverage. 76 of the 78 are rejected; the two that remain are declared in fuzz_policy.toml because rustc's own parser accepts them and rejects them later by error code (E0433, E0214), which no syn-based oracle can distinguish — see the oracle note below. Unlike the sweep and `mutate`, which are bounded by what the corpus contains, this direction is not — which matters because real source is valid, so no amount of it can show that we reject what rust rejects.'''
 
 incremental_check = '''
 `treebank incremental` — 3000 files, 9000 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 27 diverged, 0 of them on text that still parses cleanly. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
@@ -47,8 +47,8 @@ gap_files = 2
 noise_files = 13
 pass_rate = '99.95%'
 corpus_lock_sha256 = '49d8663643ba20cd2fb3de8e526295ba3d0d3b2a87878e561ffa0e72737de00a'
-grammar_sha256 = '57bd2020853d1f02b438feae01f6078b38d547439bbf152f516a16c39e323861'
-grammar_revision = '53fc002dbf9aaf152929d35678806be16d236a18'
+grammar_sha256 = 'f16b49e53be63eb1339ecc09775ed31135ae9213eff92ea76eec696f6f961a03'
+grammar_revision = 'aa6019482082dbeddfe6a8d534f72ee5aad25b37'
 
 [[oracles]]
 family = 'rust'

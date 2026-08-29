@@ -35,6 +35,22 @@ const PREC = {
   field: 16,
 };
 
+// The escape alphabet, shared by every literal token above. Split out
+// because `string`, `_abi` and `char` have to agree on it, and three
+// copies of a character class is three places for it to drift.
+const STR_TEXT = /[^"\\]+/;
+// Quote, ASCII and byte escapes. `\xHH` takes exactly two hex digits:
+// `"\x4"` is `numeric character escape is too short`.
+const ESCAPE = /\\([nrt\\0'"]|x[0-9a-fA-F]{2})/;
+// `\u{...}`: at least one hex digit and at most six SIGNIFICANT ones,
+// underscores allowed between but never leading. `"\u{}"` is `empty
+// unicode escape`, `"\u{_41}"` is `invalid start of unicode escape` and
+// `"\u{0000041}"` is `overlong unicode escape`; `"\u{41_}"` is fine.
+const U_ESCAPE = /\\u\{[0-9a-fA-F](_*[0-9a-fA-F]){0,5}_*\}/;
+// A backslash before a newline continues a string; it is not an escape,
+// and it is the one form a char literal has no use for.
+const CONTINUATION = /\\\r?\n/;
+
 module.exports = grammar({
   name: 'rust',
 
@@ -155,6 +171,25 @@ module.exports = grammar({
     [$._expression_with_block, $._control_flow],
     [$.range_expression],
     [$.function_definition, $.extern_block],
+    // The simple-path forks. A path's first segment does not say which
+    // KIND of path it is -- `foo::bar!()` and `foo::<T>::bar` are the same
+    // two tokens until the third -- so wherever a path can begin, `foo`
+    // reduces both ways and the fork closes on the token after the `::`.
+    // These are the SAME sites the `_path_ref` forks above already stand
+    // on; tree-sitter matches a declared conflict by its exact symbol set,
+    // which is why they are spelled again rather than widened.
+    [$._path_ref, $._simple_path],
+    [$.scoped_identifier, $._path_ref, $._simple_path],
+    [$.scoped_identifier, $.generic_function, $._path_ref, $._simple_path],
+    [$.generic_type, $.generic_function, $._path_ref, $._simple_path],
+    [$.generic_function, $._path_ref, $._simple_path],
+    [$.scoped_identifier, $._scoped_generic_base, $._scoped_simple_path],
+    [$.scoped_type_identifier, $.scoped_identifier, $._scoped_generic_base],
+    [$.scoped_identifier, $._scoped_generic_base],
+    [$.scoped_type_identifier, $.scoped_identifier, $._scoped_generic_base, $._scoped_simple_path],
+    [$._bound, $.generic_type],
+    [$.scoped_type_identifier, $.scoped_identifier, $._scoped_simple_path],
+    [$.scoped_identifier, $._scoped_simple_path],
   ],
 
   rules: {
@@ -163,7 +198,18 @@ module.exports = grammar({
     // valid Rust -- and it is also what made a stray `;` an item (`use x;;`)
     // and let a paren-delimited macro stand as an item without its semicolon.
     // Three catalogued widenings, one cause.
-    source_file: $ => seq(optional($.shebang), repeat($._item)),
+    // Inner attributes lead, and only lead. `#![no_std]` describes the
+    // thing it is written INSIDE, so rust admits it only before that
+    // thing's first item — `fn f() {} #![foo]` is `an inner attribute is
+    // not permitted in this context`. Offered as an `_item` it could sit
+    // anywhere, which is the same shape of bug `_item` itself fixed when
+    // the top level stopped being a list of statements. Every body that
+    // takes items or statements repeats the pair.
+    source_file: $ => seq(
+      optional($.shebang),
+      repeat($.inner_attribute_item),
+      repeat($._item),
+    ),
 
     // `#!/usr/bin/env rust-script` at the top of a file. Distinguished from
     // an inner attribute by what follows `#!`: an attribute opens a bracket,
@@ -180,7 +226,6 @@ module.exports = grammar({
       $._directive,
       $.impl_block,
       $.extern_block,
-      $.inner_attribute_item,
       alias($._macro_item, $.expression_statement),
     ),
 
@@ -198,13 +243,13 @@ module.exports = grammar({
     ),
 
     _brace_macro_invocation: $ => seq(
-      field('macro', $._path_ref),
+      field('macro', $._simple_path),
       '!',
       alias($._brace_token_tree, $.token_tree),
     ),
 
     _delimited_macro_invocation: $ => seq(
-      field('macro', $._path_ref),
+      field('macro', $._simple_path),
       '!',
       alias($._delimited_token_tree, $.token_tree),
     ),
@@ -219,7 +264,6 @@ module.exports = grammar({
       $.extern_block,
       $.let_declaration,
       $.expression_statement,
-      $.inner_attribute_item,
       $.empty_statement,
     ),
 
@@ -300,29 +344,17 @@ module.exports = grammar({
 
     mutable_specifier: _ => 'mut',
 
-    function_definition: $ => seq(
-      repeat($._attribute),
-      optional($.visibility_modifier),
-      // Ordered, once each -- rust's FunctionQualifiers are `const? async?
-      // unsafe? extern?` (`default` is an impl prefix, `safe` a foreign-item
-      // qualifier). The bare `repeat(choice(...))` before this accepted
-      // `safe safe fn` and `unsafe const fn`: 20 fuzz seeds of doubled and
-      // misordered qualifiers. `safe` outside an extern block is still
-      // accepted -- restricting it needs the extern body split from the
-      // shared declaration_list; fuzz_policy.toml declares it meanwhile.
-      optional('default'),
-      optional('const'),
-      optional('async'),
-      optional(choice('unsafe', 'safe')),
-      optional(seq('extern', optional(alias($._abi, $.string)))),
-      'fn',
-      field('name', $._name),
-      field('type_parameters', optional($.type_parameters)),
-      field('parameters', $.parameters),
-      optional(seq('->', field('return_type', $._type))),
-      optional($.where_clause),
-      choice(field('body', $._body), ';'),
-    ),
+    // Two spellings of one rule, built from one description below, because
+    // `default` is a MEMBER prefix and not an item prefix. `default fn
+    // r#XX ( ) ;` at a file's top level was the fuzzer's heaviest rust
+    // finding (170 seeds) and rustc calls it ``default` is only allowed on
+    // items in trait impls`; syn draws the line at the item/member
+    // boundary, and so does this. Whether an INHERENT impl may carry it is
+    // a question below the parser — rustc gets as far as `specialization
+    // is experimental` there, which is a feature gate and not a parse
+    // error — so the grammar stops where the oracle does.
+    function_definition: $ => functionDefinition($, { defaulted: false }),
+    _default_function_definition: $ => functionDefinition($, { defaulted: true }),
 
     // Rust's parameter list is ordered: a `self` receiver is only ever the
     // FIRST parameter, and the C-variadic `...` is only ever the last. One
@@ -454,10 +486,37 @@ module.exports = grammar({
     // so `(_member)` matches exactly the items that are members.
     // No bare `;`: rustc calls it `non-item in item list` in every list
     // this rule serves — extern blocks, impls, traits and modules alike.
-    declaration_list: $ => seq('{', repeat($._member), '}'),
+    declaration_list: $ => seq(
+      '{',
+      repeat($.inner_attribute_item),
+      repeat($._member),
+      '}',
+    ),
     _member: $ => choice(
       $._declaration,
-      $.inner_attribute_item,
+      alias($._default_function_definition, $.function_definition),
+      alias($.member_macro_invocation, $.macro_invocation),
+    ),
+
+    // An extern block is NOT an impl body, and sharing `declaration_list`
+    // with one is what let `extern { mod r#XX ; }` parse. rustc has a
+    // sentence per item it will not take there -- `module is not supported
+    // in `extern` blocks`, and the same for struct, enum, union, trait,
+    // `use` and a macro definition, plus `extern items cannot be `const``.
+    // What is left is a function, a static, an extern type, and a macro
+    // invocation to generate them with. Aliased to `declaration_list` so
+    // the node kind an extern body reports does not change.
+    _extern_declaration_list: $ => seq(
+      '{',
+      repeat($.inner_attribute_item),
+      repeat($._extern_member),
+      '}',
+    ),
+
+    _extern_member: $ => choice(
+      $.function_definition,
+      $.static_definition,
+      $.type_alias,
       alias($.member_macro_invocation, $.macro_invocation),
     ),
 
@@ -467,7 +526,7 @@ module.exports = grammar({
     // need the semicolon and `m! { … };` does not take one.
     member_macro_invocation: $ => seq(
       repeat($._attribute),
-      field('macro', $._path_ref),
+      field('macro', $._simple_path),
       '!',
       choice(
         alias($._brace_token_tree, $.token_tree),
@@ -511,7 +570,7 @@ module.exports = grammar({
       field('body', alias($.mod_block, $.block)),
     ),
     // Items, like a file's top level -- a module body is not a block.
-    mod_block: $ => seq('{', repeat($._item), '}'),
+    mod_block: $ => seq('{', repeat($.inner_attribute_item), repeat($._item), '}'),
 
     module_declaration: $ => seq(
       repeat($._attribute),
@@ -582,7 +641,7 @@ module.exports = grammar({
       optional('unsafe'),
       'extern',
       optional(alias($._abi, $.string)),
-      field('body', $.declaration_list),
+      field('body', alias($._extern_declaration_list, $.declaration_list)),
     ),
 
     extern_crate_declaration: $ => seq(
@@ -609,9 +668,14 @@ module.exports = grammar({
       ';',
     ),
 
+    // No `seq('::', $._path_ref)`. A crate-rooted path is ALREADY a
+    // `scoped_identifier` with no `path` field — that is what `::foo`
+    // parses as — so offering the leading `::` a second time here made
+    // `use ::::foo;` a program, and rustc reads the second one as
+    // `expected identifier, found `::``. Same for the `use_list` arm: `::`
+    // in front of a brace is `seq('::', $.use_list)`'s job alone.
     _use_clause: $ => choice(
       $._path_ref,
-      seq('::', $._path_ref),
       $.use_as_clause,
       $.use_list,
       $.scoped_use_list,
@@ -631,7 +695,7 @@ module.exports = grammar({
     inner_attribute_item: $ => seq('#', '!', '[', $.attribute, ']'),
 
     attribute: $ => seq(
-      $._path_ref,
+      $._simple_path,
       optional(choice(
         seq('=', $._expression),
         $.token_tree,
@@ -667,13 +731,36 @@ module.exports = grammar({
       optional(seq('=', field('value', choice($.block, $.identifier, $._literal, $.negative_literal)))),
     ),
 
+    // A bound is a TRAIT, a lifetime, or a relaxation of one -- not any
+    // type. Spelled `$._type` this accepted `impl<T: [r#XX]> r#XX {}`,
+    // where rustc says `expected a trait, found type`; a slice, a tuple,
+    // a reference and a never can none of them be bounds. What is left is
+    // the shapes a trait path takes: a name, a scoped name, one carrying
+    // generic arguments or an associated-type binding, the `Fn(A) -> B`
+    // sugar, a parenthesised bound, and a macro that expands to one.
     trait_bounds: $ => prec.right(seq(sep1(choice(
-      $._type,
+      $._bound,
       $.lifetime,
-      seq('?', $._type),
+      seq('?', $._bound),
       $.higher_ranked_bound,
       $.use_bound,          // impl Trait + use<'a, T> (precise capture, 1.82)
     ), '+'), optional('+'))),
+
+    _bound: $ => choice(
+      alias($.identifier, $.type_identifier),
+      alias($._soft_keyword, $.type_identifier),
+      $.scoped_type_identifier,
+      $.generic_type,
+      $.function_type,
+      $.macro_invocation,
+      // `T: (Copy)` and `dyn (Fn() + Send)`. Parentheses group a bound,
+      // and dropping them was the one gap narrowing this rule opened.
+      // Hidden: the grouping carries no role the inner bounds do not, and
+      // a node kind for it would be a new name in every consumer's tree.
+      $._parenthesized_bound,
+    ),
+
+    _parenthesized_bound: $ => seq('(', $.trait_bounds, ')'),
 
     use_bound: $ => seq(
       'use',
@@ -736,7 +823,12 @@ module.exports = grammar({
       $.dyn_type,
       $.impl_type,
       $.never_type,
-      $.qualified_type,
+      // NOT `qualified_type`. `<T>` and `<T as Tr>` are path QUALIFIERS,
+      // spelled only in front of a `::`, and they stay reachable as the
+      // `path` field of `scoped_type_identifier` and `scoped_identifier`.
+      // Offered as a type in its own right they made `impl<T> {}` parse —
+      // `<T>` landing in the self-type slot that `impl` requires, which
+      // rustc reports as `expected type, found `{``.
       $.macro_invocation,
     ),
 
@@ -797,9 +889,14 @@ module.exports = grammar({
       ')',
     ),
 
+    // No `?` here, unlike `trait_bounds`. `?Sized` is a RELAXED BOUND: it
+    // is spelled after a `:`, in a where-predicate or behind `dyn`/`impl`,
+    // and `trait_bounds` carries it in all three. Admitting it into a
+    // `+`-joined type let `unsafe impl ?Foo + Bar {}` through as a self
+    // type, where rustc wants a type and finds `?`.
     bounded_type: $ => prec.left(-1, seq(
-      choice($._type, $.lifetime, seq('?', $._type), $.use_bound),
-      repeat1(seq('+', choice($._type, $.lifetime, seq('?', $._type), $.use_bound))),
+      choice($._type, $.lifetime, $.use_bound),
+      repeat1(seq('+', choice($._type, $.lifetime, $.use_bound))),
     )),
 
     dyn_type: $ => prec.right(seq('dyn', $.trait_bounds)),
@@ -1098,7 +1195,7 @@ module.exports = grammar({
     _argument: $ => choice($._expression),
 
     macro_invocation: $ => seq(
-      field('macro', $._path_ref),
+      field('macro', $._simple_path),
       '!',
       $.token_tree,
     ),
@@ -1114,6 +1211,13 @@ module.exports = grammar({
       $.string,
       $.raw_string,
       $.char,
+      // A macro's token tree still has to LEX, and rust's lexer reads `'`
+      // as the start of either a char literal or a lifetime — never as a
+      // token of its own. The soup below used to offer a bare `'`, which
+      // made `m! { ' }` a program; rustc calls it `unterminated character
+      // literal`. Naming the lifetime here is what lets the soup stop
+      // offering it, and `m! { 'a }` — which syn accepts — keeps parsing.
+      $.lifetime,
       $._token_soup,
     ),
 
@@ -1125,7 +1229,7 @@ module.exports = grammar({
     // raw string's prefix before the scanner ever saw it.
     // '@' is fenced too: insta/jiff-style `@r##"…"##` snapshots need the
     // scanner to see the `r` at a token boundary.
-    _token_soup: _ => token(prec(-1, choice(/[^()\[\]{}"'\/@\s]+/, "'", '/', '@'))),
+    _token_soup: _ => token(prec(-1, choice(/[^()\[\]{}"'\/@\s]+/, '/', '@'))),
 
     _access: $ => choice($.member_expression, $.subscript_expression),
 
@@ -1229,6 +1333,7 @@ module.exports = grammar({
 
     block: $ => seq(
       '{',
+      repeat($.inner_attribute_item),
       repeat($._statement),
       optional(seq(repeat($._attribute), $._expression)),
       '}',
@@ -1264,10 +1369,26 @@ module.exports = grammar({
       field('name', choice($.identifier, 'super', $.self)),
     ),
 
+    // The segment a turbofish attaches to is an IDENTIFIER. `super` and
+    // `self` name a module, never a generic item, so `::super::<>` and
+    // `::self::<>` cannot be written in any program -- rustc parses them
+    // and then says `error[E0433]: `super` in paths can only be used in
+    // start position` (E0424 for `self`), which is where it happens to
+    // notice rather than where the rule lives. `scoped_identifier` admits
+    // both spellings as a `name`, so this takes the narrower one.
     generic_function: $ => seq(
-      field('function', choice($.identifier, $.scoped_identifier)),
+      field('function', choice(
+        $.identifier,
+        alias($._scoped_generic_base, $.scoped_identifier),
+      )),
       '::',
       field('type_arguments', $.type_arguments),
+    ),
+
+    _scoped_generic_base: $ => seq(
+      field('path', optional(choice($._path_ref, $.generic_function, $.qualified_type))),
+      '::',
+      field('name', $.identifier),
     ),
 
     _path_ref: $ => choice(
@@ -1276,6 +1397,30 @@ module.exports = grammar({
       $.scoped_identifier,
       $.self,
       alias(choice('crate', 'super'), $.identifier),
+    ),
+
+    // Rust's SimplePath: identifiers joined by `::`, optionally rooted at
+    // the crate, and nothing else. It is what an ATTRIBUTE names and what a
+    // MACRO names, and `_path_ref` is not it -- through
+    // `scoped_identifier`'s `path` field it reaches `generic_function` and
+    // `qualified_type`, which is right in expression and type position and
+    // wrong in these two. 35 of the fuzzer's 78 findings were one or the
+    // other of those two prefixes: `#[foo::<>::bar]`, `#[<T>::bar]` and
+    // `foo::<>::bar!{}` are each `expected identifier, found `<`` to rustc.
+    // Aliased back to `scoped_identifier` so the tree does not gain a kind
+    // for the narrower path.
+    _simple_path: $ => choice(
+      $.identifier,
+      alias($._soft_keyword, $.identifier),
+      alias($._scoped_simple_path, $.scoped_identifier),
+      $.self,
+      alias(choice('crate', 'super'), $.identifier),
+    ),
+
+    _scoped_simple_path: $ => seq(
+      field('path', optional($._simple_path)),
+      '::',
+      field('name', choice($.identifier, 'super', $.self)),
     ),
 
     // ── patterns ─────────────────────────────────────────────────────
@@ -1406,26 +1551,30 @@ module.exports = grammar({
     // rather than a check, because the two are only ever valid in disjoint
     // states, so the lexer can tell them apart from context. Aliased to
     // `string` so node-types.json does not gain a type for it.
-    _abi: _ => token(seq(
-      '"',
-      repeat(choice(/[^"\\]+/, /\\(.|\r?\n)/)),
-      '"',
+    _abi: _ => token(seq('"', repeat(choice(STR_TEXT, ESCAPE, U_ESCAPE, CONTINUATION)), '"')),
+
+    // The escape set is rust's, not "backslash anything". `/\\(.|\r?\n)/`
+    // made `"\a"` a string, and rustc lexes it as `unknown character
+    // escape: `a``. The fuzzer reached it through extern ABIs
+    // (`unsafe extern " \a " { }`, 53 seeds) but the looseness was in every
+    // literal form the language has.
+    //
+    // Byte strings are the one form WITHOUT `\u`: `b"\u{41}"` is `unicode
+    // escape in byte string`, so the two are separate alternatives of one
+    // token rather than the `[bc]?` prefix that let them share.
+    //
+    // Shape only. `\x80` in a non-byte string, `\u{110000}` and a null in a
+    // c-string are all rustc errors, and all three are checks on the VALUE
+    // an escape denotes rather than on how it is spelled — the same line
+    // fuzz.rs draws when it asks the parser and not the compiler.
+    string: _ => token(choice(
+      seq(/[c]?"/, repeat(choice(STR_TEXT, ESCAPE, U_ESCAPE, CONTINUATION)), '"'),
+      seq('b"', repeat(choice(STR_TEXT, ESCAPE, CONTINUATION)), '"'),
     )),
 
-    string: _ => token(seq(
-      /[bc]?"/,
-      repeat(choice(/[^"\\]+/, /\\(.|\r?\n)/)),
-      '"',
-    )),
-
-    char: _ => token(seq(
-      optional('b'),
-      '\'',
-      choice(
-        /[^'\\]/,
-        /\\(x[0-9a-fA-F]{1,2}|u\{[0-9a-fA-F_]+\}|.)/,
-      ),
-      '\'',
+    char: _ => token(choice(
+      seq('\'', choice(/[^'\\]/, ESCAPE, U_ESCAPE), '\''),
+      seq('b\'', choice(/[^'\\]/, ESCAPE), '\''),
     )),
 
     true: _ => 'true',
@@ -1434,6 +1583,33 @@ module.exports = grammar({
     line_comment: _ => token(seq('//', /.*/)),
   },
 });
+
+// `function_definition` twice over: once as an item, once as an impl or
+// trait member that may open with `default`. The qualifiers are ORDERED
+// and once each -- rust's FunctionQualifiers are `const? async? unsafe?
+// extern?`. The bare `repeat(choice(...))` this replaced accepted `safe
+// safe fn` and `unsafe const fn`: 20 fuzz seeds of doubled and misordered
+// qualifiers. `safe` outside an extern block is still accepted --
+// restricting it needs the qualifier list split per context the way this
+// splits `default`; fuzz_policy.toml declares it meanwhile.
+function functionDefinition($, { defaulted }) {
+  return seq(
+    repeat($._attribute),
+    optional($.visibility_modifier),
+    ...(defaulted ? ['default'] : []),
+    optional('const'),
+    optional('async'),
+    optional(choice('unsafe', 'safe')),
+    optional(seq('extern', optional(alias($._abi, $.string)))),
+    'fn',
+    field('name', $._name),
+    field('type_parameters', optional($.type_parameters)),
+    field('parameters', $.parameters),
+    optional(seq('->', field('return_type', $._type))),
+    optional($.where_clause),
+    choice(field('body', $._body), ';'),
+  );
+}
 
 function commaSep1(rule) {
   return sep1(rule, ',');

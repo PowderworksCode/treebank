@@ -7,3 +7,28 @@ why = '''
 [[declared]]
 starts_with = 'static safe'
 why = 'Same deferral as `safe fn`: a foreign-static qualifier accepted module-wide until the extern body splits.'
+
+# ── past the parser ──────────────────────────────────────────────────
+# The two below are NOT syntax. rustc's own parser accepts each of
+# them and rejects it later, by error CODE — E0433 from name resolution,
+# E0214 from type checking — and fuzz.rs's rule is to ask the
+# parser and not the compiler ("`break` outside a loop is not a syntax
+# error, and a tree-sitter grammar has no business tracking loop
+# nesting"). syn is the only rust oracle and has no parse-only mode, which
+# ledger.toml already records; these are exactly the cases where that
+# costs a verdict. Each was put to rustc directly and the error it gives
+# is quoted.
+
+[[declared]]
+starts_with = 'use :: { ::'
+why = '''
+`use ::{::core};` — rustc: `error[E0433]: global paths cannot start with the crate root`. A resolution rule about where a path may be ROOTED, not about how one is spelled: rustc parses the use-tree and rejects it once it tries to resolve the nested `::`. `use ::::foo;` — the same family's genuine SYNTAX error, `expected identifier, found `::`` — is fixed, not declared.'''
+
+[[declared]]
+starts_with = 'unsafe impl < const r#XX : r#XX ( )'
+why = '''
+A const parameter whose type uses the parenthesised `Foo()` sugar. rustc:
+`error[E0214]: parenthesized type parameters may only be used with a `Fn`
+trait` — a check on which trait the path names, which is type checking and
+not available to a grammar. The sugar itself is real syntax the grammar has
+to keep: `T: Fn(u8) -> u8` is the same shape.'''

@@ -117,3 +117,111 @@ mod inner {
         name: (identifier)
         parameters: (parameters)
         body: (block)))))
+
+================================================================================
+placement: inner attributes, extern members, `default`, escapes, bounds
+================================================================================
+
+#![no_std]
+
+#[doc = "d"]
+unsafe extern "C" {
+    #![allow(dead_code)]
+    pub safe fn g(x: u8) -> u8;
+    pub static X: u8;
+    type Opaque;
+    m!();
+}
+
+pub trait Tr {
+    #![allow(dead_code)]
+    default fn h() {}
+}
+
+pub fn lits() {
+    let _ = ("\n\x41\u{1F600}\\\0", b"\x80\r", c"\u{41}", '\'', b'\n');
+}
+
+pub fn bounds<T: (Copy) + ?Sized + for<'a> Fn(&'a u8)>() {}
+
+--------------------------------------------------------------------------------
+
+(source_file
+  (inner_attribute_item
+    (attribute
+      (identifier)))
+  (extern_block
+    (attribute_item
+      (attribute
+        (identifier)
+        (string)))
+    (string)
+    body: (declaration_list
+      (inner_attribute_item
+        (attribute
+          (identifier)
+          (token_tree)))
+      (function_definition
+        (visibility_modifier)
+        name: (identifier)
+        parameters: (parameters
+          (parameter
+            pattern: (identifier)
+            type: (type_identifier)))
+        return_type: (type_identifier))
+      (static_definition
+        (visibility_modifier)
+        name: (identifier)
+        type: (type_identifier))
+      (type_alias
+        name: (identifier))
+      (macro_invocation
+        macro: (identifier)
+        (token_tree))))
+  (trait_definition
+    (visibility_modifier)
+    name: (identifier)
+    body: (declaration_list
+      (inner_attribute_item
+        (attribute
+          (identifier)
+          (token_tree)))
+      (function_definition
+        name: (identifier)
+        parameters: (parameters)
+        body: (block))))
+  (function_definition
+    (visibility_modifier)
+    name: (identifier)
+    parameters: (parameters)
+    body: (block
+      (let_declaration
+        pattern: (identifier)
+        value: (tuple_expression
+          (string)
+          (string)
+          (string)
+          (char)
+          (char)))))
+  (function_definition
+    (visibility_modifier)
+    name: (identifier)
+    type_parameters: (type_parameters
+      (type_parameter
+        name: (identifier)
+        (trait_bounds
+          (trait_bounds
+            (type_identifier))
+          (type_identifier)
+          (higher_ranked_bound
+            (type_parameters
+              (lifetime_parameter
+                (lifetime)))
+            (function_type
+              trait: (type_identifier)
+              parameters: (parameters
+                (reference_type
+                  (lifetime)
+                  type: (type_identifier))))))))
+    parameters: (parameters)
+    body: (block)))
