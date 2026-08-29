@@ -77,7 +77,8 @@ receive a capture:
 | zig | 703 | 352 | 50.1% |
 
 **3800 named nodes, 1778 captured: 46.8%** — from one file, `treebank queries
---coverage`, reported in every CI run.
+--coverage`, reported in every CI run. `locals.scm` reaches 41.4% of the same
+nodes.
 
 Two honest caveats. These corpora are small, and a number over the locked
 corpora would mean more; that is a sweep rather than a check, so it is not run
@@ -86,12 +87,59 @@ anonymous tokens, which no vocabulary term reaches. Colouring the `if` itself
 needs a per-grammar supplement, which is the remaining half of a complete
 highlighting file.
 
-## Why the second half is the interesting one
+## locals.scm
 
-`locals.scm` — the file that drives rename, go-to-definition and
-highlight-references — is the hardest to write per language and the most
-valuable to get right. Its three ingredients are `_scope`, `_binding` and
-`_identifier`, and all three are in the vocabulary of every grammar.
+The file that drives rename, go-to-definition and highlight-references is the
+hardest of the standard queries to write, because it is about a language's
+binding structure rather than its surface. It is normally written once per
+language, by someone who knows that language well.
 
-Nobody has been able to write that once before, because nobody had a
-vocabulary that survived the trip between languages.
+Its three ingredients are in every grammar's vocabulary, so it is written once
+here too:
+
+```scm
+(_scope) @local.scope
+(_callable name: (_) @local.definition.function)
+(_binding name: (_) @local.definition.var)
+(_parameter name: (_) @local.definition.parameter)   ; where the grammar has one
+(_identifier) @local.reference
+```
+
+The capture goes on the **name**, not on the construct: an editor renames an
+identifier and needs the range of the thing it would rewrite. What that finds,
+on the playground's own samples:
+
+| grammar | definitions found |
+| --- | --- |
+| bash | `greet`, `name` |
+| java | `Point`, `x`, `y` |
+| python | `greet`, `name` |
+| ruby | `Greeter`, `initialize`, `call`, `name` |
+| rust | `largest` |
+| zig | `std`, `main`, `xs` |
+
+### Where a grammar cannot express a pattern
+
+Two things vary, and both are written into the generated file rather than
+left for someone to discover.
+
+**A term the grammar does not have.** bash functions take `$1`, not a named
+parameter, so bash has no `_parameter` at all. The pattern is marked
+`; treebank: only-if _parameter` and is omitted there — rather than dropped
+from the eight grammars that do have one.
+
+**A term whose members do not take the field.** C and Rust have `_parameter`,
+but a C parameter is a *declarator* and a Rust one is a *pattern*, so neither
+has a `name`. Expansion filters every member away and the pattern is omitted,
+with the reason in the file's header.
+
+The same thing costs C most of its definitions. `int counter = 0;` binds
+through `declarator`, not `name`, so C's generated file captures scopes and
+references but only names macros and enum constants. `(_binding declarator:
+(_identifier))` finds exactly `counter, rate, a, b, t` in C — and is a compile
+error in C++, whose declarators nest differently. That belongs in a
+per-grammar supplement rather than the universal file, alongside the keywords.
+
+This is worth saying plainly: **one file gets a long way, and it does not get
+all the way.** The vocabulary makes the common shape writable once; the
+declarator languages need help that only they need.

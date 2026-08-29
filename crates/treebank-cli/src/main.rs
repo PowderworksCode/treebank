@@ -738,7 +738,22 @@ fn main() -> anyhow::Result<()> {
         Cmd::Roles { grammar } => roles_cmd(&grammar),
         Cmd::Queries { source, crates, check, coverage } => {
             if coverage {
-                queries::coverage(&crates, "highlights.scm")
+                // Every source file, so a new one is measured the day it
+                // lands rather than the day someone remembers this list.
+                let mut names: Vec<String> = std::fs::read_dir(&source)
+                    .with_context(|| format!("reading {}", source.display()))?
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.file_name().to_string_lossy().to_string())
+                    .filter(|n| n.ends_with(".scm"))
+                    .collect();
+                names.sort();
+                for (i, name) in names.iter().enumerate() {
+                    if i > 0 {
+                        println!();
+                    }
+                    queries::coverage(&crates, name)?;
+                }
+                Ok(())
             } else {
                 queries::run(&source, &crates, check)
             }
