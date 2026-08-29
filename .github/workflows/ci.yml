@@ -33,6 +33,25 @@ jobs:
           cat "$RUNNER_TEMP/treebank-status.md" >> "$GITHUB_STEP_SUMMARY"
       - run: cargo test --workspace
 
+      # The site publishes a snapshot of the inventory above, because
+      # Cloudflare Workers Build has no Rust toolchain and cannot produce one
+      # at deploy time. Regenerating it here and failing on a difference is
+      # what stops treebank.dev from quoting pass rates, gap counts and
+      # evidence freshness that this repository has stopped agreeing with --
+      # the same guard the corpus ledgers get, for the same reason.
+      #
+      # `git status --porcelain`, not `git diff`: diff reports only tracked
+      # files, so a snapshot that went missing from the index would make this
+      # check pass by having nothing to compare.
+      - name: the site's inventory snapshot is current
+        run: |
+          node site/tools/build-status.mjs
+          if [ -n "$(git status --porcelain -- site/public/status.json)" ]; then
+            echo "::error::site/public/status.json is stale or untracked; run 'bun run status' in site/"
+            git diff -- site/public/status.json | head -40
+            exit 1
+          fi
+
   # The grammar and sweep lists, read off the repository rather than written down.
   # A hand-maintained matrix means a new grammar's gates are green because
   # nothing ran them, which is the one failure mode a gate cannot survive.
@@ -257,6 +276,34 @@ jobs:
       # forgotten in another: supertype matching is derivation-based, so a
       # missed thread is silent everywhere else.
       - run: ./target/debug/treebank rosetta
+
+  site:
+    name: site
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: install
+        working-directory: site
+        run: bun install --frozen-lockfile
+
+      # The build derives the reference pages and their data from crates/ --
+      # a directory with a grammar.js in it is a grammar, the same rule the
+      # gates above are matrixed from. So this fails if a grammar has arrived
+      # without a page, rather than publishing a site that quietly documents
+      # eight of nine.
+      - name: build
+        working-directory: site
+        run: bun run build
+
+      # The fold is total over grammar.json's node kinds and throws on one it
+      # does not know. Running it over every rule of every grammar is what
+      # stops a new DSL construct from silently dropping part of a production
+      # from its documentation -- invisible in the output, because the rule
+      # still renders, just not all of it.
+      - name: test
+        working-directory: site
+        run: bun test
 
   wasm:
     name: wasm packs (${{ matrix.grammar }})

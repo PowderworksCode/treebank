@@ -1,0 +1,20 @@
+{
+  "name": "treebank-site",
+  "version": "0.0.0",
+  "private": true,
+  "scripts": {
+    "grammars": "node tools/build-grammars.mjs",
+    "status": "node tools/build-status.mjs",
+    "viewer": "cp src/grammar.mjs src/railroad.mjs src/grammar-viewer.mjs src/status.mjs src/status-view.mjs src/grammar.css public/",
+    "build": "rm -rf out && bun run grammars && bun run viewer && powderworks-docs build content --out out --site-url https://treebank.dev --name Treebank --description \"A growing collection of well-tested Tree-sitter grammars\" --github PowderworksCode/treebank --license MIT --copyright \"Zack Maril\" --wordmark Treebank --wordmark-font '\"Fraunces\"' --wordmark-woff2 /fraunces-latin.woff2 --wordmark \"The Powderworks Agentic Code Consortium\" --wordmark-font '\"IM Fell English SC\"' --wordmark-woff2 /im-fell-english-sc-latin.woff2 --wordmark Powderworks --wordmark-font '\"IM Fell English SC\"' --wordmark-woff2 /im-fell-english-sc-latin.woff2 --static public",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "test": "bun test"
+  },
+  "dependencies": {
+    "powderworks-docs": "github:PowderworksCode/docs"
+  },
+  "devDependencies": {
+    "wrangler": "^4.123.0"
+  }
+}
