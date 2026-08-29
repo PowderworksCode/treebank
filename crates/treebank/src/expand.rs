@@ -167,7 +167,7 @@ pub fn expand_with_types(
                             if want.is_empty() {
                                 return true;
                             }
-                            // Derivation-based, DESIGN.md §2 fact 4: a
+                            // Derivation-based, notes/DESIGN.md §2 fact 4: a
                             // supertype pattern only matches where the
                             // field DECLARES that supertype (the value
                             // derives through it). `namespace_definition`'s

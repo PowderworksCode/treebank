@@ -317,7 +317,7 @@ enum Cmd {
         #[arg(long)]
         no_write_ledger: bool,
     },
-    /// Check a grammar for the structural smells FIELD_GUIDE.md names:
+    /// Check a grammar for the structural smells notes/field_guide.md names:
     /// declared-conflict growth, early commits between parallel tiers,
     /// same-text token splits, unreserved keywords, scanner/externals
     /// drift, and parse-table growth — judged against the grammar's
@@ -327,7 +327,7 @@ enum Cmd {
         /// src/scanner.c and lint_policy.toml
         grammar: PathBuf,
     },
-    /// Check a grammar's vocabulary conformance (DESIGN.md §3.3): declared
+    /// Check a grammar's vocabulary conformance (notes/DESIGN.md §3.3): declared
     /// supertypes from the closed table tier, every named node covered or
     /// deliberately uncategorised, required containments, and a valid
     /// roles.json facet manifest
@@ -352,7 +352,7 @@ enum Cmd {
         coverage: bool,
     },
     /// Run the rosetta gate: the same program in every owned language must
-    /// yield the same role counts (DESIGN.md §5.4)
+    /// yield the same role counts (notes/DESIGN.md §5.4)
     Rosetta {
         /// Directory of rosetta cases [default: test/rosetta]
         #[arg(long, default_value = "test/rosetta")]

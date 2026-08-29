@@ -1,6 +1,6 @@
 /**
  * treebank-zig: a from-scratch grammar for Zig 0.11–0.16, carrying the
- * treebank vocabulary (DESIGN.md §3) in its parse table.
+ * treebank vocabulary (notes/DESIGN.md §3) in its parse table.
  *
  * Zig is the first language here whose TYPES ARE VALUES, and that decides
  * where the vocabulary lands. `u32` is an identifier, `[]const u8` is an
@@ -8,7 +8,7 @@
  * is a variable declaration and nothing more. So `_type` cannot be a
  * sibling of `_expression` the way it is in rust — every type occurrence
  * would then be reachable as both at one position, which generate rejects
- * outright (DESIGN.md §2, fact 3). It is a NESTED partition instead:
+ * outright (notes/DESIGN.md §2, fact 3). It is a NESTED partition instead:
  * `_expression → _type → pointer_type | slice_type | …`, holding the type
  * OPERATORS — pointer, slice, array, optional, error union, `anyframe`,
  * `anytype`. `struct { … }` and `error{ … }` are primaries beside the

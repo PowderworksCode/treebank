@@ -69,7 +69,7 @@ pub trait Oracle: Sync {
     /// Separate from `validate` because the two answer different questions.
     /// `validate` asks "is this valid in the language at all", which is what
     /// decides gap-vs-noise. This asks "is this still valid today", which is
-    /// what lets a declared version-policy rejection (DESIGN.md §4.2) be
+    /// what lets a declared version-policy rejection (notes/DESIGN.md §4.2) be
     /// distinguished from a genuine gap: a construct may only be booked as
     /// `version` if the current oracle also rejects it. Without that second
     /// condition a policy entry could suppress a real, current-language

@@ -1,9 +1,9 @@
 # Constructs this grammar rejects ON PURPOSE because a newer version of the
-# language removed them (DESIGN.md 4.2). Each needs the current oracle to
+# language removed them (notes/DESIGN.md 4.2). Each needs the current oracle to
 # agree, so a policy entry cannot suppress a real failure.
 
 rule = '''
-DESIGN.md §4.2 — where a construct is valid only in an older version AND admitting it would change how current code parses, the current language wins and the construct is rejected. Each entry below is also a file in test/negative/, so the rejection is a gate rather than a note.'''
+notes/DESIGN.md §4.2 — where a construct is valid only in an older version AND admitting it would change how current code parses, the current language wins and the construct is rejected. Each entry below is also a file in test/negative/, so the rejection is a gate rather than a note.'''
 not_rejected_note = '''
 Older-version syntax with no competing reading in any later version stays ACCEPTED — `except E, e:`, the py2 print and exec statements, backtick repr, old-style octal literals. No current program can contain them, so supporting them costs the present nothing. That is case (3) in §4.2, and it is most of what the py2 half of the union is.'''
 
