@@ -4,6 +4,11 @@
 //! artifacts, so a checkout that has not run tools/wasm-pack/build.sh has
 //! nothing to test against, and failing there would mean the test suite
 //! reported a missing artifact as a broken loader.
+//!
+//! Set `TREEBANK_REQUIRE_PACK=1` where the packs have already been built and
+//! every skip becomes a failure. CI does that in `wasm consumers`, which is
+//! what stops this file from reporting clean over nothing -- the same thing
+//! the sweep refuses to do when it reads less than the requested tree.
 #![cfg(feature = "pack")]
 
 use std::path::PathBuf;
@@ -18,10 +23,10 @@ use common::a_pack;
 fn a_queryable_pack() -> Option<Pack> {
     let pack = Pack::from_path(a_pack()?).ok()?;
     if pack.provenance().pack_abi < 3 {
-        eprintln!(
+        common::skip(&format!(
             "pack is pack_abi {}; queries need 3. Rebuild with tools/wasm-pack/build.sh",
             pack.provenance().pack_abi
-        );
+        ));
         return None;
     }
     Some(pack)
@@ -29,10 +34,7 @@ fn a_queryable_pack() -> Option<Pack> {
 
 #[test]
 fn parses_and_answers_for_itself() {
-    let Some(path) = a_pack() else {
-        eprintln!("no treebank-python.wasm; run tools/wasm-pack/build.sh python");
-        return;
-    };
+    let Some(path) = a_pack() else { return };
     let pack = Pack::from_path(&path).expect("load");
 
     let p = pack.provenance();
@@ -129,7 +131,9 @@ fn one_query_runs_against_every_grammar() {
     }
 
     if ran < 2 {
-        eprintln!("only {ran} pack(s) present; build more with tools/wasm-pack/build.sh");
+        common::skip(&format!(
+            "only {ran} queryable pack(s) present; build more with tools/wasm-pack/build.sh"
+        ));
     }
 }
 
@@ -155,7 +159,7 @@ fn an_older_pack_still_works_without_queries() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let old = root.join("crates/treebank/tests/fixtures/pack-abi-2.wasm");
     if !old.is_file() {
-        eprintln!("no abi-2 fixture; skipping");
+        common::skip("no abi-2 fixture at crates/treebank/tests/fixtures/pack-abi-2.wasm");
         return;
     }
     let pack = Pack::from_path(&old).expect("an older pack must still load");
@@ -175,10 +179,7 @@ fn an_older_pack_still_works_without_queries() {
 
 #[test]
 fn hands_out_the_manifests_as_they_ship() {
-    let Some(path) = a_pack() else {
-        eprintln!("no treebank-python.wasm; run tools/wasm-pack/build.sh python");
-        return;
-    };
+    let Some(path) = a_pack() else { return };
     let pack = Pack::from_path(&path).expect("load");
 
     // roles_json is the document roles() parsed, for a consumer that has its
@@ -196,10 +197,7 @@ fn hands_out_the_manifests_as_they_ship() {
 
 #[test]
 fn the_raw_node_manifest_agrees_with_the_parsed_one() {
-    let Some(path) = a_pack() else {
-        eprintln!("no treebank-python.wasm; run tools/wasm-pack/build.sh python");
-        return;
-    };
+    let Some(path) = a_pack() else { return };
     let pack = Pack::from_path(&path).expect("load");
     let raw = pack.node_types_json().expect("node types");
     let parsed = pack.node_types().expect("node types parse");
