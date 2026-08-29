@@ -51,4 +51,11 @@ default = ["pack", "fetch"]
 pack = ["dep:wasmer", "dep:blake3", "dep:sha2"]
 # Downloading a grammar rather than being handed one. Implies `pack`, since
 # what is fetched is a pack.
-fetch = ["pack", "dep:ureq"]
+fetch = ["fetch-bytes", "pack"]
+# Acquisition without an engine: the manifest, the cache and the hash check,
+# handing back bytes. For a host with its own runtime, so that reusing this
+# does not mean linking a second engine beside the one it already has.
+fetch-bytes = ["dep:ureq", "dep:sha2"]
+
+[dev-dependencies]
+sha2 = "0.10"
