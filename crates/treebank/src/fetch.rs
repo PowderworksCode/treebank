@@ -30,6 +30,7 @@ use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "pack")]
 use crate::pack::Pack;
 
 /// Where packs are served from. `TREEBANK_PACKS_URL` overrides it, for a
@@ -155,13 +156,10 @@ fn manifest() -> Result<Manifest> {
 ///
 /// Resolves the current version through the manifest, so it follows the
 /// grammar as it improves. Use [`fetch_pinned`] where that must not happen.
+#[cfg(feature = "pack")]
 pub fn fetch(grammar: &str) -> Result<Pack> {
-    let manifest = manifest()?;
-    let entry = manifest.packs.get(grammar).ok_or_else(|| {
-        let known: Vec<_> = manifest.packs.keys().cloned().collect();
-        anyhow!("no grammar named {grammar}; the manifest has {}", known.join(", "))
-    })?;
-    load_verified(&entry.key, &entry.sha256)
+    let (key, sha256) = key_for(grammar)?;
+    load_verified(&key, &sha256)
 }
 
 /// Load an exact pack by the hash in its filename, e.g. `d82f4fd5c5a9`.
@@ -169,11 +167,9 @@ pub fn fetch(grammar: &str) -> Result<Pack> {
 /// No manifest is consulted, so this is reproducible and needs no network
 /// once the bytes are cached. This is what a build that must not vary should
 /// call, and what a bug report's permalink names.
+#[cfg(feature = "pack")]
 pub fn fetch_pinned(grammar: &str, hash: &str) -> Result<Pack> {
-    if !hash.chars().all(|c| c.is_ascii_hexdigit()) || hash.len() < 8 {
-        bail!("{hash} is not a pack hash");
-    }
-    load_verified(&format!("treebank-{grammar}-{}.wasm", &hash[..12.min(hash.len())]), hash)
+    load_verified(&pinned_key(grammar, hash)?, hash)
 }
 
 /// The cache path a key would occupy, whether or not it is there.
@@ -181,14 +177,14 @@ pub fn cached_path(key: &str) -> PathBuf {
     packs_dir().join(key)
 }
 
-fn load_verified(key: &str, expected: &str) -> Result<Pack> {
+fn bytes_verified(key: &str, expected: &str) -> Result<Vec<u8>> {
     let path = cached_path(key);
 
     if let Ok(bytes) = fs::read(&path) {
         // A cache entry is named by its hash, so a mismatch means the file was
         // damaged or replaced. Re-fetching is the repair.
         if starts_with_hash(&sha256_hex(&bytes), expected) {
-            return Pack::from_bytes(&bytes).with_context(|| format!("loading cached {key}"));
+            return Ok(bytes);
         }
         let _ = fs::remove_file(&path);
     }
@@ -203,6 +199,54 @@ fn load_verified(key: &str, expected: &str) -> Result<Pack> {
         );
     }
     cache_atomically(&path, &bytes)?;
+    Ok(bytes)
+}
+
+fn key_for(grammar: &str) -> Result<(String, String)> {
+    let manifest = manifest()?;
+    let entry = manifest.packs.get(grammar).ok_or_else(|| {
+        let known: Vec<_> = manifest.packs.keys().cloned().collect();
+        anyhow!("no grammar named {grammar}; the manifest has {}", known.join(", "))
+    })?;
+    Ok((entry.key.clone(), entry.sha256.clone()))
+}
+
+fn pinned_key(grammar: &str, hash: &str) -> Result<String> {
+    if !hash.chars().all(|c| c.is_ascii_hexdigit()) || hash.len() < 8 {
+        bail!("{hash} is not a pack hash");
+    }
+    Ok(format!("treebank-{grammar}-{}.wasm", &hash[..12.min(hash.len())]))
+}
+
+/// The verified bytes of a pack, for a host that has its own runtime.
+///
+/// Everything [`fetch`] does except the last step. A consumer that drives
+/// packs through its own engine -- straitjacket materialises trees into an
+/// arena its rule library can walk, which this crate's lazy handles cannot
+/// satisfy -- would otherwise reimplement the manifest, the cache, the
+/// atomic install and the hash check, which is how two consumers come to
+/// disagree about which bytes are the python grammar.
+///
+/// Available without the `pack` feature, so taking it costs no engine.
+#[cfg(feature = "fetch-bytes")]
+pub fn fetch_bytes(grammar: &str) -> Result<Vec<u8>> {
+    let (key, sha256) = key_for(grammar)?;
+    bytes_verified(&key, &sha256)
+}
+
+/// The verified bytes of an exact pack, by the hash in its filename.
+///
+/// [`fetch_pinned`] without the engine, and the one a build that must not
+/// vary should call: no manifest is consulted, so it is reproducible and
+/// needs no network once the bytes are cached.
+#[cfg(feature = "fetch-bytes")]
+pub fn fetch_pinned_bytes(grammar: &str, hash: &str) -> Result<Vec<u8>> {
+    bytes_verified(&pinned_key(grammar, hash)?, hash)
+}
+
+#[cfg(feature = "pack")]
+fn load_verified(key: &str, expected: &str) -> Result<Pack> {
+    let bytes = bytes_verified(key, expected)?;
     Pack::from_bytes(&bytes).with_context(|| format!("loading {key}"))
 }
 
@@ -213,6 +257,7 @@ fn starts_with_hash(actual: &str, expected: &str) -> bool {
     !expected.is_empty() && actual.starts_with(&expected)
 }
 
+#[cfg(feature = "pack")]
 impl Pack {
     /// Load a grammar, downloading and caching it if necessary. See
     /// [`fetch`].

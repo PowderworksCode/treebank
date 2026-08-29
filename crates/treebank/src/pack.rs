@@ -28,45 +28,10 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 
-use anyhow::{anyhow, Context, Result};
+use anyhow::{anyhow, bail, Context, Result};
 use sha2::{Digest, Sha256};
 use serde::Deserialize;
-use wasmtime::{Engine, Instance, Linker, Memory, Module, Store, TypedFunc};
-use wasmtime_wasi::p1::WasiP1Ctx;
-use wasmtime_wasi::WasiCtxBuilder;
-
-/// wasmtime carries its own error type. It is near-identical to anyhow's, but
-/// deliberately not a `std::error::Error` -- and `anyhow::Context` is
-/// implemented over that trait, so it does not reach a wasmtime result. This
-/// carries one across into anyhow, where the rest of the crate lives, and
-/// leaves the call sites reading as they always did.
-trait WasmtimeContext<T> {
-    fn context<C>(self, context: C) -> Result<T>
-    where
-        C: std::fmt::Display + Send + Sync + 'static;
-
-    fn with_context<C, F>(self, f: F) -> Result<T>
-    where
-        C: std::fmt::Display + Send + Sync + 'static,
-        F: FnOnce() -> C;
-}
-
-impl<T> WasmtimeContext<T> for std::result::Result<T, wasmtime::Error> {
-    fn context<C>(self, context: C) -> Result<T>
-    where
-        C: std::fmt::Display + Send + Sync + 'static,
-    {
-        self.map_err(anyhow::Error::from).context(context)
-    }
-
-    fn with_context<C, F>(self, f: F) -> Result<T>
-    where
-        C: std::fmt::Display + Send + Sync + 'static,
-        F: FnOnce() -> C,
-    {
-        self.map_err(anyhow::Error::from).with_context(f)
-    }
-}
+use wasmer::{Function, Imports, Instance, Memory, Module, Store, TypedFunction, Value};
 
 /// What a pack says about itself, read out of the module rather than from a
 /// file beside it. A pack copied somewhere else still answers.
@@ -104,7 +69,7 @@ const MISSING: u32 = 8;
 
 /// A loaded grammar.
 pub struct Pack {
-    store: std::cell::RefCell<Store<WasiP1Ctx>>,
+    store: std::cell::RefCell<Store>,
     memory: Memory,
     f: Abi,
     provenance: Provenance,
@@ -119,25 +84,25 @@ pub struct Pack {
 }
 
 struct Abi {
-    strlen: TypedFunc<u32, u32>,
-    alloc: TypedFunc<u32, u32>,
-    free: TypedFunc<u32, ()>,
-    parse: TypedFunc<(u32, u32), u32>,
-    tree_free: TypedFunc<u32, ()>,
-    tree_root: TypedFunc<(u32, u32), ()>,
-    node_new: TypedFunc<(), u32>,
-    node_free: TypedFunc<u32, ()>,
-    node_type: TypedFunc<u32, u32>,
-    node_sexp: TypedFunc<u32, u32>,
-    node_flags: TypedFunc<u32, u32>,
-    node_start_byte: TypedFunc<u32, u32>,
-    node_end_byte: TypedFunc<u32, u32>,
-    node_child_count: TypedFunc<u32, u32>,
-    node_child: TypedFunc<(u32, u32, u32), u32>,
-    node_named_child_count: TypedFunc<u32, u32>,
-    node_named_child: TypedFunc<(u32, u32, u32), u32>,
-    field_name_for_child: TypedFunc<(u32, u32), u32>,
-    cstr_free: TypedFunc<u32, ()>,
+    strlen: TypedFunction<u32, u32>,
+    alloc: TypedFunction<u32, u32>,
+    free: TypedFunction<u32, ()>,
+    parse: TypedFunction<(u32, u32), u32>,
+    tree_free: TypedFunction<u32, ()>,
+    tree_root: TypedFunction<(u32, u32), ()>,
+    node_new: TypedFunction<(), u32>,
+    node_free: TypedFunction<u32, ()>,
+    node_type: TypedFunction<u32, u32>,
+    node_sexp: TypedFunction<u32, u32>,
+    node_flags: TypedFunction<u32, u32>,
+    node_start_byte: TypedFunction<u32, u32>,
+    node_end_byte: TypedFunction<u32, u32>,
+    node_child_count: TypedFunction<u32, u32>,
+    node_child: TypedFunction<(u32, u32, u32), u32>,
+    node_named_child_count: TypedFunction<u32, u32>,
+    node_named_child: TypedFunction<(u32, u32, u32), u32>,
+    field_name_for_child: TypedFunction<(u32, u32), u32>,
+    cstr_free: TypedFunction<u32, ()>,
     // Optional, because a pack is a versioned contract and a newer loader
     // must still drive an older pack. Queries arrived at pack_abi 3; every
     // pack published before that has none of these, and everything else in
@@ -146,12 +111,12 @@ struct Abi {
 }
 
 struct QueryAbi {
-    new: TypedFunc<(u32, u32, u32, u32), u32>,
-    delete: TypedFunc<u32, ()>,
-    exec: TypedFunc<(u32, u32), u32>,
-    cursor_delete: TypedFunc<u32, ()>,
-    next_capture: TypedFunc<(u32, u32, u32, u32, u32), u32>,
-    capture_name: TypedFunc<(u32, u32), u32>,
+    new: TypedFunction<(u32, u32, u32, u32), u32>,
+    delete: TypedFunction<u32, ()>,
+    exec: TypedFunction<(u32, u32), u32>,
+    cursor_delete: TypedFunction<u32, ()>,
+    next_capture: TypedFunction<(u32, u32, u32, u32, u32), u32>,
+    capture_name: TypedFunction<(u32, u32), u32>,
 }
 
 impl Pack {
@@ -166,28 +131,25 @@ impl Pack {
     /// Load a pack from bytes, which is what a consumer that fetched one over
     /// HTTP has.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        let engine = Engine::default();
-        let module = compile_cached(&engine, bytes)?;
+        let mut store = Store::default();
+        let module = compile_cached(&store, bytes)?;
 
-        let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
-        wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |c| c)
-            .context("linking WASI")?;
-        // A pack opens no files and reads no environment. The context exists
-        // because the six imports must resolve, not because they are used.
-        let mut store = Store::new(&engine, WasiCtxBuilder::new().build_p1());
-        let instance = linker
-            .instantiate(&mut store, &module)
-            .context("instantiating the pack")?;
+        let imports = refuse_every_import(&module, &mut store)?;
+        let instance =
+            Instance::new(&mut store, &module, &imports).context("instantiating the pack")?;
 
         // Reactor exec model: _initialize runs the module's constructors.
         instance
-            .get_typed_func::<(), ()>(&mut store, "_initialize")
+            .exports
+            .get_typed_function::<(), ()>(&store, "_initialize")
             .context("pack has no _initialize; is it a treebank pack?")?
-            .call(&mut store, ())?;
+            .call(&mut store)?;
 
         let memory = instance
-            .get_memory(&mut store, "memory")
-            .ok_or_else(|| anyhow!("pack exports no memory"))?;
+            .exports
+            .get_memory("memory")
+            .map_err(|_| anyhow!("pack exports no memory"))?
+            .clone();
         let f = Abi::bind(&instance, &mut store)?;
 
         let provenance = read_json(&mut store, &memory, &instance, "tb_provenance")?;
@@ -276,9 +238,10 @@ impl Pack {
             return Err(anyhow!("the pack could not allocate {len} bytes"));
         }
         self.memory
-            .write(&mut *store, ptr as usize, bytes)
+            .view(&*store)
+            .write(ptr as u64, bytes)
             .context("writing source into the pack")?;
-        let tree = self.f.parse.call(&mut *store, (ptr, len))?;
+        let tree = self.f.parse.call(&mut *store, ptr, len)?;
         self.f.free.call(&mut *store, ptr)?;
         if tree == 0 {
             return Err(anyhow!("parse failed"));
@@ -286,6 +249,42 @@ impl Pack {
         Ok(Tree { pack: self, handle: tree })
     }
 }
+
+/// Every import a pack declares, answered with `badf`.
+///
+/// A pack imports six WASI file-descriptor calls because wasi-libc links
+/// them, not because parsing reaches them. Supplying a real WASI context
+/// would give a grammar the ability to open files; refusing every call
+/// instead makes "a pack touches nothing" a property of the host rather
+/// than a claim about the pack.
+///
+/// Anything outside `wasi_snapshot_preview1` is refused outright, because a
+/// treebank pack has no business importing it.
+fn refuse_every_import(module: &Module, store: &mut Store) -> Result<Imports> {
+    let mut imports = Imports::new();
+    for import in module.imports() {
+        if import.module() != "wasi_snapshot_preview1" {
+            bail!(
+                "a pack may import only WASI, but this one imports {}::{}",
+                import.module(),
+                import.name()
+            );
+        }
+        let signature = match import.ty() {
+            wasmer::ExternType::Function(signature) => signature.clone(),
+            other => bail!("a pack imports a non-function {other:?}"),
+        };
+        imports.define(
+            import.module(),
+            import.name(),
+            Function::new(store, &signature, |_: &[Value]| Ok(vec![Value::I32(WASI_BADF)])),
+        );
+    }
+    Ok(imports)
+}
+
+/// WASI `errno::badf` -- "bad file descriptor", the answer to every call.
+const WASI_BADF: i32 = 8;
 
 /// A parsed tree. Freed when dropped.
 pub struct Tree<'p> {
@@ -296,11 +295,11 @@ pub struct Tree<'p> {
 impl<'p> Tree<'p> {
     pub fn root(&self) -> Node<'p> {
         let mut store = self.pack.store.borrow_mut();
-        let node = self.pack.f.node_new.call(&mut *store, ()).expect("tb_node_new");
+        let node = self.pack.f.node_new.call(&mut *store).expect("tb_node_new");
         self.pack
             .f
             .tree_root
-            .call(&mut *store, (self.handle, node))
+            .call(&mut *store, self.handle, node)
             .expect("tb_tree_root");
         Node { pack: self.pack, handle: node }
     }
@@ -379,9 +378,9 @@ impl<'p> Node<'p> {
     /// rather than handed back as a node that would answer nonsense.
     pub fn child(&self, index: u32, named_only: bool) -> Result<Option<Node<'p>>> {
         let mut store = self.pack.store.borrow_mut();
-        let kid = self.pack.f.node_new.call(&mut *store, ())?;
+        let kid = self.pack.f.node_new.call(&mut *store)?;
         let f = if named_only { &self.pack.f.node_named_child } else { &self.pack.f.node_child };
-        let ok = f.call(&mut *store, (self.handle, index, kid))?;
+        let ok = f.call(&mut *store, self.handle, index, kid)?;
         if ok == 0 {
             self.pack.f.node_free.call(&mut *store, kid)?;
             return Ok(None);
@@ -394,7 +393,7 @@ impl<'p> Node<'p> {
     /// which is why this is asked here rather than of the child.
     pub fn field_name_for_child(&self, index: u32) -> Result<Option<String>> {
         let mut store = self.pack.store.borrow_mut();
-        let ptr = self.pack.f.field_name_for_child.call(&mut *store, (self.handle, index))?;
+        let ptr = self.pack.f.field_name_for_child.call(&mut *store, self.handle, index)?;
         if ptr == 0 {
             return Ok(None);
         }
@@ -475,14 +474,14 @@ impl Pack {
         if src == 0 || errs == 0 {
             return Err(anyhow!("the pack could not allocate for a query"));
         }
-        self.memory.write(&mut *store, src as usize, bytes)?;
+        self.memory.view(&*store).write(src as u64, bytes)?;
 
-        let handle = q.new.call(&mut *store, (src, len, errs, errs + 4))?;
+        let handle = q.new.call(&mut *store, src, len, errs, errs + 4)?;
         if handle == 0 {
             // A query is usually written by a person, so where it broke is
             // the whole message.
             let mut raw = [0u8; 8];
-            self.memory.read(&mut *store, errs as usize, &mut raw)?;
+            self.memory.view(&*store).read(errs as u64, &mut raw)?;
             let offset = u32::from_le_bytes(raw[0..4].try_into().unwrap()) as usize;
             let kind = u32::from_le_bytes(raw[4..8].try_into().unwrap());
             self.f.free.call(&mut *store, src)?;
@@ -496,13 +495,13 @@ impl Pack {
         self.f.free.call(&mut *store, src)?;
         self.f.free.call(&mut *store, errs)?;
 
-        let cursor = q.exec.call(&mut *store, (handle, node.handle))?;
+        let cursor = q.exec.call(&mut *store, handle, node.handle)?;
         if cursor == 0 {
             q.delete.call(&mut *store, handle)?;
             return Err(anyhow!("the pack could not allocate a query cursor"));
         }
 
-        let out_node = self.f.node_new.call(&mut *store, ())?;
+        let out_node = self.f.node_new.call(&mut *store)?;
         let out = self.f.alloc.call(&mut *store, 8)?;
         let mut found = Vec::new();
         let mut names: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
@@ -510,12 +509,12 @@ impl Pack {
         loop {
             let more = q
                 .next_capture
-                .call(&mut *store, (cursor, handle, out_node, out, out + 4))?;
+                .call(&mut *store, cursor, handle, out_node, out, out + 4)?;
             if more == 0 {
                 break;
             }
             let mut raw = [0u8; 8];
-            self.memory.read(&mut *store, out as usize, &mut raw)?;
+            self.memory.view(&*store).read(out as u64, &mut raw)?;
             let pattern = u32::from_le_bytes(raw[0..4].try_into().unwrap());
             let capture = u32::from_le_bytes(raw[4..8].try_into().unwrap());
 
@@ -529,7 +528,7 @@ impl Pack {
             let name = match names.get(&capture) {
                 Some(name) => name.clone(),
                 None => {
-                    let ptr = q.capture_name.call(&mut *store, (handle, capture))?;
+                    let ptr = q.capture_name.call(&mut *store, handle, capture)?;
                     let name = read_cstr(&mut store, &self.memory, &self.f, ptr)?;
                     names.insert(capture, name.clone());
                     name
@@ -588,7 +587,7 @@ mod query_error_tests {
 }
 
 fn read_cstr(
-    store: &mut Store<WasiP1Ctx>,
+    store: &mut Store,
     memory: &Memory,
     f: &Abi,
     ptr: u32,
@@ -598,71 +597,76 @@ fn read_cstr(
     }
     let len = f.strlen.call(&mut *store, ptr)? as usize;
     let mut buf = vec![0u8; len];
-    memory.read(&mut *store, ptr as usize, &mut buf)?;
+    memory.view(&*store).read(ptr as u64, &mut buf)?;
     Ok(String::from_utf8(buf)?)
 }
 
 fn read_json<T: for<'de> Deserialize<'de>>(
-    store: &mut Store<WasiP1Ctx>,
+    store: &mut Store,
     memory: &Memory,
     instance: &Instance,
     name: &str,
 ) -> Result<T> {
     let ptr = instance
-        .get_typed_func::<(), u32>(&mut *store, name)
+        .exports
+        .get_typed_function::<(), u32>(&*store, name)
         .with_context(|| format!("pack has no {name}"))?
-        .call(&mut *store, ())?;
+        .call(&mut *store)?;
     let len = instance
-        .get_typed_func::<(), u32>(&mut *store, &format!("{name}_len"))
+        .exports
+        .get_typed_function::<(), u32>(&*store, &format!("{name}_len"))
         .with_context(|| format!("pack has no {name}_len"))?
-        .call(&mut *store, ())? as usize;
+        .call(&mut *store)? as usize;
     let mut buf = vec![0u8; len];
-    memory.read(&mut *store, ptr as usize, &mut buf)?;
+    memory.view(&*store).read(ptr as u64, &mut buf)?;
     serde_json::from_slice(&buf).with_context(|| format!("parsing {name}"))
 }
 
 /// The same shape as [`read_json`], stopping at the bytes. Used for a
 /// manifest that is expensive to parse and not always needed.
 fn read_string(
-    store: &mut Store<WasiP1Ctx>,
+    store: &mut Store,
     memory: &Memory,
     instance: &Instance,
     name: &str,
 ) -> Result<String> {
     let ptr = instance
-        .get_typed_func::<(), u32>(&mut *store, name)
+        .exports
+        .get_typed_function::<(), u32>(&*store, name)
         .with_context(|| format!("pack has no {name}"))?
-        .call(&mut *store, ())?;
+        .call(&mut *store)?;
     let len = instance
-        .get_typed_func::<(), u32>(&mut *store, &format!("{name}_len"))
+        .exports
+        .get_typed_function::<(), u32>(&*store, &format!("{name}_len"))
         .with_context(|| format!("pack has no {name}_len"))?
-        .call(&mut *store, ())? as usize;
+        .call(&mut *store)? as usize;
     let mut buf = vec![0u8; len];
-    memory.read(&mut *store, ptr as usize, &mut buf)?;
+    memory.view(&*store).read(ptr as u64, &mut buf)?;
     String::from_utf8(buf).with_context(|| format!("{name} is not utf-8"))
 }
 
 impl QueryAbi {
     /// All six or none: a pack that exports some but not all of these is not
     /// something to half-drive.
-    fn bind(instance: &Instance, store: &mut Store<WasiP1Ctx>) -> Option<Self> {
+    fn bind(instance: &Instance, store: &mut Store) -> Option<Self> {
         Some(Self {
-            new: instance.get_typed_func(&mut *store, "tb_query_new").ok()?,
-            delete: instance.get_typed_func(&mut *store, "tb_query_delete").ok()?,
-            exec: instance.get_typed_func(&mut *store, "tb_query_exec").ok()?,
-            cursor_delete: instance.get_typed_func(&mut *store, "tb_query_cursor_delete").ok()?,
-            next_capture: instance.get_typed_func(&mut *store, "tb_query_next_capture").ok()?,
-            capture_name: instance.get_typed_func(&mut *store, "tb_query_capture_name").ok()?,
+            new: instance.exports.get_typed_function(&*store, "tb_query_new").ok()?,
+            delete: instance.exports.get_typed_function(&*store, "tb_query_delete").ok()?,
+            exec: instance.exports.get_typed_function(&*store, "tb_query_exec").ok()?,
+            cursor_delete: instance.exports.get_typed_function(&*store, "tb_query_cursor_delete").ok()?,
+            next_capture: instance.exports.get_typed_function(&*store, "tb_query_next_capture").ok()?,
+            capture_name: instance.exports.get_typed_function(&*store, "tb_query_capture_name").ok()?,
         })
     }
 }
 
 impl Abi {
-    fn bind(instance: &Instance, store: &mut Store<WasiP1Ctx>) -> Result<Self> {
+    fn bind(instance: &Instance, store: &mut Store) -> Result<Self> {
         macro_rules! f {
             ($name:literal) => {
                 instance
-                    .get_typed_func(&mut *store, $name)
+                    .exports
+                    .get_typed_function(&*store, $name)
                     .with_context(|| format!("pack has no {}", $name))?
             };
         }
@@ -700,19 +704,20 @@ impl Abi {
 ///
 /// Beware measuring this in a debug build. Cranelift is compiled unoptimised
 /// there and the same load takes about four seconds, which is a fact about
-/// the profile rather than about wasmtime.
+/// the profile rather than about the runtime.
 ///
-/// The key covers the wasm bytes and the host. It does NOT cover the wasmtime
-/// version, because wasmtime writes its own version into the artifact and
-/// refuses to deserialize one from a different major -- so an entry that has
-/// gone stale that way fails to load, is deleted here, and is rebuilt. Adding
-/// a version to the key would duplicate a check that already exists, using a
-/// number this crate has no reliable way to read.
+/// The key covers the wasm bytes and the host. It does NOT cover the runtime
+/// version: wasmer writes its own into the artifact and
+/// [`Module::deserialize_from_file`] -- the checked reader, unlike
+/// `deserialize`, which does not validate -- refuses one it did not write.
+/// An entry that has gone stale that way fails to load, is deleted here, and
+/// is rebuilt. Adding a version to the key would duplicate a check that
+/// already exists, using a number this crate has no reliable way to read.
 ///
 /// Set TREEBANK_NO_COMPILE_CACHE=1 to skip it.
-fn compile_cached(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+fn compile_cached(store: &Store, bytes: &[u8]) -> Result<Module> {
     if std::env::var_os("TREEBANK_NO_COMPILE_CACHE").is_some() {
-        return Module::new(engine, bytes).context("not a valid wasm module");
+        return Module::new(store, bytes).context("not a valid wasm module");
     }
 
     let key = {
@@ -724,42 +729,40 @@ fn compile_cached(engine: &Engine, bytes: &[u8]) -> Result<Module> {
     };
     let path = compile_cache_dir().join(format!("{}.cwasm", &key[..32]));
 
-    if let Ok(precompiled) = std::fs::read(&path) {
-        // SAFETY: the file was produced by `precompile_module` on this
-        // machine, under a key that covers the wasm bytes, the wasmtime
-        // version and the host. Wasmtime validates its own header as well and
-        // returns Err rather than misbehaving if any of that is wrong, which
-        // is why a failure here falls through to compiling instead of
-        // propagating.
-        if let Ok(module) = unsafe { Module::deserialize(engine, &precompiled) } {
+    if path.is_file() {
+        // SAFETY: loading an artifact is loading executable code, so the
+        // bytes must be ones this runtime wrote. `deserialize_from_file`
+        // validates the header it wrote and returns Err rather than
+        // misbehaving when it did not, which is why a failure here falls
+        // through to compiling instead of propagating. The unchecked
+        // variants, and `deserialize` itself, make no such promise.
+        if let Ok(module) = unsafe { Module::deserialize_from_file(store, &path) } {
             return Ok(module);
         }
         let _ = std::fs::remove_file(&path);
     }
 
-    // Compile ONCE. `precompile_module` does the work and hands back the
-    // artifact, which deserializes in milliseconds -- so this is the compile,
-    // not an extra one beside it. Calling `Module::new` as well doubled the
-    // cold path from 3.8s to 7.6s, which is the kind of thing that only shows
-    // up if you measure the miss as well as the hit.
-    match engine.precompile_module(bytes) {
-        Ok(precompiled) => {
-            // Best effort: a read-only or full cache directory must not stop a
-            // parse, so a failure to store is ignored.
-            if let Some(dir) = path.parent() {
-                if std::fs::create_dir_all(dir).is_ok() {
-                    let tmp = dir.join(format!(".{}.cwasm", std::process::id()));
-                    if std::fs::write(&tmp, &precompiled).is_ok() {
-                        let _ = std::fs::rename(&tmp, &path);
-                    }
+    // Compile ONCE, then keep the artifact. The module returned here is the
+    // one that gets used; serialising is only how the next process avoids
+    // repeating the work.
+    let module = Module::new(store, bytes).context("not a valid wasm module")?;
+
+    // Best effort: a read-only or full cache directory must not stop a parse,
+    // so a failure to store is ignored. Written through a temporary file in
+    // the same directory and renamed, because two processes compiling the
+    // same grammar at once is the ordinary case for a build and a
+    // half-written artifact would be read as a whole one.
+    if let Ok(artifact) = module.serialize() {
+        if let Some(dir) = path.parent() {
+            if std::fs::create_dir_all(dir).is_ok() {
+                let tmp = dir.join(format!(".{}.cwasm", std::process::id()));
+                if std::fs::write(&tmp, &artifact).is_ok() {
+                    let _ = std::fs::rename(&tmp, &path);
                 }
             }
-            // SAFETY: produced by this engine, moments ago, in this process.
-            unsafe { Module::deserialize(engine, &precompiled) }
-                .context("loading the module just compiled")
         }
-        Err(_) => Module::new(engine, bytes).context("not a valid wasm module"),
     }
+    Ok(module)
 }
 
 fn compile_cache_dir() -> std::path::PathBuf {
