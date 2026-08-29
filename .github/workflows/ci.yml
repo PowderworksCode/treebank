@@ -378,43 +378,79 @@ jobs:
         working-directory: site
         run: bun run packs
 
-      # The account id is taken from a variable or a secret, whichever is set.
-      # It is not sensitive -- it appears in every dashboard URL -- so which
-      # one it lives in is a matter of taste, and a workflow that only accepts
-      # one of them turns a matter of taste into a failed build.
+      # Uploaded over the S3 API with a BUCKET-SCOPED R2 token, not over
+      # wrangler's REST endpoint with an account token.
       #
-      # Both settings are read into the step rather than gating an `if:`, so a
-      # half configured repository FAILS instead of skipping. A step that
-      # silently does nothing here is a playground with no parsers and a green
-      # tick, which is the worst of the available outcomes.
+      # That is a deliberate narrowing, and it is also the only one that
+      # works: a token scoped to this bucket with Workers R2 Storage Bucket
+      # Item read+write is refused by wrangler's objects endpoint with a
+      # 403 "Authentication error", and Cloudflare's documentation does not
+      # say which permission group that endpoint wants. The S3 API is what a
+      # bucket-scoped token is for, and it is a documented interface rather
+      # than an inferred one.
+      #
+      # Scope is worth the second secret here: this credential can write
+      # WebAssembly that executes in visitors' browsers, and nothing else.
       - name: upload to R2
         working-directory: site
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          R2_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # aws-cli v2 adds CRC32 request checksums by default, which R2
+          # rejects. Off, or every put fails on something unrelated to us.
+          AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+          AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
         run: |
           set -euo pipefail
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] && [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+          if [ -z "${R2_ACCOUNT_ID:-}" ] && [ -z "${AWS_ACCESS_KEY_ID:-}" ] \
+             && [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
             echo "::notice::R2 is not configured; packs were built and checked but not published"
             exit 0
           fi
-          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] || [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
-            echo "::error::R2 is half configured. Set CLOUDFLARE_ACCOUNT_ID (variable or secret) and CLOUDFLARE_API_TOKEN (secret)."
+          if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${AWS_ACCESS_KEY_ID:-}" ] \
+             || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+            echo "::error::R2 is half configured. Needs CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY."
             exit 1
           fi
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+
+          put() {
+            aws s3api put-object --endpoint-url "$endpoint" \
+              --bucket treebank-packs --key "$1" --body "$2" \
+              --content-type "$3" >/dev/null
+          }
+
           # Hashed objects first, manifest last. The manifest is the pointer,
-          # so publishing it before the object it names would leave the site
+          # so publishing it before the objects it names would leave the site
           # briefly resolving to something that is not there yet. Old hashed
           # objects are never deleted -- that is what keeps a pinned link
           # working, and it costs a few megabytes.
           for f in public/packs/treebank-*-*.wasm; do
-            npx --yes wrangler@4 r2 object put \
-              "treebank-packs/$(basename "$f")" --file "$f" \
-              --content-type application/wasm --remote
+            put "$(basename "$f")" "$f" application/wasm
+            echo "  put $(basename "$f")"
           done
-          npx --yes wrangler@4 r2 object put \
-            "treebank-packs/index.json" --file public/packs/index.json \
-            --content-type application/json --remote
+          put index.json public/packs/index.json application/json
+          echo "  put index.json"
+
+          # Read back what was written. A publish that reports success and
+          # leaves the bucket empty is the failure this whole job exists to
+          # avoid, and it is cheap to rule out.
+          checked=0
+          for f in public/packs/treebank-*-*.wasm; do
+            key=$(basename "$f")
+            remote=$(aws s3api head-object --endpoint-url "$endpoint" \
+              --bucket treebank-packs --key "$key" --query ContentLength --output text)
+            local_size=$(stat -c%s "$f")
+            [ "$remote" = "$local_size" ] \
+              || { echo "::error::$key is $remote bytes in the bucket, $local_size locally"; exit 1; }
+            checked=$((checked + 1))
+          done
+          aws s3api head-object --endpoint-url "$endpoint" \
+            --bucket treebank-packs --key index.json >/dev/null \
+            || { echo "::error::index.json is not in the bucket"; exit 1; }
+          echo "verified $checked packs and the manifest in the bucket"
 
   consumers:
     name: wasm consumers
