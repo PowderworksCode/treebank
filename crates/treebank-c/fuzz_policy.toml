@@ -1,0 +1,15 @@
+# Over-acceptance this grammar commits to on purpose, as prefixes of the
+# shrunk program `treebank fuzz` reports. Narrow entries only: a blanket
+# prefix silences the real finding that turns up wearing similar clothes.
+
+rule = '''
+Over-acceptance this grammar commits to ON PURPOSE, as prefixes of the shrunk program `treebank fuzz` reports. Entries must be as narrow as the decision they record: a blanket prefix silences the real finding that turns up next month wearing similar clothes, which is how a check like this quietly stops working. Every entry names the decision it follows from, and that decision is in ledger.toml — not invented here to make a number go down.'''
+
+[[declared]]
+starts_with = 'asm ( " " aa )'
+why = '''
+An unexpanded macro inside asm text. `concatenated_string` admits an identifier between the string pieces because that is what the format-macro idiom looks like before the preprocessor runs, and asm is one of its commonest homes: glibc writes `asm volatile ("ta " SYSCALL_NUM : ...)` and `("1:\tlwarx\t%0,0,%1" MUTEX_HINT_ACQ "\n" ...)`, ffmpeg writes `PTR_ADDIU "%[p_fi], 8 ..."`. clang rejects the form because by the time IT sees the file the macro has expanded; we never see that file.
+
+MEASURED, not assumed. Narrowing this rejected 22 files that are ordinary, valid C -- 21 in the c corpus (glibc, ffmpeg, grub2) and 1 in cpp (llvm) -- against 0 files that the narrowing would have been right about. The same experiment showed the encoding-prefix half of this rule costs nothing, so THAT half is enforced: `asm(L"nop")` is rejected, and its only corpus occurrence is clang's own parser test asserting it is an error.
+
+This follows the unexpanded-macro decision the grammar takes everywhere else (`unexpanded_macro`, `macro_modifier`, `macro_attributed_declarator`), and is declared rather than silently tolerated so the fuzz report keeps reporting.'''
