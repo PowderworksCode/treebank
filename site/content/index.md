@@ -28,9 +28,9 @@ main h2 { clear: none; }
 <p class="cover cover-wide"><img src="/cover.png" alt="A plate of fifteen trees drawn to scale, each with a small figure beside it for size"></p>
 
 Treebank maintains nine Tree-sitter grammars — bash, C, C++, Java, Python,
-Ruby, Rust, TypeScript and Zig — and runs each of them over the top packages
-in its language every day, checking the result against that language's own
-compiler or parser.
+Ruby, Rust, TypeScript and Zig — and runs each of them over hundreds to
+thousands of the top packages and libraries for its language, checking the
+result against that language's own compiler or parser.
 
 Every grammar ships as a single WebAssembly file with no dependencies, and
 every measurement is published, including the failures.

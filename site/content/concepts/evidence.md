@@ -4,8 +4,8 @@ description: What is measured, and how a number stays reproducible.
 order: 30
 ---
 
-The corpus is the top packages of each language's ecosystem, ranked and
-downloaded rather than hand-picked. `treebank rank` builds the list and
+The corpus is hundreds to thousands of the top packages and libraries for each
+language, ranked and downloaded rather than hand-picked. `treebank rank` builds the list and
 `treebank fetch` retrieves it. Choosing the files by hand would mean choosing
 the code the grammar already handles.
 
