@@ -11,6 +11,8 @@ Only the Rust API is versioned.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-29
+
 ### Fixed
 
 - `Pack::expand_query` now drops facet members that cannot take a field the
@@ -89,6 +91,7 @@ First release.
   pack itself carries, so a portable query needs no `roles.json` beside the
   parser.
 
-[Unreleased]: https://github.com/PowderworksCode/treebank/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/PowderworksCode/treebank/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/PowderworksCode/treebank/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/PowderworksCode/treebank/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/PowderworksCode/treebank/releases/tag/v0.1.0
