@@ -1,6 +1,9 @@
 [package]
 name = "treebank-python"
 version = "0.1.0"
+# Only the `treebank` crate is published. Everything else is a workspace
+# member: the grammars ship as wasm packs and the CLI is not a library.
+publish = false
 edition = "2021"
 license = "MIT"
 description = "Python 2.7 and 3.x in one grammar, carrying the treebank node vocabulary"

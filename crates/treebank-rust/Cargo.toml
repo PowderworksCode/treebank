@@ -1,6 +1,9 @@
 [package]
 name = "treebank-rust"
 version = "0.1.0"
+# Only the `treebank` crate is published. Everything else is a workspace
+# member: the grammars ship as wasm packs and the CLI is not a library.
+publish = false
 edition = "2021"
 license = "MIT"
 description = "Rust editions 2015-2024 in one grammar, carrying the treebank node vocabulary"

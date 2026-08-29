@@ -13,7 +13,7 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank-core/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/supertypes.js');
 
 const PREC = {
   closure: -2,

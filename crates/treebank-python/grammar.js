@@ -12,7 +12,7 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank-core/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/supertypes.js');
 
 const PREC = {
   walrus: 1,
@@ -1242,7 +1242,7 @@ module.exports = grammar({
  * so tree-sitter cannot collect them under one supertype. All six are
  * concrete types that occur nowhere but a parameter list, so type-level
  * facet membership selects exactly the nodes occurrence-level supertype
- * membership would have. `(_parameter)` through treebank-core is unchanged.
+ * membership would have. `(_parameter)` through treebank is unchanged.
  * See roles.json's `demoted` and DESIGN.md section 3.4.
  *
  * @param {string} prefix   rule-name prefix for this family of rules

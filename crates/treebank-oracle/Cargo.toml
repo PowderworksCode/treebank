@@ -1,6 +1,9 @@
 [package]
 name = "treebank-oracle"
 version = "0.1.0"
+# Only the `treebank` crate is published. Everything else is a workspace
+# member: the grammars ship as wasm packs and the CLI is not a library.
+publish = false
 edition = "2021"
 license = "MIT"
 description = "Reference-parser oracles: is this file valid <language>? One pinned oracle per language, all behind one trait. Self-contained so it can move out of this repo."

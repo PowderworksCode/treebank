@@ -19,7 +19,7 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank-core/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/supertypes.js');
 
 // Ruby's hard keywords (parse.y's reserved words, the lowercase ones).
 // Shared between the reserved-word declaration and the suffixed-name

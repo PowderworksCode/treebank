@@ -1,7 +1,7 @@
 // The closed treebank vocabulary, importable by every treebank grammar.js.
 //
 // This module is the single source of truth's JS face: the same
-// vocabulary.json is embedded in the treebank-core Rust crate, so the
+// vocabulary.json is embedded in the treebank Rust crate, so the
 // grammars, the `treebank roles` checker and the facet query expansion can
 // never disagree about what the vocabulary is.
 //

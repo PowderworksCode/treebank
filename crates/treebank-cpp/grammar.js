@@ -34,7 +34,7 @@
 // @ts-check
 
 const C = require('../treebank-c/grammar');
-const tb = require('../treebank-core/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/supertypes.js');
 
 const PREC = {
   LAMBDA: -3,

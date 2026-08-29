@@ -366,7 +366,7 @@ pub fn collect(root: &Path) -> Result<Report> {
             .get("vocabulary")
             .and_then(toml::Value::as_str)
             .map(str::to_string);
-        let expected_vocabulary = treebank_core::vocabulary().version.clone();
+        let expected_vocabulary = treebank::vocabulary().version.clone();
         if vocabulary.as_deref() != Some(expected_vocabulary.as_str()) {
             errors.push(format!(
                 "{}: ledger vocabulary is {:?}, expected {}",
@@ -820,14 +820,14 @@ fn read_manifest(path: &Path, languages: &[LangName], errors: &mut Vec<String>) 
 }
 
 fn read_roles(dir: &Path, errors: &mut Vec<String>) -> RolesStatus {
-    let roles = match treebank_core::roles::RolesManifest::load(&dir.join("roles.json")) {
+    let roles = match treebank::roles::RolesManifest::load(&dir.join("roles.json")) {
         Ok(roles) => roles,
         Err(error) => {
             errors.push(format!("{}: {error:#}", dir.display()));
             return RolesStatus::default();
         }
     };
-    let nodes = match treebank_core::node_types::NodeTypes::load(&dir.join("src/node-types.json")) {
+    let nodes = match treebank::node_types::NodeTypes::load(&dir.join("src/node-types.json")) {
         Ok(nodes) => nodes,
         Err(error) => {
             errors.push(format!("{}: {error:#}", dir.display()));

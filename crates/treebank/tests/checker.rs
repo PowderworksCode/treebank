@@ -1,10 +1,10 @@
 use std::collections::BTreeMap;
 
-use treebank_core::check::{check, dead_roles};
-use treebank_core::expand::expand;
-use treebank_core::node_types::NodeTypes;
-use treebank_core::roles::RolesManifest;
-use treebank_core::vocabulary;
+use treebank::check::{check, dead_roles};
+use treebank::expand::expand;
+use treebank::node_types::NodeTypes;
+use treebank::roles::RolesManifest;
+use treebank::vocabulary;
 
 fn good_nt() -> NodeTypes {
     NodeTypes::parse(include_str!("fixtures/good-node-types.json")).unwrap()
