@@ -426,6 +426,9 @@ struct FileResult {
     missed: usize,
     had_miss: bool,
     skipped: bool,
+    /// Why it was skipped, so a fixture directory can say what went wrong
+    /// rather than guess. The oracle's own words where the oracle skipped.
+    skip_reason: Option<String>,
     /// The oracle saw a boundary we have no node for.
     misses: Vec<Miss>,
     /// The boundary agrees and the KINDS do not.
@@ -441,12 +444,13 @@ struct FileResult {
 }
 
 impl FileResult {
-    fn skipped() -> Self {
+    fn skipped(reason: impl Into<String>) -> Self {
         FileResult {
             oracle_nodes: 0,
             missed: 0,
             had_miss: false,
             skipped: true,
+            skip_reason: Some(reason.into()),
             misses: Vec::new(),
             mismatches: Vec::new(),
             unmapped: Vec::new(),
@@ -760,19 +764,19 @@ pub fn run(
                     // a missing answer is an oracle failure, not a pass.
                     anyhow::bail!("ts-oracle returned no span record for {rel}");
                 };
-                if file.skipped.is_some() {
-                    return Ok(FileResult::skipped());
+                if let Some(why) = &file.skipped {
+                    return Ok(FileResult::skipped(format!("reference parser: {why}")));
                 }
                 let src = std::fs::read(corpus_src.join(rel))?;
                 let mut parser = Parser::new();
                 parser.set_language(&language)?;
                 let Some(tree) = parser.parse(&src, None) else {
-                    return Ok(FileResult::skipped());
+                    return Ok(FileResult::skipped("our parser returned no tree"));
                 };
                 // A file we cannot parse is the SWEEP's business, not this
                 // check's; comparing shapes against an error tree is noise.
                 if tree.root_node().has_error() {
-                    return Ok(FileResult::skipped());
+                    return Ok(FileResult::skipped("our parse has an ERROR node"));
                 }
                 let ours = our_spans(tree.root_node(), &src);
                 let mut misses = Vec::new();
@@ -1082,6 +1086,7 @@ pub fn run(
                     missed: n,
                     had_miss: n > 0,
                     skipped: false,
+                    skip_reason: None,
                     misses,
                     mismatches,
                     unmapped,
@@ -1098,7 +1103,8 @@ pub fn run(
             if r.skipped {
                 report.files_skipped += 1;
                 if dir.is_some() {
-                    report.skipped_files.push(rel.clone());
+                    let why = r.skip_reason.as_deref().unwrap_or("no reason recorded");
+                    report.skipped_files.push(format!("{rel} ({why})"));
                 }
             } else {
                 report.files_checked += 1;
@@ -1289,9 +1295,10 @@ pub fn run(
     if dir.is_some() {
         anyhow::ensure!(
             report.files_skipped == 0,
-            "shape: {} fixture(s) did not parse cleanly and were skipped: {}. A fixture that \
-             errors measures nothing -- every file in a fixture directory must parse. Fix the \
-             parse, or move the file to test/negative/ if rejecting it is the point.",
+            "shape: {} fixture(s) were skipped, so they measured nothing: {}. Every file in a \
+             fixture directory must be read by BOTH parsers -- ours to have a tree, the \
+             reference parser to have something to compare it against. Fix the cause named in \
+             the parentheses, or move the file to test/negative/ if rejecting it is the point.",
             report.files_skipped,
             report.skipped_files.join(", "),
         );

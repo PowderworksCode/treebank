@@ -6,10 +6,18 @@
 // regressed into an ERROR would leave the measured set in silence while
 // the zero ceiling kept reporting green over the hole.
 //
-// The input here is malformed for BOTH parsers on purpose. Using a
-// construct only our grammar rejects would make this test a hostage of
-// whichever gap it borrowed -- it would start failing the day that gap was
-// closed, which is the day the grammar got better.
+// This runs against the RUST grammar, whose span oracle is `syn` in
+// process -- no subprocess, no JDK, no node_modules, no libclang. The
+// property under test belongs to `shape` itself and is language-neutral,
+// so the test should not import a toolchain dependency into
+// `cargo test --workspace`. The first draft used java and did exactly
+// that: the workspace job pins no JDK, and the java oracle skipped every
+// file there while passing locally.
+//
+// The malformed input is rejected by BOTH parsers on purpose. A construct
+// only our grammar rejects would make this test a hostage of whichever gap
+// it borrowed -- it would start failing the day that gap was closed, which
+// is the day the grammar got better.
 use std::process::Command;
 
 #[test]
@@ -21,23 +29,16 @@ fn an_unparseable_fixture_fails_the_gate() {
         .unwrap()
         .to_path_buf();
 
-    // The java span oracle is javac through the single-file source
-    // launcher. Without a JDK there is no oracle and nothing to assert.
-    if Command::new("javac").arg("-version").output().is_err() {
-        eprintln!("skipped: no javac on PATH");
-        return;
-    }
-
     let dir = std::env::temp_dir().join("tb-shape-fixture-must-parse");
     let _ = std::fs::remove_dir_all(&dir);
     std::fs::create_dir_all(&dir).unwrap();
-    std::fs::write(dir.join("Fine.java"), "class Fine { int a = 1; }\n").unwrap();
+    std::fs::write(dir.join("fine.rs"), "fn main() {\n    let a = 1;\n}\n").unwrap();
 
-    let grammar = root.join("crates/treebank-java");
+    let grammar = root.join("crates/treebank-rust");
     let out = dir.join("shape.json");
     let run = || {
         Command::new(env!("CARGO_BIN_EXE_treebank"))
-            .args(["shape", "--lang", "java", "--grammar"])
+            .args(["shape", "--lang", "rust", "--grammar"])
             .arg(&grammar)
             .arg("--dir")
             .arg(&dir)
@@ -51,18 +52,25 @@ fn an_unparseable_fixture_fails_the_gate() {
     let clean = run();
     assert!(
         clean.status.success(),
-        "a fixture directory that parses should pass: {}",
+        "a fixture directory that parses should pass:\n{}",
         String::from_utf8_lossy(&clean.stderr)
     );
 
     // Now add one neither parser can read.
-    std::fs::write(dir.join("Malformed.java"), "class Malformed { void m( { }\n").unwrap();
+    std::fs::write(dir.join("malformed.rs"), "fn main( {\n").unwrap();
     let broken = run();
     let stderr = String::from_utf8_lossy(&broken.stderr);
-    assert!(!broken.status.success(), "an unparseable fixture must fail the gate: {stderr}");
+    assert!(!broken.status.success(), "an unparseable fixture must fail the gate:\n{stderr}");
     assert!(
-        stderr.contains("Malformed.java"),
-        "the failure must name the file that could not be parsed: {stderr}"
+        stderr.contains("malformed.rs"),
+        "the failure must name the file that could not be read:\n{stderr}"
+    );
+    // ...and say why, so the next person does not have to bisect CI for it.
+    assert!(
+        stderr.contains("our parse has an ERROR node")
+            || stderr.contains("reference parser:")
+            || stderr.contains("our parser returned no tree"),
+        "the failure must name the cause:\n{stderr}"
     );
 
     let _ = std::fs::remove_dir_all(&dir);
