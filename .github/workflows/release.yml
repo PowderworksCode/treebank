@@ -1,0 +1,109 @@
+name: release
+
+# A tag is the whole trigger, and the only thing a tag releases is the
+# `treebank` crate. The grammars are not released here: they are wasm packs,
+# built and published to R2 on every push to main, because a grammar improving
+# should reach consumers without a version bump. Only the Rust API is versioned.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to publish
+        required: true
+
+permissions:
+  contents: read
+
+# Never run two releases at once, and never cancel one in flight: a cancelled
+# `cargo publish` can leave a version uploaded that can never be reused.
+concurrency:
+  group: release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  # Everything checkable, checked before the one step that cannot be undone.
+  # The pack tests matter most here: the crate's whole purpose is loading a
+  # pack, and a release that cannot is worse than no release.
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: the tag matches the crate version
+        run: |
+          crate=$(sed -n 's/^version = "\(.*\)"$/\1/p' crates/treebank/Cargo.toml | head -n 1)
+          if [ "$TAG" != "v${crate}" ]; then
+            echo "::error::tag ${TAG} does not match crates/treebank/Cargo.toml version ${crate}"
+            exit 1
+          fi
+          echo "tag ${TAG} matches ${crate}"
+
+      - run: cargo test --workspace --locked
+
+      # The pack tests skip when no pack is present, so building one is what
+      # makes them run at all. Without this the release would be gated by a
+      # suite that quietly tested nothing about the feature being released.
+      - name: cache wasm toolchain
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/treebank
+          key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
+      - run: ./tools/wasm-pack/build.sh python --out dist/wasm
+      - name: the pack loader works against a real pack
+        run: cargo test -p treebank --locked --test pack
+
+      # The publish path itself, uploading nothing.
+      - run: ./tools/publish-crate.sh --dry-run
+
+  # crates.io is the one place a version can never be replaced, so it goes
+  # last and everything checkable is checked first.
+  crate:
+    needs: verify
+    runs-on: ubuntu-latest
+    # One place to require a human approval before an irreversible publish:
+    # Settings > Environments > crates-io > Required reviewers.
+    environment: crates-io
+    permissions:
+      id-token: write
+    env:
+      # `secrets` cannot be read from an `if`, so whether one exists is
+      # answered here, where it can be.
+      HAS_STORED_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref_name }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+
+      # Trusted publishing is the normal path and needs no secret. The stored
+      # token exists only to bootstrap: a crate's first version cannot be
+      # published this way, because crates.io will not attach a trusted
+      # publisher to a crate that does not exist yet. Delete the secret once
+      # the trusted publisher is configured and this step takes over.
+      - uses: rust-lang/crates-io-auth-action@v1
+        id: auth
+        if: env.HAS_STORED_TOKEN == 'false'
+
+      - name: publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token || secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          if [ "${HAS_STORED_TOKEN}" = "true" ]; then
+            echo "publishing with the stored bootstrap token; delete it once trusted publishing is configured"
+          else
+            echo "publishing with a short-lived trusted-publishing token"
+          fi
+          ./tools/publish-crate.sh --execute
