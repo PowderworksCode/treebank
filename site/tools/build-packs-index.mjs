@@ -17,7 +17,14 @@
 // shape is written from the packs the wasm gate already built and checked.
 
 import { createHash } from "node:crypto";
-import { copyFile, link, readdir, readFile, rm, writeFile } from "node:fs/promises";
+import {
+  copyFile,
+  link,
+  readdir,
+  readFile,
+  rm,
+  writeFile,
+} from "node:fs/promises";
 import path from "node:path";
 
 const HERE = path.dirname(new URL(import.meta.url).pathname);
@@ -31,7 +38,9 @@ async function main() {
   let files;
   try {
     // Only the unhashed originals; the hashed names are this script's output.
-    files = (await readdir(PACKS)).filter((f) => /^treebank-[a-z0-9]+\.wasm$/.test(f));
+    files = (await readdir(PACKS)).filter((f) =>
+      /^treebank-[a-z0-9]+\.wasm$/.test(f),
+    );
   } catch {
     console.log("packs: none staged; skipping the manifest");
     return;
@@ -55,8 +64,9 @@ async function main() {
     // would double 14 MB for nothing.
     const target = path.join(PACKS, key);
     await rm(target, { force: true });
-    await link(path.join(PACKS, file), target)
-      .catch(() => copyFile(path.join(PACKS, file), target));
+    await link(path.join(PACKS, file), target).catch(() =>
+      copyFile(path.join(PACKS, file), target),
+    );
 
     console.log(
       `  ${name.padEnd(11)} ${sha256.slice(0, 12)}  ${(bytes.length / 1024).toFixed(0).padStart(5)} KiB`,
@@ -66,7 +76,10 @@ async function main() {
   // schema_version so a consumer that finds this document later can tell
   // whether it understands it, rather than guessing from the shape.
   const manifest = { schema_version: 1, packs };
-  await writeFile(path.join(PACKS, "index.json"), JSON.stringify(manifest, null, 1) + "\n");
+  await writeFile(
+    path.join(PACKS, "index.json"),
+    JSON.stringify(manifest, null, 1) + "\n",
+  );
   console.log(`packs: ${Object.keys(packs).length} in the manifest`);
 }
 

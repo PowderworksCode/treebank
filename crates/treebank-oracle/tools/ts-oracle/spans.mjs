@@ -76,7 +76,9 @@ for (const line of input.split("\n")) {
   let out = { path, spans: [] };
   try {
     const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, scriptKind(path));
-    const diags = sf.parseDiagnostics ?? [];
+    // Internal to the compiler, and absent from its public types; see the
+    // header on why a syntax-only verdict has to come from here.
+    const diags = /** @type {any} */ (sf).parseDiagnostics ?? [];
     if (diags.length > 0) {
       // Only clean parses have meaningful boundaries.
       out.skipped = "parse errors";

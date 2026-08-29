@@ -6,11 +6,12 @@ import { statusOverview } from "./status.mjs";
 for (const root of document.querySelectorAll(".status-overview")) {
   try {
     const response = await fetch("/status.json");
-    if (!response.ok) throw new Error(`${response.status} fetching the inventory`);
+    if (!response.ok)
+      throw new Error(`${response.status} fetching the inventory`);
     root.innerHTML = statusOverview(await response.json());
   } catch (error) {
-    root.innerHTML = `<p class="broken">Could not load the inventory: ${
-      String(error.message).replace(/[<&]/g, "")
-    }</p>`;
+    root.innerHTML = `<p class="broken">Could not load the inventory: ${String(
+      error.message,
+    ).replace(/[<&]/g, "")}</p>`;
   }
 }

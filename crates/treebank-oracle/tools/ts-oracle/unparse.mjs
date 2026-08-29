@@ -30,7 +30,8 @@ for (const line of input.split("\n")) {
   const out = { path };
   try {
     const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, true, scriptKind(path));
-    if ((sf.parseDiagnostics ?? []).length > 0) {
+    // Internal to the compiler, and absent from its public types.
+    if ((/** @type {any} */ (sf).parseDiagnostics ?? []).length > 0) {
       out.skipped = "parse";
     } else {
       out.source = printer.printFile(sf);

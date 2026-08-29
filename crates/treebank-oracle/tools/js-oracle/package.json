@@ -5,5 +5,8 @@
   "description": "Syntax-only JavaScript reference check for the treebank oracle (V8 via vm, plus a JSX-only babel leg)",
   "dependencies": {
     "@babel/parser": "^7.28"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0"
   }
 }

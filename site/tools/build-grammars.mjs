@@ -21,7 +21,9 @@ const ROOT = path.join(SITE, "..");
 
 // A directory under crates/ with a grammar.js in it is a grammar.
 async function discover() {
-  const entries = await readdir(path.join(ROOT, "crates"), { withFileTypes: true });
+  const entries = await readdir(path.join(ROOT, "crates"), {
+    withFileTypes: true,
+  });
   const found = [];
   for (const entry of entries) {
     if (!entry.isDirectory()) continue;
@@ -140,7 +142,9 @@ async function main() {
 
   await writeFile(
     path.join(dataDir, "index.json"),
-    JSON.stringify(index.map(({ name, productions }) => ({ name, productions }))),
+    JSON.stringify(
+      index.map(({ name, productions }) => ({ name, productions })),
+    ),
   );
 
   const total = index.reduce((n, g) => n + g.productions, 0);
