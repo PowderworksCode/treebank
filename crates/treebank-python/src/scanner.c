@@ -288,6 +288,48 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
   uint32_t entry_column = lexer->get_column(lexer);
   bool line_crossed = false;
 
+  // Indentation is not always the column the first TOKEN sits at: a
+  // backslash continuation inside a line's leading whitespace moves the
+  // token without moving the indent. CPython's tokenizer (`cont_line_col`
+  // in Parser/tokenizer.c) settles it while scanning that whitespace —
+  // "indentation cannot be split over multiple physical lines using
+  // backslashes, so if we found a backslash preceded by whitespace there is
+  // no more indentation to be found":
+  //
+  //   * a backslash reached at a NON-ZERO column FIXES the indent there and
+  //     whatever follows on the continuation line is not indentation;
+  //   * a backslash at column ZERO contributes nothing, and the scan keeps
+  //     going onto the next physical line.
+  //
+  // Both halves are load-bearing, and the corpus holds a fixture for each.
+  // ruff's backslash_continuation_indentation needs the first:
+  //
+  //     if True:
+  //         \
+  //             1
+  //         2
+  //
+  // opens its suite at 4, not at the 8 the token sits at, so the `2` at 4
+  // stays in the block instead of dedenting out of it. black's
+  // backslash_before_indent needs the second:
+  //
+  //     class Plotter:
+  //     \
+  //         pass
+  //
+  // opens its suite at 4 — the continuation line's own indent — because the
+  // backslash is at column 0. Taking the backslash unconditionally fixes
+  // the first fixture and breaks the second; the non-zero test is what
+  // makes both agree with CPython.
+  //
+  // Only while still IN the leading whitespace: past the logical line's
+  // first token a continuation is mid-expression and its column says
+  // nothing about indentation. `else:\` opens its suite at the column of
+  // the tokens after the backslash, not at the backslash.
+  bool at_line_start = entry_column == 0;
+  bool have_logical_column = false;
+  uint32_t logical_column = 0;
+
   // One unified skip pass. The external scanner is consulted exactly once
   // per token request, BEFORE the internal lexer touches extras — so every
   // kind of whitespace in front of a token we own must be handled here:
@@ -299,9 +341,25 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
     if (c == ' ' || c == '\t' || c == '\f') {
       skip(lexer);
     } else if (c == '\\') {
+      uint32_t backslash_column = lexer->get_column(lexer);
+      bool continued = false;
       skip(lexer);
-      if (lexer->lookahead == '\r') skip(lexer);
-      if (lexer->lookahead == '\n') skip(lexer);
+      if (lexer->lookahead == '\r') {
+        skip(lexer);
+        continued = true;
+      }
+      if (lexer->lookahead == '\n') {
+        skip(lexer);
+        continued = true;
+      }
+      if (continued) {
+        // Column 0 is CPython's falsy `cont_line_col`: it fixes nothing
+        // and the scan continues onto the next physical line.
+        if (at_line_start && !have_logical_column && backslash_column > 0) {
+          logical_column = backslash_column;
+          have_logical_column = true;
+        }
+      }
     } else if (c == '\n' || c == '\r') {
       // A NEWLINE only where a line with CONTENT ends: this call started
       // past column 0 and has not already crossed a boundary. Otherwise the
@@ -323,6 +381,10 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
         return true;
       }
       line_crossed = true;
+      // A genuine newline starts a new physical line, so any indentation
+      // remembered from a continuation on the line just left is stale.
+      at_line_start = true;
+      have_logical_column = false;
       // Not a message here: a blank line before an indent decision, or a
       // newline inside brackets. Plain whitespace either way — but only
       // the former is a line boundary: inside brackets the logical line
@@ -407,7 +469,8 @@ bool tree_sitter_python_external_scanner_scan(void *payload, TSLexer *lexer,
   // emit a NEWLINE for it, which the shared GLR token stream would force on
   // the fork that is waiting for an elif/else/except instead.
   if ((valid[INDENT] || valid[DEDENT]) && s->line_start_pending) {
-    uint32_t col = lexer->get_column(lexer);
+    uint32_t col =
+        have_logical_column ? logical_column : lexer->get_column(lexer);
     uint32_t top = s->indent_count > 0 ? s->indents[s->indent_count - 1] : 0;
     if (col > top && valid[INDENT]) {
       if (s->indent_count < MAX_INDENTS) {
