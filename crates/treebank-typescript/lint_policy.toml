@@ -4,7 +4,7 @@
 # tighten. Each carries the reason the debt is accepted, because a
 # baseline nobody can explain is just a number that rots.
 #
-# Measured on 69dabad. These are today's exact counts, not headroom.
+# Measured on 387a29f. These are today's exact counts, not headroom.
 #
 # This grammar owns two languages, javascript and typescript, and carries
 # JSX on top of both. It has the most declared conflicts and the most
@@ -28,7 +28,7 @@ declared_conflicts = 184
 # (FIELD_GUIDE.md §1) and is the obvious first target.
 early_commit_conflicts = 54
 
-# prec.dynamic sites. 21 — the most of the nine, and the count that
+# prec.dynamic sites. 22 — the most of the nine, and the count that
 # should worry a reader most, because weights are the tool of last resort
 # and this many suggests forks resolved by ranking rather than by
 # factoring. They group as: JSX (jsx_opening_element,
@@ -39,10 +39,16 @@ early_commit_conflicts = 54
 # _default_function, two on _method_definition); arrow_function (+2 on
 # its block body, the brace-versus-object-literal choice); catch_clause
 # and finally_clause (+2); labeled_statement (-1); nested_identifier
-# (+1); and _pattern (-1). A weight on a construct CORRECT parses contain
-# re-ranks whole versions at the cull, so new weights need that analysis
-# first — and this grammar should be removing them, not adding.
-dynamic_weights = 21
+# (+1); and _pattern (-1).
+#
+# The 22nd is `_anonymous_class` (+1), added by 83b4b0b ("typescript: a
+# class DECLARATION must have a name", PR #204) after this ratchet was
+# first measured at 21. That change was a correctness fix and it paid for
+# itself in the table — state_count DROPPED 38 — so the weight is
+# recorded rather than contested. A weight on a construct CORRECT parses
+# contain re-ranks whole versions at the cull, so new weights need that
+# analysis first, and this grammar should be removing them, not adding.
+dynamic_weights = 22
 
 # One spelling, two tokens (§4): `/`. The immediate form is the `regex`
 # delimiter, which must abut its body, against the plain `/` of division,
@@ -69,5 +75,7 @@ same_text_tokens = 1
 unreserved_keywords = 75
 
 # Parse-table size. Not a correctness bound — a growth alarm: conflicts
-# inflate the table faster than factoring does.
-state_count = 6046
+# inflate the table faster than factoring does. Tightened from 6,046 to
+# 6,008: the anonymous-class fix above removed 38 states, and the ratchet
+# follows the improvement down so it cannot silently unwind.
+state_count = 6008

@@ -4,7 +4,7 @@
 # tighten. Each carries the reason the debt is accepted, because a
 # baseline nobody can explain is just a number that rots.
 #
-# Measured on 69dabad. These are today's exact counts, not headroom.
+# Measured on 387a29f. These are today's exact counts, not headroom.
 
 [baselines]
 # GLR fork sites (FIELD_GUIDE.md §2). Rust's forks are the generic-
@@ -12,7 +12,18 @@
 # argument list, resolved in real rustc by the turbofish), patterns
 # sharing spellings with expressions, and macro invocation, whose token
 # trees can be anything.
-declared_conflicts = 58
+#
+# This was 58 when the ratchet was first measured. aa60194 ("rust: eight
+# causes behind every fuzz finding in #186", PR #203) added twelve, all
+# in one family: the path tier, splitting `_path_ref`, `_simple_path`,
+# `_scoped_generic_base` and `_scoped_simple_path` out against
+# `scoped_identifier`, `generic_function`, `generic_type` and
+# `scoped_type_identifier`. That is a real fix for real fuzz findings and
+# the debt is recorded, not waved through — but twelve new fork sites in
+# one family is exactly the shape §1 says to factor rather than declare,
+# and the rust lane should look at it with that in mind. Had this ratchet
+# been in place first, CI would have raised it at review.
+declared_conflicts = 70
 
 # Conflicts naming a supertype — parallel-tier early commits, spread
 # across `_name` (4), `_control_flow` (2), `_invocation` (2), `_type`
@@ -20,7 +31,8 @@ declared_conflicts = 58
 # `_invocation`, `_pattern` and `_type`. The mixed ones are the
 # interesting group: they are the sites where a token could still turn
 # out to be a macro call, a pattern or a type, and the grammar commits to
-# a tier before it knows.
+# a tier before it knows. Unchanged by the path-family work above, which
+# forked between concrete rules rather than across supertypes.
 early_commit_conflicts = 17
 
 # prec.dynamic sites. Only two, both on `expression_statement` (+1 and
@@ -47,16 +59,18 @@ same_text_tokens = 1
 # true, type, union, unsafe, use, where, while.
 #
 # Rust is the only grammar besides ruby that declares a reserved set at
-# all, but it holds exactly two words — `box` and `yield`, the
-# reserved-for-future-use pair — so the 43 above are the ACTUAL keywords,
-# left unreserved. That is nearly the opposite of what the set is for.
-# A handful genuinely are contextual (`auto`, `default`, `union`, `raw`,
-# `safe`, `macro_rules`); the rest are hard keywords, unreserved by
-# omission. Nobody has probed which positions leak; see issue #198 for
-# the same defect confirmed in zig. Frozen at today's value so it cannot
-# grow while that check is outstanding.
+# all, but it holds exactly two words — `box` and `yield`, added by
+# 53fc002 as the reserved-for-future-use pair — so the 43 above are the
+# ACTUAL keywords, left unreserved. That is nearly the opposite of what
+# the set is for. A handful genuinely are contextual (`auto`, `default`,
+# `union`, `raw`, `safe`, `macro_rules`); the rest are hard keywords,
+# unreserved by omission. Nobody has probed which positions leak; see
+# issue #198 for the same defect confirmed in zig. Frozen at today's
+# value so it cannot grow while that check is outstanding.
 unreserved_keywords = 43
 
 # Parse-table size. Not a correctness bound — a growth alarm: conflicts
-# inflate the table faster than factoring does.
-state_count = 5214
+# inflate the table faster than factoring does. Was 5,214 at first
+# measurement; the path-family conflicts above cost +152 states, which is
+# the table paying for those twelve forks.
+state_count = 5366
