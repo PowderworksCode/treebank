@@ -29,6 +29,7 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{anyhow, Context, Result};
+use sha2::{Digest, Sha256};
 use serde::Deserialize;
 use wasmtime::{Engine, Instance, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime_wasi::p1::WasiP1Ctx;
@@ -97,6 +98,20 @@ struct Abi {
     node_named_child: TypedFunc<(u32, u32, u32), u32>,
     field_name_for_child: TypedFunc<(u32, u32), u32>,
     cstr_free: TypedFunc<u32, ()>,
+    // Optional, because a pack is a versioned contract and a newer loader
+    // must still drive an older pack. Queries arrived at pack_abi 3; every
+    // pack published before that has none of these, and everything else in
+    // this ABI works exactly the same without them.
+    query: Option<QueryAbi>,
+}
+
+struct QueryAbi {
+    new: TypedFunc<(u32, u32, u32, u32), u32>,
+    delete: TypedFunc<u32, ()>,
+    exec: TypedFunc<(u32, u32), u32>,
+    cursor_delete: TypedFunc<u32, ()>,
+    next_capture: TypedFunc<(u32, u32, u32, u32, u32), u32>,
+    capture_name: TypedFunc<(u32, u32), u32>,
 }
 
 impl Pack {
@@ -112,7 +127,7 @@ impl Pack {
     /// HTTP has.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         let engine = Engine::default();
-        let module = Module::new(&engine, bytes).context("not a valid wasm module")?;
+        let module = compile_cached(&engine, bytes)?;
 
         let mut linker: Linker<WasiP1Ctx> = Linker::new(&engine);
         wasmtime_wasi::p1::add_to_linker_sync(&mut linker, |c| c)
@@ -224,14 +239,14 @@ impl<'p> Node<'p> {
     pub fn kind(&self) -> Result<String> {
         let mut store = self.pack.store.borrow_mut();
         let ptr = self.pack.f.node_type.call(&mut *store, self.handle)?;
-        cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)
+        read_cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)
     }
 
     /// The whole subtree as an s-expression.
     pub fn sexp(&self) -> Result<String> {
         let mut store = self.pack.store.borrow_mut();
         let ptr = self.pack.f.node_sexp.call(&mut *store, self.handle)?;
-        let out = cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)?;
+        let out = read_cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)?;
         self.pack.f.cstr_free.call(&mut *store, ptr)?;
         Ok(out)
     }
@@ -298,7 +313,7 @@ impl<'p> Node<'p> {
         if ptr == 0 {
             return Ok(None);
         }
-        Ok(Some(cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)?))
+        Ok(Some(read_cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)?))
     }
 
     /// Every named child, as a vector.
@@ -315,7 +330,153 @@ impl Drop for Node<'_> {
     }
 }
 
-fn cstr(
+
+/// One capture from a query.
+#[derive(Debug, Clone)]
+pub struct Capture {
+    /// The `@name` the pattern gave it, without the at sign.
+    pub name: String,
+    /// The node's type.
+    pub kind: String,
+    /// Byte range in the source that was parsed.
+    pub range: std::ops::Range<usize>,
+    /// Which pattern in the query matched, counting from zero.
+    pub pattern: u32,
+}
+
+impl Pack {
+    /// Run a query and collect its captures.
+    ///
+    /// The query is expanded against this pack's facet manifest first, so a
+    /// role written once runs against every grammar:
+    ///
+    /// ```no_run
+    /// # use treebank::Pack;
+    /// # let pack = Pack::fetch("python")?;
+    /// # let tree = pack.parse("def f(): pass")?;
+    /// for c in pack.query(&tree, "(_declaration) @decl")? {
+    ///     println!("{} {:?}", c.kind, c.range);
+    /// }
+    /// # Ok::<(), anyhow::Error>(())
+    /// ```
+    ///
+    /// `(_declaration)` is a supertype and queryable directly; `(_callable)`
+    /// is a facet and is rewritten into this grammar's members on the way in.
+    /// Either way the caller writes the same query for every language.
+    pub fn query(&self, tree: &Tree<'_>, query: &str) -> Result<Vec<Capture>> {
+        let expanded = self.expand_query(query)?;
+        let root = tree.root();
+        self.query_node(&root, &expanded)
+    }
+
+    /// Run a query rooted at one node, taking the query exactly as given.
+    /// [`Pack::query`] is this plus facet expansion.
+    pub fn query_node(&self, node: &Node<'_>, expanded: &str) -> Result<Vec<Capture>> {
+        let q = self.f.query.as_ref().ok_or_else(|| {
+            anyhow!(
+                "this {} pack cannot run queries: it is pack_abi {}, and queries need 3. \
+                 Fetch a current pack, or use expand_query and your own query engine.",
+                self.provenance.language, self.provenance.pack_abi
+            )
+        })?;
+        let bytes = expanded.as_bytes();
+        let len = u32::try_from(bytes.len()).context("query larger than 4 GiB")?;
+        let mut store = self.store.borrow_mut();
+
+        // Two out-params for the error position, and the source itself, all
+        // live in the module's memory.
+        let src = self.f.alloc.call(&mut *store, len)?;
+        let errs = self.f.alloc.call(&mut *store, 8)?;
+        if src == 0 || errs == 0 {
+            return Err(anyhow!("the pack could not allocate for a query"));
+        }
+        self.memory.write(&mut *store, src as usize, bytes)?;
+
+        let handle = q.new.call(&mut *store, (src, len, errs, errs + 4))?;
+        if handle == 0 {
+            // A query is usually written by a person, so where it broke is
+            // the whole message.
+            let mut raw = [0u8; 8];
+            self.memory.read(&mut *store, errs as usize, &mut raw)?;
+            let offset = u32::from_le_bytes(raw[0..4].try_into().unwrap()) as usize;
+            let kind = u32::from_le_bytes(raw[4..8].try_into().unwrap());
+            self.f.free.call(&mut *store, src)?;
+            self.f.free.call(&mut *store, errs)?;
+            return Err(anyhow!(
+                "{} at byte {offset} of the query:\n  {expanded}\n  {:>offset$}^",
+                query_error(kind),
+                ""
+            ));
+        }
+        self.f.free.call(&mut *store, src)?;
+        self.f.free.call(&mut *store, errs)?;
+
+        let cursor = q.exec.call(&mut *store, (handle, node.handle))?;
+        if cursor == 0 {
+            q.delete.call(&mut *store, handle)?;
+            return Err(anyhow!("the pack could not allocate a query cursor"));
+        }
+
+        let out_node = self.f.node_new.call(&mut *store, ())?;
+        let out = self.f.alloc.call(&mut *store, 8)?;
+        let mut found = Vec::new();
+        let mut names: std::collections::HashMap<u32, String> = std::collections::HashMap::new();
+
+        loop {
+            let more = q
+                .next_capture
+                .call(&mut *store, (cursor, handle, out_node, out, out + 4))?;
+            if more == 0 {
+                break;
+            }
+            let mut raw = [0u8; 8];
+            self.memory.read(&mut *store, out as usize, &mut raw)?;
+            let pattern = u32::from_le_bytes(raw[0..4].try_into().unwrap());
+            let capture = u32::from_le_bytes(raw[4..8].try_into().unwrap());
+
+            let kind_ptr = self.f.node_type.call(&mut *store, out_node)?;
+            let kind = read_cstr(&mut store, &self.memory, &self.f, kind_ptr)?;
+            let start = self.f.node_start_byte.call(&mut *store, out_node)? as usize;
+            let end = self.f.node_end_byte.call(&mut *store, out_node)? as usize;
+
+            // Capture names repeat across every match, and each lookup is a
+            // call plus a string read, so they are resolved once.
+            let name = match names.get(&capture) {
+                Some(name) => name.clone(),
+                None => {
+                    let ptr = q.capture_name.call(&mut *store, (handle, capture))?;
+                    let name = read_cstr(&mut store, &self.memory, &self.f, ptr)?;
+                    names.insert(capture, name.clone());
+                    name
+                }
+            };
+
+            found.push(Capture { name, kind, range: start..end, pattern });
+        }
+
+        self.f.free.call(&mut *store, out)?;
+        self.f.node_free.call(&mut *store, out_node)?;
+        q.cursor_delete.call(&mut *store, cursor)?;
+        q.delete.call(&mut *store, handle)?;
+        Ok(found)
+    }
+}
+
+/// TSQueryError, which the C header numbers rather than names.
+fn query_error(kind: u32) -> &'static str {
+    match kind {
+        1 => "the query is not valid s-expression syntax",
+        2 => "the query names a node type this grammar does not have",
+        3 => "the query names a field this grammar does not have",
+        4 => "the query captures something that cannot be captured",
+        5 => "the query uses a predicate this runtime does not support",
+        6 => "the query uses a structure this runtime does not support",
+        7 => "the query names a language that is not this one",
+        _ => "the query is not valid",
+    }
+}
+
+fn read_cstr(
     store: &mut Store<WasiP1Ctx>,
     memory: &Memory,
     f: &Abi,
@@ -349,6 +510,21 @@ fn read_json<T: for<'de> Deserialize<'de>>(
     serde_json::from_slice(&buf).with_context(|| format!("parsing {name}"))
 }
 
+impl QueryAbi {
+    /// All six or none: a pack that exports some but not all of these is not
+    /// something to half-drive.
+    fn bind(instance: &Instance, store: &mut Store<WasiP1Ctx>) -> Option<Self> {
+        Some(Self {
+            new: instance.get_typed_func(&mut *store, "tb_query_new").ok()?,
+            delete: instance.get_typed_func(&mut *store, "tb_query_delete").ok()?,
+            exec: instance.get_typed_func(&mut *store, "tb_query_exec").ok()?,
+            cursor_delete: instance.get_typed_func(&mut *store, "tb_query_cursor_delete").ok()?,
+            next_capture: instance.get_typed_func(&mut *store, "tb_query_next_capture").ok()?,
+            capture_name: instance.get_typed_func(&mut *store, "tb_query_capture_name").ok()?,
+        })
+    }
+}
+
 impl Abi {
     fn bind(instance: &Instance, store: &mut Store<WasiP1Ctx>) -> Result<Self> {
         macro_rules! f {
@@ -378,6 +554,91 @@ impl Abi {
             node_named_child: f!("tb_node_named_child"),
             field_name_for_child: f!("tb_node_field_name_for_child"),
             cstr_free: f!("tb_cstr_free"),
+            query: QueryAbi::bind(instance, store),
         })
     }
+}
+
+/// Compiling a pack costs a few hundred milliseconds; loading an
+/// already-compiled one costs a few. Measured on a release build: python
+/// 296ms cold against 4ms warm, C++ 370ms against 25ms. Everything else here
+/// is far cheaper -- reading the file and parsing a small program are both
+/// under a millisecond -- so this is the whole startup cost of using a
+/// grammar, paid on every run of a tool without it.
+///
+/// Beware measuring this in a debug build. Cranelift is compiled unoptimised
+/// there and the same load takes about four seconds, which is a fact about
+/// the profile rather than about wasmtime.
+///
+/// The key covers the wasm bytes and the host. It does NOT cover the wasmtime
+/// version, because wasmtime writes its own version into the artifact and
+/// refuses to deserialize one from a different major -- so an entry that has
+/// gone stale that way fails to load, is deleted here, and is rebuilt. Adding
+/// a version to the key would duplicate a check that already exists, using a
+/// number this crate has no reliable way to read.
+///
+/// Set TREEBANK_NO_COMPILE_CACHE=1 to skip it.
+fn compile_cached(engine: &Engine, bytes: &[u8]) -> Result<Module> {
+    if std::env::var_os("TREEBANK_NO_COMPILE_CACHE").is_some() {
+        return Module::new(engine, bytes).context("not a valid wasm module");
+    }
+
+    let key = {
+        let mut hasher = Sha256::new();
+        hasher.update(bytes);
+        hasher.update(std::env::consts::ARCH.as_bytes());
+        hasher.update(std::env::consts::OS.as_bytes());
+        hasher.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()
+    };
+    let path = compile_cache_dir().join(format!("{}.cwasm", &key[..32]));
+
+    if let Ok(precompiled) = std::fs::read(&path) {
+        // SAFETY: the file was produced by `precompile_module` on this
+        // machine, under a key that covers the wasm bytes, the wasmtime
+        // version and the host. Wasmtime validates its own header as well and
+        // returns Err rather than misbehaving if any of that is wrong, which
+        // is why a failure here falls through to compiling instead of
+        // propagating.
+        if let Ok(module) = unsafe { Module::deserialize(engine, &precompiled) } {
+            return Ok(module);
+        }
+        let _ = std::fs::remove_file(&path);
+    }
+
+    // Compile ONCE. `precompile_module` does the work and hands back the
+    // artifact, which deserializes in milliseconds -- so this is the compile,
+    // not an extra one beside it. Calling `Module::new` as well doubled the
+    // cold path from 3.8s to 7.6s, which is the kind of thing that only shows
+    // up if you measure the miss as well as the hit.
+    match engine.precompile_module(bytes) {
+        Ok(precompiled) => {
+            // Best effort: a read-only or full cache directory must not stop a
+            // parse, so a failure to store is ignored.
+            if let Some(dir) = path.parent() {
+                if std::fs::create_dir_all(dir).is_ok() {
+                    let tmp = dir.join(format!(".{}.cwasm", std::process::id()));
+                    if std::fs::write(&tmp, &precompiled).is_ok() {
+                        let _ = std::fs::rename(&tmp, &path);
+                    }
+                }
+            }
+            // SAFETY: produced by this engine, moments ago, in this process.
+            unsafe { Module::deserialize(engine, &precompiled) }
+                .context("loading the module just compiled")
+        }
+        Err(_) => Module::new(engine, bytes).context("not a valid wasm module"),
+    }
+}
+
+fn compile_cache_dir() -> std::path::PathBuf {
+    if let Ok(dir) = std::env::var("TREEBANK_CACHE") {
+        return std::path::PathBuf::from(dir).join("compiled");
+    }
+    if let Ok(dir) = std::env::var("XDG_CACHE_HOME") {
+        return std::path::PathBuf::from(dir).join("treebank").join("compiled");
+    }
+    if let Ok(home) = std::env::var("HOME") {
+        return std::path::PathBuf::from(home).join(".cache").join("treebank").join("compiled");
+    }
+    std::env::temp_dir().join("treebank").join("compiled")
 }

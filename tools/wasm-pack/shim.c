@@ -27,9 +27,15 @@
  *     them. Those returned by tb_node_sexp are owned by the caller and must be
  *     released with tb_cstr_free; every other string points into static data
  *     and must NOT be freed.
+ *   - A query is compiled once (tb_query_new) and run against a node through a
+ *     cursor (tb_query_exec). Captures come out one at a time rather than as
+ *     an array of structs, for the same reason nodes do: wasm cannot return a
+ *     struct, and a match list would have to be marshalled somewhere.
  *   - tb_pack_abi() is THIS interface's version, independent of the grammar
  *     and of tree-sitter's own language ABI (tb_language_abi()). It changes
- *     only when a binding written against it would break.
+ *     only when a binding written against it would break. Adding exports does
+ *     not break one, so 2 -> 3 advertises queries rather than warning of a
+ *     breakage.
  *
  * The provenance travels INSIDE the module (tb_provenance), not only beside
  * it. A .wasm that gets copied out of a release, vendored into a repo and
@@ -55,7 +61,7 @@ extern const unsigned treebank_roles_len;
 extern const unsigned char treebank_node_types_raw[];
 extern const unsigned treebank_node_types_len;
 
-#define TB_PACK_ABI 2
+#define TB_PACK_ABI 3
 
 #define EXPORT(name) __attribute__((export_name(#name))) name
 
@@ -177,3 +183,77 @@ unsigned EXPORT(tb_node_flags)(const TSNode *n) {
 
 /* Caller owns the result; release it with tb_cstr_free. */
 char *EXPORT(tb_node_sexp)(const TSNode *n) { return ts_node_string(*n); }
+
+/* ---- queries ------------------------------------------------------------
+ *
+ * This is what the shared vocabulary is for. `(_declaration) @d` runs against
+ * any treebank grammar and finds that language's declarations, because the
+ * role is a real supertype threaded through the productions rather than a
+ * naming convention. Facet-tier roles are expanded into an alternation before
+ * they get here, against the manifest in tb_roles.
+ *
+ * Captures are pulled one at a time. tree-sitter reports a match as an array
+ * of TSQueryCapture structs, and marshalling that across the boundary would
+ * mean either allocating a parallel array in module memory or teaching every
+ * binding the struct layout. Pulling captures is the same shape the node
+ * accessors already use, so a binding that can walk a tree can run a query.
+ */
+
+/* Compile a query. Returns NULL on a syntax error, and writes the byte offset
+ * and TSQueryError into the out params so a caller can say WHERE it broke --
+ * a query is usually written by a person, so the position is the whole
+ * message. */
+TSQuery *EXPORT(tb_query_new)(const char *src, unsigned len,
+                              unsigned *err_offset, unsigned *err_type) {
+  uint32_t offset = 0;
+  TSQueryError type = TSQueryErrorNone;
+  TSQuery *q = ts_query_new(TREEBANK_LANGUAGE_FN(), src, len, &offset, &type);
+  if (err_offset) *err_offset = offset;
+  if (err_type) *err_type = (unsigned)type;
+  return q;
+}
+
+void EXPORT(tb_query_delete)(TSQuery *q) { ts_query_delete(q); }
+
+unsigned EXPORT(tb_query_pattern_count)(const TSQuery *q) {
+  return ts_query_pattern_count(q);
+}
+
+/* Start a run over `node`. The cursor owns the iteration state and must be
+ * released with tb_query_cursor_delete. */
+TSQueryCursor *EXPORT(tb_query_exec)(const TSQuery *q, const TSNode *node) {
+  TSQueryCursor *cursor = ts_query_cursor_new();
+  if (!cursor) return NULL;
+  ts_query_cursor_exec(cursor, q, *node);
+  return cursor;
+}
+
+void EXPORT(tb_query_cursor_delete)(TSQueryCursor *c) { ts_query_cursor_delete(c); }
+
+/* Next capture, or 0 when the run is finished.
+ *
+ * Writes the captured node into the caller's slot and the pattern index into
+ * *out_pattern. The capture NAME is fetched separately by index, because it
+ * points into the query's own static strings and has a different lifetime
+ * from the node. */
+int EXPORT(tb_query_next_capture)(TSQueryCursor *c, const TSQuery *q,
+                                  TSNode *out_node, unsigned *out_pattern,
+                                  unsigned *out_capture) {
+  TSQueryMatch match;
+  uint32_t index = 0;
+  if (!ts_query_cursor_next_capture(c, &match, &index)) return 0;
+  if (index >= match.capture_count) return 0;
+  const TSQueryCapture capture = match.captures[index];
+  if (out_node) *out_node = capture.node;
+  if (out_pattern) *out_pattern = match.pattern_index;
+  if (out_capture) *out_capture = capture.index;
+  (void)q;
+  return 1;
+}
+
+/* The name a capture index stands for: `@name` without the at sign. Points
+ * into the query and must not be freed; it dies with tb_query_delete. */
+const char *EXPORT(tb_query_capture_name)(const TSQuery *q, unsigned index) {
+  uint32_t len = 0;
+  return ts_query_capture_name_for_id(q, index, &len);
+}

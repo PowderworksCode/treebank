@@ -1,6 +1,6 @@
 [package]
 name = "treebank"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 license = "MIT"
 homepage = "https://treebank.dev"
@@ -9,6 +9,11 @@ documentation = "https://docs.rs/treebank"
 keywords = ["tree-sitter", "parser", "grammar", "wasm", "syntax"]
 categories = ["parsing", "development-tools", "wasm"]
 readme = "README.md" 
+# The abi-2 regression fixture is 673 KB and exists to prove this crate still
+# drives a pack that predates queries. It is worth its weight in git, where it
+# is frozen on purpose, and worth nothing in the published tarball -- nobody
+# downloading the crate runs its tests.
+exclude = ["tests/fixtures/pack-abi-2.wasm"]
 description = "The treebank vocabulary as code and data: the closed term lists, the roles.json facet manifest schema, the vocabulary-conformance checker, and facet query expansion."
 
 [dependencies]
@@ -22,6 +27,14 @@ serde_json = "1"
 wasmtime = { version = "38", optional = true, default-features = false, features = ["runtime", "cranelift", "std"] }
 wasmtime-wasi = { version = "38", optional = true }
 
+# Fetching grammars. Same versions the rest of the workspace already uses, so
+# a checkout does not carry two HTTP stacks.
+ureq = { version = "2", optional = true, features = ["native-certs", "proxy-from-env"] }
+sha2 = { version = "0.10", optional = true }
+
 [features]
-default = ["pack"]
-pack = ["dep:wasmtime", "dep:wasmtime-wasi"]
+default = ["pack", "fetch"]
+pack = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2"]
+# Downloading a grammar rather than being handed one. Implies `pack`, since
+# what is fetched is a pack.
+fetch = ["pack", "dep:ureq"]

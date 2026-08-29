@@ -44,6 +44,32 @@ declared deviations — without fetching anything.
 
 ## Using a grammar
 
+One crate, and the grammar is fetched:
+
+```sh
+cargo add treebank
+```
+
+```rust
+use treebank::Pack;
+
+let pack = Pack::fetch("python")?;
+let tree = pack.parse(source)?;
+println!("{}", tree.root().sexp()?);
+```
+
+`fetch` downloads the grammar, verifies it against the published sha256 and
+caches it. `Pack::fetch_pinned("python", "<hash>")` names an exact version for
+a build that must not vary.
+
+There is deliberately no crate per grammar: nine today and more later would
+mean a version to keep in step for each. Only `treebank` is published — the
+grammar crates in this repository are `publish = false` and exist to build the
+wasm packs.
+
+Inside this workspace a grammar can also be used directly, which is what the
+gates do:
+
 ```rust
 let mut parser = tree_sitter::Parser::new();
 parser.set_language(&treebank_python::LANGUAGE.into())?;
