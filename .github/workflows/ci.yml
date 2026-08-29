@@ -33,6 +33,11 @@ jobs:
           cat "$RUNNER_TEMP/treebank-status.md" >> "$GITHUB_STEP_SUMMARY"
       - run: cargo test --workspace
 
+      # The publish path runs on every change, uploading nothing. Otherwise it
+      # is first exercised by the tag that publishes, which is the one moment
+      # a mistake cannot be taken back.
+      - run: ./tools/publish-crate.sh --dry-run
+
       # The site publishes a snapshot of the inventory above, because
       # Cloudflare Workers Build has no Rust toolchain and cannot produce one
       # at deploy time. Regenerating it here and failing on a difference is
