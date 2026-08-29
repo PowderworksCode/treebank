@@ -200,17 +200,18 @@ jobs:
       # Sweeps and the negative corpus both judge accept/reject. This judges
       # the TREE: every node boundary the reference parser reports must
       # exist in ours. It is the only check here that can see a file parse
-      # cleanly and wrongly, and every fixture under test/shape/ is a
-      # mis-parse that was found on the corpus and fixed. Ceiling is zero.
+      # cleanly and wrongly, and every fixture under test/shape/ is either a
+      # mis-parse that was found on the corpus and fixed, or a construct
+      # family nothing else was pinning. Ceiling is zero.
       #
       # The full corpus run is `treebank shape --lang typescript` locally;
       # CI has no corpus, so it guards the fixtures.
       # Whether there is anything to guard is a property of the checkout,
-      # not a list of exceptions: java has a span oracle but no fixtures yet;
-      # C and C++ have both and run here; zig has no span oracle because its
-      # toolchain exposes formatting and a verdict, not a supported tree dump.
-      # Any grammar currently without fixtures starts running this step the
-      # day its first one lands.
+      # not a list of exceptions: C, C++ and java have a span oracle and
+      # fixtures and run here; bash has the oracle but no fixtures yet; zig
+      # has no span oracle because its toolchain exposes formatting and a
+      # verdict, not a supported tree dump. Any grammar currently without
+      # fixtures starts running this step the day its first one lands.
       - name: are there shape fixtures
         id: fixtures
         run: |
@@ -224,6 +225,17 @@ jobs:
       - name: install libclang span oracle
         if: steps.fixtures.outputs.have == 'true' && (matrix.grammar == 'c' || matrix.grammar == 'cpp')
         run: sudo apt-get update -qq && sudo apt-get install -y libclang-dev
+
+      # The java span oracle is javac's own parser through the single-file
+      # source launcher, so this job needs the same JDK the `sweeps` job
+      # pins and the ledger names. The runner image ships a JDK, but which
+      # one is not ours to depend on: the fixtures use record patterns and
+      # pattern switches, which a JDK older than 21 rejects outright.
+      - uses: actions/setup-java@v4
+        if: steps.fixtures.outputs.have == 'true' && matrix.grammar == 'java'
+        with:
+          distribution: temurin
+          java-version: "21"
 
       - name: shape (tree agrees with the reference parser)
         if: steps.fixtures.outputs.have == 'true'

@@ -56,6 +56,13 @@ pub struct ShapeReport {
     pub grammar: String,
     pub files_checked: usize,
     pub files_skipped: usize,
+    /// Which files were skipped, recorded for a fixture directory only. A
+    /// corpus run skips tens of thousands of files by design — that is the
+    /// sweep's business — and listing them here would bloat every report
+    /// for no reader. A fixture directory skips none, so the list is short
+    /// and it is the one place the names are worth having.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skipped_files: Vec<String>,
     pub oracle_nodes: usize,
     pub missed_nodes: usize,
     pub files_with_misses: usize,
@@ -419,6 +426,9 @@ struct FileResult {
     missed: usize,
     had_miss: bool,
     skipped: bool,
+    /// Why it was skipped, so a fixture directory can say what went wrong
+    /// rather than guess. The oracle's own words where the oracle skipped.
+    skip_reason: Option<String>,
     /// The oracle saw a boundary we have no node for.
     misses: Vec<Miss>,
     /// The boundary agrees and the KINDS do not.
@@ -434,12 +444,13 @@ struct FileResult {
 }
 
 impl FileResult {
-    fn skipped() -> Self {
+    fn skipped(reason: impl Into<String>) -> Self {
         FileResult {
             oracle_nodes: 0,
             missed: 0,
             had_miss: false,
             skipped: true,
+            skip_reason: Some(reason.into()),
             misses: Vec::new(),
             mismatches: Vec::new(),
             unmapped: Vec::new(),
@@ -718,6 +729,7 @@ pub fn run(
         grammar: grammar_dir.display().to_string(),
         files_checked: 0,
         files_skipped: 0,
+        skipped_files: Vec::new(),
         oracle_nodes: 0,
         missed_nodes: 0,
         files_with_misses: 0,
@@ -752,19 +764,19 @@ pub fn run(
                     // a missing answer is an oracle failure, not a pass.
                     anyhow::bail!("ts-oracle returned no span record for {rel}");
                 };
-                if file.skipped.is_some() {
-                    return Ok(FileResult::skipped());
+                if let Some(why) = &file.skipped {
+                    return Ok(FileResult::skipped(format!("reference parser: {why}")));
                 }
                 let src = std::fs::read(corpus_src.join(rel))?;
                 let mut parser = Parser::new();
                 parser.set_language(&language)?;
                 let Some(tree) = parser.parse(&src, None) else {
-                    return Ok(FileResult::skipped());
+                    return Ok(FileResult::skipped("our parser returned no tree"));
                 };
                 // A file we cannot parse is the SWEEP's business, not this
                 // check's; comparing shapes against an error tree is noise.
                 if tree.root_node().has_error() {
-                    return Ok(FileResult::skipped());
+                    return Ok(FileResult::skipped("our parse has an ERROR node"));
                 }
                 let ours = our_spans(tree.root_node(), &src);
                 let mut misses = Vec::new();
@@ -1074,6 +1086,7 @@ pub fn run(
                     missed: n,
                     had_miss: n > 0,
                     skipped: false,
+                    skip_reason: None,
                     misses,
                     mismatches,
                     unmapped,
@@ -1084,11 +1097,15 @@ pub fn run(
             })
             .collect::<Result<_>>()?;
 
-        for r in results {
+        for (rel, r) in batch.iter().zip(results) {
             report.oracle_nodes += r.oracle_nodes;
             report.missed_nodes += r.missed;
             if r.skipped {
                 report.files_skipped += 1;
+                if dir.is_some() {
+                    let why = r.skip_reason.as_deref().unwrap_or("no reason recorded");
+                    report.skipped_files.push(format!("{rel} ({why})"));
+                }
             } else {
                 report.files_checked += 1;
             }
@@ -1268,9 +1285,28 @@ pub fn run(
             grammar_dir.display(),
         );
     }
+    // A file that does not parse is skipped, because comparing shapes
+    // against an error tree is noise and parse failures are the SWEEP's
+    // business. In a fixture directory there is no sweep to hand them to:
+    // CI has no corpus, and this is the only check that reads these files.
+    // A fixture that regressed into an ERROR would drop out of the set in
+    // silence and the zero ceiling below would pass over the hole, so here
+    // a skip is the finding rather than the absence of one.
+    if dir.is_some() {
+        anyhow::ensure!(
+            report.files_skipped == 0,
+            "shape: {} fixture(s) were skipped, so they measured nothing: {}. Every file in a \
+             fixture directory must be read by BOTH parsers -- ours to have a tree, the \
+             reference parser to have something to compare it against. Fix the cause named in \
+             the parentheses, or move the file to test/negative/ if rejecting it is the point.",
+            report.files_skipped,
+            report.skipped_files.join(", "),
+        );
+    }
     // A fixture directory is a ZERO ratchet -- every file in it is there
-    // because a specific mis-parse was fixed, so any miss is that mis-parse
-    // coming back.
+    // because a specific mis-parse was fixed, or because it pins a
+    // construct family nothing else was guarding. Either way any miss is a
+    // regrouping that was not there before.
     let ceiling = if dir.is_some() { Some(0) } else { baseline };
     // Only meaningful over the whole set; a --limit run checks a prefix and
     // would trip the ratchet for no reason.
