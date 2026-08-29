@@ -5,6 +5,7 @@ mod incremental;
 mod kinds;
 mod lint;
 mod mutate;
+mod queries;
 mod recovery;
 mod reformat;
 mod rosetta;
@@ -333,6 +334,22 @@ enum Cmd {
     Roles {
         /// Grammar crate root: reads src/node-types.json and roles.json
         grammar: PathBuf,
+    },
+    /// Generate each grammar's query files from queries/*.scm, expanding
+    /// facets into that grammar's own node types
+    Queries {
+        /// Where the vocabulary-level sources live [default: queries]
+        #[arg(long, default_value = "queries")]
+        source: PathBuf,
+        /// Where the grammar crates live [default: crates]
+        #[arg(long, default_value = "crates")]
+        crates: PathBuf,
+        /// Fail if a generated file is missing or out of date, writing nothing
+        #[arg(long)]
+        check: bool,
+        /// Report how much of each grammar's own corpus one file captures
+        #[arg(long)]
+        coverage: bool,
     },
     /// Run the rosetta gate: the same program in every owned language must
     /// yield the same role counts (DESIGN.md §5.4)
@@ -719,6 +736,13 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
+        Cmd::Queries { source, crates, check, coverage } => {
+            if coverage {
+                queries::coverage(&crates, "highlights.scm")
+            } else {
+                queries::run(&source, &crates, check)
+            }
+        }
         Cmd::Rosetta { dir, crates } => rosetta::run(&dir, &crates),
         Cmd::Verify {
             grammar,

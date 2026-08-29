@@ -11,11 +11,10 @@
   "lint_ratchets": 9,
   "shape_fixture_grammars": 7,
   "wasm_packs": 9,
-  "query_files": 0,
+  "query_files": 9,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
-  "no tree-sitter query files are configured",
   "no grammar has a binding directory beyond Rust",
   "span oracle configured but no checked-in shape fixtures: bash"
  ],
@@ -55,7 +54,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -114,7 +113,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -207,7 +206,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -275,7 +274,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -348,7 +347,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -506,7 +505,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -565,7 +564,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -700,7 +699,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -861,7 +860,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 1
    },
    "corpus_lock": true,
    "corpus_canary": true,
