@@ -17,14 +17,18 @@ a reimplementation for the web.
 
 ## Using the same file
 
-Each grammar is one WebAssembly module that imports only WASI — six calls, all
+From Rust, the same grammar is two lines and no download to manage:
+
+```rust
+let pack = Pack::fetch("python")?;
+let tree = pack.parse(source)?;
+```
+
+Each grammar is one WebAssembly module importing only WASI — six calls, all
 file-descriptor stubs the parse path never reaches. There is no
 web-tree-sitter and no emscripten glue, so a binding is about twenty lines in
-any language with a WASI runtime.
-
-```sh
-curl -O https://treebank.dev/packs/treebank-python.wasm
-```
+any language with a WASI runtime. [Using a grammar](/integrate/) has both, and
+the module URLs.
 
 The module answers for itself: `tb_provenance()` returns which grammar, which
 vocabulary and what the last sweep measured, and `tb_roles()` returns the

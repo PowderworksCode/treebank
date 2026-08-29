@@ -44,21 +44,34 @@ program would download. Paste some code and watch the tree.
 
 ## Use one
 
-Each grammar is one `.wasm` that imports only WASI. It runs from Python, Go,
-Ruby, Rust or a browser with no toolchain at the far end:
-
 ```sh
-curl -O https://treebank.dev/packs/treebank-python.wasm
+cargo add treebank
 ```
 
-From Rust that is `cargo add treebank` and `Pack::fetch("python")`, which
-downloads and verifies the grammar for you. From anywhere else it is a WASI
-runtime and about twenty lines — [Using a grammar](/integrate/) has both, and
-the complete examples.
+```rust
+use treebank::Pack;
+
+let pack = Pack::fetch("python")?;
+let tree = pack.parse(source)?;
+
+for capture in pack.query(&tree, "(_declaration) @decl")? {
+    println!("{} {:?}", capture.kind, capture.range);
+}
+```
+
+`fetch` downloads the grammar, checks it against the published sha256, and
+caches it. That query finds declarations in Rust and TypeScript too, without
+being rewritten — every grammar carries the same vocabulary.
 
 There is one package per language you write in, not one per language you
-parse. Every file is content-addressed, so `treebank-python-<hash>.wasm` is a
-version you can pin and never see change.
+parse, so adding a language is a download rather than a dependency. Every
+grammar is content-addressed and can be pinned to a version that never
+changes.
+
+Each grammar is also just one `.wasm` importing only WASI, so it runs from
+Python, Go, Ruby or a browser in about twenty lines with no toolchain at the
+far end. [Using a grammar](/integrate/) has all of it, with complete
+examples.
 
 ## What is here
 
