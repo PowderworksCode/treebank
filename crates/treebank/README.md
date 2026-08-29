@@ -83,10 +83,17 @@ for i in 0..node.child_count(false)? {
 
 This is the reason the grammars are written rather than collected. Every one
 carries the same vocabulary, so a query written once runs against all of them
-and finds whatever that language calls the thing:
+and finds whatever that language calls the thing. The sources differ, because
+they must; the query does not:
 
 ```rust
-for lang in ["python", "rust", "typescript"] {
+let sources = [
+    ("python", "def f(): pass\nclass C: pass\n"),
+    ("rust", "fn f() {}\nstruct S;\n"),
+    ("typescript", "function f() {}\nclass C {}\n"),
+];
+
+for (lang, source) in sources {
     let pack = Pack::fetch(lang)?;
     let tree = pack.parse(source)?;
     for capture in pack.query(&tree, "(_declaration) @decl")? {
