@@ -90,6 +90,13 @@ export class Pack {
     return this.cstr(this.e.tb_language_name());
   }
 
+  // Whether this pack can run queries at all. Adding exports does not break a
+  // binding, so an older pack is missing them rather than broken -- asking is
+  // the difference between a page that explains itself and one that throws.
+  get canQuery() {
+    return typeof this.e.tb_query_new === "function";
+  }
+
   parse(text) {
     const bytes = new TextEncoder().encode(text);
     const ptr = this.e.tb_alloc(bytes.length);
@@ -99,6 +106,108 @@ export class Pack {
     this.e.tb_free(ptr);
     if (!tree) throw new Error("parse failed");
     return new Tree(this, tree, bytes.length);
+  }
+}
+
+// tree-sitter's TSQueryError, by position in the C enum, worded as
+// crates/treebank/src/pack.rs words them so the page and the crate do not
+// describe the same failure differently.
+const QUERY_ERROR = [
+  "the query is valid",
+  "the query is not valid s-expression syntax",
+  "the query names a node type this grammar does not have",
+  "the query names a field this grammar does not have",
+  "the query captures something that cannot be captured",
+  "the query asks for a shape this grammar cannot produce, usually a field on a node type that does not have it",
+  "the query names a language that is not this one",
+];
+
+// A compiled query. Compiling is the expensive half and is worth keeping
+// across runs; the cursor is per-run and is not.
+//
+// Queries arrived with pack_abi 3. An older pack parses perfectly well and
+// simply cannot do this, which is a fact about the pack rather than a fault
+// in the page -- so `Pack.canQuery` is asked first and the box says so.
+export class Query {
+  constructor(pack, source) {
+    const e = pack.e;
+    if (!pack.canQuery) {
+      throw new Error(
+        `this ${pack.language} pack cannot run queries: it is pack_abi ` +
+          `${pack.provenance.pack_abi}, and queries need 3. Fetch a current pack.`,
+      );
+    }
+    const bytes = new TextEncoder().encode(source);
+    const src = e.tb_alloc(bytes.length || 1);
+    if (!src) throw new Error("out of memory in the pack");
+    pack.mem.set(bytes, src);
+    // Two u32 out-params: the byte offset the compiler stopped at, and which
+    // kind of error it is. The offset is the whole message for a person who
+    // just typed the query.
+    const err = e.tb_alloc(8);
+    const handle = e.tb_query_new(src, bytes.length, err, err + 4);
+    let offset = 0, kind = 0;
+    if (!handle) {
+      const view = new DataView(e.memory.buffer);
+      offset = view.getUint32(err, true);
+      kind = view.getUint32(err + 4, true);
+    }
+    e.tb_free(src);
+    e.tb_free(err);
+    if (!handle) {
+      const what = QUERY_ERROR[kind] ?? "the query is not valid";
+      const error = new Error(`${what}, at byte ${offset}`);
+      error.offset = offset;
+      error.kind = what;
+      throw error;
+    }
+    this.pack = pack;
+    this.handle = handle;
+  }
+
+  get patternCount() {
+    return this.pack.e.tb_query_pattern_count(this.handle);
+  }
+
+  // Captures come out one at a time because wasm cannot return a struct --
+  // the same reason nodes are handles. `limit` stops a pattern that matches
+  // everything from building a list nothing will read.
+  run(node, { limit = Infinity } = {}) {
+    const e = this.pack.e;
+    const cursor = e.tb_query_exec(this.handle, node);
+    if (!cursor) throw new Error("could not start the query");
+    const slot = e.tb_node_new();
+    const out = e.tb_alloc(8);
+    const found = [];
+    let truncated = false;
+    try {
+      while (e.tb_query_next_capture(cursor, this.handle, slot, out, out + 4)) {
+        if (found.length >= limit) {
+          truncated = true;
+          break;
+        }
+        const view = new DataView(e.memory.buffer);
+        found.push({
+          name: this.pack.cstr(e.tb_query_capture_name(this.handle, view.getUint32(out + 4, true))),
+          pattern: view.getUint32(out, true),
+          type: this.pack.cstr(e.tb_node_type(slot)),
+          startByte: e.tb_node_start_byte(slot),
+          endByte: e.tb_node_end_byte(slot),
+          startRow: e.tb_node_start_row(slot),
+          startColumn: e.tb_node_start_column(slot),
+        });
+      }
+    } finally {
+      e.tb_node_free(slot);
+      e.tb_free(out);
+      e.tb_query_cursor_delete(cursor);
+    }
+    return { captures: found, truncated };
+  }
+
+  free() {
+    this.pack.e.tb_query_delete(this.handle);
+    this.handle = 0;
   }
 }
 

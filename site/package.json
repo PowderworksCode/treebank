@@ -6,7 +6,7 @@
     "grammars": "node tools/build-grammars.mjs",
     "status": "node tools/build-status.mjs",
     "packs": "node tools/build-packs-index.mjs",
-    "viewer": "cp src/grammar.mjs src/railroad.mjs src/grammar-viewer.mjs src/status.mjs src/status-view.mjs src/pack.mjs src/playground.mjs src/grammar.css public/",
+    "viewer": "cp src/grammar.mjs src/railroad.mjs src/grammar-viewer.mjs src/status.mjs src/status-view.mjs src/pack.mjs src/expand.mjs src/playground.mjs src/grammar.css public/",
     "build": "rm -rf out && bun run grammars && bun run packs && bun run viewer && powderworks-docs build content --out out --site treebank --license MIT --static public",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",

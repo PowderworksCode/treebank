@@ -495,17 +495,43 @@ impl Pack {
     }
 }
 
-/// TSQueryError, which the C header numbers rather than names.
+/// TSQueryError, which the C header numbers rather than names. The numbering
+/// is the header's and nothing else: an earlier version of this function
+/// invented a `predicate` variant at 5, which pushed every later value along
+/// and made a structure error -- the one a facet query hits most -- report a
+/// predicate the query did not contain.
 fn query_error(kind: u32) -> &'static str {
     match kind {
         1 => "the query is not valid s-expression syntax",
         2 => "the query names a node type this grammar does not have",
         3 => "the query names a field this grammar does not have",
         4 => "the query captures something that cannot be captured",
-        5 => "the query uses a predicate this runtime does not support",
-        6 => "the query uses a structure this runtime does not support",
-        7 => "the query names a language that is not this one",
+        // TSQueryErrorStructure: the pattern's shape cannot occur. Usually a
+        // field asked of a node type that does not declare it, which is what
+        // an expanded facet produces when one member lacks the field.
+        5 => "the query asks for a shape this grammar cannot produce, \
+              usually a field on a node type that does not have it",
+        6 => "the query names a language that is not this one",
         _ => "the query is not valid",
+    }
+}
+
+#[cfg(test)]
+mod query_error_tests {
+    use super::query_error;
+
+    /// Pinned against tree_sitter/api.h. The values are positional in the C
+    /// enum, so inserting one shifts every later message onto the wrong error.
+    #[test]
+    fn the_numbering_matches_the_header() {
+        assert!(query_error(1).contains("s-expression"));
+        assert!(query_error(2).contains("node type"));
+        assert!(query_error(3).contains("field"));
+        assert!(query_error(4).contains("captures"));
+        assert!(query_error(5).contains("shape"));
+        assert!(query_error(6).contains("language"));
+        assert_eq!(query_error(7), "the query is not valid");
+        assert_eq!(query_error(99), "the query is not valid");
     }
 }
 
