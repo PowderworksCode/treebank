@@ -63,10 +63,20 @@ why a hash is the useful thing to quote in a bug report.
 
 ### Speed
 
-A grammar is compiled the first time it is loaded, which takes a few seconds,
-and the compiled form is cached — subsequent loads are about fifty
-milliseconds. Nothing is needed to enable this.
-`TREEBANK_NO_COMPILE_CACHE=1` turns it off and `TREEBANK_CACHE` moves it.
+A grammar is compiled the first time it is loaded and the compiled form is
+cached, so later loads are a few milliseconds. Nothing is needed to enable
+this.
+
+| | cold | warm |
+| --- | --- | --- |
+| python, 673 KB | 296 ms | 4 ms |
+| C++, 5.0 MB | 370 ms | 25 ms |
+
+Parsing itself is well under a millisecond, so this is the whole startup cost.
+Measure it in a **release** build: in a debug build cranelift is unoptimised
+and the same load takes about four seconds, which says nothing about what your
+users will see. `TREEBANK_NO_COMPILE_CACHE=1` turns the cache off and
+`TREEBANK_CACHE` moves it.
 
 ## Walking the tree
 

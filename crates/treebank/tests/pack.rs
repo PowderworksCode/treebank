@@ -78,10 +78,13 @@ fn expands_a_facet_query_against_the_packs_own_manifest() {
     assert!(expanded.contains(&members[0]), "expected {} in {expanded}", members[0]);
 }
 
-/// Compiling a pack is ~3.8s and deserializing a cached one is ~50ms, so the
-/// cache is not an optimisation but the difference between a tool that is
-/// usable and one that is not. This asserts it is actually being hit, in a
-/// clean cache directory rather than whatever the developer's happens to hold.
+/// Compiling a pack costs a few hundred milliseconds and loading a cached one
+/// costs a few, so this is the startup cost of every tool that uses a grammar.
+/// Asserts the cache is actually hit, in a clean directory rather than
+/// whatever the developer's happens to hold.
+///
+/// The ratio rather than a duration, because this runs in a debug profile
+/// where cranelift is unoptimised and everything is roughly ten times slower.
 #[test]
 fn a_second_load_uses_the_compiled_cache() {
     let Some(path) = a_pack() else { return };

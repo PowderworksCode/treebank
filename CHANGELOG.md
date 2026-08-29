@@ -21,11 +21,12 @@ Only the Rust API is versioned.
 - `Pack::fetch_pinned("python", "<hash>")` loads an exact version. It consults
   no manifest, so it is reproducible and works offline once the bytes are
   cached — which is what a build that must not vary should call.
-- Compiled modules are cached. Loading a pack was ~3.8s of cranelift on every
-  run; a cached one is ~51ms. The artifact is keyed by the wasm bytes and the
-  host, and wasmtime rejects one built by an incompatible version, so a stale
-  entry is rebuilt rather than mis-loaded. `TREEBANK_NO_COMPILE_CACHE=1`
-  disables it.
+- Compiled modules are cached, so loading a grammar is a few milliseconds
+  rather than a few hundred. Release-build measurements: python 296ms cold
+  against 4ms warm, C++ 370ms against 25ms. The artifact is keyed by the wasm
+  bytes and the host, and wasmtime rejects one built by an incompatible
+  version, so a stale entry is rebuilt rather than mis-loaded.
+  `TREEBANK_NO_COMPILE_CACHE=1` disables it.
 - A `fetch` feature, on by default and implying `pack`. Turn it off for a
   build that must not reach the network.
 

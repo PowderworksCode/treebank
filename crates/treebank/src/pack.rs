@@ -383,11 +383,16 @@ impl Abi {
     }
 }
 
-/// Compiling a pack takes about four seconds; loading an already-compiled one
-/// takes milliseconds. Everything else here is fast enough not to matter --
-/// reading the file and parsing a small program are both under a millisecond
-/// -- so without this, every run of a tool that loads a grammar pays four
-/// seconds of cranelift.
+/// Compiling a pack costs a few hundred milliseconds; loading an
+/// already-compiled one costs a few. Measured on a release build: python
+/// 296ms cold against 4ms warm, C++ 370ms against 25ms. Everything else here
+/// is far cheaper -- reading the file and parsing a small program are both
+/// under a millisecond -- so this is the whole startup cost of using a
+/// grammar, paid on every run of a tool without it.
+///
+/// Beware measuring this in a debug build. Cranelift is compiled unoptimised
+/// there and the same load takes about four seconds, which is a fact about
+/// the profile rather than about wasmtime.
 ///
 /// The key covers the wasm bytes and the host. It does NOT cover the wasmtime
 /// version, because wasmtime writes its own version into the artifact and
