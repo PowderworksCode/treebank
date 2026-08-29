@@ -70,15 +70,27 @@ same_text_tokens = 1
 # contextual words (get, set, of, from, as, declare, namespace, module,
 # global, out, override, accessor, target, meta, is).
 #
-# The grammar declares `word: identifier` and NO reserved set. A larger
-# share of this list is genuinely contextual than in any other grammar
-# here — typescript's type keywords really are ordinary identifiers in
-# value position, and `type`, `as` and `of` are used as variable names in
-# real code. But the hard javascript reserved words (`class`, `function`,
-# `return`, `typeof`) are in the list too, unreserved by omission. Nobody
-# has probed which positions leak; see issue #198 for the same defect
-# confirmed in zig. Frozen at today's value so it cannot grow while that
-# check is outstanding.
+# The grammar declares `word: identifier` and NO reserved set, but unlike
+# the other six grammars in that position, most of this list is soft BY
+# DESIGN rather than by omission, and it should not be read as 75 units
+# of debt.
+#
+# Two separate reasons. First, typescript's own vocabulary really is
+# contextual: `type`, `as`, `of`, `from`, `get`, `set`, `satisfies`,
+# `keyof`, `infer`, `declare`, `namespace`, `module`, `global`, `is`,
+# `out` and `asserts` are legal identifiers in real code and MUST lex as
+# names. Second, the grammar carries `_reserved_property`, a rule listing
+# 40 hard keywords deliberately admitted as property names — `x.class`,
+# `x.new`, `x.function` are valid JavaScript and have been since ES5. So
+# the hard keywords appearing here is, in property position, a designed
+# behaviour with a named rule behind it, not an oversight.
+#
+# What is NOT established is the rest: whether a hard keyword also lexes
+# as a plain name somewhere that is not a property. That is the same
+# distinction zig turned out to fail (issue #198) — which positions leak
+# is incidental rather than designed. Stream 5 owns that probe for this
+# grammar. Frozen at today's value meanwhile, and it should DROP to
+# whatever the probe leaves rather than keep the slack.
 unreserved_keywords = 75
 
 # Parse-table size. Not a correctness bound — a growth alarm: conflicts
