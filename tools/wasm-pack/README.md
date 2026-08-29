@@ -79,52 +79,48 @@ Two build settings are load-bearing:
   which loses the WASI reactor exec model, and every host then refuses to
   instantiate the module. It looks like a runtime bug and is a link flag.
 
-## Releases and the index
+## Distribution
 
-```sh
-./tools/wasm-pack/release.sh                 # stage into dist/release
-./tools/wasm-pack/release.sh --publish       # the only networked path
-./tools/wasm-pack/index.sh                   # packs.json
-./tools/wasm-pack/test-release.sh            # rehearse all of it, publish nothing
+Packs are published to **R2**, and served from `treebank.dev/packs/` by the
+site's Worker. They are content-addressed:
+
+```
+treebank-python-<sha256[:12]>.wasm   immutable, cached for a year
+treebank-python.wasm                 the moving pointer
+index.json                           which hash is current, per grammar
 ```
 
-A release is the `.wasm`, its provenance and roles as sibling JSON, and
-`SHA256SUMS` over all three. The siblings are extracted **from the module**,
-so they cannot disagree with what it says about itself; the module remains
-the source of truth.
+A pack is byte-reproducible, so a hashed key is those bytes or does not
+exist, and a pinned URL cannot change under a consumer. The plain name is
+resolved through `index.json` rather than duplicated as a second object,
+because two names for the same bytes is two things that can disagree.
+Old hashed objects are never deleted: that is what keeps a pin working.
 
-**GitHub Releases, not npm** — measured rather than assumed: npm's
-tree-sitter grammar packages ship native `.node` prebuilds and contain zero
-wasm, while every upstream grammar publishes `<name>.wasm` as a release
-asset. Releases also need no account and no secret, and are an HTTPS GET from
-any language, which is what matters when packs are consumed from bindings
-rather than only from JS.
+CI publishes on a push to `main`, uploading the packs the gate above already
+built and checked -- hashed objects first, then the manifest that names them,
+so the pointer is never live before its target.
 
-`packs.json` is published to a **moving `packs-index` tag**, so a consumer has
-one stable URL instead of N releases to discover. The index is mutable by
-design and nothing in it is trusted: every entry carries the sha256 of an
-immutable artifact.
+**Why not GitHub Releases** -- it was the obvious answer and it cannot work.
+Release assets carry no `access-control-allow-origin`, on either the
+`github.com` redirect or the final `release-assets.githubusercontent.com`
+object, so a browser cannot fetch them at all. R2 has free egress, and the
+Worker makes the packs same-origin, so the question does not arise. Consumers
+outside a browser were never blocked by CORS and can fetch the same URLs.
 
-Versions are plain semver from each crate's `Cargo.toml`. The vendoring era's
-`<upstream>-treebank.N` scheme tracked an upstream version and a build
-counter; treebank owns these grammars, so neither exists.
+`list-grammars.sh` is the shared source for CI and for publishing: every
+`crates/treebank-*/grammar.js` creates a pack obligation, and there is no
+matrix to remember to extend when a grammar is added.
 
-`list-grammars.sh` is the shared source for CI, default releases and release
-rehearsals: every `crates/treebank-*/grammar.js` creates a pack obligation.
-There is no release matrix to remember to extend when a grammar is added.
-
-`test-release.sh` closes what publishing leaves untestable — the tag, the
-skip on a re-run, and a consumer actually fetching over HTTP. It stages
-every pack under a `rehearsal-wasm/` tag namespace, serves it over
-localhost, fetches **by URL**, verifies `SHA256SUMS` against the fetched
-bytes, runs both example consumers (asserting each grammar's sweep-smoke
-invalid fixture is rejected and its valid fixture parses clean), checks the
-index's hashes and that its URLs name the real tag rather than the rehearsal
-one, and asserts a re-run releases nothing. It publishes nothing and deletes
-its tags on exit.
+`test-consumers.sh` covers what `check.sh` cannot. `check.sh` proves a pack
+loads under a WASI runtime; this proves the ABI is usable. It serves the
+packs over localhost, fetches them **by URL** as a real consumer does,
+verifies sha256 against the bytes that travelled, and drives both example
+bindings -- asserting each grammar's sweep-smoke invalid fixture is rejected
+and its valid fixture parses clean. A pack that accepted everything would
+pass a valid-only check. Those bindings are also the reference the browser's
+was ported from, so if they break, the playground breaks with them.
 
 ## Status
 
-Built, gated and rehearsed on every change; **published nowhere**. The first
-real publish is a `--publish` run, and it is deliberately not wired to
-anything that fires.
+Built, gated and consumer-checked on every change; published to R2 on every
+push to `main`, and read from there by the playground.

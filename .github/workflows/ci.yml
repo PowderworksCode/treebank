@@ -416,13 +416,11 @@ jobs:
             "treebank-packs/index.json" --file public/packs/index.json \
             --content-type application/json --remote
 
-  release-rehearsal:
-    name: wasm release rehearsal
+  consumers:
+    name: wasm consumers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0          # the rehearsal reads and writes tags
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -435,10 +433,11 @@ jobs:
           path: ~/.cache/treebank
           key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
       - run: pip install wasmtime
-      # Everything that only happens AFTER a successful release — the tag,
-      # the skip on a re-run, and a consumer fetching assets over HTTP and
-      # parsing with them — is untestable by publishing, which is exactly
-      # the part that breaks. This rehearses all of it and publishes
-      # nothing: staged releases, served over localhost, fetched by URL,
-      # checksummed, parsed by both example consumers, and indexed.
-      - run: ./tools/wasm-pack/test-release.sh
+      # check.sh proves a pack loads under a WASI runtime. This proves the ABI
+      # is usable: every pack fetched over HTTP -- as the site fetches them
+      # from R2 -- checksummed against the bytes that travelled, then driven
+      # by both example bindings, asserting the sweep-smoke valid fixture
+      # parses clean and the invalid one is still rejected. Those bindings are
+      # also the reference the browser's was ported from, so if they break the
+      # playground breaks with them.
+      - run: ./tools/wasm-pack/test-consumers.sh
