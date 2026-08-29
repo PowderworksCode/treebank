@@ -1,0 +1,122 @@
+# What this grammar's corpora are allowed never to build, and what checks
+# it instead. `treebank kinds --check` holds this file to the measurement
+# in both directions: a blind spot missing from here fails, and so does an
+# entry the corpus has since started producing. Sections are per LANGUAGE,
+# because one grammar answers for two corpora with different blind spots.
+#
+# Nothing goes in here to make a number go down. Each entry names what
+# covers the construct, and `covered_by` should be reproducible -- a corpus
+# or a seed count, not a judgement.
+
+[typescript]
+rule = '''
+Resolves #153. The decision is to ACCEPT this list rather than grow the corpus, and the reason is a property of npm rather than of K.
+
+11,991 files, and 10,923 of them -- 91.1% -- are declaration files (.d.ts/.d.cts/.d.mts). A declaration file has no statements and no expressions, so it cannot contain a compound assignment, a `debugger`, a `static_block`, a `with`, or a destructuring default NO MATTER HOW MANY of them we admit. The implementation slice is 1,068 files. Raising the npm top-K adds packages at the same ~91% ratio, so it buys implementation files at roughly one in eleven and does not aim at the gap; the ledger already records this shape under `corpus.blind_to`. Reaching these in a real .ts file needs a corpus of application TypeScript from repositories, which is a different corpus with a different lock, not a bigger K.
+
+What makes accepting it honest is that this grammar's OTHER corpus is not blind to them. corpus/javascript is 25,300 real files judged by V8, parsed by this same grammar crate, and it exercises 11 of the 14 below. So for those 11 the claim is not "fuzzing reached it" but "real source ran it past a reference parser" -- just under .js rather than .ts. The residue is `**=` and `jsx_namespace_name`, which no corpus here contains and only fuzzing reaches.
+
+Every construct below was also put to the reference parser by hand at the spelling in `spelling`, and tsc's verdict is recorded. Measured 2026-08-29 against grammar b2550d9; fuzz figures are 10 seeds x 5,000 derivations, `treebank fuzz --lang typescript`.'''
+
+[[typescript.accepted]]
+item = '%='
+spelling = 'let a = 1; a %= 2;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 8/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'compound assignment; absent from .d.ts by construction'
+
+[[typescript.accepted]]
+item = '&&='
+spelling = 'let a: any = 1; a &&= 2;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 7/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'logical assignment (ES2021); absent from .d.ts by construction'
+
+[[typescript.accepted]]
+item = '&='
+spelling = 'let a = 1; a &= 2;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 7/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'compound assignment; absent from .d.ts by construction'
+
+[[typescript.accepted]]
+item = '**='
+spelling = 'let a = 1; a **= 2;'
+covered_by = 'fuzz 4/10 seeds ONLY — no corpus here contains it'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = '''
+The weakest entry in this file and the one to fix first if anything here is fixed. Exponentiation assignment (ES2016) appears in neither corpus, and 4 of 10 seeds means an individual nightly fuzz run is more likely to miss it than hit it. It is carried by the checked-in corpus fixture in test/corpus/statements.txt, which asserts the tree deterministically in CI; what that fixture cannot do is ask an oracle, which is why this entry says fuzz rather than claiming more.'''
+
+[[typescript.accepted]]
+item = '*='
+spelling = 'let a = 1; a *= 2;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'compound assignment; absent from .d.ts by construction'
+
+[[typescript.accepted]]
+item = '/='
+spelling = 'let a = 1; a /= 2;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 7/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = '''
+compound assignment, and the one with a lexing question behind it: `/` is this grammar's single same-text token split (a plain token and a token.immediate), which `treebank lint` reports. The .js corpus exercising `/=` is what says the split does not eat it.'''
+
+[[typescript.accepted]]
+item = 'debugger'
+spelling = 'debugger;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'the keyword; its statement is the next entry'
+
+[[typescript.accepted]]
+item = 'debugger_statement'
+spelling = 'debugger;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'shipped .ts is compiled or linted output; `debugger` is what a linter removes'
+
+[[typescript.accepted]]
+item = 'assignment_pattern'
+spelling = 'const [a = 1] = [2];'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'a default inside a destructuring pattern; needs an expression, so no .d.ts has one'
+
+[[typescript.accepted]]
+item = 'import_attribute'
+spelling = 'import d from "./d.json" with { type: "json" };'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'import attributes are new enough that the locked top-1000 predates their adoption in shipped .ts'
+
+[[typescript.accepted]]
+item = 'jsx_fragment'
+spelling = 'const x = <></>;'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = '''
+the ledger records JSX incidence as low outside React-adjacent packages, and the .tsx slice of this corpus is 47 files. The .jsx/.js side is where React actually ships.'''
+
+[[typescript.accepted]]
+item = 'jsx_namespace_name'
+spelling = 'const x = <svg:circle />;'
+covered_by = 'fuzz 10/10 seeds ONLY — no corpus here contains it'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = '''
+Namespaced JSX names (`<svg:circle/>`) are legal JSX that React itself does not use, so no corpus of npm packages is likely to contain one at any K. Unlike `**=` every seed reaches it, so fuzz coverage here is a property of the grammar rather than a coin flip.'''
+
+[[typescript.accepted]]
+item = 'static_block'
+spelling = 'class C { static { } }'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 9/10 seeds'
+oracle = 'ts-oracle: valid; tsc: no diagnostic'
+why = 'class static blocks (ES2022); a body of statements, so no .d.ts has one'
+
+[[typescript.accepted]]
+item = 'with_statement'
+spelling = 'declare const o: any; with (o) { }'
+covered_by = 'corpus/javascript (real files, V8) · fuzz 10/10 seeds'
+oracle = '''
+ts-oracle: valid. tsc PARSES it and refuses it in the checker -- TS2410, "the 'with' statement is not supported" -- which is a semantic refusal, not a syntax error, so parseDiagnostics is empty. The same shape as TS1211, and the reason this grammar keeps the rule: `with` is grammatical JavaScript, banned in strict mode and in modules, and sloppy-mode .js in the wild still has it.'''
+why = 'no modern .ts contains one; the .js corpus does'

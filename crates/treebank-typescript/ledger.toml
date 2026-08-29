@@ -49,7 +49,13 @@ Every earlier finding is closed: `try { }` with neither catch nor finally, `for 
 source = '''
 top-1000 npm packages by download rank, both corpora (typescript: .ts/.tsx; javascript: .js/.mjs/.cjs/.jsx, minified excluded)'''
 blind_to = '''
-npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heavy (undici-types, type-fest) and light on application .ts; JSX incidence is low outside React-adjacent packages'''
+npm ships mostly compiled .js + .d.ts, so the TS corpus is declaration-file-heavy (undici-types, type-fest) and light on application .ts; JSX incidence is low outside React-adjacent packages. Measured: 10,923 of 11,991 typescript files are declaration files -- 91.1% -- leaving 1,068 that can hold a statement at all. That ratio, not the value of K, is what `kinds_coverage` below is about.'''
+kinds_coverage = '''
+`treebank kinds` finds 7 node kinds and 7 tokens that no typescript corpus file ever builds, and the decision (#153) is to ACCEPT them rather than grow the corpus. The list, what covers each one and the reason are in `kinds_policy.toml`, which `treebank kinds --check` holds to the measurement in both directions -- an undeclared blind spot fails, and so does a declaration the corpus has since outgrown, so growing the corpus deletes entries there rather than leaving a claim that quietly stopped being true. The weekly canary runs it.
+
+The reason not to grow: a `.d.ts` has no statements and no expressions, so 91.1% of this corpus cannot hold a compound assignment, a `debugger`, a `static_block`, a `with` or a destructuring default at any K, and a larger top-1000 is more npm at the same ratio. Reaching them in real .ts needs application TypeScript from repositories -- a different corpus with a different lock.
+
+The reason accepting is not a shrug: 11 of the 14 are exercised by real files in corpus/javascript, 25,300 of them judged by V8 through this same grammar crate. Only `**=` and `jsx_namespace_name` rest on fuzzing, both carry a checked-in corpus fixture, and every one of the 14 was put to tsc by hand at a recorded spelling. Fuzz reach, 10 seeds x 5,000 derivations: 7 of the 14 on every seed, `**=` weakest at 4/10.'''
 mutation_falsification = '''
 javascript with while_statement deleted from _loop: 429 gap files (vs 8). typescript with the _type_member_end token removed: 20 gap files (vs 13). Both the oldest and the newest rules can be falsified.'''
 widening_note = '''

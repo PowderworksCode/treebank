@@ -248,6 +248,12 @@ enum Cmd {
         out: Option<PathBuf>,
         #[arg(long)]
         limit: Option<usize>,
+        /// Hold kinds_policy.toml to the measurement: fail on a blind spot
+        /// it does not declare, and on a declaration the corpus has since
+        /// outgrown. Advisory where the grammar declares no section for
+        /// this language
+        #[arg(long)]
+        check: bool,
     },
     Mutate {
         #[arg(long, value_enum, default_value_t = LangName::Python)]
@@ -640,12 +646,14 @@ fn main() -> anyhow::Result<()> {
             manifest,
             out,
             limit,
+            check,
         } => kinds::run(
             lang,
             &grammar,
             &lang_path(lang, manifest, "manifest.json"),
             limit,
             &out.unwrap_or_else(|| kinds::default_out(lang)),
+            check,
         ),
         Cmd::Fuzz {
             lang,
