@@ -332,5 +332,38 @@ ul.pg-errlist li { display: flex; gap: .5rem; align-items: baseline; padding: .1
 @media (prefers-color-scheme: dark) {
   .pg-badge.err { color: #e0977a; } .pg-badge.missing { color: #d6ab4e; }
 }
+/* The query box spans both columns: a query is about the tree and the source
+   at once, so it belongs under both rather than beside one. */
+.pg-query { margin-top: 1.1rem; }
+.pg-q {
+  width: 100%; font-family: var(--font-mono); font-size: .82rem;
+  padding: .5rem .6rem; color: var(--fg); background: var(--code-bg);
+  border: 1px solid var(--line); border-radius: 4px;
+}
+.pg-q:focus { outline: 2px solid var(--g-accent); outline-offset: -1px; }
+.pg-q:disabled { opacity: .55; cursor: not-allowed; }
+.pg-qhint { margin-top: .4rem; font-size: .78rem; line-height: 1.6; }
+/* Facet names are buttons because the useful thing to do with one is try it. */
+.pg-facet {
+  font-size: .76rem; padding: .05rem .35rem; cursor: pointer;
+  color: var(--g-accent); background: var(--g-accent-bg);
+  border: 1px solid var(--g-hair); border-radius: 3px;
+}
+.pg-facet:hover { text-decoration: underline; }
+.pg-qout { margin-top: .6rem; font-size: .84rem; }
+.pg-expansion summary { cursor: pointer; font-size: .78rem; }
+.pg-expanded {
+  margin: .35rem 0; padding: .45rem .6rem; overflow-x: auto;
+  font-size: .76rem; line-height: 1.5; white-space: pre-wrap; word-break: break-word;
+  background: var(--g-sheet); border: 1px solid var(--g-hair); border-radius: 4px;
+}
+ul.pg-caplist { list-style: none; margin: .2rem 0; padding: 0; max-height: 18rem; overflow: auto; }
+ul.pg-caplist li {
+  display: flex; gap: .5rem; align-items: baseline; padding: .12rem .25rem;
+  border-radius: 3px; cursor: pointer;
+}
+ul.pg-caplist li:hover { background: var(--g-accent-bg); }
+.pg-cap { color: var(--g-outside); font-size: .78rem; }
+
 .pg-prov { margin-top: 1rem; font-size: .82rem; }
 .pg-pin { font-family: var(--font-mono); font-size: .78rem; }

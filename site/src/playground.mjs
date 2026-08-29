@@ -11,7 +11,8 @@
 // -- see a `function_definition` in your own code, click it, read the
 // production that admitted it.
 
-import { errorsIn, Pack, walk } from "./pack.mjs";
+import { errorsIn, Pack, Query, walk } from "./pack.mjs";
+import { expandQuery } from "./expand.mjs";
 
 const E = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -39,7 +40,7 @@ const MAX_BYTES = 400_000;
 const MAX_NODES = 4_000;
 
 const SAMPLES = {
-  bash: 'for f in *.txt; do\n  echo "${f@Q}" >&2\ndone\n',
+  bash: 'greet() {\n  local name=${1:?need a name}\n  printf \'hi %s\\n\' "${name@Q}"\n}\n\nfor f in *.txt; do greet "$f"; done\n',
   c: "int main(void) {\n    int xs[] = {1, 2, 3};\n    return xs[0];\n}\n",
   cpp: "template <typename T>\nauto sum(const std::vector<T>& xs) -> T {\n    return std::accumulate(xs.begin(), xs.end(), T{});\n}\n",
   java: "record Point(int x, int y) {\n    Point {\n        if (x < 0) throw new IllegalArgumentException();\n    }\n}\n",
@@ -49,6 +50,14 @@ const SAMPLES = {
   typescript: "type Result<T> = { ok: true; value: T } | { ok: false; error: string };\n\nconst unwrap = <T,>(r: Result<T>): T => {\n  if (!r.ok) throw new Error(r.error);\n  return r.value;\n};\n",
   zig: "const std = @import(\"std\");\n\npub fn main() !void {\n    const xs = [_]u8{ 1, 2, 3 };\n    std.debug.print(\"{d}\\n\", .{xs.len});\n}\n",
 };
+
+// A capture list is one row each; a query like `(_) @x` matches everything.
+const MAX_CAPTURES = 500;
+
+// The box starts with a query that works, because a facet is easier to
+// understand from its expansion than from a description of one. `_callable`
+// exists in every grammar, which is the point of the shared vocabulary.
+const DEFAULT_QUERY = "(_callable) @callable";
 
 class Playground {
   constructor(root) {
@@ -78,6 +87,13 @@ class Playground {
     <div class="pg-tree"><p class="dim">No parse yet.</p></div>
   </div>
 </div>
+<div class="pg-query">
+  <label class="pg-label" for="pg-q">Query</label>
+  <input id="pg-q" class="pg-q mono" spellcheck="false" autocapitalize="off"
+         autocomplete="off" autocorrect="off">
+  <div class="pg-qhint dim"></div>
+  <div class="pg-qout"></div>
+</div>
 <div class="pg-prov dim"></div>`;
 
     this.select = this.root.querySelector(".pg-grammar");
@@ -86,9 +102,19 @@ class Playground {
     this.errorBox = this.root.querySelector(".pg-errors");
     this.stateBox = this.root.querySelector(".pg-state");
     this.provBox = this.root.querySelector(".pg-prov");
+    this.queryBox = this.root.querySelector(".pg-q");
+    this.queryOut = this.root.querySelector(".pg-qout");
+    this.queryHint = this.root.querySelector(".pg-qhint");
 
     this.select.addEventListener("change", () => this.choose(this.select.value));
     this.source.addEventListener("input", () => this.schedule());
+    this.queryBox.addEventListener("input", () => this.schedule());
+    // A capture names a byte range, so clicking one can show it rather than
+    // describe it.
+    this.queryOut.addEventListener("click", (event) => {
+      const row = event.target.closest("[data-start]");
+      if (row) this.select_(Number(row.dataset.start), Number(row.dataset.end));
+    });
     this.fillGrammars();
   }
 
@@ -130,6 +156,7 @@ class Playground {
   async choose(name, wantHash) {
     if (this.name === name && !wantHash) return;
     this.name = name;
+    this.dropQuery();
     this.pack = null;
     this.treeBox.innerHTML = '<p class="dim">Loading the parser…</p>';
     this.errorBox.innerHTML = "";
@@ -163,6 +190,11 @@ then <code>bun run packs</code>.</p>`;
       this.source.value = SAMPLES[name] ?? "";
       this.sampleShown = true;
     }
+    if (!this.queryBox.value.trim() || this.queryShown) {
+      this.queryBox.value = DEFAULT_QUERY;
+      this.queryShown = true;
+    }
+    this.showFacets();
     this.parse();
   }
 
@@ -220,6 +252,7 @@ than fail honestly.</p>`;
     try {
       this.showErrors(root);
       this.showTree(root, ms, bytes);
+      this.runQuery(root, text);
     } finally {
       this.pack.e.tb_node_free(root);
       tree.free();
@@ -241,6 +274,124 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
     }.</p><ul class="pg-errlist">${rows}</ul>${
       errors.length > 25 ? '<p class="dim">…first 25 shown.</p>' : ""
     }`;
+  }
+
+  // The facets this grammar declares, named under the box: a query cannot be
+  // written against a vocabulary nobody has listed.
+  showFacets() {
+    if (!this.pack) return;
+    const facets = Object.keys(this.pack.roles.facets ?? {}).sort();
+    if (!this.pack.canQuery) {
+      this.queryHint.innerHTML =
+        `This pack is <b>pack_abi ${E(this.pack.provenance.pack_abi)}</b> and queries need 3. ` +
+        `It parses fine; it was built before packs could run queries.`;
+      this.queryBox.disabled = true;
+      return;
+    }
+    this.queryBox.disabled = false;
+    this.queryHint.innerHTML =
+      `Facets in ${E(this.name)}: ` +
+      facets.map((f) => `<button type="button" class="pg-facet mono">${E(f)}</button>`).join(" ") +
+      ` — expanded here before the query runs, the same way ` +
+      `<code>Pack::query</code> expands them.`;
+    for (const button of this.queryHint.querySelectorAll(".pg-facet")) {
+      button.addEventListener("click", () => {
+        this.queryBox.value = `(${button.textContent}) @hit`;
+        this.parse();
+      });
+    }
+  }
+
+  dropQuery() {
+    if (this.compiled) {
+      try {
+        this.compiled.query.free();
+      } catch {
+        // The pack it belonged to is going away regardless.
+      }
+      this.compiled = null;
+    }
+  }
+
+  // Compiling is the expensive half, so it is kept while the query text is
+  // unchanged -- which is every keystroke in the SOURCE box.
+  compile(expanded) {
+    if (this.compiled?.text === expanded) return this.compiled.query;
+    this.dropQuery();
+    const query = new Query(this.pack, expanded);
+    this.compiled = { text: expanded, query };
+    return query;
+  }
+
+  runQuery(root, text) {
+    if (!this.pack?.canQuery) return;
+    const source = this.queryBox.value.trim();
+    if (!source) {
+      this.queryOut.innerHTML = '<p class="dim">Write a query to run it against the tree above.</p>';
+      return;
+    }
+
+    let expanded, query;
+    try {
+      expanded = expandQuery(source, this.pack.roles.facets ?? {});
+      query = this.compile(expanded);
+    } catch (error) {
+      this.dropQuery();
+      // When expansion changed the query, the failure is usually about the
+      // expansion rather than about what was typed -- so show it. An expanded
+      // facet fails as a whole when any one member cannot take a field the
+      // pattern asks for, and seeing the alternation is what makes that
+      // legible instead of mysterious.
+      const shown = expanded && expanded !== source
+        ? `<pre class="pg-expanded mono">${E(expanded)}</pre>`
+        : "";
+      this.queryOut.innerHTML =
+        `<p class="broken">${E(error.message)}</p>${shown}`;
+      return;
+    }
+
+    const { captures, truncated } = query.run(root, { limit: MAX_CAPTURES });
+    const expansion = expanded !== source
+      ? `<details class="pg-expansion"><summary class="dim">expanded to ${
+          E(query.patternCount)} pattern${query.patternCount === 1 ? "" : "s"}</summary>` +
+        `<pre class="pg-expanded mono">${E(expanded)}</pre></details>`
+      : "";
+
+    if (!captures.length) {
+      this.queryOut.innerHTML =
+        `${expansion}<p class="dim">No matches in this source.</p>`;
+      return;
+    }
+
+    const rows = captures.map((c) =>
+      `<li data-start="${c.startByte}" data-end="${c.endByte}" title="Select this range in the source">
+<span class="pg-cap mono">@${E(c.name)}</span>
+<a class="pg-type" href="/grammars/${E(this.name)}/#r-${E(c.type)}"
+   title="Read the production for ${E(c.type)}">${E(c.type)}</a>
+<span class="mono dim">${c.startRow + 1}:${c.startColumn + 1}</span>
+<span class="pg-span">${c.startByte}–${c.endByte}</span></li>`).join("");
+
+    this.queryOut.innerHTML = `${expansion}<p class="pg-ok">${captures.length}${
+      truncated ? "+" : ""} capture${captures.length === 1 ? "" : "s"}.</p>` +
+      `<ul class="pg-caplist">${rows}</ul>` +
+      (truncated ? `<p class="dim">Stopped at ${MAX_CAPTURES.toLocaleString()}.</p>` : "");
+  }
+
+  // Byte offsets are what a capture carries; a textarea counts UTF-16 code
+  // units. Decoding the prefix is the conversion, and it is only ever done
+  // for one click.
+  select_(startByte, endByte) {
+    const bytes = new TextEncoder().encode(this.source.value);
+    const decoder = new TextDecoder();
+    const start = decoder.decode(bytes.subarray(0, startByte)).length;
+    const end = decoder.decode(bytes.subarray(0, endByte)).length;
+    this.source.focus();
+    this.source.setSelectionRange(start, end);
+    // Put the selection roughly in view: a textarea will not scroll to a
+    // selection on its own.
+    const before = this.source.value.slice(0, start).split("\n").length - 1;
+    const lineHeight = parseFloat(getComputedStyle(this.source).lineHeight) || 18;
+    this.source.scrollTop = Math.max(0, (before - 3) * lineHeight);
   }
 
   showTree(root, ms, bytes) {
