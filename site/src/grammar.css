@@ -333,3 +333,4 @@ ul.pg-errlist li { display: flex; gap: .5rem; align-items: baseline; padding: .1
   .pg-badge.err { color: #e0977a; } .pg-badge.missing { color: #d6ab4e; }
 }
 .pg-prov { margin-top: 1rem; font-size: .82rem; }
+.pg-pin { font-family: var(--font-mono); font-size: .78rem; }

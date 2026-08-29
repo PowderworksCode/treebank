@@ -14,3 +14,6 @@ content/grammars/*.md
 
 # Built artifacts, 14 MB. See site/README.md for how they are served.
 public/packs/
+
+# Hashed copies and the manifest are derived from the staged packs.
+public/packs/index.json

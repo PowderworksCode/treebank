@@ -17,10 +17,18 @@ const E = (s) =>
   String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
 
-// Where packs are served from. One place, because the answer is a deployment
-// decision rather than a property of this file: same-origin today, and the
-// only thing that changes if they move is this line.
-const PACK_URL = (name) => `/packs/treebank-${name}.wasm`;
+// Packs are content-addressed: `treebank-python-<hash>.wasm` is those bytes
+// or does not exist, because the build asserts byte reproducibility. The
+// manifest says which hash is current, and `treebank-python.wasm` is the
+// moving pointer for anyone who does not care.
+//
+// Resolving through the manifest rather than fetching the pointer buys the
+// thing a playground otherwise cannot offer: the URL in the address bar names
+// the exact parser, so a report about a mis-parse can be reproduced instead of
+// being about whatever was current that day.
+const PACKS = "/packs/";
+const POINTER_URL = (name) => `${PACKS}treebank-${name}.wasm`;
+const HASHED_URL = (name, hash) => `${PACKS}treebank-${name}-${hash.slice(0, 12)}.wasm`;
 
 // tb_parse runs on the main thread. A megabyte of source is a fraction of a
 // second and fine; ten is a frozen tab. The cap is honest about what this
@@ -93,17 +101,34 @@ class Playground {
       const grammars = await response.json();
       this.select.innerHTML = grammars
         .map((g) => `<option value="${E(g.name)}">${E(g.name)}</option>`).join("");
-      const wanted = new URLSearchParams(location.search).get("g");
+      const params = new URLSearchParams(location.search);
+      const wanted = params.get("g");
       const start = grammars.some((g) => g.name === wanted) ? wanted : "python";
+      const pinned = /^[0-9a-f]{12,64}$/.test(params.get("pack") ?? "")
+        ? params.get("pack")
+        : null;
       this.select.value = start;
-      await this.choose(start);
+      await this.choose(start, pinned);
     } catch (error) {
       this.stateBox.textContent = `could not list grammars: ${error.message}`;
     }
   }
 
-  async choose(name) {
-    if (this.name === name) return;
+  // The manifest is advisory: without it the pointer still works, and the
+  // page loses pinning rather than the parser.
+  async manifest() {
+    if (this.packs !== undefined) return this.packs;
+    try {
+      const response = await fetch(`${PACKS}index.json`);
+      this.packs = response.ok ? (await response.json()).packs ?? null : null;
+    } catch {
+      this.packs = null;
+    }
+    return this.packs;
+  }
+
+  async choose(name, wantHash) {
+    if (this.name === name && !wantHash) return;
     this.name = name;
     this.pack = null;
     this.treeBox.innerHTML = '<p class="dim">Loading the parser…</p>';
@@ -111,15 +136,24 @@ class Playground {
     this.provBox.textContent = "";
     this.stateBox.textContent = `loading treebank-${name}.wasm…`;
 
+    const packs = await this.manifest();
+    const entry = packs?.[name];
+    // An explicit ?pack= wins over the manifest: pinning is the whole point,
+    // so a pin must survive the pointer moving underneath it.
+    const hash = wantHash ?? entry?.sha256;
+    const url = hash ? HASHED_URL(name, hash) : POINTER_URL(name);
+    this.hash = hash ?? null;
+
     const started = performance.now();
     try {
-      this.pack = await Pack.load(PACK_URL(name));
+      this.pack = await Pack.load(url);
     } catch (error) {
       this.stateBox.textContent = "";
       this.treeBox.innerHTML =
         `<p class="broken">Could not load the ${E(name)} parser: ${E(error.message)}</p>
 <p class="dim">The packs are built artifacts. If this is a local checkout, run
-<code>./tools/wasm-pack/build.sh ${E(name)} --out site/public/packs</code>.</p>`;
+<code>./tools/wasm-pack/build.sh ${E(name)} --out site/public/packs</code>
+then <code>bun run packs</code>.</p>`;
       return;
     }
     const ms = Math.round(performance.now() - started);
@@ -142,7 +176,16 @@ class Playground {
       facets.length ? `facets ${facets.map(E).join(" ")}` : null,
     ].filter(Boolean);
     // Read out of the module's own bytes, not from a caption beside it.
-    this.provBox.innerHTML = `Read from the pack itself: ${bits.join(" · ")}. ` +
+    // The permalink is the useful half: it names the exact parser, so a
+    // report about a mis-parse can be reproduced rather than being about
+    // whatever happened to be current that day.
+    const pin = this.hash
+      ? ` <a class="pg-pin" href="?g=${E(this.name)}&pack=${E(this.hash.slice(0, 12))}"
+title="A link to this exact parser, which cannot change under you">pack ${
+        E(this.hash.slice(0, 12))
+      } — permalink</a>`
+      : ' <span class="dim">(unpinned: no manifest, so this is whatever is current)</span>';
+    this.provBox.innerHTML = `Read from the pack itself: ${bits.join(" · ")}.${pin}<br>` +
       `<a href="/grammars/${E(this.name)}/">Read the ${E(this.name)} grammar reference →</a>`;
   }
 

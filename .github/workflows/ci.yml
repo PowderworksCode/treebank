@@ -343,47 +343,62 @@ jobs:
           name: treebank-${{ matrix.grammar }}-wasm-pack
           path: dist/wasm/treebank-${{ matrix.grammar }}.wasm
 
-  # The packs the playground loads. They are build artifacts, so they live in
-  # R2 rather than in git or in a release: 14 MB rebuilt whenever a grammar
-  # changes would be a poor thing to carry in history, and release assets
-  # cannot be fetched by a browser at all -- they carry no
-  # access-control-allow-origin, on either the github.com redirect or the
-  # final object. The Worker reads the bucket and serves them same-origin.
+  # The packs the playground loads, content-addressed.
   #
-  # Only on main, and only if the credentials are configured: a fork's pull
-  # request has no secrets and must not fail for the lack of them.
+  # They are build artifacts -- 14 MB, rebuilt whenever a grammar changes --
+  # so they live in R2 rather than in git or in a release. Release assets
+  # could not work anyway: they carry no access-control-allow-origin, on
+  # either the github.com redirect or the final object, so a browser is
+  # refused. R2 makes the rest unremarkable, with free egress and 14 MB
+  # against a 10 GB free tier.
+  #
+  # The bytes uploaded are the ones the wasm gate above already built and
+  # checked, downloaded rather than rebuilt, so what the site serves is
+  # exactly what was verified.
+  #
+  # Only on main, and only where the credentials are configured: a fork's
+  # pull request has no secrets and must not fail for the lack of them.
   packs:
     name: publish wasm packs
     runs-on: ubuntu-latest
-    needs: [discover, wasm]
+    needs: [wasm]
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    strategy:
-      fail-fast: false
-      matrix:
-        grammar: ${{ fromJSON(needs.discover.outputs.grammars) }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/download-artifact@v4
         with:
-          python-version: "3.12"
-      - name: cache wasm toolchain
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/treebank
-          key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
-      - name: build the pack
-        run: ./tools/wasm-pack/build.sh ${{ matrix.grammar }} --out dist/wasm
+          pattern: treebank-*-wasm-pack
+          merge-multiple: true
+          path: site/public/packs
+
+      # Same script the local build uses, so the keys and the manifest cannot
+      # be one thing here and another on a laptop.
+      - name: content-address them
+        working-directory: site
+        run: bun run packs
+
       - name: upload to R2
         if: vars.CLOUDFLARE_ACCOUNT_ID != ''
+        working-directory: site
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
+          set -euo pipefail
+          # Hashed objects first, manifest last. The manifest is the pointer,
+          # so publishing it before the object it names would leave the site
+          # briefly resolving to something that is not there yet. Old hashed
+          # objects are never deleted -- that is what keeps a pinned link
+          # working, and it costs a few megabytes.
+          for f in public/packs/treebank-*-*.wasm; do
+            npx --yes wrangler@4 r2 object put \
+              "treebank-packs/$(basename "$f")" --file "$f" \
+              --content-type application/wasm --remote
+          done
           npx --yes wrangler@4 r2 object put \
-            "treebank-packs/treebank-${{ matrix.grammar }}.wasm" \
-            --file "dist/wasm/treebank-${{ matrix.grammar }}.wasm" \
-            --content-type application/wasm \
-            --remote
+            "treebank-packs/index.json" --file public/packs/index.json \
+            --content-type application/json --remote
 
   release-rehearsal:
     name: wasm release rehearsal
