@@ -96,6 +96,12 @@ summary: if the parser does it, it is on this page.
 The identifier every command wants is \`${name}\`, as in
 \`treebank verify --grammar crates/treebank-${name}\`.
 
+The parse table itself is at [\`/grammars/${name}.json\`](/grammars/${name}.json)
+— \`grammar.json\`, \`node-types.json\` and \`roles.json\` joined and pruned to what
+a renderer reads. The diagrams below are drawn from exactly that file, so
+anything reading this page without running its JavaScript should read that
+instead of this.
+
 <link rel="stylesheet" href="/grammar.css">
 <div class="grammar-viewer" data-grammar="${name}">
   <p class="grammar-loading">Loading the ${name} parse table…</p>
