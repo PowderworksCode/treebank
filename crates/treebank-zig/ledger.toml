@@ -30,6 +30,15 @@ Three threadings are worth stating because a reader would otherwise assume the o
 
 And `unreachable` is a `_jump`, not a literal: it transfers control out of the function and yields nothing, which is Zig's `raise`.'''
 
+fuzz_check = '''
+`treebank fuzz` — programs derived from grammar.json and judged by `zig fmt --stdin`. The 5,000-derivation run behind issue #183 (seed 675206893) reported 1,348 widenings in 111 distinct programs at 99.6% alternative coverage.
+
+The first question here is not which finding to fix but whether a finding is a FINDING. For Zig the compiler version is the language version, and the oracle is a union — a program is valid if EITHER family accepts it — so a disagreement can be the union rather than a bug. All 111 were therefore put to zig 0.16.0 and zig 0.11.0 separately: all 111 are rejected by both, so none of them is version behaviour. The check is not vacuous, and the control that shows it is `pub usingnamespace @import("std");` — 0.16 rejects it and 0.11 accepts it, because it was removed in 0.15, and the grammar is right to keep parsing it. What the two-endpoint check CANNOT see is a construct that lived only in 0.12–0.14: the oracle runs the current and legacy families and nothing between, by design. Nothing in these 111 has that shape.
+
+The heaviest class was 373 of the 1,348 widenings and is now fixed: a container's tag parens held an optional expression, so `struct () {}` parsed. Notably NOT the rule a reader expects — `zig fmt` parses `struct(u32) {}` on both versions and leaves "backing integers are for `packed`" to AstGen, so requiring `packed` would have opened a gap. Same seed after: that class is 0, and the run reports 1,330 widenings in 119 distinct programs. The distinct count rises because the class was absorbing the derivation budget; all 27 newly reported programs were re-parsed with the pre-change grammar and every one already parsed.
+
+The remaining classes are unrelated to each other and to this one — `usingnamespace` as a block statement, the `test` declaration header, container-level qualifier stacks like `threadlocal comptime var`, and a label on a `comptime` — and are left for their own rounds rather than mixed into this one.'''
+
 [corpus]
 source = 'the released source tarballs from ziglang.org, one per MINOR version from 0.11 to 0.16 (fetched 2026-08-19): 0.16.0, 0.15.2, 0.14.1, 0.13.0, 0.12.1, 0.11.0'
 files = 17168
@@ -53,8 +62,8 @@ gap_files = 4
 noise_files = 167
 pass_rate = '99.00%'
 corpus_lock_sha256 = '8c3a6f09a0662dcab94793892ebc26827ceb3c7b93f23189c228f1ec3d8993c3'
-grammar_sha256 = 'f49b929e09bd60b116e5d2f2e869810e832202ce3c4b3b1cd30ee1f7ff91e8dd'
-grammar_revision = '282b605b4b37e34c56151738ef1ee1f47f8a14b0'
+grammar_sha256 = '9384f93614755ffe1d38fc9c9e725dd6bf33b23a546325b912a4f7357e4e72ac'
+grammar_revision = 'fe5a7ff3cd9ad57c6c90967038bee4d72eb4e7f8'
 
 [corpus.sweep_history]
 note = '''
