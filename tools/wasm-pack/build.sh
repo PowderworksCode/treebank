@@ -129,11 +129,26 @@ PY
 # NO -flto. It silently exports _start instead of _initialize, which loses
 # the WASI reactor exec model, and every host then refuses to instantiate
 # the module. That failure looks like a runtime bug and is a link flag.
+#
+# -ffile-prefix-map, because __FILE__ survives into the module. The runtime's
+# assertions bake their own source paths into the data section, so a pack
+# built under /home/runner and one built under /home/exedev differed by 65
+# bytes of `.../.cache/treebank/tree-sitter-0.26.12/lib/src/array.h` -- same
+# size, same provenance, different hash. Reproducibility was only ever true
+# per machine, and check.sh could not see it because it rebuilds in place.
+#
+# Every ambient path is mapped, not just the cache one: the crate and repo
+# roots for the same reason, and the temporary build directory because it is
+# a mktemp name that differs on every run.
 "$CLANG" \
   --target=wasm32-wasip1 \
   -O3 \
   -fno-exceptions \
   -mexec-model=reactor \
+  -ffile-prefix-map="$RUNTIME"=/treebank/runtime \
+  -ffile-prefix-map="$CRATE"=/treebank/grammar \
+  -ffile-prefix-map="$WORK"=/treebank/build \
+  -ffile-prefix-map="$ROOT"=/treebank \
   -I "$RUNTIME/lib/include" \
   -I "$RUNTIME/lib/src" \
   -I "$CRATE/src" \
