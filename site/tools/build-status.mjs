@@ -102,9 +102,14 @@ async function main() {
     };
   }
 
+  // `revision` is deliberately dropped. It is the repository's HEAD, so
+  // committing this snapshot changes it and instantly invalidates the file
+  // that was just written -- a freshness check against it can never pass.
+  // The revision that actually matters is per corpus: `grammar_revision`
+  // says which grammar the evidence was measured against, changes only when
+  // that grammar does, and is what `freshness` is computed from.
   const out = {
     schema_version: raw.schema_version ?? null,
-    revision: raw.revision ?? null,
     summary: raw.summary ?? {},
     warnings: raw.warnings ?? [],
     errors: raw.errors ?? [],
