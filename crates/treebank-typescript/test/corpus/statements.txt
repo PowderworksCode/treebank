@@ -270,3 +270,30 @@ new (class { })()
         (class_definition
           body: (class_body)))
       arguments: (arguments))))
+
+================================================================================
+constructs no corpus file contains
+================================================================================
+
+let a = 1
+a **= 2
+const x = <svg:circle />
+
+--------------------------------------------------------------------------------
+
+(program
+  (variable_declaration
+    (variable_declarator
+      name: (identifier)
+      value: (number)))
+  (expression_statement
+    (augmented_assignment_expression
+      left: (identifier)
+      right: (number)))
+  (variable_declaration
+    (variable_declarator
+      name: (identifier)
+      value: (jsx_self_closing_element
+        name: (jsx_namespace_name
+          (identifier)
+          (identifier))))))

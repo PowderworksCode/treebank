@@ -14,13 +14,31 @@
 //! The output is a budget, not a score. Kinds with millions of occurrences
 //! are thoroughly checked already and fuzzing them again buys nothing;
 //! kinds with none are where the marginal value of a generated program is.
+//!
+//! **The budget can be spent, and then it has to be written down.** A blind
+//! spot is either worth closing or worth accepting, and the third state --
+//! measured once, argued about in an issue, forgotten -- is the one that
+//! rots. So a grammar may carry a `kinds_policy.toml` naming every kind and
+//! token its corpus never produces, with what covers each one instead, and
+//! `--check` holds the declaration to the measurement in BOTH directions:
+//! an undeclared blind spot fails, and so does a declared one the corpus
+//! has since started producing. The second half is the one that makes it a
+//! policy rather than an ignore list -- it means growing the corpus deletes
+//! entries here, and nobody has to notice by hand.
+//!
+//! Sections are per LANGUAGE, not per grammar dir, because one grammar can
+//! answer for several corpora whose blind spots have nothing in common:
+//! `treebank-typescript` sees 7 kinds never built by .ts files and 48 never
+//! built by .js files, and the second list is just "TypeScript", which is
+//! not a decision anybody needs to record. Without a section for the
+//! language the run is advisory, the same way `lint` is without a policy.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use anyhow::Result;
+use anyhow::{bail, Context, Result};
 use rayon::prelude::*;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use tree_sitter::{Node, Parser};
 
 use treebank_corpus::fetch::Manifest;
@@ -166,13 +184,117 @@ pub struct KindsReport {
 /// unusual spelling of it could still be unchecked.
 const THIN: u64 = 20;
 
+/// A grammar's `kinds_policy.toml`: per language, what its corpus is
+/// allowed never to build.
+#[derive(Deserialize, Default)]
+struct KindsPolicy {
+    #[serde(flatten)]
+    languages: BTreeMap<String, LanguagePolicy>,
+}
+
+#[derive(Deserialize, Default)]
+struct LanguagePolicy {
+    /// Why this corpus cannot reach the list below. Prose, deliberately:
+    /// the entries say WHAT and this says why growing the corpus is not
+    /// the answer, which is the part a reader needs to re-examine.
+    #[serde(default)]
+    rule: String,
+    #[serde(default)]
+    accepted: Vec<Accepted>,
+}
+
+/// One kind or token the corpus never produces, and what checks it
+/// instead. Every field is evidence somebody measured; a coverage claim
+/// nobody can reproduce is the thing this file exists to prevent.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Accepted {
+    /// The node kind or anonymous token, spelled as `kinds` reports it.
+    item: String,
+    /// A minimal program containing it. The point is that a reader can
+    /// paste it into the oracle and get `oracle` back; a claim about
+    /// coverage that cannot be re-run is the thing this file replaces.
+    #[serde(default)]
+    spelling: String,
+    /// What covers it instead. Free text, but it should name a corpus or
+    /// a seed count, not a feeling.
+    covered_by: String,
+    /// What the reference parser said about `spelling`, when it was asked.
+    #[serde(default)]
+    oracle: String,
+    #[serde(default)]
+    why: String,
+}
+
+fn load_policy(grammar_dir: &Path, lang: LangName) -> Result<Option<LanguagePolicy>> {
+    let path = grammar_dir.join("kinds_policy.toml");
+    let Ok(text) = std::fs::read_to_string(&path) else {
+        return Ok(None);
+    };
+    let policy: KindsPolicy = toml::from_str(&text).context("parse kinds_policy.toml")?;
+    Ok(policy.languages.into_iter().find_map(|(name, section)| {
+        (name == lang.as_str()).then_some(section)
+    }))
+}
+
+/// Hold the declaration to the measurement, both ways.
+///
+/// Undeclared-but-blind fails because that is the case the file exists to
+/// catch. Declared-but-covered fails too, and that direction matters more
+/// than it looks: it is what makes a corpus that grows DELETE entries here
+/// instead of quietly carrying a claim that stopped being true. The same
+/// argument `shape_policy.toml` makes for printing a reminder when its
+/// baseline drops, one step firmer, because these are names rather than a
+/// count and a stale name is a specific false statement.
+fn check_policy(report: &KindsReport, policy: &LanguagePolicy) -> Result<()> {
+    let measured: BTreeSet<&str> = report
+        .never_seen
+        .iter()
+        .chain(report.tokens_never.iter())
+        .map(String::as_str)
+        .collect();
+    let declared: BTreeSet<&str> = policy.accepted.iter().map(|a| a.item.as_str()).collect();
+
+    let undeclared: Vec<&&str> = measured.difference(&declared).collect();
+    let stale: Vec<&&str> = declared.difference(&measured).collect();
+
+    for item in &undeclared {
+        println!("  UNDECLARED  {item} — no corpus file builds it and kinds_policy.toml does not say why");
+    }
+    for item in &stale {
+        println!("  STALE       {item} — the corpus builds it now; delete its kinds_policy.toml entry");
+    }
+    if undeclared.is_empty() && stale.is_empty() {
+        println!(
+            "kinds: policy ok — {} accepted blind spot(s), all still blind, none undeclared",
+            declared.len()
+        );
+        return Ok(());
+    }
+    bail!(
+        "kinds: {} undeclared blind spot(s), {} stale declaration(s) in kinds_policy.toml",
+        undeclared.len(),
+        stale.len()
+    );
+}
+
 pub fn run(
     lang: LangName,
     grammar_dir: &Path,
     manifest_path: &Path,
     limit: Option<usize>,
     out_path: &Path,
+    check: bool,
 ) -> Result<()> {
+    // Load before the sweep, not after: a policy that does not parse should
+    // say so in a second rather than after every corpus file has been read.
+    let policy = load_policy(grammar_dir, lang)?;
+    anyhow::ensure!(
+        !(check && limit.is_some()),
+        "--check needs the whole corpus: a sampled run's never-seen set is \
+         an artefact of the sample, and gating on it would declare blind \
+         spots that are not blind"
+    );
     let manifest = Manifest::load(manifest_path)?;
     let corpus_src = manifest_path.parent().unwrap_or(Path::new(".")).join("src");
     let mut entries = manifest.files();
@@ -461,9 +583,124 @@ pub fn run(
     }
     std::fs::write(out_path, serde_json::to_string_pretty(&report)?)?;
     println!("kinds: report at {}", out_path.display());
+
+    match (check, &policy) {
+        (true, Some(policy)) => {
+            if !policy.rule.is_empty() {
+                println!("kinds: policy — {}", policy.rule.trim());
+            }
+            for a in &policy.accepted {
+                println!("  accepted {:<20} {}", a.item, a.covered_by);
+            }
+            check_policy(&report, policy)?;
+        }
+        (true, None) => println!(
+            "kinds: no [{lang}] section in {}/kinds_policy.toml — nothing declared, nothing enforced",
+            grammar_dir.display()
+        ),
+        (false, _) => {}
+    }
     Ok(())
 }
 
 pub fn default_out(lang: LangName) -> PathBuf {
     PathBuf::from(format!("corpus/{lang}/reports/kinds.json"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn report(never_kinds: &[&str], never_tokens: &[&str]) -> KindsReport {
+        KindsReport {
+            lang: "typescript".into(),
+            files_parsed: 1,
+            named_kinds_total: 0,
+            named_kinds_seen: 0,
+            never_seen: never_kinds.iter().map(|s| s.to_string()).collect(),
+            thin: Vec::new(),
+            counts: BTreeMap::new(),
+            tokens_total: 0,
+            tokens_seen: 0,
+            tokens_never: never_tokens.iter().map(|s| s.to_string()).collect(),
+            edges_possible: 0,
+            edges_seen: 0,
+            edges_never_by_parent: Vec::new(),
+            edges_never: Vec::new(),
+        }
+    }
+
+    fn policy(items: &[&str]) -> LanguagePolicy {
+        LanguagePolicy {
+            rule: String::new(),
+            accepted: items
+                .iter()
+                .map(|i| Accepted {
+                    item: i.to_string(),
+                    spelling: String::new(),
+                    covered_by: "fuzz".into(),
+                    oracle: String::new(),
+                    why: String::new(),
+                })
+                .collect(),
+        }
+    }
+
+    #[test]
+    fn a_declaration_matching_the_measurement_passes() {
+        let r = report(&["with_statement"], &["%="]);
+        assert!(check_policy(&r, &policy(&["with_statement", "%="])).is_ok());
+    }
+
+    /// The case the file exists for: a blind spot nobody wrote down.
+    #[test]
+    fn an_undeclared_blind_spot_fails() {
+        let r = report(&["with_statement", "static_block"], &[]);
+        let err = check_policy(&r, &policy(&["with_statement"]))
+            .expect_err("an undeclared blind spot must fail");
+        assert!(err.to_string().contains("1 undeclared"), "{err}");
+    }
+
+    /// The direction that keeps the file honest as the corpus grows: a
+    /// construct real code now contains must not keep its excuse.
+    #[test]
+    fn a_declaration_the_corpus_outgrew_fails() {
+        let r = report(&[], &[]);
+        let err = check_policy(&r, &policy(&["debugger_statement"]))
+            .expect_err("a stale declaration must fail");
+        assert!(err.to_string().contains("1 stale"), "{err}");
+    }
+
+    /// Tokens and node kinds share one namespace in the policy; a token
+    /// declared where only a kind is blind is still stale.
+    #[test]
+    fn tokens_and_kinds_are_checked_together() {
+        let r = report(&["with_statement"], &["%="]);
+        let err = check_policy(&r, &policy(&["with_statement", "&&="]))
+            .expect_err("wrong token must fail");
+        let msg = err.to_string();
+        assert!(msg.contains("1 undeclared") && msg.contains("1 stale"), "{msg}");
+    }
+
+    /// The committed policy must parse and must name the language it is
+    /// for. A section keyed by a name no LangName spells would silently
+    /// mean "advisory" forever.
+    #[test]
+    fn the_committed_typescript_policy_loads() {
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap()
+            .join("treebank-typescript");
+        let loaded = load_policy(&dir, LangName::Typescript)
+            .expect("kinds_policy.toml must parse")
+            .expect("it must carry a [typescript] section");
+        assert!(!loaded.accepted.is_empty());
+        assert!(!loaded.rule.is_empty(), "an accepted list needs its reason");
+        for a in &loaded.accepted {
+            assert!(!a.covered_by.is_empty(), "{} has no coverage", a.item);
+        }
+        // The grammar answers for javascript too, and its blind spots are
+        // a different question; leaving it advisory is deliberate.
+        assert!(load_policy(&dir, LangName::Javascript).unwrap().is_none());
+    }
 }

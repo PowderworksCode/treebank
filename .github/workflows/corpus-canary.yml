@@ -168,6 +168,23 @@ jobs:
             exit 1
           fi
 
+      # The corpus is here and hydrated, which is the only place this can
+      # be asked. Needs no per-language wiring in either direction: a
+      # grammar with no [<lang>] section in kinds_policy.toml prints what
+      # it found and exits clean, so it starts being GATED the day it
+      # writes one, and `sweep_args` is reused verbatim because for every
+      # full-corpus language it is exactly the --lang/--grammar pair.
+      #
+      # Skipped where the sweep above was sampled: `--check` refuses a
+      # --limit run outright, because a sample's never-seen set is an
+      # artefact of the sample and would declare blind spots that are not
+      # blind.
+      - name: hold the corpus blind spots to their policy
+        if: ${{ !contains(matrix.sweep_args, '--limit') }}
+        run: |
+          ./target/debug/treebank kinds ${{ matrix.sweep_args }} --check \
+            --out "corpus/${{ matrix.language }}/reports/kinds.json"
+
       - name: upload the corpus report
         if: always()
         uses: actions/upload-artifact@v4
