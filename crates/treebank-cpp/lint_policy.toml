@@ -1,0 +1,68 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+#
+# C++ is the worst grammar of the nine on every count in this file, and
+# its corpus pass rate (24.70%) says the same thing from the other
+# direction. These baselines are a floor to build from, not a standard to
+# hold the other grammars to.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). C's declaration-versus-expression
+# ambiguity, plus templates: `a < b > c` is a comparison chain or a
+# template instantiation, and `T x(y);` is the most vexing parse.
+declared_conflicts = 71
+
+# Conflicts naming a supertype — parallel-tier early commits. `_type` in
+# 14 of the 28, `_expression` in 5, `_expression`+`_type` in 4,
+# `_declaration` in 3, `_literal` and `_modifier` once each. As in C, the
+# `_type` concentration is the declaration-versus-expression problem
+# rather than 28 independent defects.
+early_commit_conflicts = 28
+
+# prec.dynamic sites. Weights are the tool of last resort. Five rank a
+# reading DOWN: macro_modifier (-2), macro_type_specifier (-1),
+# macro_attribute (-1), _type_argument (-1), and parenthesized_declarator
+# (-10), the hammer that stops `(x)` reading as a declarator. Three rank
+# declarators UP so the sigil binds as a declarator and not as an
+# operator: pointer_declarator, abstract_pointer_declarator and
+# reference_declarator (all +1) — the last is the C++ addition, for `&`
+# and `&&` against bitwise-and and logical-and. A weight on a construct
+# CORRECT parses contain re-ranks whole versions at the cull, so new
+# weights need that analysis first.
+dynamic_weights = 8
+
+# One spelling, two tokens (§4): `(` and `...`, both inherited from the C
+# grammar and both adjacency-is-the-syntax cases the language defines
+# that way. Immediate `(` is `preproc_params` only — `#define F(x)` is
+# function-like, `#define F (x)` is object-like with body `(x)`.
+# Immediate `...` is `gnu_variadic_parameter` only (`args...`), against
+# the plain `...` of variadic parameters, pack expansion, base-class
+# clauses and case ranges. Disjoint by construction.
+same_text_tokens = 2
+
+# Keyword-shaped tokens outside every reserved set: 129 — the largest of
+# the nine. The C++ keyword vocabulary including the C++20 additions
+# (concept, requires, consteval, constinit, co_await, co_return,
+# co_yield), the inherited C `_Atomic` and GNU `__attribute__` families,
+# the contextual words (final, override), and the preprocessor directive
+# words.
+#
+# The grammar declares `word: identifier` and NO reserved set. Some of
+# this must stay unreserved — `final` and `override` are contextual by
+# standard, and the preprocessor words are ordinary identifiers outside a
+# directive. The rest are hard keywords, unreserved by omission. Nobody
+# has probed which positions leak; see issue #198 for the same defect
+# confirmed in zig. Frozen at today's value so it cannot grow while that
+# check is outstanding.
+unreserved_keywords = 129
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does. 26,576 states is 3.5x the
+# next largest grammar (ruby, 7,635) and is the direct cost of the 71
+# conflicts above.
+state_count = 26576

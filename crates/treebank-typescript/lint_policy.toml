@@ -1,0 +1,100 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 387a29f. These are today's exact counts, not headroom.
+#
+# This grammar owns two languages, javascript and typescript, and carries
+# JSX on top of both. It has the most declared conflicts and the most
+# dynamic weights of the nine. The baselines below are high because the
+# debt is high; they are a starting line, not an endorsement.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). 184, by a wide margin the most of
+# the nine. Three ambiguities generate most of them: `<` as JSX, as a
+# type argument list, or as less-than; the arrow-function parameter list,
+# which is indistinguishable from a parenthesized expression until the
+# `=>` arrives; and the type annotation tier reusing expression
+# spellings.
+declared_conflicts = 184
+
+# Conflicts naming a supertype — parallel-tier early commits, and 54 is
+# the number that most needs to come down. `_expression` appears in 17,
+# `_name` in 11, `_name`+`_type` in 6, `_type` in 5, `_access` in 5,
+# `_literal` in 3, plus mixed pattern families. The `_name`/`_type`
+# overlap is the same shape ruby factored away as `[_name, _callee]`
+# (FIELD_GUIDE.md §1) and is the obvious first target.
+early_commit_conflicts = 54
+
+# prec.dynamic sites. 22 — the most of the nine, and the count that
+# should worry a reader most, because weights are the tool of last resort
+# and this many suggests forks resolved by ranking rather than by
+# factoring. They group as: JSX (jsx_opening_element,
+# jsx_self_closing_element, both -1) ranking `<` as JSX below the
+# comparison reading; the type tier (5 sites on _no_conditional_type,
+# plus mapped_type, type_arguments, nested_type_identifier, all +1);
+# declaration heads (function_definition, class_definition,
+# _default_function, two on _method_definition); arrow_function (+2 on
+# its block body, the brace-versus-object-literal choice); catch_clause
+# and finally_clause (+2); labeled_statement (-1); nested_identifier
+# (+1); and _pattern (-1).
+#
+# The 22nd is `_anonymous_class` (+1), added by 83b4b0b ("typescript: a
+# class DECLARATION must have a name", PR #204) after this ratchet was
+# first measured at 21. It is the old decision split in two rather than a
+# new one: the weight was carried over from `class_definition`, because
+# both compete with `_reserved_property` for `class` as a property name
+# in `{ class ... }`. The conflict pair moved with the ambiguity instead
+# of accumulating — 83b4b0b drops `[_reserved_property, class_definition]`
+# and adds `[_reserved_property, _anonymous_class]`, so declared_conflicts
+# held at 184 — and the table SHRANK 38 states. Recorded, not contested.
+#
+# 22 is a ceiling, not slack. A 23rd weight should have to argue for
+# itself: a weight on a construct CORRECT parses contain re-ranks whole
+# versions at the cull, so new weights need that analysis first, and this
+# grammar should be removing them, not adding.
+dynamic_weights = 22
+
+# One spelling, two tokens (§4): `/`. The immediate form is the `regex`
+# delimiter, which must abut its body, against the plain `/` of division,
+# comments and JSX closing tags. Regex-versus-division is decided by
+# lexer state in every javascript implementation, so a token split here
+# is the conventional answer rather than a defect.
+same_text_tokens = 1
+
+# Keyword-shaped tokens outside every reserved set: 75, spanning the
+# javascript reserved words, the typescript type-level vocabulary (keyof,
+# infer, satisfies, asserts, unique, never, unknown, any, symbol) and the
+# contextual words (get, set, of, from, as, declare, namespace, module,
+# global, out, override, accessor, target, meta, is).
+#
+# The grammar declares `word: identifier` and NO reserved set, but unlike
+# the other six grammars in that position, most of this list is soft BY
+# DESIGN rather than by omission, and it should not be read as 75 units
+# of debt.
+#
+# Two separate reasons. First, typescript's own vocabulary really is
+# contextual: `type`, `as`, `of`, `from`, `get`, `set`, `satisfies`,
+# `keyof`, `infer`, `declare`, `namespace`, `module`, `global`, `is`,
+# `out` and `asserts` are legal identifiers in real code and MUST lex as
+# names. Second, the grammar carries `_reserved_property`, a rule listing
+# 40 hard keywords deliberately admitted as property names — `x.class`,
+# `x.new`, `x.function` are valid JavaScript and have been since ES5. So
+# the hard keywords appearing here is, in property position, a designed
+# behaviour with a named rule behind it, not an oversight.
+#
+# What is NOT established is the rest: whether a hard keyword also lexes
+# as a plain name somewhere that is not a property. That is the same
+# distinction zig turned out to fail (issue #198) — which positions leak
+# is incidental rather than designed. Stream 5 owns that probe for this
+# grammar. Frozen at today's value meanwhile, and it should DROP to
+# whatever the probe leaves rather than keep the slack.
+unreserved_keywords = 75
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does. Tightened from 6,046 to
+# 6,008: the anonymous-class fix above removed 38 states, and the ratchet
+# follows the improvement down so it cannot silently unwind.
+state_count = 6008

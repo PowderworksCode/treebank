@@ -1,0 +1,76 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 387a29f. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). Rust's forks are the generic-
+# argument ambiguity (`a < b` is a comparison or the start of a type
+# argument list, resolved in real rustc by the turbofish), patterns
+# sharing spellings with expressions, and macro invocation, whose token
+# trees can be anything.
+#
+# This was 58 when the ratchet was first measured. aa60194 ("rust: eight
+# causes behind every fuzz finding in #186", PR #203) added twelve, all
+# in one family: the path tier, splitting `_path_ref`, `_simple_path`,
+# `_scoped_generic_base` and `_scoped_simple_path` out against
+# `scoped_identifier`, `generic_function`, `generic_type` and
+# `scoped_type_identifier`. That is a real fix for real fuzz findings and
+# the debt is recorded, not waved through — but twelve new fork sites in
+# one family is exactly the shape §1 says to factor rather than declare,
+# and the rust lane should look at it with that in mind. Had this ratchet
+# been in place first, CI would have raised it at review.
+declared_conflicts = 70
+
+# Conflicts naming a supertype — parallel-tier early commits, spread
+# across `_name` (4), `_control_flow` (2), `_invocation` (2), `_type`
+# (2), `_pattern`, `_access`, and five mixed families that pair
+# `_invocation`, `_pattern` and `_type`. The mixed ones are the
+# interesting group: they are the sites where a token could still turn
+# out to be a macro call, a pattern or a type, and the grammar commits to
+# a tier before it knows. Unchanged by the path-family work above, which
+# forked between concrete rules rather than across supertypes.
+early_commit_conflicts = 17
+
+# prec.dynamic sites. Only two, both on `expression_statement` (+1 and
+# -1), which is the block-expression-versus-statement rule: `match x {}`
+# at statement position ends the statement at the closing brace, while
+# the same text in value position continues into a binary operator. Rust
+# defines this asymmetry in its own grammar, so the weights encode a real
+# language rule rather than papering over a fork. A weight on a construct
+# CORRECT parses contain re-ranks whole versions at the cull, so new
+# weights need that analysis first.
+dynamic_weights = 2
+
+# One spelling, two tokens (§4): `!`. The immediate form is
+# `macro_definition` only — `macro_rules!` requires the bang to abut —
+# against the plain `!` of macro invocation, unary negation, the never
+# type, `impl !Trait` and inner attributes. Disjoint by construction: the
+# immediate form occurs in no other rule.
+same_text_tokens = 1
+
+# Keyword-shaped tokens outside every reserved set: as, async, auto,
+# await, break, const, continue, crate, default, dyn, else, enum, extern,
+# false, fn, for, if, impl, in, let, loop, macro_rules, match, mod, move,
+# mut, pub, raw, ref, return, safe, self, static, struct, super, trait,
+# true, type, union, unsafe, use, where, while.
+#
+# Rust is the only grammar besides ruby that declares a reserved set at
+# all, but it holds exactly two words — `box` and `yield`, added by
+# 53fc002 as the reserved-for-future-use pair — so the 43 above are the
+# ACTUAL keywords, left unreserved. That is nearly the opposite of what
+# the set is for. A handful genuinely are contextual (`auto`, `default`,
+# `union`, `raw`, `safe`, `macro_rules`); the rest are hard keywords,
+# unreserved by omission. Nobody has probed which positions leak; see
+# issue #198 for the same defect confirmed in zig. Frozen at today's
+# value so it cannot grow while that check is outstanding.
+unreserved_keywords = 43
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does. Was 5,214 at first
+# measurement; the path-family conflicts above cost +152 states, which is
+# the table paying for those twelve forks.
+state_count = 5366

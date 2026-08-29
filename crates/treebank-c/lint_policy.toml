@@ -1,0 +1,66 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). C's forks are the two ambiguities
+# the language is famous for: declaration-versus-expression (`a * b;`
+# needs a symbol table nobody has at parse time), and the unexpanded
+# macro, where `FOO(x) int y;` could be a type, a modifier or a call.
+declared_conflicts = 35
+
+# Conflicts naming a supertype — parallel-tier early commits. `_type`
+# appears in 9 of the 13, `_expression`+`_type` in 2, `_literal` and
+# `_expression` once each. That concentration IS the
+# declaration-versus-expression problem; the macro tier
+# (macro_modifier / unexpanded_macro / macro_type_specifier) accounts for
+# 6 of the 9 on its own. Any real reduction here is one factoring of the
+# macro tier, not thirteen separate fixes.
+early_commit_conflicts = 13
+
+# prec.dynamic sites. Weights are the tool of last resort. Six of the
+# eight rank a macro reading DOWN so ordinary code wins when both parse:
+# unexpanded_macro (-1), macro_modifier (-2), macro_type_specifier (-1),
+# macro_attribute (-1), _type_argument (-1), and
+# parenthesized_declarator (-10) — the last is the big hammer that keeps
+# `(x)` from being read as a declarator wrapping a name. The remaining
+# two rank pointer declarators UP (pointer_declarator,
+# abstract_pointer_declarator, both +1) so `*` binds as a declarator
+# rather than as multiplication. A weight on a construct CORRECT parses
+# contain re-ranks whole versions at the cull, so new weights need that
+# analysis first.
+dynamic_weights = 8
+
+# One spelling, two tokens (§4): `(` and `...`. Both are
+# adjacency-is-the-syntax cases the language actually defines that way.
+# The immediate `(` is `preproc_params` only: `#define F(x)` is a
+# function-like macro and `#define F (x)` is an object-like macro whose
+# body is `(x)`, so the abutting paren is the syntax. The immediate `...`
+# is `gnu_variadic_parameter` only (`args...`), against the plain `...`
+# of `variadic_parameter`, case ranges and designators. Both sides are
+# disjoint by construction — the immediate form occurs nowhere but those
+# two rules.
+same_text_tokens = 2
+
+# Keyword-shaped tokens outside every reserved set: 95 — the C keyword
+# vocabulary, the `_Atomic`-family C11 spellings, the GNU `__attribute__`
+# family, and the preprocessor directive words (define, defined, elif,
+# elifdef, elifndef, else, endif, ifdef, ifndef, include, undef).
+#
+# The grammar declares `word: identifier` and NO reserved set, so this is
+# the whole vocabulary, not a documented residue like ruby's five. Some
+# of it genuinely must stay unreserved — the preprocessor words are
+# ordinary identifiers outside a directive, and `#define include 1` is
+# legal C. The rest (`int`, `struct`, `return`) are hard keywords,
+# unreserved by omission. Nobody has probed which positions leak; see
+# issue #198 for the same defect confirmed in zig. Frozen at today's
+# value so it cannot grow while that check is outstanding.
+unreserved_keywords = 95
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does.
+state_count = 3033

@@ -1,0 +1,50 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Measured on 69dabad. These are today's exact counts, not headroom.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). Bash's forks are the word-vs-
+# structure ambiguity that the language itself has: almost every
+# construct starts with something that could still turn out to be a plain
+# command word.
+declared_conflicts = 16
+
+# Conflicts naming a supertype — parallel-tier early commits. Three are
+# the `_literal` family (continue/break/return against a literal: the
+# argument of `return 2` is a word until the statement keyword decides
+# otherwise), one is `_statement`/`_body`, one `command`/`_assignment`
+# (`a=1 cmd` is a prefix assignment or a command, decided at the word
+# after). Each is a factoring candidate.
+early_commit_conflicts = 5
+
+# prec.dynamic sites. Weights are the tool of last resort. The single
+# weight is `_redirect_statement` at -1, ranking a bare redirection below
+# the command reading so `> file` does not win against a command that
+# carries the same redirect. New weights need the cull analysis
+# FIELD_GUIDE.md §2 describes before they are added, not after.
+dynamic_weights = 1
+
+# One spelling, two tokens (§4). None — keep it that way.
+same_text_tokens = 0
+
+# Keyword-shaped tokens outside every reserved set: alias, break, case,
+# continue, declare, do, done, elif, else, esac, eval, export, fi, for,
+# function, if, in, let, local, readonly, return, select, then, typeset,
+# until, while.
+#
+# The grammar declares `word` and NO reserved set, so this is the whole
+# keyword vocabulary, not a residue like ruby's five. For bash that is
+# closer to correct than it looks — bash keywords really are positional,
+# and `echo if` is a valid command with a plain word argument, so
+# reserving them globally would be wrong. But it is unverified: nobody
+# has checked per token which positions leak. The count is frozen here so
+# it cannot grow while that check is outstanding.
+unreserved_keywords = 26
+
+# Parse-table size. Not a correctness bound — a growth alarm: conflicts
+# inflate the table faster than factoring does.
+state_count = 3911
