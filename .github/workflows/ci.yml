@@ -378,14 +378,26 @@ jobs:
         working-directory: site
         run: bun run packs
 
+      # Both settings are read here rather than in an `if:`, so that a half
+      # configured repository FAILS instead of skipping. The likely mistake is
+      # putting the account id in secrets rather than variables, and a step
+      # that silently does nothing when that happens is a playground with no
+      # parsers and a green tick.
       - name: upload to R2
-        if: vars.CLOUDFLARE_ACCOUNT_ID != ''
         working-directory: site
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           set -euo pipefail
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] && [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::notice::R2 is not configured; packs were built and checked but not published"
+            exit 0
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ] || [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            echo "::error::R2 is half configured. CLOUDFLARE_ACCOUNT_ID must be a repository VARIABLE and CLOUDFLARE_API_TOKEN a repository SECRET."
+            exit 1
+          fi
           # Hashed objects first, manifest last. The manifest is the pointer,
           # so publishing it before the object it names would leave the site
           # briefly resolving to something that is not there yet. Old hashed
