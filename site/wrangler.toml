@@ -17,3 +17,15 @@ not_found_handling = "404-page"
 binding = "ASSETS"
 
 run_worker_first = true
+
+# The wasm packs. Build artifacts, 14 MB across nine grammars and rebuilt
+# whenever a grammar changes, so they are neither committed nor built here --
+# CI puts them in the bucket and the Worker serves them same-origin.
+#
+# R2 is what makes this unremarkable: egress is free, and 14 MB is two
+# thousandths of the free storage tier. The alternative that looked obvious --
+# fetching the packs straight from GitHub releases -- cannot work at all, as
+# release assets carry no access-control-allow-origin on either hop.
+[[r2_buckets]]
+binding = "PACKS"
+bucket_name = "treebank-packs"
