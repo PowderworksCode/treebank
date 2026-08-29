@@ -21,14 +21,14 @@ Sources jars, so anything that ships no `-sources.jar` is absent: 111 of the top
 
 [corpus.sweep]
 files = 243576
-passed = 243409
-failed = 167
-gap_files = 167
+passed = 243462
+failed = 114
+gap_files = 114
 noise_files = 0
-pass_rate = '99.93%'
+pass_rate = '99.95%'
 corpus_lock_sha256 = '224a7f2adb284f3c7f1158d18cde872d75f8cf3de3b062f1f95a181012ef319a'
-grammar_sha256 = 'f2089dcfc3615f507abbfa5057441648f69eb6163ddbac0ba2f7654fe6a80875'
-grammar_revision = '2769c501beb46d93b7eb4fd9d1852d6499107099'
+grammar_sha256 = 'ebf4610f918006df1e32c8924443c5ea1bef09c6b0cc4656d8f284c9c82dae1c'
+grammar_revision = '19d9d02d42e4e6371098cfe374257b14ffcca6be'
 
 [[oracles]]
 family = 'java'
@@ -38,16 +38,28 @@ role = '''
 primary and only. `parse()` runs the parser and stops -- it never attributes, so an unresolved import or a missing classpath entry is not an error and a file is judged on its own text, exactly as `ts.createSourceFile` does for typescript. Only ERROR diagnostics count. The source level is the JDK's own latest, which is a decision rather than a default: a file javac rejects there is not valid modern java, and `enum` or `assert` used as an identifier is 1.4-era code that belongs in noise.'''
 
 [[known_gaps]]
-construct = '`case A -> …` where the case constant is a bare identifier'
-files = 539
+construct = '`record` and `when` used as ordinary identifiers'
+files = 85
 note = '''
-`case PROXY -> getProxyImports();` — an arrow switch over an enum, which is most arrow switches. At `A` the parser cannot tell a case constant from a lambda parameter, and only the `->` settles it, by which time the reduce toward the label is gone. Java puts LambdaExpression at the top of its expression grammar and a case constant is a ConstantExpression, so the language is unambiguous; the parse table is not. Tried and rejected: excluding lambda from `_case_constant`, an expression tier below lambda (kept anyway -- it is more faithful and fixed other things), dynamic precedence on the rule and on the label, a declared conflict against `lambda`, and inlining the label into `switch_rule` to remove the shared reduction. Each is recorded here so the next attempt starts after them rather than before.'''
+`return record(DEFAULT_RECORDER_NAME, timer.monotonicNow(), values);` and
+`.operate(record -> { … })`. Both words are contextual keywords the
+`versions` note above calls soft, and in most positions they are: a field
+named `record`, a variable named `when`. Where softness still fails is the
+head of a statement or an argument, exactly where a declaration could also
+begin -- `record(x);` is a call, but `record R(int x);` is a declaration,
+and the parser has committed by the time the `(` disambiguates. 53 files
+are `record`, 32 are `when`. This is now the largest gap by a wide margin
+and is the obvious next piece of work on this grammar.'''
 
 [[known_gaps]]
-construct = 'module declarations (`module-info.java`)'
-files = 83
+construct = 'a trailing empty dimension on an array creation'
+files = 13
 note = '''
-Java 9 modules are not in the grammar at all. `module com.google.gson { requires …; exports …; }` is a small, self-contained sub-language and the omission is deliberate for a first pass, not a defect discovered late.'''
+`new double[numberOfRows][numberOfColumns][]` -- sized dimensions followed
+by an empty one, which JLS 15.10.1 allows and which our array creation
+reads as a subscript, reporting `array_access > MISSING identifier`. The
+same family covers the C-style declarator with a comment between the
+brackets.'''
 
 [[deviations]]
 what = '''
