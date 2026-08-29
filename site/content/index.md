@@ -35,14 +35,10 @@ result against that language's own compiler or parser.
 Every grammar ships as a single WebAssembly file with no dependencies, and
 every measurement is published, including the failures.
 
-## Try one now
+Try one in the [playground](/playground/) — it parses in your browser with the
+same file a program would download.
 
-The [playground](/playground/) parses in your browser with the same file a
-program would download. Paste some code and watch the tree.
-
-<div class="clear-cover"></div>
-
-## Use one
+To use one, add the crate and ask for a grammar by name:
 
 ```sh
 cargo add treebank
@@ -59,19 +55,16 @@ for capture in pack.query(&tree, "(_declaration) @decl")? {
 }
 ```
 
-`fetch` downloads the grammar, checks it against the published sha256, and
-caches it. That query finds declarations in Rust and TypeScript too, without
-being rewritten — every grammar carries the same vocabulary.
-
-There is one package per language you write in, not one per language you
-parse, so adding a language is a download rather than a dependency. Every
-grammar is content-addressed and can be pinned to a version that never
-changes.
+`fetch` downloads the grammar, checks it against the published sha256 and
+caches it. The query finds declarations in Rust and TypeScript too, unchanged,
+because every grammar carries the same vocabulary — so there is one package
+per language you write in rather than one per language you parse, and adding a
+language is a download rather than a dependency.
 
 Each grammar is also just one `.wasm` importing only WASI, so it runs from
 Python, Go, Ruby or a browser in about twenty lines with no toolchain at the
-far end. [Using a grammar](/integrate/) has all of it, with complete
-examples.
+far end. [Using a grammar](/integrate/) has all of it, and every file is
+content-addressed, so a version can be pinned and never change.
 
 ## What is here
 
