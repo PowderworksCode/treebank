@@ -30,16 +30,26 @@
   }
 }
 
-/* The viewer stays inside the reading column and each diagram scrolls within
-   its own box.
+/* Grammar pages earn more width than prose does.
  *
- * Widening past the column was tried and reverted. A railroad diagram for a
- * C++ declarator is wider than any column, so breaking out only changes how
- * much scrolling is left -- and to break out correctly an element has to know
- * its own distance from the viewport edge, which here is a function of the
- * shared theme's grid (68rem cap, 14rem rail, gap, padding). Hard-coding that
- * bought a little width and a page that scrolled sideways at 1440px, and it
- * would have broken silently the day the theme changed. */
+ * The shared theme caps a reading column at 46rem inside a 68rem page, which
+ * is right for sentences and wrong for a C++ declarator. This stylesheet is
+ * linked only from grammar pages, so widening here reaches exactly the pages
+ * that need it and leaves the prose column alone. */
+.wrap { max-width: 96rem; }
+main { max-width: none; }
+
+/* Each diagram still scrolls within its own box, because no column is wide
+ * enough for a C++ declarator and widening only ever changes how much
+ * scrolling is left.
+ *
+ * Widening the page is done above, by raising the theme's own cap. An earlier
+ * attempt instead had the viewer break OUT of the column with a negative
+ * margin, and that is the wrong shape: to break out correctly an element has
+ * to know its own distance from the viewport edge, which here is a function
+ * of the theme's grid. Hard-coding it bought a page that scrolled sideways at
+ * 1440px and would have broken silently the day the theme changed. Raising
+ * the cap lets the existing grid do the arithmetic. */
 .grammar-viewer { margin: 1.5rem 0; }
 
 /* The measurement probe. It is never shown; it exists so the layout engine
@@ -58,7 +68,7 @@
 .grammar-stats b { font-size: 1.35rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .grammar-stats span { font-size: .78rem; color: var(--dim); letter-spacing: .02em; }
 
-.grammar-cols { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 2rem; align-items: start; }
+.grammar-cols { display: grid; grid-template-columns: 15rem minmax(0, 1fr); gap: 2rem; align-items: start; }
 @media (max-width: 60rem) { .grammar-cols { grid-template-columns: minmax(0, 1fr); } }
 
 /* ---- the index rail ------------------------------------------------- */

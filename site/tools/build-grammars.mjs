@@ -87,8 +87,6 @@ title: ${NAMES[name] ?? name}
 description: Every production in the ${NAMES[name] ?? name} parse table, as EBNF and as a railroad diagram.
 ---
 
-# ${NAMES[name] ?? name}
-
 ${productions} productions, rendered from \`crates/treebank-${name}/src/grammar.json\`
 — the normalised grammar tree-sitter itself consumes. Nothing here is a
 summary: if the parser does it, it is on this page.

@@ -1,7 +1,7 @@
 ---
 title: Grammar reference
 description: Every production in every grammar, as EBNF and as a railroad diagram.
-order: 20
+order: 50
 ---
 
 The honest way to document a parser is to render its parse table rather than

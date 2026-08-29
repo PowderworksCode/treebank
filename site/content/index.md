@@ -3,6 +3,8 @@ title: Treebank
 description: Tree-sitter grammars, with the evidence attached.
 ---
 
+<p class="cover"><img src="/cover.png" alt="A plate of fifteen trees drawn to scale, each with a small figure beside it for size" width="420"><span class="credit">Fifteen trees to scale. The grammars are the same idea: the same drawing, done to the same standard, however different the subject.</span></p>
+
 Treebank owns nine tree-sitter grammars — bash, C, C++, Java, Python, Ruby,
 Rust, TypeScript and Zig — and treats each one as a claim that has to be paid
 for. The claim is that the grammar accepts the language. The payment is a
