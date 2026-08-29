@@ -1,0 +1,8 @@
+# The skipped directories are test corpora: real-world source samples and
+# their lock files, whose content is quoted from upstream, not authored here.
+# They must byte-match their sources, so spelling is never "fixed" in them.
+# ignore-words-list: "Nd" is the Unicode \p{Nd} category in grammar regexes;
+# "Wirth" is Niklaus Wirth, of railroad-diagram fame (site/src/railroad.mjs).
+[codespell]
+skip = corpus-locks,*/test/corpus,*/test/corpus/*
+ignore-words-list = nd,wirth

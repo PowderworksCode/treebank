@@ -134,7 +134,7 @@ fn releases(k: usize) -> Result<Vec<RankedCrate>> {
         .collect())
 }
 
-/// Sortable form of a `MAJOR.MINOR.PATCH` tag. Anything unparseable sorts
+/// Sortable form of a `MAJOR.MINOR.PATCH` tag. Anything unparsable sorts
 /// last rather than erroring: the index is upstream's file, not ours.
 fn semver_key(v: &str) -> (u64, u64, u64) {
     let mut it = v.split('.').map(|p| p.parse::<u64>().unwrap_or(0));

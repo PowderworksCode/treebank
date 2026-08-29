@@ -17,7 +17,7 @@ cd "$(dirname "$0")"
 # echoed at the end and expected to be read.
 LLVM_DIR="${TREEBANK_LLVM_DIR:-}"
 if [ -z "$LLVM_DIR" ]; then
-  for d in $(ls -d /usr/lib/llvm-* 2>/dev/null | sort -V -r); do
+  for d in $(printf '%s\n' /usr/lib/llvm-* | sort -V -r); do
     if [ -f "$d/include/clang-c/Index.h" ]; then LLVM_DIR="$d"; break; fi
   done
 fi

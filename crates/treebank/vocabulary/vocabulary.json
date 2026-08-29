@@ -93,7 +93,7 @@
   "facets": [
     {
       "name": "_callable",
-      "definition": "defines something invokable"
+      "definition": "defines something invocable"
     },
     {
       "name": "_binding",

@@ -42,7 +42,7 @@ function packageType(file) {
       let type = "commonjs";
       try {
         type = JSON.parse(fs.readFileSync(pkg, "utf8")).type === "module" ? "module" : "commonjs";
-      } catch { /* unparseable package.json: treat as commonjs, like Node */ }
+      } catch { /* unparsable package.json: treat as commonjs, like Node */ }
       typeCache.set(dir, type);
       break;
     }

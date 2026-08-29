@@ -60,7 +60,7 @@ fn an_unparseable_fixture_fails_the_gate() {
     std::fs::write(dir.join("malformed.rs"), "fn main( {\n").unwrap();
     let broken = run();
     let stderr = String::from_utf8_lossy(&broken.stderr);
-    assert!(!broken.status.success(), "an unparseable fixture must fail the gate:\n{stderr}");
+    assert!(!broken.status.success(), "an unparsable fixture must fail the gate:\n{stderr}");
     assert!(
         stderr.contains("malformed.rs"),
         "the failure must name the file that could not be read:\n{stderr}"

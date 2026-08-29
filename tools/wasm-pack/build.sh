@@ -147,6 +147,11 @@ PY
 # Every ambient path is mapped, not just the cache one: the crate and repo
 # roots for the same reason, and the temporary build directory because it is
 # a mktemp name that differs on every run.
+#
+# An external scanner is optional; only grammars that have one pass it. The
+# `[@]+` expansion keeps `set -u` happy on an empty array under bash 3.2.
+scanner_src=()
+if [ -f "$CRATE/src/scanner.c" ]; then scanner_src=("$CRATE/src/scanner.c"); fi
 "$CLANG" \
   --target=wasm32-wasip1 \
   -O3 \
@@ -165,7 +170,7 @@ PY
   -o "$WORK/pack.wasm" \
   "$RUNTIME/lib/src/lib.c" \
   "$CRATE/src/parser.c" \
-  $([ -f "$CRATE/src/scanner.c" ] && echo "$CRATE/src/scanner.c") \
+  ${scanner_src[@]+"${scanner_src[@]}"} \
   "$ROOT/tools/wasm-pack/shim.c" \
   "$WORK/embedded.c"
 

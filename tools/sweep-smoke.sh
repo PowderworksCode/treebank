@@ -83,7 +83,12 @@ grep -Fq 'noise_files = 1' "$grammar/ledger.toml"
 grep -Fq "pass_rate = '50.00%'" "$grammar/ledger.toml"
 grep -Eq "^corpus_lock_sha256 = '[0-9a-f]{64}'$" "$grammar/ledger.toml"
 grep -Eq "^grammar_sha256 = '[0-9a-f]{64}'$" "$grammar/ledger.toml"
-! grep -Fq 'grammar_revision' "$grammar/ledger.toml"
+# Not `! grep`: errexit ignores a `!`-prefixed command, so that form could
+# never fail the smoke test. This one can.
+if grep -Fq 'grammar_revision' "$grammar/ledger.toml"; then
+  echo "sweep smoke: ledger.toml must not carry grammar_revision" >&2
+  exit 1
+fi
 jq -e '.passed_sha256 | length == 1' "$corpus/sweep-cache.json" >/dev/null
 
 if [[ "$lang" == rust ]]; then

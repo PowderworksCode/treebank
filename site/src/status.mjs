@@ -20,7 +20,7 @@ const n = (v) => (typeof v === "number" ? v.toLocaleString("en-US") : "—");
 
 // A pass rate is read as a grade, so it gets a band -- but the bands are wide
 // and unlabelled by colour alone, because "24.70%" on C++ is a fact about how
-// much of the language macros make unparseable, not a failing report card.
+// much of the language macros make unparsable, not a failing report card.
 function band(rate) {
   const v = parseFloat(rate);
   if (!Number.isFinite(v)) return "";
