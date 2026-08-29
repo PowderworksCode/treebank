@@ -1,4 +1,4 @@
-//! Recovery from a compiled artifact this wasmtime cannot read.
+//! Recovery from a compiled artifact this runtime cannot read.
 //!
 //! Its own binary, like tests/compile_cache.rs and for the same reason: it
 //! points `TREEBANK_CACHE` at a directory it then inspects, and that variable
@@ -10,17 +10,22 @@ use treebank::pack::Pack;
 mod common;
 use common::a_pack;
 
-/// A compiled artifact outlives the wasmtime that wrote it. The cache key
+/// A compiled artifact outlives the runtime that wrote it. The cache key
 /// covers the wasm bytes and the host but not the runtime version, on the
-/// grounds that wasmtime stamps its own version into the artifact and refuses
-/// one it did not write -- so a stale entry should fail to load, be deleted,
-/// and be rebuilt. That claim is what makes upgrading wasmtime safe for
-/// someone with a warm cache, and it is the kind of thing that is true until
-/// it quietly is not.
+/// grounds that the runtime stamps its own version into the artifact and
+/// refuses one it did not write -- so a stale entry should fail to load, be
+/// deleted, and be rebuilt. That claim is what makes upgrading the runtime
+/// safe for someone with a warm cache, and it is the kind of thing that is
+/// true until it quietly is not.
 ///
-/// Unreadable bytes stand in for an artifact from another version. Both reach
-/// `Module::deserialize` the same way: it refuses, and the recovery is the
-/// thing under test.
+/// It is load-bearing here in a way it was not under wasmtime: wasmer's
+/// `Module::deserialize` does NOT validate, and only
+/// `deserialize_from_file` -- what the cache calls -- does. If that ever
+/// changes to the unchecked reader, this test is what says so.
+///
+/// Unreadable bytes stand in for an artifact from another version. Both
+/// reach the same reader: it refuses, and the recovery is the thing under
+/// test.
 #[test]
 fn a_foreign_compiled_artifact_is_rebuilt_rather_than_trusted() {
     let Some(path) = a_pack() else { return };
