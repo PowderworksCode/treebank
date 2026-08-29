@@ -1,0 +1,57 @@
+# Over-acceptance this grammar commits to on purpose, as prefixes of the
+# shrunk program `treebank fuzz` reports.
+#
+# Entries are per LANGUAGE here, and that is the whole design. One union
+# grammar is judged by two different oracles: V8 for .js, tsc for .ts. A
+# declaration made to quiet one leg must not reach the other, because the
+# same prefix covers real findings there. Measured over 10 seeds on the
+# typescript leg, 6 distinct genuine findings begin with `public`, 22 with
+# `static` and 16 with `override` -- `public override enum XX { } ;` is a
+# modifier stack tsc rejects, and it is a real one. Declaring `public `
+# globally to silence the javascript union noise would have buried all six.
+# That is exactly the "blanket prefix silences the real finding that turns
+# up next month wearing similar clothes" this rule warns about, so the
+# narrowing offered is by ORACLE rather than by more prefix text.
+
+rule = '''
+Over-acceptance this grammar commits to ON PURPOSE, as prefixes of the shrunk program `treebank fuzz` reports. Entries must be as narrow as the decision they record. Every entry names the decision it follows from, and that decision lives in ledger.toml -- it is not invented here to make a number go down. Nothing is declared at the top level: this grammar has no widening that is deliberate in BOTH dialects at once, which is itself the finding that produced the per-language sections.'''
+
+[javascript]
+rule = '''
+TypeScript, spelled in a .js file. `dialect_decision` in ledger.toml commits this repository to one parser for TS + JS + JSX rather than the DESIGN.md §4.2 dialect pair, and the [[deviations]] entry states the trade in one line: "union-widening traded for a single table". The javascript fuzz leg is where that trade shows up as a bill. Its oracle is V8, correctly and deliberately NOT the TypeScript parser -- a TS-aware oracle would call `const x: number = 1` valid JavaScript and turn this grammar's correct rejection of TypeScript into a reported gap -- so every TypeScript construct the generator derives is a widening against it, and is meant to be one.
+
+Left undeclared this single decision dominates the run and buries everything else, which is the exact failure fuzz.rs describes python's `print x` policy as preventing. Measured over 4 seeds x 5,000 derivations: 2,256 widening seeds in 11 distinct programs, of which 2,161 -- 95.8% -- are the `enum` family alone. The class of real findings this was hiding is not hypothetical: #191 sat under it, 615 seeds of `class { }`, and was only visible because it happened to out-count the noise that run.
+
+A limit worth stating rather than working around. `starts_with` is POSITIONAL, so a declared construct nested inside a statement escapes its entry: `do enum XX { } while ( 0x0n )` is the same `enum` decision and is not matched by `enum `. It stays undeclared on purpose. Chasing it would mean an entry per enclosing statement -- `do enum `, `if ( x ) enum `, `{ enum ` -- and a policy that grows a tail like that stops being readable long before it stops being incomplete. One undeclared finding in 2,256 seeds is a better report than a prefix broad enough to cover them all.'''
+
+[[javascript.declared]]
+starts_with = 'enum '
+why = '''
+TypeScript `enum`, which has no production in JavaScript at all -- `enum` is a reserved word there with nothing behind it, so V8 rejects every program starting with one and no narrower prefix would mean anything. 2,161 of 2,256 measured widening seeds.'''
+
+[[javascript.declared]]
+starts_with = 'public '
+why = '''
+A TypeScript modifier leading a statement: `public var XX ;` and its doubled form. `_modifier` is reachable at statement level because ledger.toml records tsc's parser taking `declare var x`, `static var x` and `readonly var x`; V8 takes none of them. `public` leading a statement is never valid JavaScript in any mode, so the prefix is as narrow as the decision.
+
+Only `public` has been reached so far. The other six modifiers -- private, protected, readonly, static, abstract, declare, accessor -- follow from the same decision and get their own entries when a seed reaches them, recorded here so the next person adds one without re-deriving the argument rather than declaring all seven on speculation.'''
+
+[[javascript.declared]]
+starts_with = 'export default function ( ) ;'
+why = '''
+The bodiless anonymous default function. ledger.toml already declares it deliberate for .d.ts, where mime-4.1.0 ships `export default function (): Promise<void>;` and upstream tree-sitter rejects it in 73 corpus files. A .js file has no such form, so V8 rejects it; the rule is kept for the dialect that needs it.'''
+
+# ── past the parser ──────────────────────────────────────────────────
+# NOT over-acceptance, and the distinction is the point. The entry below
+# is a program V8 PARSES and then refuses by an early-error rule, and
+# fuzz.rs's stated rule is to ask the parser rather than the compiler:
+# "`break` outside a loop is not a syntax error, and a tree-sitter grammar
+# has no business tracking loop nesting to produce one." Where an oracle
+# can separate the two this uses validate_syntax_only; js-oracle has no
+# such mode, which ledger.toml records, and this is what that costs.
+# Same shape as the section treebank-rust carries for E0433 and E0214.
+
+[[javascript.declared]]
+starts_with = 'break ;'
+why = '''
+`break` at top level. V8: `SyntaxError: Illegal break statement` -- raised as a SyntaxError, but the spec makes it an Early Error (a static semantic rule), not a production the grammar could have got right. Tracking whether a `break` sits inside an iteration or switch statement is exactly the loop-nesting bookkeeping fuzz.rs says a tree-sitter grammar has no business doing, and the python runs that motivated `--syntax-only` hit the identical wall. Declared because the js oracle cannot be asked the parser-only question, not because the grammar is accepting too much: this one it accepts correctly.'''

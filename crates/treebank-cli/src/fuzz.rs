@@ -102,7 +102,7 @@
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 
-use anyhow::{Context, Result};
+use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use serde_json::Value;
 use tree_sitter::Parser;
@@ -850,9 +850,42 @@ pub struct FuzzReport {
 }
 
 /// What a grammar accepts on purpose. Absent file means nothing is declared.
+///
+/// Top-level `declared` entries apply to every language the grammar answers
+/// for. A `[<lang>]` section applies to that language ALONE, and the
+/// difference is not cosmetic: `treebank-typescript` is one union grammar
+/// judged by two different oracles, so `public var x` is the declared
+/// TS-in-.js union decision on the javascript leg and an ordinary parse on
+/// the typescript one, where tsc's parser takes the modifier. Declaring it
+/// globally to quiet the javascript leg would silence 6 distinct REAL
+/// typescript findings that begin with the same word (measured over 10
+/// seeds: also 22 under `static`, 16 under `override`). That is precisely
+/// the "blanket prefix silences the real finding that turns up next month
+/// wearing similar clothes" this file's own rule warns about, so the
+/// narrowing this offers is by ORACLE rather than by more prefix text.
+/// `deny_unknown_fields` is deliberately absent here and present on every
+/// struct below it: serde cannot combine it with `flatten`, and the
+/// flattened map is what makes `[javascript]` a section rather than an
+/// error. The protection it would have given -- a typo'd key noticed
+/// rather than ignored -- is bought back by `load`, which rejects any
+/// section whose name is not a language THIS grammar answers for. That is
+/// the stronger check of the two: `deny_unknown_fields` would have caught
+/// `[javascrpt]`, and `load` also catches `[python]` in the typescript
+/// grammar, which is well-formed, plausible, and silently dead.
+#[derive(Default, serde::Deserialize)]
+struct FuzzPolicy {
+    #[serde(default)]
+    rule: String,
+    #[serde(default)]
+    declared: Vec<Declared>,
+    /// Per-language sections, keyed by canonical language name.
+    #[serde(flatten)]
+    languages: std::collections::BTreeMap<String, LanguageSection>,
+}
+
 #[derive(Default, serde::Deserialize)]
 #[serde(deny_unknown_fields)]
-struct FuzzPolicy {
+struct LanguageSection {
     #[serde(default)]
     rule: String,
     #[serde(default)]
@@ -874,14 +907,64 @@ impl FuzzPolicy {
             return Ok(FuzzPolicy::default());
         }
         let text = std::fs::read_to_string(&path)?;
-        toml::from_str(&text).with_context(|| format!("parse {}", path.display()))
+        let policy: FuzzPolicy =
+            toml::from_str(&text).with_context(|| format!("parse {}", path.display()))?;
+        policy.validate_sections(grammar_dir)?;
+        Ok(policy)
     }
 
-    fn declared_reason(&self, program: &str) -> Option<&str> {
-        self.declared
-            .iter()
+    /// A section must name a language this grammar actually parses. Both
+    /// halves matter: a misspelling and a plausible-but-wrong language
+    /// produce the same silent failure, a declaration that never applies
+    /// and a report that keeps calling the finding undeclared.
+    fn validate_sections(&self, grammar_dir: &Path) -> Result<()> {
+        let dir = grammar_dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        for name in self.languages.keys() {
+            let Some(lang) = LangName::from_name(name) else {
+                bail!("fuzz_policy.toml has a [{name}] section, which is not a language");
+            };
+            anyhow::ensure!(
+                lang.grammar_crate() == dir,
+                "fuzz_policy.toml has a [{name}] section, but {name} is parsed by {} — \
+                 the declaration would never apply",
+                lang.grammar_crate()
+            );
+        }
+        Ok(())
+    }
+
+    /// Entries in force for one language: the shared ones plus that
+    /// language's own section.
+    fn entries_for(&self, lang: LangName) -> impl Iterator<Item = &Declared> {
+        self.declared.iter().chain(
+            self.languages
+                .get(lang.as_str())
+                .into_iter()
+                .flat_map(|s| s.declared.iter()),
+        )
+    }
+
+    fn declared_reason(&self, lang: LangName, program: &str) -> Option<&str> {
+        self.entries_for(lang)
             .find(|d| program.starts_with(&d.starts_with))
             .map(|d| d.why.as_str())
+    }
+
+    /// Whether anything at all is in force, which decides only whether the
+    /// report bothers to name the file.
+    fn is_empty(&self, lang: LangName) -> bool {
+        self.entries_for(lang).next().is_none()
+    }
+
+    fn rule_for(&self, lang: LangName) -> &str {
+        let section = self.languages.get(lang.as_str()).map(|s| s.rule.as_str());
+        match section {
+            Some(r) if !r.is_empty() => r,
+            _ => &self.rule,
+        }
     }
 }
 
@@ -1211,7 +1294,7 @@ pub fn run(
     let mut findings: Vec<Finding> = by_program
         .into_iter()
         .map(|(program, seeds)| Finding {
-            declared: policy.declared_reason(&program).map(String::from),
+            declared: policy.declared_reason(lang, &program).map(String::from),
             bytes: program.len(),
             program,
             seeds,
@@ -1305,8 +1388,22 @@ pub fn run(
         undeclared.len(),
         declared_count,
     );
-    if !policy.rule.is_empty() && declared_count > 0 {
+    if !policy.is_empty(lang) && declared_count > 0 {
         println!("  ({} declared by fuzz_policy.toml)", declared_count);
+        // Name the decision, not just the count. A reader who wants to
+        // know whether a silenced finding SHOULD be silenced needs the
+        // reason in the run, not a second file to go and open.
+        let rule = policy.rule_for(lang);
+        if !rule.is_empty() {
+            println!("  policy — {}", rule.trim());
+        }
+        for f in report.findings.iter().filter(|f| f.declared.is_some()) {
+            println!(
+                "  {:>3}x  {}  [declared]",
+                f.seeds,
+                f.program.replace('\n', " ⏎ ")
+            );
+        }
     }
     println!(
         "fuzz: coverage — {}/{} grammar alternatives ({}%), {} tape(s) kept",
@@ -1333,4 +1430,147 @@ pub fn run(
 
 pub fn default_out(lang: LangName) -> PathBuf {
     PathBuf::from(format!("corpus/{lang}/reports/fuzz.json"))
+}
+
+#[cfg(test)]
+mod policy_tests {
+    use super::{FuzzPolicy, LangName};
+
+    fn parse(text: &str) -> FuzzPolicy {
+        toml::from_str(text).expect("policy must parse")
+    }
+
+    /// The shape python and rust already ship: no sections, entries apply
+    /// wherever the grammar is fuzzed. Adding sections must not disturb it.
+    #[test]
+    fn top_level_entries_apply_to_every_language() {
+        let p = parse(
+            r#"
+rule = "shared"
+[[declared]]
+starts_with = "print "
+why = "py2"
+"#,
+        );
+        assert!(p.declared_reason(LangName::Python, "print x\n").is_some());
+        assert!(p.declared_reason(LangName::Rust, "print x\n").is_some());
+        assert!(p.declared_reason(LangName::Python, "exec x\n").is_none());
+    }
+
+    /// The reason sections exist. One union grammar, two oracles: a
+    /// declaration made for the javascript leg must not reach the
+    /// typescript one, where the same prefix covers real findings.
+    #[test]
+    fn a_section_does_not_leak_to_the_sibling_language() {
+        let p = parse(
+            r#"
+[javascript]
+rule = "TS in .js"
+[[javascript.declared]]
+starts_with = "public var"
+why = "union"
+"#,
+        );
+        assert!(p
+            .declared_reason(LangName::Javascript, "public var XX ;\n")
+            .is_some());
+        assert!(
+            p.declared_reason(LangName::Typescript, "public var XX ;\n")
+                .is_none(),
+            "a javascript declaration must not silence the typescript leg"
+        );
+    }
+
+    #[test]
+    fn shared_and_section_entries_compose() {
+        let p = parse(
+            r#"
+[[declared]]
+starts_with = "shared "
+why = "both"
+[javascript]
+[[javascript.declared]]
+starts_with = "only "
+why = "one"
+"#,
+        );
+        for lang in [LangName::Javascript, LangName::Typescript] {
+            assert!(p.declared_reason(lang, "shared x\n").is_some());
+        }
+        assert!(p.declared_reason(LangName::Javascript, "only x\n").is_some());
+        assert!(p.declared_reason(LangName::Typescript, "only x\n").is_none());
+        assert!(!p.is_empty(LangName::Typescript), "shared entry is in force");
+    }
+
+    /// A section's own rule is what the run prints for that language;
+    /// without one it falls back to the shared rule rather than nothing.
+    #[test]
+    fn a_section_rule_overrides_the_shared_one() {
+        let p = parse(
+            r#"
+rule = "shared reason"
+[javascript]
+rule = "javascript reason"
+"#,
+        );
+        assert_eq!(p.rule_for(LangName::Javascript), "javascript reason");
+        assert_eq!(p.rule_for(LangName::Typescript), "shared reason");
+    }
+
+    #[test]
+    fn an_empty_policy_declares_nothing() {
+        let p = FuzzPolicy::default();
+        assert!(p.is_empty(LangName::Javascript));
+        assert!(p.declared_reason(LangName::Javascript, "anything\n").is_none());
+    }
+
+    /// A misspelling and a plausible-but-wrong language fail the same
+    /// way -- silently -- so `load` rejects both.
+    #[test]
+    fn a_section_naming_no_language_is_refused() {
+        let p = parse("[javascrpt]\nrule = \"typo\"\n");
+        let err = p
+            .validate_sections(std::path::Path::new("crates/treebank-typescript"))
+            .expect_err("a misspelt language must fail");
+        assert!(err.to_string().contains("not a language"), "{err}");
+    }
+
+    #[test]
+    fn a_section_for_another_grammars_language_is_refused() {
+        let p = parse("[python]\nrule = \"wrong crate\"\n");
+        let err = p
+            .validate_sections(std::path::Path::new("crates/treebank-typescript"))
+            .expect_err("a section for a language this grammar does not parse must fail");
+        assert!(err.to_string().contains("treebank-python"), "{err}");
+    }
+
+    /// The dialect case must be ALLOWED: javascript is parsed by the
+    /// typescript grammar, and that is the whole point of the sections.
+    #[test]
+    fn a_dialect_section_is_accepted_in_its_grammars_crate() {
+        let p = parse("[javascript]\nrule = \"union\"\n");
+        p.validate_sections(std::path::Path::new("crates/treebank-typescript"))
+            .expect("javascript is parsed by treebank-typescript");
+    }
+
+    /// Every committed policy must parse under the extended schema, or a
+    /// sibling stream's file becomes a build-time surprise.
+    #[test]
+    fn every_committed_fuzz_policy_still_parses() {
+        let crates_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .unwrap();
+        let mut seen = 0;
+        for entry in std::fs::read_dir(crates_dir).unwrap() {
+            let path = entry.unwrap().path().join("fuzz_policy.toml");
+            if !path.exists() {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path).unwrap();
+            toml::from_str::<FuzzPolicy>(&text)
+                .unwrap_or_else(|e| panic!("{} does not parse: {e}", path.display()));
+            seen += 1;
+        }
+        assert!(seen >= 2, "expected python and rust policies, found {seen}");
+    }
 }

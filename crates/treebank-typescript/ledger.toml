@@ -35,8 +35,7 @@ Counts are not comparable across a grammar change and nothing here compares them
 
   497 seeds   `enum XX { }`, `enum XX { } ;`, and 11 more for `public var XX ;`
               — TypeScript spelled in a .js file. That is the union grammar
-                working as the dialect_decision above says it does, and it is
-                what a fuzz_policy.toml is for.
+                working as the dialect_decision above says it does.
     4 seeds   `export default function ( ) ;` — the bodiless anonymous default
                 function this ledger records as deliberate, judged in .js.
     4 seeds   `break ;` at top level — V8's "Illegal break statement" is a
@@ -44,6 +43,9 @@ Counts are not comparable across a grammar change and nothing here compares them
                 report says "parser and compiler together", and this is the
                 cost of that.
 
+All four are now declared in `fuzz_policy.toml`, per LANGUAGE. Widened to 4 seeds x 5,000 derivations the family is 2,256 widening seeds in 11 distinct programs, and 2,161 of those seeds — 95.8% — are `enum` alone; the declaration takes seed 701089105 — the seed #191 was filed from — to 0 undeclared and 9 declared, and the 4-seed union to 1 undeclared, without touching the typescript leg, which reports the same 154 findings it did before, byte for byte.
+
+The sections exist because this file is shared and the two legs are not. On the typescript leg 6 distinct genuine findings begin with `public`, 22 with `static`, 16 with `override` — `public override enum XX { } ;` is a modifier stack tsc rejects, and it survives the declaration that silences `public var XX ;` on the .js side. Declaring these globally would have buried all six, which is the failure the policy file's own rule names. The remaining javascript finding is `do enum XX { } while ( 0x0n )`: `starts_with` is positional, so the same decision nested inside a statement escapes its entry, and one undeclared finding in 2,256 seeds is left visible rather than chased with an entry per enclosing statement.
 Every earlier finding is closed: `try { }` with neither catch nor finally, `for await (x in y)`, `override var x`, and the `function ( ) ;` family the `_method_definition` split ended — `function ( ) ;`, `foo ( ) { }` and `declare foo(): void` are all rejected, checked. The `_declaration` refactor those notes called blocked has landed.'''
 [corpus]
 source = '''
