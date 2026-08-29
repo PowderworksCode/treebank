@@ -119,8 +119,8 @@ loads are a few milliseconds. Release-build figures:
 
 | | cold | warm |
 | --- | --- | --- |
-| python, 673 KB | 296 ms | 4 ms |
-| C++, 5.0 MB | 370 ms | 25 ms |
+| python, 673 KB | 297 ms | 1 ms |
+| C++, 5.0 MB | 362 ms | 15 ms |
 
 Parsing is well under a millisecond, so this is the whole startup cost. Measure
 it in a **release** build: in debug, cranelift is unoptimised and the same load
@@ -137,6 +137,9 @@ Both are on by default.
 | --- | --- |
 | `pack` | load and parse with a grammar; brings a WASI runtime (`wasmtime`) |
 | `fetch` | download grammars; implies `pack` |
+
+`pack` brings wasmtime, which needs Rust 1.95. That floor is wasmtime's, not
+this crate's, and turning the runtime off removes it.
 
 For a build that must not reach the network, keep `pack` and hand the bytes in
 yourself with `Pack::from_path` or `Pack::from_bytes`:

@@ -10,6 +10,9 @@ use std::path::PathBuf;
 
 use treebank::pack::Pack;
 
+mod common;
+use common::a_pack;
+
 /// Queries arrived at pack_abi 3. A checkout whose packs predate that should
 /// skip these rather than fail: the pack is stale, not the code.
 fn a_queryable_pack() -> Option<Pack> {
@@ -22,17 +25,6 @@ fn a_queryable_pack() -> Option<Pack> {
         return None;
     }
     Some(pack)
-}
-
-fn a_pack() -> Option<PathBuf> {
-    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-    for dir in ["dist/wasm", "site/public/packs"] {
-        let path = root.join(dir).join("treebank-python.wasm");
-        if path.is_file() {
-            return Some(path);
-        }
-    }
-    None
 }
 
 #[test]
@@ -91,48 +83,6 @@ fn expands_a_facet_query_against_the_packs_own_manifest() {
     assert!(!expanded.contains(term), "facet should be expanded away: {expanded}");
     assert!(expanded.contains(&members[0]), "expected {} in {expanded}", members[0]);
 }
-
-/// Compiling a pack costs a few hundred milliseconds and loading a cached one
-/// costs a few, so this is the startup cost of every tool that uses a grammar.
-/// Asserts the cache is actually hit, in a clean directory rather than
-/// whatever the developer's happens to hold.
-///
-/// The ratio rather than a duration, because this runs in a debug profile
-/// where cranelift is unoptimised and everything is roughly ten times slower.
-#[test]
-fn a_second_load_uses_the_compiled_cache() {
-    let Some(path) = a_pack() else { return };
-    let dir = std::env::temp_dir().join(format!("treebank-cachetest-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&dir);
-
-    // SAFETY: single-threaded test; the variable is read on the next line's
-    // call and nothing else in this process depends on it.
-    unsafe { std::env::set_var("TREEBANK_CACHE", &dir) };
-
-    let cold = std::time::Instant::now();
-    Pack::from_path(&path).expect("cold load");
-    let cold = cold.elapsed();
-
-    let warm = std::time::Instant::now();
-    Pack::from_path(&path).expect("warm load");
-    let warm = warm.elapsed();
-
-    let cached: Vec<_> = std::fs::read_dir(dir.join("compiled"))
-        .expect("the cache directory should exist")
-        .filter_map(|e| e.ok())
-        .filter(|e| e.path().extension().is_some_and(|x| x == "cwasm"))
-        .collect();
-    assert_eq!(cached.len(), 1, "one compiled artifact, got {}", cached.len());
-
-    // Deliberately loose. The point is that the second load does not recompile,
-    // not that it hits a particular number on a particular machine.
-    assert!(
-        warm * 4 < cold,
-        "a cached load should be far faster than compiling: cold {cold:?}, warm {warm:?}"
-    );
-    let _ = std::fs::remove_dir_all(&dir);
-}
-
 /// The vocabulary's whole purpose: one query, several languages, whatever each
 /// one calls its declarations. Skipped unless more than one pack is present,
 /// because a single-language run would prove nothing about portability.
