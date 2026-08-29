@@ -46,14 +46,16 @@
  * tree_sitter_tsx, ...). One pack, one grammar. */
 const TSLanguage *TREEBANK_LANGUAGE_FN(void);
 
-/* Generated into embedded.c by tools/wasm-pack/build.sh from ledger.json
- * and roles.json. */
+/* Generated into embedded.c by tools/wasm-pack/build.sh from ledger.json,
+ * roles.json and node-types.json. */
 extern const unsigned char treebank_provenance_raw[];
 extern const unsigned treebank_provenance_len;
 extern const unsigned char treebank_roles_raw[];
 extern const unsigned treebank_roles_len;
+extern const unsigned char treebank_node_types_raw[];
+extern const unsigned treebank_node_types_len;
 
-#define TB_PACK_ABI 1
+#define TB_PACK_ABI 2
 
 #define EXPORT(name) __attribute__((export_name(#name))) name
 
@@ -73,6 +75,22 @@ unsigned EXPORT(tb_provenance_len)(void) { return treebank_provenance_len; }
  * the module for the same reason provenance does. */
 const char *EXPORT(tb_roles)(void) { return (const char *)treebank_roles_raw; }
 unsigned EXPORT(tb_roles_len)(void) { return treebank_roles_len; }
+
+/* The node manifest (node-types.json), which is where TABLE-tier membership
+ * lives: that `while_statement` derives from `_loop`, and `_loop` from
+ * `_statement`, is recorded here and nowhere else a pack consumer can reach.
+ *
+ * Supertypes are queryable from the parser only through a tree-sitter QUERY,
+ * and this ABI deliberately exposes node walking rather than a query engine.
+ * A host walking the tree therefore sees concrete kinds -- `while_statement`
+ * -- and without this manifest has no way to learn it is a `_loop`. That made
+ * the vocabulary, which is the whole point of a treebank grammar, the one
+ * thing a pack could not answer for itself.
+ *
+ * It ships inside for the same reason provenance and roles do: the file next
+ * to the binary is the thing that goes missing. */
+const char *EXPORT(tb_node_types)(void) { return (const char *)treebank_node_types_raw; }
+unsigned EXPORT(tb_node_types_len)(void) { return treebank_node_types_len; }
 
 /* ---- memory ------------------------------------------------------------ */
 

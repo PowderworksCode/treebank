@@ -84,6 +84,18 @@ for field in ("language", "vocabulary", "generate_cli"):
 roles = blob(e["tb_roles"](store), e["tb_roles_len"](store))
 assert roles == json.load(open(f"crates/treebank-{lang}/roles.json")), f"{lang}: roles.json does not match the pack"
 
+# The node manifest likewise, and this one fails quieter: table-tier
+# membership drifting from node-types.json makes (_loop) match the wrong
+# nodes, so a consumer sees a rule stop firing rather than an error.
+node_types = blob(e["tb_node_types"](store), e["tb_node_types_len"](store))
+assert node_types == json.load(open(f"crates/treebank-{lang}/src/node-types.json")), \
+    f"{lang}: node-types.json does not match the pack"
+
+# The ABI version lives in shim.c and again in the provenance the build
+# generates. They are written in two places, so check they agree.
+assert prov["pack_abi"] == e["tb_pack_abi"](store), \
+    f"{lang}: provenance says pack_abi {prov['pack_abi']}, module says {e['tb_pack_abi'](store)}"
+
 # And it must actually parse a checked-in program. These are the same valid
 # fixtures the native sweep smoke sends through the production parser path.
 src = open(fixture, "rb").read()
@@ -91,7 +103,7 @@ p = e["tb_alloc"](store, len(src)); mem.write(store, src, p)
 tree = e["tb_parse"](store, p, len(src)); e["tb_free"](store, p)
 node = e["tb_node_new"](store); e["tb_tree_root"](store, tree, node)
 assert not (e["tb_node_flags"](store, node) & 4), f"{lang}: pack failed to parse {fixture}"
-print(f"  {lang}: loads, names itself {got_name}, provenance and roles match, parses {fixture}")
+print(f"  {lang}: loads, names itself {got_name}, provenance, roles and node types match, parses {fixture}")
 PY
 done
 echo "wasm-check: OK"
