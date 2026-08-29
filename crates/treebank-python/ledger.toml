@@ -31,13 +31,18 @@ fuzz_check = '''
 `treebank fuzz` — programs derived from grammar.json and judged by CPython's PARSER (`ast.parse`, via validate_syntax_only) rather than by `compile()`. That distinction is the whole result: judged by `compile()` the run was dominated by `break`, `yield` and `* x` at module level, which CPython's parser accepts and its compiler rejects — no tree-sitter grammar should track loop nesting to reproduce those. Judged by the parser, 400 derivations gave 21 distinct shrunk programs, 4 of them the declared py2 union (fuzz_policy.toml) and the rest the five causes in known_widenings. All were confirmed against ast.parse.'''
 
 incremental_check = '''
-`treebank incremental` — 3000 files, 8898 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 0 diverged, 0 of them on text that still parses cleanly. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
+`treebank incremental` — 3000 files, 8739 edits (delete a run, insert a token, replace a run), reparsing after `Tree::edit` compared against a fresh parse of the same text. 0 diverged, 0 of them on text that still parses cleanly. Re-measured when the scanner gained a serialized field, which is exactly the failure this check exists to catch. The split is the result: an incremental reparse is exact whenever the edit leaves the file valid, and every divergence that exists is on text the edit broke, where error recovery and subtree reuse can stitch the same wreckage together more than one way. The gate is the clean half. This is the only check with a hard invariant rather than an oracle, and the only one that looks at the reparse path at all — every other one parses from scratch, so a grammar can pass all of them and still hand a broken tree to an editor.'''
 
 recovery_check = '''
 `treebank recovery` — 1978 files, 10920 single-token deletions that break the parse, measuring how much of the file lands inside an ERROR. Blast radius median 0.3%, p90 17.1%, p99 99.1%; 240 deletions put more than half of a file of at least 1 KiB inside an error, most often `"""` x59, `:` x34, `(` x23, `)` x22. A property rather than a comparison: no reference parser produces a recovered tree, so there is nothing to check against. The size floor was added after the first run counted `from a b` — which errors for two lines and recovers — as a shredding, because on a four-line file two lines is more than half; a percentage measures the file as much as the parser when the file is small.'''
 
 indentation_and_continuations = '''
 Indentation is not the column the first TOKEN sits at. A backslash continuation inside a line's leading whitespace moves the token without moving the indent, and CPython settles it while scanning that whitespace, in `cont_line_col` (Parser/tokenizer.c): a backslash reached at a NON-ZERO column fixes the indent there and nothing after it on the continuation line is indentation; a backslash at column ZERO fixes nothing and the scan continues onto the next physical line. The corpus holds a fixture for each half and they pull opposite ways — ruff's backslash_continuation_indentation needs the first, black's backslash_before_indent needs the second — which is why this was carried as a gap where fixing one broke the other. It is the non-zero test that reconciles them, and it is the whole fix: sweep 297,252 -> 297,256 passing, gap files 7 -> 3, closing two gap clusters (issue #194). Scanner only; grammar.js and the parse table did not move. What remains in this area is the tab gap below, which is a different rule (tab EXPANSION, not continuations).'''
+
+inline_suites_and_comment_lines = '''
+An INLINE suite (`if x: body()`) opens no indent level, so each comment line that follows it produces a NEWLINE with nowhere to be absorbed — a block suite folds the same newlines into its DEDENT. The tolerance was bounded at exactly one, so `if x: body()` under two or more comment lines ended the statement early and left the following `else` to be lexed as a plain identifier. dill/source.py has three in a row.
+The bound was there because an unbounded repeat HUNG the parser, which reproduces: the NEWLINE closing the last logical line at EOF is ZERO WIDTH, so consuming it advances nothing and the repeat asks for it from the same position forever. That is a scanner fact, not a grammar one, and it is fixed in the scanner — the last logical line ends once, so the second end-of-file newline request is answered `false` (`eof_newline_emitted`, cleared while input remains, carried through serialize/deserialize). The grammar then says what it means: `repeat($._newline)`.
+Sweep 297,256 -> 297,257 passing, gap files 3 -> 2 (issue #195). Parse states 2496 -> 2490, declared conflicts unchanged at 47, serialized scanner state +1 byte (325 worst case against a 1024 buffer). The tree it produces is the one a block suite already produced: the comments sit in the body block, ahead of the else_clause.'''
 
 [[known_gaps]]
 construct = 'indentation that mixes tabs and spaces'
@@ -55,18 +60,18 @@ python2-only code (modern PyPI sdists are effectively py3-only, so the py2 half 
 mutation_falsification = '''
 while_statement deleted from _loop: 3,661 gap files (vs 23). star_pattern deleted from the match sequence rule: +4. escape_sequence allowed to consume a brace again: 29. Old and new rules alike can be falsified.'''
 corpus_composition_note = '''
-3 grammar-gap files across 3 clusters and 12 version-policy rejections, one file per gap cluster. The 12 version-policy files are three distinct constructs repeated across the copies of ruff's parser test corpus that ruff, ty and ast-serialize each vendor. That vendoring is why the backslash-continuation gap counted three times while it was open: one fixture, three copies.'''
+2 grammar-gap files across 2 clusters and 12 version-policy rejections, one file per gap cluster. One gap is declared below (tabs and spaces in one indent run); the other, pycrypto's `(True, False) = (1, 0)`, is a py2 tuple-assignment target and is NOT yet declared. The 12 version-policy files are three distinct constructs repeated across the copies of ruff's parser test corpus that ruff, ty and ast-serialize each vendor. That vendoring is why the backslash-continuation gap counted three times while it was open: one fixture, three copies.'''
 
 [corpus.sweep]
 files = 298354
-passed = 297256
-failed = 1098
-gap_files = 3
+passed = 297257
+failed = 1097
+gap_files = 2
 noise_files = 1083
 pass_rate = '99.63%'
 corpus_lock_sha256 = 'caa6ed0d03bb58fb0dfd209ba3e6df7308753c88ddb9a8e8f8fc6d5e8257569b'
-grammar_sha256 = '4f65c896e791151d92d92ff5f1d7162a00175890d1eb28d903921b390d73beed'
-grammar_revision = 'e999a80702847ab0f6129db459df1ce7da0ba267'
+grammar_sha256 = '4758c1e6d7cccafb65a2126666c4b45999116692574da4c2424affb4308d4732'
+grammar_revision = 'a48f228adc59c586306ee9ba849de17d86feeefe'
 
 [[oracles]]
 family = 'python3'
@@ -89,12 +94,6 @@ battery = '''
 test/negative-oracle/py3/ (print statement, backticks, 0777, except-comma) verified live: python3 rejects all four, python2 accepts all four. test/negative-oracle/py2/ (f-string, nonlocal, walrus) verified live in the reverse direction. The battery caught its own bad fixture on first run: bare `nonlocal x` with no enclosing binding is a SyntaxError in py3 as well, so the fixture gained the enclosing function it needed.'''
 bug_found_by_widening = '''
 The wider corpus crashed the py2 leg: a file with a NUL byte makes py2's compile() raise TypeError where py3 raises ValueError, and check2.py caught only the latter, so the oracle died instead of returning a verdict. A NUL in the source is a VERDICT (the bytes were read fine, they are just not python), not an oracle failure, so both are now caught. The loud-failure discipline worked exactly as designed — the sweep aborted rather than silently booking every python2 file as noise.'''
-
-[[known_gaps]]
-construct = 'TWO OR MORE consecutive comment lines after an inline suite'
-files = 1
-note = '''
-One is tolerated. `repeat1` there HANGS the parser — the scanner emits a zero-width NEWLINE at EOF and an unbounded repeat over a zero-width token never terminates. dill/source.py has four.'''
 
 [[deviations]]
 what = '''
