@@ -188,7 +188,10 @@ module.exports = grammar({
     [$._reserved_property, $.null],
     [$._reserved_property, $.super],
     [$._reserved_property, $.this],
-    [$._reserved_property, $.class_definition],
+    // `{ class ... }`: `class` is a property name here, and with the
+    // name required on `class_definition` only the anonymous form still
+    // forks against it -- so this pair moved with the ambiguity.
+    [$._reserved_property, $._anonymous_class],
     [$.throw_statement, $._reserved_property],
     [$.return_statement, $._reserved_property],
     [$.do_statement, $._reserved_property],
@@ -716,11 +719,51 @@ module.exports = grammar({
       optional(seq(':', field('type', $._type))),
     ),
 
+    // The name is REQUIRED here, for the reason `function_definition`
+    // records one rule up: a class DECLARATION must have one. `class { }`
+    // is not a program -- V8 says `Unexpected token '{'` and tsc says
+    // TS1211, "a class declaration without the 'default' modifier must
+    // have a name" -- and with the name optional this rule was the
+    // javascript fuzzer's whole undeclared surface, 615 widenings across
+    // `class { }` and `class { } ;`.
+    //
+    // Only the javascript leg could see it. TS1211 is raised by tsc's
+    // grammar CHECK, not its parser, so `ts.createSourceFile` returns no
+    // parseDiagnostics and the typescript oracle -- which reads exactly
+    // those -- calls the program valid. The two dialects share this
+    // grammar; the sharper reference parser is the one that judges it.
+    //
+    // The anonymous form is `_anonymous_class` below, in the expression
+    // tier and nowhere else.
     class_definition: $ => prec.dynamic(1, prec.right(seq(
       repeat($._attribute),
       repeat($._modifier),
       'class',
-      optional(field('name', $._name)),
+      field('name', $._name),
+      field('type_parameters', optional($.type_parameters)),
+      optional($.class_heritage),
+      field('body', $.class_body),
+    ))),
+
+    // A class with NO name: `const C = class { }`, `new (class { })()`.
+    // It carries no name slot at all, which is what keeps it disjoint from
+    // `class_definition` -- the same shape that lets `_default_function`
+    // sit beside `function_definition`. Aliased back so consumers see one
+    // kind; the tree is the one this grammar always produced.
+    //
+    // `export default class { }` -- ClassDeclaration with [+Default], the
+    // one declaration position the language allows an anonymous class --
+    // reaches it through `export default <expression>` and ASI, and that
+    // is why there is no `export default` alternative here to match
+    // `_default_function`'s. Writing one makes `export default
+    // _anonymous_class . ';'` reduce two ways, to `export_statement`
+    // directly or to `_expression` first, and no precedence separates
+    // them. `_default_function` has no such twin because the expression
+    // tier's anonymous function is a DIFFERENT symbol, `function_expression`.
+    _anonymous_class: $ => prec.dynamic(1, prec.right(seq(
+      repeat($._attribute),
+      repeat($._modifier),
+      'class',
       field('type_parameters', optional($.type_parameters)),
       optional($.class_heritage),
       field('body', $.class_body),
@@ -934,6 +977,7 @@ module.exports = grammar({
       $.arrow_function,
       $.function_expression,
       $.class_definition,
+      alias($._anonymous_class, $.class_definition),
       $.binary_expression,
       $.unary_expression,
       $.update_expression,
@@ -1127,6 +1171,7 @@ module.exports = grammar({
       $._literal,
       $.function_expression,
       $.class_definition,
+      alias($._anonymous_class, $.class_definition),
       $.import_meta,
     ),
 

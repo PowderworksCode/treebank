@@ -235,3 +235,38 @@ declare const env: `prefix-${string}`
         (string_content)
         (template_substitution
           (type_identifier))))))
+
+================================================================================
+anonymous classes
+================================================================================
+
+export default class extends Base { }
+const anon = class { }
+const named = class Inner { }
+new (class { })()
+
+--------------------------------------------------------------------------------
+
+(program
+  (export_statement
+    (class_definition
+      (class_heritage
+        value: (identifier))
+      body: (class_body)))
+  (variable_declaration
+    (variable_declarator
+      name: (identifier)
+      value: (class_definition
+        body: (class_body))))
+  (variable_declaration
+    (variable_declarator
+      name: (identifier)
+      value: (class_definition
+        name: (identifier)
+        body: (class_body))))
+  (expression_statement
+    (new_expression
+      constructor: (parenthesized_expression
+        (class_definition
+          body: (class_body)))
+      arguments: (arguments))))
