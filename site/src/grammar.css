@@ -1,0 +1,201 @@
+/* The grammar reference, layered over the shared theme.
+ *
+ * Three colours carry all the meaning, and they are the same three the
+ * Python original used: ink blue for structure (another production), ochre
+ * for literal text as it appears in the source, plum for what is handed to
+ * the external scanner -- the hand-written C no diagram can explain. Every
+ * other surface is borrowed from theme.css so the page stays a relative of
+ * the rest of the site rather than a visitor. */
+
+:root {
+  --g-accent: #16496e;      /* structure -- another production */
+  --g-literal: #8a6212;     /* literal text in the source */
+  --g-outside: #7c3d63;     /* handed to the external scanner */
+  --g-accent-bg: #dce6ee;
+  --g-literal-bg: #f0e6cf;
+  --g-outside-bg: #eddce6;
+  --g-sheet: #f7f9f6;
+  --g-hair: #d8dfdb;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --g-accent: #7cb2dc;
+    --g-literal: #d6ab4e;
+    --g-outside: #c98cb4;
+    --g-accent-bg: #152531;
+    --g-literal-bg: #2c2515;
+    --g-outside-bg: #2b1c26;
+    --g-sheet: #171c1b;
+    --g-hair: #232a29;
+  }
+}
+
+/* The viewer stays inside the reading column and each diagram scrolls within
+   its own box.
+ *
+ * Widening past the column was tried and reverted. A railroad diagram for a
+ * C++ declarator is wider than any column, so breaking out only changes how
+ * much scrolling is left -- and to break out correctly an element has to know
+ * its own distance from the viewport edge, which here is a function of the
+ * shared theme's grid (68rem cap, 14rem rail, gap, padding). Hard-coding that
+ * bought a little width and a page that scrolled sideways at 1440px, and it
+ * would have broken silently the day the theme changed. */
+.grammar-viewer { margin: 1.5rem 0; }
+
+/* The measurement probe. It is never shown; it exists so the layout engine
+   can ask the browser what the face it will paint with actually measures. */
+.rr-probe {
+  position: absolute; visibility: hidden; white-space: pre;
+  font: 12px var(--font-mono);
+}
+
+.grammar-stats {
+  display: flex; flex-wrap: wrap; gap: 1.75rem;
+  padding: .9rem 0 1.1rem; margin-bottom: 1.25rem;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+}
+.grammar-stats div { display: flex; flex-direction: column; }
+.grammar-stats b { font-size: 1.35rem; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.grammar-stats span { font-size: .78rem; color: var(--dim); letter-spacing: .02em; }
+
+.grammar-cols { display: grid; grid-template-columns: 13rem minmax(0, 1fr); gap: 2rem; align-items: start; }
+@media (max-width: 60rem) { .grammar-cols { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---- the index rail ------------------------------------------------- */
+.idx { position: sticky; top: 2rem; font-size: .85rem; }
+.grammar-filter {
+  width: 100%; padding: .35rem .5rem; margin-bottom: .5rem;
+  font: inherit; color: var(--fg);
+  background: var(--bg); border: 1px solid var(--line); border-radius: 4px;
+}
+.idx-scroll { max-height: 70vh; overflow-y: auto; }
+.idx h4 {
+  margin: .9rem 0 .25rem; font-size: .72rem; font-weight: 700;
+  text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
+}
+.idx a {
+  display: block; padding: .1rem 0; color: var(--fg);
+  text-decoration: none; font-family: var(--font-mono); font-size: .8rem;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.idx a:hover { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 60rem) { .idx-scroll { max-height: 18rem; } }
+
+/* ---- vocabulary ----------------------------------------------------- */
+.vocab { margin: .75rem 0 1.5rem; }
+.vocab dt {
+  font-family: var(--font-mono); font-size: .82rem; font-weight: 700;
+  margin-top: .7rem; color: var(--g-accent);
+}
+.vocab dd { margin: .2rem 0 0; padding: 0; display: flex; flex-wrap: wrap; gap: .3rem; }
+.vocab dd a, .vocab dd .dead {
+  font-family: var(--font-mono); font-size: .76rem;
+  padding: .05rem .3rem; border-radius: 3px;
+  background: var(--code-bg); color: var(--fg); text-decoration: none;
+}
+.vocab dd .dead { color: var(--dim); text-decoration: line-through; }
+
+/* ---- precedence ----------------------------------------------------- */
+.scroll { overflow-x: auto; }
+table.prec { border-collapse: collapse; width: 100%; font-size: .82rem; }
+table.prec th, table.prec td {
+  text-align: left; padding: .3rem .6rem .3rem 0;
+  border-bottom: 1px solid var(--line); vertical-align: top;
+}
+table.prec th { font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+table.prec .lvl { font-variant-numeric: tabular-nums; font-weight: 700; }
+table.prec .kind code { font-size: .76rem; }
+table.prec td a {
+  font-family: var(--font-mono); font-size: .76rem;
+  margin-right: .35rem; white-space: nowrap;
+}
+
+/* ---- the key -------------------------------------------------------- */
+.key { display: flex; flex-wrap: wrap; gap: 1rem; margin: .75rem 0 1.5rem; font-size: .78rem; color: var(--dim); }
+.key span { display: flex; align-items: center; gap: .35rem; }
+.key i { width: 1.1rem; height: .75rem; border: 1px solid; display: inline-block; }
+.key .k-term { border-radius: 6px; background: var(--g-literal-bg); border-color: var(--g-literal); }
+.key .k-nt { border-radius: 2px; background: var(--g-accent-bg); border-color: var(--g-accent); }
+.key .k-re { border-radius: 6px; background: transparent; border-color: var(--dim); border-style: dashed; }
+.key .k-ext { border-radius: 2px; background: var(--g-outside-bg); border-color: var(--g-outside); }
+
+/* ---- one production ------------------------------------------------- */
+.grammar-main h3.grp {
+  margin: 2.5rem 0 .5rem; padding-bottom: .3rem;
+  border-bottom: 1px solid var(--line);
+  font-size: .78rem; text-transform: uppercase; letter-spacing: .07em; color: var(--dim);
+}
+.rule { margin: 1.5rem 0; scroll-margin-top: 2rem; }
+.rule-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: .4rem; }
+/* A production name is one unbreakable monospace token, and C++ has some
+   that are wider than a phone. Without somewhere to break, the longest name
+   in the grammar sets the width of the whole page. */
+.rule-name {
+  font-family: var(--font-mono); font-size: .95rem; font-weight: 700;
+  color: var(--fg); text-decoration: none;
+  min-width: 0; overflow-wrap: anywhere;
+}
+.rule-name:hover { text-decoration: underline; text-underline-offset: 3px; }
+.badge {
+  font-size: .62rem; text-transform: uppercase; letter-spacing: .05em;
+  padding: .08rem .3rem; border-radius: 3px; border: 1px solid var(--line); color: var(--dim);
+}
+.badge.b-sup { color: var(--g-accent); border-color: var(--g-accent); }
+.badge.b-ext { color: var(--g-outside); border-color: var(--g-outside); }
+
+.ebnf {
+  margin: .4rem 0 .5rem; padding: .5rem .7rem;
+  background: var(--code-bg); border-radius: 4px;
+  font-family: var(--font-mono); font-size: .8rem; line-height: 1.7;
+  white-space: pre-wrap; word-break: break-word; overflow-x: auto;
+}
+.ebnf b { color: var(--g-literal); font-weight: 600; }
+.ebnf i { color: var(--dim); font-style: normal; }
+.ebnf a { text-decoration: none; }
+.ebnf a.sym { color: var(--g-accent); }
+.ebnf a.hid { color: var(--g-accent); opacity: .72; }
+.ebnf a.ext { color: var(--g-outside); }
+.ebnf a:hover { text-decoration: underline; }
+.ebnf .fld { color: var(--dim); font-style: italic; }
+.ebnf .al, .ebnf .eps { color: var(--dim); }
+
+/* An undrawn figure must still occupy space. It is what the observer is
+   watching for, and a box with no height never intersects anything -- so
+   hiding it until it has content is a way of guaranteeing it never gets
+   any. The min-height also keeps the page from lurching as diagrams land. */
+.rrbox {
+  margin: 0; padding: .4rem .1rem; overflow-x: auto; min-height: 3.25rem;
+  background: var(--g-sheet); border: 1px solid var(--g-hair); border-radius: 4px;
+}
+
+/* ---- the diagram ---------------------------------------------------- */
+svg.rr { display: block; max-width: none; }
+svg.rr path { fill: none; stroke: var(--dim); stroke-width: 1.2; }
+svg.rr path.cap-line { stroke: var(--fg); stroke-width: 1.8; }
+svg.rr text {
+  font-family: var(--font-mono); font-size: 12px; text-anchor: middle;
+  fill: var(--fg); stroke: none;
+}
+svg.rr text.cap {
+  font-size: 10px; text-anchor: start; fill: var(--dim);
+}
+svg.rr rect { stroke-width: 1.2; }
+svg.rr .term rect { fill: var(--g-literal-bg); stroke: var(--g-literal); }
+svg.rr .term text { fill: var(--g-literal); }
+svg.rr .nonterm rect { fill: var(--g-accent-bg); stroke: var(--g-accent); }
+svg.rr .nonterm text { fill: var(--g-accent); }
+svg.rr .external rect { fill: var(--g-outside-bg); stroke: var(--g-outside); }
+svg.rr .external text { fill: var(--g-outside); }
+svg.rr .regex rect { fill: none; stroke: var(--dim); stroke-dasharray: 3 2; }
+svg.rr .regex text { fill: var(--dim); }
+svg.rr a { text-decoration: none; }
+svg.rr a:hover rect { stroke-width: 2.2; }
+/* The captioned boxes: a field name, an alias, a token, a precedence. */
+svg.rr rect.field, svg.rr rect.alias, svg.rr rect.token, svg.rr rect.prec {
+  fill: none; stroke: var(--dim); stroke-dasharray: 2 2; stroke-width: 1;
+}
+svg.rr rect.prec { stroke: var(--g-accent); }
+
+.grammar-loading { color: var(--dim); font-style: italic; }
+.broken { color: #b3261e; font-family: var(--font-mono); font-size: .8rem; }
+@media (prefers-color-scheme: dark) { .broken { color: #f2b8b5; } }

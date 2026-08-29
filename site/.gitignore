@@ -1,0 +1,13 @@
+node_modules/
+out/
+.wrangler/
+.DS_Store
+
+# Derived from crates/ by tools/build-grammars.mjs, and from src/ by the
+# build script. Committing them would mean a grammar could change without
+# its reference page changing, which is the one thing this site must not do.
+public/grammars/
+public/*.mjs
+public/grammar.css
+content/grammars/*.md
+!content/grammars/index.md
