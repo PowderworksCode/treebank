@@ -20,6 +20,9 @@ fi
 
 fail() { echo "wasm-check: FAIL — $*" >&2; exit 1; }
 
+WORK=$(mktemp -d)
+trap 'rm -rf "$WORK"' EXIT
+
 for g in "${GRAMMARS[@]}"; do
   fixtures=("test/sweep-smoke/$g/src/sweep-smoke/"[Vv]alid.*)
   if [ ${#fixtures[@]} -ne 1 ] || [ ! -f "${fixtures[0]}" ]; then
@@ -34,6 +37,22 @@ for g in "${GRAMMARS[@]}"; do
   ./tools/wasm-pack/build.sh "$g" --out "$OUT" >/dev/null
   after=$(sha256sum "$OUT/treebank-$g.wasm" | cut -d' ' -f1)
   [ "$before" = "$after" ] || fail "$g: not byte-reproducible ($before vs $after)"
+
+  #    Rebuilding in place cannot see the failure that actually happened: the
+  #    runtime's assertions bake __FILE__ into the module, so a pack built
+  #    under /home/runner and one built under /home/exedev differed by 65
+  #    bytes of cache path -- same size, same provenance, different hash, and
+  #    two rebuilds on one machine agreeing every time.
+  #
+  #    So build once more through a differently named path to the same cache.
+  #    A symlink is enough: clang records the path it was given, not the one
+  #    it resolves to, which is exactly the ambient input being tested for.
+  alt="$WORK/cache-under-another-name"
+  ln -sfn "${TREEBANK_WASM_CACHE:-${XDG_CACHE_HOME:-$HOME/.cache}/treebank}" "$alt"
+  TREEBANK_WASM_CACHE="$alt" ./tools/wasm-pack/build.sh "$g" --out "$WORK/alt" >/dev/null
+  elsewhere=$(sha256sum "$WORK/alt/treebank-$g.wasm" | cut -d' ' -f1)
+  [ "$before" = "$elsewhere" ] \
+    || fail "$g: build depends on where the toolchain lives ($before vs $elsewhere)"
 
   # 2. It must load in a real WASI runtime and agree with the repo about
   #    what it is. A pack built from the wrong grammar would otherwise look

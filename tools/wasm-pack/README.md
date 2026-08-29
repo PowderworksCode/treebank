@@ -42,12 +42,23 @@ grammar src (committed, CI-checked) + runtime @ pinned sha256
   -> identical bytes
 ```
 
-Verified two ways and falsified once: identical on rebuild, identical from a
-different absolute path, and **different** when `parser.c` is perturbed — so
-the build really recompiles rather than caching. No embedded paths,
-timestamps or build IDs; provenance deliberately carries no build host or git
-sha, because anything ambient would break the property it exists to make
-checkable.
+Verified three ways and falsified twice: identical on rebuild, identical when
+the toolchain is reached by a different path, and **different** when
+`parser.c` is perturbed — so the build really recompiles rather than caching.
+
+The second of those is there because it was once false. The runtime's
+assertions bake `__FILE__` into the module, so a pack built under
+`/home/runner` and one built under `/home/exedev` differed by 65 bytes of
+`.cache/treebank/tree-sitter-0.26.12/lib/src/array.h` — same size, same
+provenance, different hash. Rebuilding in place agreed every time, which is
+why nothing caught it: reproducibility was true per machine and claimed
+absolutely. `-ffile-prefix-map` maps every ambient path to a fixed name, and
+`check.sh` now builds a third time through a differently named path to the
+same cache.
+
+No embedded paths, timestamps or build IDs; provenance deliberately carries
+no build host or git sha, because anything ambient would break the property
+it exists to make checkable.
 
 ## Toolchain, pinned and cached
 
