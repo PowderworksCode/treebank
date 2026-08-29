@@ -98,7 +98,18 @@ Old hashed objects are never deleted: that is what keeps a pin working.
 
 CI publishes on a push to `main`, uploading the packs the gate above already
 built and checked -- hashed objects first, then the manifest that names them,
-so the pointer is never live before its target.
+so the pointer is never live before its target -- and then reads every object
+back, because a publish that reports success and leaves the bucket empty is
+the failure worth ruling out.
+
+It uploads over the **S3 API** with a token scoped to this bucket alone:
+`CLOUDFLARE_ACCOUNT_ID` for the endpoint, plus `R2_ACCESS_KEY_ID` and
+`R2_SECRET_ACCESS_KEY`. Wrangler's REST object endpoint was tried first and
+refuses a bucket-scoped token with a 403, and Cloudflare's documentation does
+not say which permission group it wants; the S3 API is what a bucket-scoped
+token is for. The narrow scope is worth the second secret, because this
+credential can write WebAssembly that executes in visitors' browsers and
+nothing else.
 
 **Why not GitHub Releases** -- it was the obvious answer and it cannot work.
 Release assets carry no `access-control-allow-origin`, on either the
