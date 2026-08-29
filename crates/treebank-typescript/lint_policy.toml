@@ -43,11 +43,18 @@ early_commit_conflicts = 54
 #
 # The 22nd is `_anonymous_class` (+1), added by 83b4b0b ("typescript: a
 # class DECLARATION must have a name", PR #204) after this ratchet was
-# first measured at 21. That change was a correctness fix and it paid for
-# itself in the table — state_count DROPPED 38 — so the weight is
-# recorded rather than contested. A weight on a construct CORRECT parses
-# contain re-ranks whole versions at the cull, so new weights need that
-# analysis first, and this grammar should be removing them, not adding.
+# first measured at 21. It is the old decision split in two rather than a
+# new one: the weight was carried over from `class_definition`, because
+# both compete with `_reserved_property` for `class` as a property name
+# in `{ class ... }`. The conflict pair moved with the ambiguity instead
+# of accumulating — 83b4b0b drops `[_reserved_property, class_definition]`
+# and adds `[_reserved_property, _anonymous_class]`, so declared_conflicts
+# held at 184 — and the table SHRANK 38 states. Recorded, not contested.
+#
+# 22 is a ceiling, not slack. A 23rd weight should have to argue for
+# itself: a weight on a construct CORRECT parses contain re-ranks whole
+# versions at the cull, so new weights need that analysis first, and this
+# grammar should be removing them, not adding.
 dynamic_weights = 22
 
 # One spelling, two tokens (§4): `/`. The immediate form is the `regex`
