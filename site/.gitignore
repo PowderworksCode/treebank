@@ -11,3 +11,6 @@ public/*.mjs
 public/grammar.css
 content/grammars/*.md
 !content/grammars/index.md
+
+# Built artifacts, 14 MB. See site/README.md for how they are served.
+public/packs/
