@@ -139,7 +139,7 @@ must justify:
 
 3. **Static precedence.** Where a genuine shift/reduce remains, a
    `prec`/`prec.left`/`prec.right` annotation resolves it at GENERATE
-   time, for free at runtime. This is the right tool for operator
+   time, at no runtime cost. This is the right tool for operator
    ladders and for keyword-versus-continuation decisions (§6).
 
 4. **GLR with dynamic precedence — the floor, not the default.** A
