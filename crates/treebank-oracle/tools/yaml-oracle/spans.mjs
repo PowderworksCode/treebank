@@ -122,7 +122,16 @@ function spansOf(src) {
   const map = byteMap(src);
   const docs = YAML.parseAllDocuments(src, { prettyErrors: false });
   for (const doc of docs) {
-    if (doc.errors.length > 0) return { skipped: doc.errors[0].code || "error" };
+    if (doc.errors.length > 0) {
+      // No boundaries — there is no tree to report them from — but the
+      // OFFSET the parser stopped at is still worth handing over. It is
+      // what `treebank errors` compares against our own first ERROR node,
+      // and rejecting the right files at the wrong place makes an editor's
+      // recovery useless downstream.
+      const err = doc.errors[0];
+      const at = err.pos && typeof err.pos[0] === "number" ? map[err.pos[0]] : undefined;
+      return { skipped: err.code || "error", error: at };
+    }
   }
   const push = (start, end, kind) => {
     if (typeof start !== "number" || typeof end !== "number") return;
