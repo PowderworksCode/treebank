@@ -9,7 +9,7 @@
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
   "lint_ratchets": 10,
-  "shape_fixture_grammars": 8,
+  "shape_fixture_grammars": 9,
   "wasm_packs": 10,
   "query_files": 20,
   "non_rust_binding_grammars": 0
