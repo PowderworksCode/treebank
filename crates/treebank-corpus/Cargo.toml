@@ -29,4 +29,4 @@ treebank-lang = { path = "../treebank-lang" }
 # and curl on the same machine work. Reading the platform trust store and the
 # proxy environment is what every other tool here already does.
 ureq = { version = "2", features = ["json", "native-certs", "proxy-from-env"] }
-zip = { version = "2", default-features = false, features = ["deflate"] }
+zip = { version = "8", default-features = false, features = ["deflate"] }
