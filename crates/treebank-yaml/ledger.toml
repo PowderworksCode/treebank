@@ -17,9 +17,9 @@ generate_cli = '0.26.12'
 vocabulary = '0.1.0'
 
 parser_note = '''
-`src/parser.c` is 407 KB and the table is 527 states, the smallest in this repository by a factor of seven over the next one, with zero declared conflicts. That is not because YAML is simple. It is because YAML's structure is COLUMNS, and a context-free rule cannot ask about a column, so the decisions were pushed to the highest rung of FIELD_GUIDE.md §1's ladder — the lexer — and what is left for the parse table is short.
+`src/parser.c` is 392 KB and the table is 527 states, against 1,245 for the next smallest (java) and 26,576 for the largest (C++), with zero declared conflicts. That is not because YAML is simple. It is because YAML's structure is COLUMNS, and a context-free rule cannot ask about a column, so the decisions were pushed to the highest rung of FIELD_GUIDE.md §1's ladder — the lexer — and what is left for the parse table is short.
 
-`src/scanner.c` is 750 lines and owns twenty tokens: the indent stack and the `_block_end` that pops it, `_indented` and `_empty_node`, both entry indicators, both spellings of `:`, the four flow brackets, the document markers, the anchor and alias sigils, tags, and all four kinds of scalar. Owning that much is a cost worth naming, because it moves correctness out of a generated table and into hand-written C where only tests can see it. Three things make it the right trade anyway.
+`src/scanner.c` is 929 lines and owns twenty-one tokens — 22 externals, one of which is the error sentinel that is never produced: the `_block_end` that pops the indent stack, `_indented` and `_empty_node`, the entry indicator, both spellings of `:`, the explicit-key `?`, the four flow brackets, both document markers, the anchor and alias sigils, the anchor name, tags, and all four kinds of scalar. Only ruby declares more externals (35) and its table is fourteen times the size. Owning that much is a cost worth naming, because it moves correctness out of a generated table and into hand-written C where only tests can see it. Three things make it the right trade anyway.
 
 The first is that YAML's own specification is written this way. Its "simple key" machinery — a key is one line and at most 1024 characters — is lexer state in every implementation there is, and the productions are parameterised by an indentation level `n` that no LR table carries.
 
@@ -42,18 +42,30 @@ Threaded: `_expression`, `_literal`, `_name`, `_type`, `_directive`.
 
 Now the seventeen. `_statement`, `_control_flow`, `_branch`, `_loop`, `_jump`, `_assignment`, `_invocation`, `_access`, `_callable` are all about EXECUTION, and a YAML document does not execute. There is nothing here that alters sequential control, nothing to apply, nothing to store into and nothing to call. `_declaration`, `_member`, `_parameter`, `_argument`, `_modifier`, `_body`, `_pattern` are about the shape of a program's definitions, and YAML has no definitions: an anchor introduces a name but does not declare an entity, which is exactly the `_declaration`/`_binding` distinction DESIGN.md §3.2 draws, and the anchor is on the `_binding` side. `_attribute` is covered above. `_interpolation` is absent because YAML strings do not interpolate — `{{ x }}` in an Ansible playbook is a nested flow mapping to YAML and a template to Ansible, and the grammar is right to see only the former.
 
-Four facets carry what the table tier cannot. `_clause` holds the three subordinate pieces — `block_mapping_pair`, `block_sequence_item`, `flow_pair` — each of which is a piece of a larger construct and is neither a statement nor an expression. `_binding` holds `anchor`. `_scope` holds `document` and `stream`, and `document` is a genuine lexical scope rather than a convenient one: an anchor is visible only within the document that defines it. `_string` holds the three scalar kinds that are always strings and deliberately NOT `plain_scalar`, because a plain scalar is where `null`, `true` and `42` live and calling it a string would be the very schema opinion this grammar refuses to hold.'''
+Six facets carry what the table tier cannot. `_comment` holds `comment` and `_identifier` holds the two name-shaped tokens, both of them the ordinary answers. Of the other four, `_clause` holds the three subordinate pieces — `block_mapping_pair`, `block_sequence_item`, `flow_pair` — each of which is a piece of a larger construct and is neither a statement nor an expression. `_binding` holds `anchor`. `_scope` holds `document` and `stream`, and `document` is a genuine lexical scope rather than a convenient one: an anchor is visible only within the document that defines it. `_string` holds the three scalar kinds that are always strings and deliberately NOT `plain_scalar`, because a plain scalar is where `null`, `true` and `42` live and calling it a string would be the very schema opinion this grammar refuses to hold.'''
 
 conformance = '''
 yaml-test-suite at da267a5, the case set the language's own community maintains: 406 cases, 312 of which must parse and 94 of which must be rejected. It is used here in place of the fuzzer, and it is a better instrument than one, because every case is a construct somebody argued about.
 
-**Parses: 312 of 312.** Every case the suite says is valid parses without an error node.
+**Parses: 310 of 312.** The two that do not are one construct and are recorded in `known_gaps`: they are the half of an implementation disagreement this grammar had to choose against.
 
-**Shape: 300 of 303.** The suite ships the expected EVENT STREAM for each case, which is a tree in a different notation, so it can be compared against ours directly — the check `treebank shape` performs against a span oracle for other languages, done here against the language's own answer key. Our tree is folded to `+STR/+DOC/+MAP/+SEQ/=VAL/=ALI` and compared for structure; scalar text, styles, tags and anchors are dropped, because those are resolution or presentation. 303 of the 312 valid cases carry an event stream and 300 of them match exactly. The three that do not are one construct and are declared as a deviation below.
+**Shape: 298 of 303.** The suite ships the expected EVENT STREAM for each case, which is a tree in a different notation, so it can be compared against ours directly — the check `treebank shape` performs against a span oracle for other languages, done here against the language's own answer key. Our tree is folded to `+STR/+DOC/+MAP/+SEQ/=VAL/=ALI` and compared for structure; scalar text, styles, tags and anchors are dropped, because those are resolution or presentation. 303 of the 312 valid cases carry an event stream and 298 of them match. Three of the five that do not are one construct and are declared as a deviation below; the other two are the two the grammar does not parse at all.
 
 Two mis-parses were found this way and fixed, and neither was reachable from an accept/reject test: `seq:` / ` &anchor` / `- a` closed the mapping and started a new document rather than anchoring the sequence, and a `...` with no document in front of it produced an empty document that the file does not contain.
 
 **Rejects: 46 of 94.** This is the accepts-invalid direction and it is where the grammar is weakest; the number is stated rather than improved because most of what remains is not reachable from a grammar. See `blind_to`.'''
+
+incremental_check = '''
+`treebank incremental` — 3,000 corpus files, 3 edits each, 9,000 edits: **0 diverged**. A reparse after an edit is byte-identical to a fresh parse of the edited text.
+
+This is the check this grammar most needed, and it is the reason the scanner serializes every field it has. Twenty external tokens mean twenty ways for a reparse to start from a state the fresh parse never had; an indent stack that did not round-trip would show up nowhere else, because every other check here parses from scratch.
+
+The measurement also has a corollary the design already relied on: the runtime restores the serialized state before EVERY scan, including one that goes on to decline. That is not a fact about incremental parsing at all — it is why the scanner has to own every token that can begin a line.'''
+
+recovery_check = '''
+`treebank recovery` — 1,500 files, up to 8 single-token deletions each: 29 deletions break the parse, with a median blast radius of 0% and a p90 of 97.4%. Two files are shredded, both by deleting a `,` from a long flow sequence.
+
+The shape of that distribution is the language rather than the grammar. Delete a token from a block collection and the damage is local, because the next line's column re-establishes where everything is; delete one from a flow collection and nothing re-establishes anything until the closing bracket, so the error runs to the end of it. A 1,600-entry flow sequence in a Kubernetes manifest is therefore an all-or-nothing structure for an editor, and no arrangement of this grammar changes that.'''
 
 [corpus]
 source = 'the 500 most-starred repositories GitHub classifies as YAML, fetched 2026-08-30 at their default-branch commit; 499 of them yielded admitted files'
@@ -76,6 +88,25 @@ And the metric is stars, which is attention rather than use — the weakest popu
 
 The direction no corpus can see is the other one. Real files are valid, so no quantity of them shows whether the grammar rejects what YAML rejects; `test/negative/` and the suite's 94 error cases are the only mirror, and they say 46 of 94.'''
 
+[corpus.sweep]
+files = 128334
+passed = 128085
+failed = 249
+gap_files = 0
+noise_files = 249
+pass_rate = '99.81%'
+corpus_lock_sha256 = '1a0a66c78bbef3d54dadaae0f637f931a341e2cce37f252303f89ea9ced5dc76'
+grammar_sha256 = '7cdd540548af88578d91ab627699ed21a7b805c8e07d62524ebde2e813fba9ab'
+grammar_revision = 'aaf6e6a53fbc74a5b1aad7bd337e7ace427819f2'
+
+[corpus.sweep_history]
+note = '''
+Three sweeps over the same 128,334 files: 99.80% -> 99.81% -> 99.81%, 8 gap files -> 1 -> 0. It is a short history because the corpus had little to say, and that is itself the finding: a population of GitOps manifests and Ansible roles exercises a narrow band of the language very hard and the rest of it not at all. Every construct this grammar found difficult — explicit keys, compact collections under properties, the two spellings of `:` — was settled against yaml-test-suite before the first sweep ran, and the sweep then found three defects the suite could not have.
+
+All three were about text that is invisible when you read a file and decisive when you lex one. A comment measured the next line's indentation to decide whether the collection above it had ended, and stopped at a line of trailing spaces; that closed every collection above a comment followed by a blank line, which in a hand-edited workflow is most of them (5 files). The `-` probe consumed its dash before deciding the dash was not an indicator, so `-: ""` lost its key (1 file). And the last one was not a defect at all but an implementation disagreement, recorded in known_gaps (1 file).
+
+The 249 remaining failures are all corpus noise, and the union oracle is what says so rather than an assumption: every one of them is rejected by the spec-first parser at 1.2, by the same parser at 1.1, AND by libyaml. What they are is templates the admission filter did not catch — Helm charts whose braces happen to lex, Jinja that renders to YAML — and files that are simply broken.'''
+
 [[oracles]]
 family = 'yaml'
 tool = 'the `yaml` npm package 2.9.0 (tools/yaml-oracle/check.mjs and check11.mjs), and PyYAML 6.0.1 over libyaml (check.py)'
@@ -94,6 +125,35 @@ The oracle is a UNION of three legs, and a file is valid if ANY of them accepts 
 3. PyYAML 6.0.1 through `yaml.parse`, which is the libyaml lineage — the state machine PyYAML, the C bindings, Ruby's Psych and Go's yaml packages all descend from. This is NOT a version. It is the other half of the installed base, and it is the leg that matters in practice: a file the whole Python and Ruby world reads without complaint is a file this grammar had better parse, whatever the specification says about it. `yaml.parse` runs the parser and stops there — no composing, no tag resolution, no construction — for the same reason the zig oracle prefers `zig fmt` to `ast-check`.
 
 What the union makes this blind to, stated plainly: PyYAML accepts 16 of the suite's 94 known-invalid cases, so those 16 shapes are "valid" to this oracle. If the grammar rejects one of them the sweep will call it a gap when it is not. That is the price of the third leg and it is paid in the direction that costs us numbers rather than the one that buys us them.'''
+
+[[known_gaps]]
+construct = 'an anchor or alias name containing a `:`'
+files = 0
+note = '''
+Zero corpus files and two yaml-test-suite cases: 2SXE (`&a: key: &a value`) and W5VH (`&:@*!$"<foo>: scalar a`). Both are rejected, deliberately, and the reason is that YAML's two implementation families disagree about the production and a single lexer cannot satisfy both.
+
+`ns-anchor-char` is every non-space character except the four flow indicators, so a `:` is legal INSIDE an anchor name. Read that way, `*app: {}` is an alias to a name called `app:` followed by a stray `{}`, and the spec-first parser rejects it on exactly that ground — measured, not assumed: `yaml` 2.9.0 answers `Unresolved alias (the anchor must be set before the alias): app:`. PyYAML narrows anchor names to word characters, reads the alias as `app`, and accepts the file. Each family is right about one of the two shapes and wrong about the other.
+
+The corpus decided it. `*alias:` as a mapping key appears in 8 of the 499 packages — it is how Kubernetes YAML reuses an anchored name — and under the spec reading the sweep reported that file as its last remaining gap. No anchor name in 128,334 files contains a colon outside a quoted string. So the name ends at a `:` followed by whitespace, which is the same rule that ends a plain scalar, and these two cases are the price.
+
+This is the one place in this grammar where DESIGN.md §4.2's "latest version wins" has an analogue and does not apply: the two readings are not two versions, they are two implementations that are both current, and the tiebreak had to be the corpus rather than a date.'''
+
+[[known_widenings]]
+construct = 'a bare document following another document without a `---` or a `...` between them'
+found_by = 'yaml-test-suite (KS4U, BD7L, JY7Z, TD5N, 3HFZ and others)'
+why_accepted = '''
+`stream` is `repeat(document)` and a document may be a bare node, so trailing text after a complete document starts a second one instead of failing. `[ … ]` on one line and `invalid item` on the next is two documents here and an error in YAML.'''
+why_not_fixed = '''
+The rule is real and the shape it needs is not expressible without a second document rule. YAML allows a bare document only first in the stream or after a `...`, which means one node type reachable from two positions with different alternatives — and two rules whose right-hand sides overlap are a reduce-reduce conflict on every lookahead (FIELD_GUIDE.md §3), which static precedence can only settle by killing one of them everywhere.
+
+It is the single largest remaining class in the accepts-invalid direction and it accounts for a fifth of what the suite still gets past this grammar. It is written down here rather than worked around, because the worked-around versions all cost something a corpus of real files would have paid for.'''
+
+[[known_widenings]]
+construct = 'two anchors on one node, `&a` then `&b value`'
+found_by = 'yaml-test-suite (4JVG)'
+why_accepted = '''
+`_properties` admits at most one anchor and one tag, so this parses as an anchored node with no content followed by a second document that is itself an anchored node — the widening above, wearing a different hat.'''
+why_not_fixed = 'it is the same rule; fixing that one fixes this one.'
 
 [[deviations]]
 what = '''

@@ -11,7 +11,8 @@
 # all questions a context-free rule cannot ask. So the decisions live in
 # the external scanner — the highest rung of FIELD_GUIDE.md §1's ladder —
 # and the parse table is left with almost nothing to be ambiguous about.
-# Twenty externals is a lot; zero conflicts is the thing they buy.
+# Twenty-two externals is a lot; zero conflicts in 527 states — against
+# 1,245 for the next smallest grammar here — is the thing they buy.
 
 [baselines]
 # GLR fork sites (FIELD_GUIDE.md §2). None. The three decisions that would
