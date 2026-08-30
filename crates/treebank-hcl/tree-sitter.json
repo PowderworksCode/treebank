@@ -1,0 +1,23 @@
+{
+  "grammars": [
+    {
+      "name": "hcl",
+      "camelcase": "Hcl",
+      "scope": "source.hcl",
+      "file-types": [
+        "hcl",
+        "tf",
+        "tfvars"
+      ],
+      "injection-regex": "^(hcl|terraform|tf)$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "HCL2 native syntax in one grammar, Terraform's .tf and .tfvars included, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

@@ -1,0 +1,186 @@
+================================================================================
+a resource block, its labels and a nested block
+================================================================================
+
+terraform {
+  required_version = ">= 1.5"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
+    }
+  }
+}
+
+resource "aws_s3_bucket" "logs" {
+  bucket = "example-logs"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (block
+    type: (identifier)
+    body: (body
+      (attribute
+        name: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote)))
+      (block
+        type: (identifier)
+        body: (body
+          (attribute
+            name: (identifier)
+            value: (object
+              (object_elem
+                key: (identifier)
+                value: (quoted_template
+                  (quote)
+                  (template_literal)
+                  (quote)))
+              (object_elem
+                key: (identifier)
+                value: (quoted_template
+                  (quote)
+                  (template_literal)
+                  (quote)))))))))
+  (block
+    type: (identifier)
+    label: (string_lit)
+    label: (string_lit)
+    body: (body
+      (attribute
+        name: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote)))
+      (block
+        type: (identifier)
+        body: (body
+          (attribute
+            name: (identifier)
+            value: (true)))))))
+
+================================================================================
+a one-line block holds at most one attribute, and a multi-line body may be empty
+================================================================================
+
+locals {}
+
+variable "region" { default = "us-east-1" }
+
+moved {
+}
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (block
+    type: (identifier)
+    body: (body))
+  (block
+    type: (identifier)
+    label: (string_lit)
+    body: (body
+      (attribute
+        name: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote)))))
+  (block
+    type: (identifier)
+    body: (body)))
+
+================================================================================
+naked identifier labels, and a dash in a name
+================================================================================
+
+service http-check {
+  check-interval = 30
+}
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (block
+    type: (identifier)
+    label: (identifier)
+    body: (body
+      (attribute
+        name: (identifier)
+        value: (integer)))))
+
+================================================================================
+comments in all three spellings, and blank lines between items
+================================================================================
+
+# a line comment
+// another spelling of the same thing
+/* an inline comment
+   over two lines */
+
+count = 1
+
+instance_type = "t3.micro" # trailing
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (comment)
+  (comment)
+  (block_comment)
+  (attribute
+    name: (identifier)
+    value: (integer))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal)
+      (quote)))
+  (comment))
+
+================================================================================
+a .tfvars body: attributes only, no blocks
+================================================================================
+
+region = "us-west-2"
+
+tags = {
+  Owner = "platform"
+  Env   = "prod"
+}
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal)
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (object
+      (object_elem
+        key: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote)))
+      (object_elem
+        key: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote))))))

@@ -112,6 +112,7 @@ pub(crate) struct RubySpans;
 pub(crate) struct CSpans;
 pub(crate) struct CppSpans;
 pub(crate) struct YamlSpans;
+pub(crate) struct HclSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -189,6 +190,31 @@ impl SpanOracle for RubySpans {
             "ruby",
             &[script.to_string_lossy().as_ref()],
             "ruby tools/rb-oracle/spans.rb — is ruby installed?",
+            srcroot,
+            paths,
+        )?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
+impl SpanOracle for HclSpans {
+    /// hclsyntax's own tree, from the same `ParseConfig` that gives the
+    /// validity verdict, so the boundaries and the verdict cannot come from
+    /// different readings of the file.
+    ///
+    /// It reports no EDGES: hclsyntax's nodes are Go structs with no
+    /// generic field reflection, so naming an edge would mean a
+    /// hand-written table from Go struct fields to this grammar's field
+    /// names — which is the correspondence table this whole check exists to
+    /// avoid. `hclsyntax.LexConfig` does ride along as the lexical oracle,
+    /// the role `tokenize` plays for python: the library exposes its
+    /// scanner separately from its parser.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        let oracle = crate::hcl::ensure_oracle()?;
+        let lines = stdin_oracle::run_lines(
+            oracle.to_string_lossy().as_ref(),
+            &["spans"],
+            "hcl-oracle spans — run tools/hcl-oracle/build.sh (needs go)",
             srcroot,
             paths,
         )?;
