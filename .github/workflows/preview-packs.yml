@@ -1,0 +1,167 @@
+name: preview packs
+
+# The packs a PREVIEW deployment needs, and cannot otherwise have.
+#
+# `ci.yml`'s publish job runs only on a push to main, so the bucket holds the
+# packs main published and nothing else. A branch that ADDS a grammar
+# therefore has no pack for it, and the playground on that branch's preview
+# URL cannot load the one thing the branch exists to add — which is the worst
+# moment for it to be missing, because a preview is where a grammar gets
+# looked at before it merges.
+#
+# WHY `workflow_run` AND NOT `pull_request`. This job holds a credential that
+# can write WebAssembly the site serves to visitors' browsers. A
+# `pull_request` job runs the workflow file FROM THE PULL REQUEST, so anyone
+# who can push a branch could rewrite these steps and keep the secret; the
+# scope `ci.yml` is careful to give that token would be worth nothing.
+# `workflow_run` runs the copy of this file on the DEFAULT BRANCH, whatever
+# the pull request says, and reaches the pull request's build only to download
+# its artifacts. The bytes are still the branch's — that is the point — but
+# where they may be written is main's decision and not the branch's.
+#
+# They land under `previews/<sha>/`, a prefix production never reads: the
+# Worker builds a `previews/` key only when the deployment carries a
+# `/packs/preview.json` asset, and only a non-production build writes one.
+#
+# The upload is also SMALL. A pack is byte-reproducible, so an unchanged
+# grammar has the hash main already published and the object main already
+# uploaded; only the grammars whose bytes moved are written, and a branch that
+# touches no grammar writes nothing at all. A commit that rewrites one grammar
+# costs about 400 KB, against a 10 GB free tier.
+#
+# Nothing here deletes them, deliberately: a delete that races a preview still
+# being read is worse than the storage. Expiry belongs to the bucket, as an R2
+# lifecycle rule on the `previews/` prefix — 30 days is longer than any branch
+# here has stayed open, and the objects a rule like that removes are ones no
+# deployment points at any more.
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+
+permissions:
+  contents: read
+  # Reading the triggering run's artifacts, and nothing else.
+  actions: read
+
+jobs:
+  publish:
+    name: publish preview packs
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.head_branch != 'main'
+    env:
+      SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      # The default branch, deliberately: the tooling that content-addresses
+      # the packs and decides what to upload must be main's, or the argument
+      # above buys nothing.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      # `continue-on-error` because "there are no artifacts" is a NORMAL
+      # outcome here and the action treats it as a failure. A markdown-only
+      # pull request skips ci.yml's `discover` job and with it the whole wasm
+      # matrix, so there is nothing to download; without this, every docs PR
+      # would leave a red run in the Actions tab for a thing that worked
+      # correctly. The step below is what decides whether anything arrived.
+      - name: take the packs the pull request's build already checked
+        continue-on-error: true
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: treebank-*-wasm-pack
+          merge-multiple: true
+          path: site/public/packs
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      # A docs-only change skips the wasm jobs, so there may be nothing to
+      # publish. That is a normal outcome, not a failure: the preview reads
+      # main's packs and every grammar in it is one main already has.
+      - name: is there anything to publish
+        id: staged
+        run: |
+          if compgen -G 'site/public/packs/treebank-*.wasm' >/dev/null; then
+            echo "any=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "any=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::no packs in this run; the preview reads main's"
+          fi
+
+      # Same script the local build and the main publish use, so a preview's
+      # keys and manifest cannot be one shape here and another there.
+      - name: content-address them
+        if: steps.staged.outputs.any == 'true'
+        working-directory: site
+        run: bun run packs
+
+      - name: upload what main does not already have
+        if: steps.staged.outputs.any == 'true'
+        working-directory: site
+        env:
+          R2_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID || secrets.CLOUDFLARE_ACCOUNT_ID }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          # aws-cli v2 adds CRC32 request checksums by default, which R2
+          # rejects. Off, or every put fails on something unrelated to us.
+          AWS_REQUEST_CHECKSUM_CALCULATION: WHEN_REQUIRED
+          AWS_RESPONSE_CHECKSUM_VALIDATION: WHEN_REQUIRED
+        run: |
+          set -euo pipefail
+          if [ -z "${R2_ACCOUNT_ID:-}" ] || [ -z "${AWS_ACCESS_KEY_ID:-}" ] \
+             || [ -z "${AWS_SECRET_ACCESS_KEY:-}" ]; then
+            echo "::notice::R2 is not configured; preview packs were not published"
+            exit 0
+          fi
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          prefix="previews/${SHA}"
+
+          # Main's manifest says which objects the bucket already has under a
+          # bare key. Anything it names, a preview reads through the Worker's
+          # fallback rather than through a second copy of the same bytes.
+          published=$(mktemp)
+          if aws s3api get-object --endpoint-url "$endpoint" \
+               --bucket treebank-packs --key index.json "$published" \
+               >/dev/null 2>&1; then
+            :
+          else
+            echo '{"packs":{}}' > "$published"
+            echo "::notice::no manifest in the bucket yet; every pack is new"
+          fi
+
+          new=$(jq -r --slurpfile old "$published" '
+            .packs
+            | to_entries
+            | map(select(.value.key != ($old[0].packs // {})[.key].key))
+            | .[].value.key
+          ' public/packs/index.json)
+
+          if [ -z "$new" ]; then
+            echo "::notice::every pack in this run is one main already published"
+            exit 0
+          fi
+
+          for key in $new; do
+            echo "  $prefix/$key"
+            aws s3api put-object --endpoint-url "$endpoint" \
+              --bucket treebank-packs --key "$prefix/$key" \
+              --body "public/packs/$key" \
+              --content-type application/wasm >/dev/null
+          done
+
+          # The manifest last, and complete rather than a delta: it names
+          # every grammar in this run, and the Worker falls back to the bare
+          # key for each one whose object was not uploaded above. Publishing
+          # it before its objects would leave a preview resolving to
+          # something that is not there yet.
+          aws s3api put-object --endpoint-url "$endpoint" \
+            --bucket treebank-packs --key "$prefix/index.json" \
+            --body public/packs/index.json \
+            --content-type application/json >/dev/null
+
+          count=$(printf '%s\n' "$new" | wc -l | tr -d ' ')
+          echo "::notice::published $count preview pack(s) under $prefix/"
