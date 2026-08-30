@@ -68,6 +68,32 @@ The accepts-invalid direction is the one no corpus can measure, because real fil
 
 And one rule that was tried and REMOVED, which is the more useful half of this section. YAML says a quoted scalar folding onto another line must be indented past the collection that holds it, so `msg: "one line` / `    a second at the mapping's own column"` is not YAML. Every implementation reads it anyway, Ansible writes it by the thousand, and the sweep found 18 files that the rule turned from passing into gaps. It bought one suite case and cost eighteen real files, so it is gone and the shape has a corpus fixture instead. The union oracle exists to make exactly that call, and this is the first time it has been asked to.'''
 
+fuzz_check = '''
+`treebank fuzz` — programs derived from grammar.json and judged by the oracle. 3,000 derivations at seed 1: 2,057 accepted by this grammar and by the oracle both, 255 discarded as unfaithful, and **0 widenings**, at **100% grammar-alternative coverage** (98 of 98).
+
+This is the instrument for the accepts-invalid direction that is not bounded by what a corpus happens to contain, and for YAML it is the only one of the three that reaches everything: the corpus never produces a directive, and the conformance suite reaches the corners but is a fixed 406 cases. A hundred per cent of alternatives with nothing to report is the strongest statement available here about the direction a sweep cannot see.
+
+It is also worth saying what a zero means and does not. The fuzzer derives from the grammar, so it can only reach text the grammar already admits; a widening it cannot express is a widening it cannot find. The 25 error cases yaml-test-suite still gets past this grammar are all still there, and `known_widenings` names the two that are the grammar's own doing.'''
+
+mutation_check = '''
+`treebank mutate` — 1,197 corpus files the oracle calls valid, 8 mutants each, seed 1: 9,162 mutants, 330 rejected by this grammar, and **0 widenings** among the 8,832 it accepted.
+
+The 3.6% rejection rate is the finding, and it is about YAML rather than about this grammar. Mutation works by making small edits and asking whether the grammar now accepts something the language does not; in a language where almost any run of characters is a legal scalar, almost every edit lands on text that is still valid YAML — differently valid, but valid. Python's mutation run found 102 widenings because python has syntax to break. This one had very little to break, which makes it the weakest of the three accepts-invalid instruments here and is why `fuzz_check` above carries the weight.'''
+
+kinds_check = '''
+`treebank kinds` — what real YAML never contains. Over the whole 128,334-file corpus: **all 22 named kinds appear**, 73 of the 100 parent→child edge shapes `node-types.json` allows are built, and three kinds are thin enough to name.
+
+`directive`, `directive_name` and `directive_parameter` occur **twice each in 128,334 files**. That is the blind spot this check exists to find, and it is a sharper number than `blind_to` guessed: the ledger said directives were "close to absent" from a GitOps corpus and they are two occurrences in a hundred and twenty-eight thousand files. Everything this grammar does with `%YAML` and `%TAG` — the whole directive production, and the rule that a directive may not follow a document without a `...` — rests on the conformance suite and on `test/corpus`, with essentially no corpus support at all. A second corpus is the answer and `ranking_note` names it.
+
+No kind is never-seen, so there is no `kinds_policy.toml`: a policy with nothing to declare is a file that only rots.'''
+
+error_positions = '''
+`treebank errors` — when this grammar rejects a file, does it reject in the right PLACE? Over 40,000 files, 32 of which it rejects: 32 comparable, 3 exact, 1 within 16 bytes, 4 within 128, and **24 further**, with a median absolute delta of 300 bytes. Every one of the 24 is in the same direction: we report the error EARLIER than the reference parser, often at byte 0 of a file whose problem is a kilobyte in.
+
+The mechanism is not a mystery and it is structural. A block collection is `pair+` followed by a zero-width close, so a collection that never manages to close is one ERROR node spanning its whole extent — which for a document-level mapping is the file. The reference parser recovers locally and points at the construct; we point at the collection the construct was in.
+
+This is a real weakness for an editor, and it is recorded rather than fixed because fixing it means changing how the collection rules recover, not how they parse. The population is also worth naming: the files involved are almost all templates that render to YAML — Helm charts whose `{{ … }}` the admission filter let through because inline interpolation is legal YAML — so the number is measured over exactly the input an editor is least likely to be pointed at. `recovery_check` measures the other and commoner case, a single missing token in a file that is otherwise fine, and reports a median blast radius of 0%.'''
+
 shape_check = '''
 `treebank shape` — node BOUNDARIES from the `yaml` package's own AST, compared against ours. **235 missed of 16,774,527 oracle nodes over a 20,000-file sample**, 0.0014%, in five clusters; 206 of them are one declared difference and the residue is ratcheted in `shape_policy.toml`. The five committed fixtures under `test/shape/` miss nothing, which is the ceiling CI enforces.
 
@@ -108,7 +134,7 @@ That place is real: GitOps cluster repositories, Ansible collections and roles, 
 blind_to = '''
 Helm charts, and with them the single largest body of `.yaml` files in the world. A file whose lines open with `{{- if …}}` or `{% for … %}` is a template that RENDERS to YAML and is not YAML, so `admit` excludes it — see the reasoning in `treebank-corpus/src/yaml.rs`. Inline interpolation is deliberately kept: `image: {{ ansible_hostname }}` is legal YAML that every implementation reads, and excluding it would have thrown away most of an Ansible corpus. The exclusion is the right call and it is also a hole: whatever a Helm template does to a parser, this number does not know.
 
-Everything else this corpus is blind to follows from what a GitOps repository is. It is MACHINE-WRITTEN as often as not, so it is syntactically narrow — plain mappings, sequences, quoted scalars, the occasional block scalar — and the constructs this grammar spent the most effort on are barely present in it. Anchors and aliases appear, but explicit `?` keys, complex collection keys, `%TAG` directives, verbatim `!<…>` tags and multi-document streams with directives are close to absent. The conformance suite is what measures those, which is why `conformance` above is a separate section rather than a footnote to this one.
+Everything else this corpus is blind to follows from what a GitOps repository is. It is MACHINE-WRITTEN as often as not, so it is syntactically narrow — plain mappings, sequences, quoted scalars, the occasional block scalar — and the constructs this grammar spent the most effort on are barely present in it. Anchors and aliases appear, but explicit `?` keys, complex collection keys, verbatim `!<…>` tags and multi-document streams with directives are close to absent — and `kinds_check` has since put a number on the sharpest of them: a `directive` node occurs TWICE in 128,334 files. The conformance suite is what measures those, which is why `conformance` above is a separate section rather than a footnote to this one.
 
 And the metric is stars, which is attention rather than use — the weakest popularity metric in this repository, and the one `lang::github` already describes. A star costs nothing and never decays.
 
