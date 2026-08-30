@@ -380,13 +380,6 @@
       "type": "SYMBOL",
       "name": "anchor_name"
     },
-    "anchor_name": {
-      "type": "IMMEDIATE_TOKEN",
-      "content": {
-        "type": "PATTERN",
-        "value": "[^\\s\\[\\]{},]+"
-      }
-    },
     "_literal": {
       "type": "CHOICE",
       "members": [
@@ -1041,6 +1034,10 @@
     {
       "type": "SYMBOL",
       "name": "_alias_sigil"
+    },
+    {
+      "type": "SYMBOL",
+      "name": "anchor_name"
     },
     {
       "type": "SYMBOL",

@@ -333,3 +333,31 @@ after: 2
         key: (plain_scalar)
         value: (plain_scalar)))))
 
+
+================================================================================
+an alias as a mapping key
+================================================================================
+
+anchored: &app homepage
+serviceAccount:
+  *app: {}
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (anchor
+            name: (anchor_name))
+          (plain_scalar)))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_mapping
+          (block_mapping_pair
+            key: (alias
+              name: (anchor_name))
+            value: (flow_mapping)))))))
+

@@ -61,6 +61,7 @@ module.exports = grammar({
     $._document_end,
     $._anchor_sigil,
     $._alias_sigil,
+    $.anchor_name,
     $._flow_seq_start,
     $._flow_seq_end,
     $._flow_map_start,
@@ -197,7 +198,6 @@ module.exports = grammar({
     alias: $ => seq($._alias_sigil, field('name', $._name)),
     // One node type for both, because an alias's name IS an anchor name.
     _name: $ => $.anchor_name,
-    anchor_name: $ => token.immediate(/[^\s\[\]{},]+/),
 
     // Every one of these is fully determined by its own text. Whether `no`
     // is a boolean and `0o14` an integer is RESOLUTION, decided by a schema

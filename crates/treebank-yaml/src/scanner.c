@@ -50,6 +50,7 @@ enum TokenType {
   DOCUMENT_END,
   ANCHOR_SIGIL,
   ALIAS_SIGIL,
+  ANCHOR_NAME,
   FLOW_SEQ_START,
   FLOW_SEQ_END,
   FLOW_MAP_START,
@@ -352,6 +353,44 @@ static bool scan_double_quote(TSLexer *lexer, Scanner *s) {
   }
 }
 
+// The name after a `&` or a `*`.
+//
+// YAML's own production allows a `:` inside one — `ns-anchor-char` is
+// every non-space character except the four flow indicators — and every
+// implementation there is stops at a `: ` anyway, because `*app: {}` is how
+// half the Kubernetes YAML in the world reuses an anchored name as a key.
+// Taken literally the spec would read that anchor as `app:` and then choke
+// on the `{}`; PyYAML narrows the name to word characters outright, and the
+// spec-first parser stops at the indicator. This follows the practice: a
+// colon ends the name exactly where it would end a plain scalar.
+//
+// Scanned here rather than written as `token.immediate` in the grammar for
+// that lookahead alone: a regex cannot ask what follows the colon.
+static bool scan_anchor_name(TSLexer *lexer, Scanner *s) {
+  bool any = false;
+  for (;;) {
+    int32_t c = lexer->lookahead;
+    if (is_blank_or_end(c) || is_flow_indicator(c)) break;
+    if (c == ':') {
+      advance(lexer);
+      int32_t after = lexer->lookahead;
+      if (is_blank_or_end(after) ||
+          (s->flow_depth > 0 && is_flow_indicator(after))) {
+        break;
+      }
+      lexer->mark_end(lexer);
+      any = true;
+      continue;
+    }
+    advance(lexer);
+    lexer->mark_end(lexer);
+    any = true;
+  }
+  if (!any) return false;
+  lexer->result_symbol = ANCHOR_NAME;
+  return true;
+}
+
 // ── tags ────────────────────────────────────────────────────────────────
 
 // `!`, `!!str`, `!local`, `!e!suffix`, `!<verbatim:uri>`. Owned here rather
@@ -457,6 +496,14 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   // could emit is justified by its own state and a zero-width token would
   // loop the parser forever.
   if (valid_symbols[ERROR_SENTINEL]) return false;
+
+  // The name of an anchor or an alias abuts its sigil, so this one is
+  // answered before the skip pass: whitespace here means the name is
+  // missing, not that it is further along.
+  if (valid_symbols[ANCHOR_NAME]) {
+    lexer->mark_end(lexer);
+    return scan_anchor_name(lexer, s);
+  }
 
   // One skip pass. The scanner runs BEFORE extras, so every kind of
   // trivia in front of a token it owns has to be handled here.
