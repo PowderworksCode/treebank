@@ -32,12 +32,18 @@ Only the Rust API is versioned.
 
 ### Added
 
+- `Pack::roles_json` and `Pack::node_types_json`, returning the facet and node
+  manifests as the pack ships them. A consumer building its own role table had
+  to reparse this crate's structs back into JSON or reimplement the mapping,
+  which is how two consumers come to disagree about what a `_callable` is.
+  `node_types_json` is `None` for a pack predating the export. Nothing is
+  resolved: the parsed forms this crate uses itself are unchanged.
 - `fetch-bytes`: acquisition without an engine. The manifest resolution, the
   content-addressed cache, the sha256 check and the stale-manifest fallback,
   handing back bytes -- for a host that already has its own wasm runtime and
-  would otherwise link a second one to reuse any of it. Adds
-  `Pack::bytes_verified`, `fetch_bytes` and `fetch_pinned_bytes`. `fetch` is
-  now `["fetch-bytes", "pack"]`, so it behaves exactly as before.
+  would otherwise link a second one to reuse any of it. Adds `fetch_bytes` and
+  `fetch_pinned_bytes`. `fetch` is now `["fetch-bytes", "pack"]`, so it
+  behaves exactly as before.
 
 ## [0.2.1] - 2026-08-29
 
