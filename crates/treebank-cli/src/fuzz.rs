@@ -1,5 +1,5 @@
 //! Generate programs FROM the grammar and ask the oracle whether they are
-//! in the language (DESIGN.md §5.9).
+//! in the language (notes/DESIGN.md §5.9).
 //!
 //! Every other check starts from source somebody wrote. The sweep reads the
 //! corpus; `mutate` perturbs it; `roundtrip` reprints it. All three are

@@ -32,6 +32,7 @@
 ; language whose bindings are positional loses those patterns rather than
 ; producing a pattern that cannot match.
 
+; treebank: only-if _callable
 (_callable name: (_) @local.definition.function)
 
 (_binding name: (_) @local.definition.var)

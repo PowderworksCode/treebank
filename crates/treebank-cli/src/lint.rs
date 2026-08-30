@@ -1,4 +1,4 @@
-//! `treebank lint` — the grammar-smell detector (FIELD_GUIDE.md §9).
+//! `treebank lint` — the grammar-smell detector (notes/field_guide.md §9).
 //!
 //! Every check here is a mechanical form of a defect that shipped, or
 //! nearly shipped, in a treebank grammar. A grammar can pass every
@@ -181,7 +181,7 @@ fn check_conflicts(grammar: &serde_json::Value, r: &mut Report) -> usize {
         r.findings.push(format!(
             "{n} declared conflict(s): each is a GLR fork site, and past the \
              runtime's six-version cap ties are culled arbitrarily \
-             (FIELD_GUIDE.md §2) — prefer factoring them away (§1)"
+             (notes/field_guide.md §2) — prefer factoring them away (§1)"
         ));
     }
     n
@@ -276,7 +276,7 @@ fn check_same_text_tokens(grammar: &serde_json::Value, r: &mut Report) -> usize 
         r.findings.push(format!(
             "`{t}` is both a plain token and a token.immediate — two tokens, one \
              spelling; a fork that needs the one the lexer did not pick starves \
-             at the lexer (FIELD_GUIDE.md §4)"
+             at the lexer (notes/field_guide.md §4)"
         ));
     }
     both.len()
@@ -284,7 +284,7 @@ fn check_same_text_tokens(grammar: &serde_json::Value, r: &mut Report) -> usize 
 
 /// Keyword-shaped string tokens not in any reserved set: where the
 /// keyword is invalid, the word token lexes the same text as a name, so
-/// a stray `end` becomes a variable read (FIELD_GUIDE.md §5). Only
+/// a stray `end` becomes a variable read (notes/field_guide.md §5). Only
 /// meaningful for grammars that declare `word`; intentional soft
 /// keywords go in the policy baseline with their reason.
 fn check_unreserved_keywords(grammar: &serde_json::Value, r: &mut Report) -> usize {

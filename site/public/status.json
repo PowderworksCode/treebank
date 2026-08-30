@@ -1,17 +1,17 @@
 {
  "schema_version": 1,
  "summary": {
-  "languages": 10,
-  "grammars": 9,
-  "corpus_locks": 10,
-  "corpus_canaries": 9,
-  "current_corpus_evidence": 10,
+  "languages": 11,
+  "grammars": 10,
+  "corpus_locks": 11,
+  "corpus_canaries": 10,
+  "current_corpus_evidence": 11,
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
-  "lint_ratchets": 9,
+  "lint_ratchets": 10,
   "shape_fixture_grammars": 7,
-  "wasm_packs": 9,
-  "query_files": 18,
+  "wasm_packs": 10,
+  "query_files": 20,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
@@ -231,7 +231,7 @@
    "known_widenings": [],
    "deviations": [
     {
-     "summary": "**Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern \"C\" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it. `T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern \"C\" { … }` all parse. DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.",
+     "summary": "**Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern \"C\" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it. `T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern \"C\" { … }` all parse. notes/DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.",
      "files": null
     },
     {
@@ -826,8 +826,90 @@
     }
    ]
   },
+  "yaml": {
+   "versions": "YAML 1.1 and 1.2 in one grammar, `.yaml` and `.yml` alike. The union is NOMINAL here, and saying so is the first honest thing this file has to do, because the brief for this grammar assumed the opposite. YAML 1.1 and 1.2 genuinely differ and the installed base is genuinely split — libyaml and PyYAML descend from 1.1, ruamel and go-yaml v3 aim at 1.2 — but almost every difference between them is a RESOLUTION difference, and a grammar has no opinion about resolution. Whether `no` is a boolean, `0o14` an integer and `12:30` a sexagesimal number is decided by a SCHEMA applied to a scalar this grammar has already parsed. So the Norway problem is not a parse problem. Measured rather than argued. The `yaml` package is the only implementation available that can be asked BOTH version questions with everything else held constant, and over the 406 cases of yaml-test-suite its verdict changes on exactly ONE case between `version: \"1.2\"` and `version: \"1.1\"` — QLJ7, and that one is about whether a `%TAG` handle declared in the first document is still in scope in the second, which is a directive-scope rule rather than a production. Over 29 hand-picked probes at the constructs where the two versions are supposed to part company — the JSON-adjacent `{\"a\":1}`, a `%YAML 1.1` directive, tabs, flow-mapping keys, plain scalars containing a colon — the two versions agree on all 29. DESIGN.md §4.2's \"latest version wins\" is therefore never invoked, and there is no `version_policy.toml`: no construct is rejected on version grounds because no construct needed to be. What the oracle still carries a 1.1 leg for is that the claim is now measured instead of assumed, and the measurement is one case in 406. The split that IS real is between IMPLEMENTATIONS, not versions, and it is large: over the same 406 cases the spec-first parser and the libyaml lineage disagree on 71. That is the union this grammar's oracle is actually built over, and `[[oracles]]` says so.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "yaml"
+   ],
+   "capabilities": {
+    "spans": false,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 5,
+    "facets": 6,
+    "named_nodes": 22,
+    "uncategorised": 1
+   },
+   "tests": {
+    "corpus_cases": 10,
+    "negative_files": 9,
+    "shape_files": 0
+   },
+   "known_deviations": {
+    "shape": false,
+    "fuzz": false,
+    "lint": true,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 2
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": true,
+   "corpora": [
+    {
+     "language": "yaml",
+     "files": 128334,
+     "passed": 128085,
+     "failed": 249,
+     "grammar_gaps": 0,
+     "noise": 249,
+     "pass_rate": "99.81%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "aaf6e6a53fbc74a5b1aad7bd337e7ace427819f2"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "an anchor or alias name containing a `:`",
+     "files": 0
+    }
+   ],
+   "known_widenings": [
+    {
+     "summary": "a bare document following another document without a `---` or a `...` between them",
+     "files": null
+    },
+    {
+     "summary": "two anchors on one node, `&a` then `&b value`",
+     "files": null
+    }
+   ],
+   "deviations": [
+    {
+     "summary": "A flow-mapping entry with no `:` is a bare node in this tree, not a pair with an empty value. `{ a, b }` and `{ http://foo.com }` produce two nodes and one node; the YAML data model produces two pairs and one pair, each with an empty value, and yaml-test-suite's event streams say so. This is the whole of the 3-case shape difference above (4ABK, 8KB6, 9BXH). It is deliberate. A tree-sitter tree describes what is WRITTEN, and no `:` is written there; inventing a pair with two empty halves would put two nodes in the tree with no text behind either. The consumer that wants the data model applies it above the parse, which is where DESIGN.md §1 puts every other semantic question.",
+     "files": null
+    },
+    {
+     "summary": "`&a foo: 1` anchors the KEY, not the mapping. YAML tells the two readings apart by a line break — properties followed by a newline and an indented block anchor the collection, properties on the same line as the key anchor the key — and this grammar encodes exactly that: `annotated_node` admits a block collection only behind the `_indented` marker, so `&a` / newline / ` foo: 1` anchors the mapping and the same-line form anchors the key. It is the same rule YAML applies, so this is a deviation only in that the mechanism is a token rather than a production.",
+     "files": null
+    }
+   ]
+  },
   "zig": {
-   "versions": "Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar. The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.",
+   "versions": "Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar. The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per notes/DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.",
    "generate_cli": "0.26.12",
    "vocabulary": "0.1.0",
    "languages": [

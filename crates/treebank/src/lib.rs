@@ -1,4 +1,4 @@
-//! The treebank vocabulary (DESIGN.md §3), as code.
+//! The treebank vocabulary (notes/DESIGN.md §3), as code.
 //!
 //! Two tiers with different physics, dictated by what tree-sitter's
 //! supertype mechanism can express:
@@ -19,7 +19,7 @@
 //! alternation without the grammar accepting `def f(a=1, b)`). Demotion is
 //! sound precisely when every member of the term is a concrete node type
 //! that occurs nowhere else, since then type-level and occurrence-level
-//! membership select the same nodes; see DESIGN.md §3.4.
+//! membership select the same nodes; see notes/DESIGN.md §3.4.
 //!
 //! The vocabulary itself lives in `vocabulary/vocabulary.json`, embedded
 //! here and re-exported to JavaScript by `vocabulary/supertypes.js`, so the

@@ -1,5 +1,5 @@
 # Accepted structural debt, per `treebank lint` check — the ratchet that
-# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# keeps the notes/field_guide.md smells from growing back. Every number here is
 # a ceiling: going over fails CI, dropping under prints a reminder to
 # tighten. Each carries the reason the debt is accepted, because a
 # baseline nobody can explain is just a number that rots.
@@ -12,7 +12,7 @@
 # debt is high; they are a starting line, not an endorsement.
 
 [baselines]
-# GLR fork sites (FIELD_GUIDE.md §2). 184, by a wide margin the most of
+# GLR fork sites (notes/field_guide.md §2). 184, by a wide margin the most of
 # the nine. Three ambiguities generate most of them: `<` as JSX, as a
 # type argument list, or as less-than; the arrow-function parameter list,
 # which is indistinguishable from a parenthesized expression until the
@@ -25,7 +25,7 @@ declared_conflicts = 184
 # `_name` in 11, `_name`+`_type` in 6, `_type` in 5, `_access` in 5,
 # `_literal` in 3, plus mixed pattern families. The `_name`/`_type`
 # overlap is the same shape ruby factored away as `[_name, _callee]`
-# (FIELD_GUIDE.md §1) and is the obvious first target.
+# (notes/field_guide.md §1) and is the obvious first target.
 early_commit_conflicts = 54
 
 # prec.dynamic sites. 22 — the most of the nine, and the count that

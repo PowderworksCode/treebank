@@ -1,5 +1,5 @@
 # Accepted structural debt, per `treebank lint` check — the ratchet that
-# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# keeps the notes/field_guide.md smells from growing back. Every number here is
 # a ceiling: going over fails CI, dropping under prints a reminder to
 # tighten. Each carries the reason the debt is accepted, because a
 # baseline nobody can explain is just a number that rots.
@@ -7,7 +7,7 @@
 # Measured on 69dabad. These are today's exact counts, not headroom.
 
 [baselines]
-# GLR fork sites (FIELD_GUIDE.md §2). Java's forks are dominated by one
+# GLR fork sites (notes/field_guide.md §2). Java's forks are dominated by one
 # ambiguity: a dotted name is a package prefix, a type, or a field
 # access, and nothing decides which until the token after the name ends.
 declared_conflicts = 38
@@ -17,7 +17,7 @@ declared_conflicts = 38
 # `_name`+`_type` together in 1, plus `_member` and `_modifier` once
 # each. The `_name`/`_type` family is one factoring problem, not eight;
 # it is the java analogue of the `[_name, _callee]` family ruby factored
-# away (FIELD_GUIDE.md §1), and it should go the same way.
+# away (notes/field_guide.md §1), and it should go the same way.
 early_commit_conflicts = 12
 
 # prec.dynamic sites. Weights are the tool of last resort; these four are
@@ -26,7 +26,7 @@ early_commit_conflicts = 12
 # comparison reading), `annotated_type` (-1) and `cast_expression` (-1,
 # `(Foo)` as a cast ranked under the parenthesized-expression reading).
 # All four are the same shape: one spelling that only context separates.
-# New weights need the cull analysis FIELD_GUIDE.md §2 describes first.
+# New weights need the cull analysis notes/field_guide.md §2 describes first.
 dynamic_weights = 4
 
 # One spelling, two tokens (§4). None — keep it that way.

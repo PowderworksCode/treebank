@@ -1,6 +1,6 @@
 /**
  * treebank-rust: a from-scratch grammar for Rust across editions 2015–2024,
- * carrying the treebank vocabulary (DESIGN.md §3) in its parse table.
+ * carrying the treebank vocabulary (notes/DESIGN.md §3) in its parse table.
  *
  * Rust is expression-oriented, which changes where the vocabulary threads:
  * `_control_flow` (and `_branch`/`_loop`/`_jump`) nest inside `_expression`
@@ -60,7 +60,7 @@ module.exports = grammar({
   // wanted: the lexer stops offering `identifier` for these even where the
   // keyword itself is not valid, which is what `#![box]`, `union box { }`
   // and `extern crate box` were slipping through. Both words are reserved
-  // in EVERY edition, so the version-union grammar (DESIGN.md §4.2) loses
+  // in EVERY edition, so the version-union grammar (notes/DESIGN.md §4.2) loses
   // no 2015 code by refusing them. `try` and `dyn` stay identifiers -- they
   // are exactly that in edition 2015 -- and the other reserved-but-unused
   // words (`abstract`, `priv`, ...) cannot join: tree-sitter only reserves
@@ -361,7 +361,7 @@ module.exports = grammar({
     // `_parameter` alternation repeated by commas says neither, and accepts
     // `fn f(a: i32, self)`. So the list is spelled out as "what may still
     // follow", which is also why `_parameter` is a facet rather than a
-    // supertype here -- see roles.json's `demoted` and DESIGN.md 3.4.
+    // supertype here -- see roles.json's `demoted` and notes/DESIGN.md 3.4.
     parameters: $ => seq('(', optional($._parameter_list), ')'),
 
     _parameter_list: $ => choice(
@@ -974,7 +974,7 @@ module.exports = grammar({
     )),
 
     // `else` is a node, not an inline tail. Same construct as python's and
-    // typescript's `else`, so it carries the same name (DESIGN.md §4.1):
+    // typescript's `else`, so it carries the same name (notes/DESIGN.md §4.1):
     // `alternative:` points at an else_clause in all three, and `(_clause)`
     // has a member here that it was silently missing. What rust admits
     // AFTER the keyword differs — a block or a chained if, where python

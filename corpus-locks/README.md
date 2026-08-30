@@ -32,7 +32,7 @@ admission rules, and verifies that the resulting file set has no missing,
 extra, or changed entries. Only then does it publish `corpus/<language>/src`
 and its `manifest.json`.
 
-All ten registered languages have a lock. A lock pins inputs; it does not claim
+All eleven registered languages have a lock. A lock pins inputs; it does not claim
 that CI sweeps the full population.
 
 | language | pinned packages | admitted source files |
@@ -46,6 +46,7 @@ that CI sweeps the full population.
 | Ruby | 120 | 6,487 |
 | Rust | 1,000 | 27,307 |
 | TypeScript | 1,000 | 11,991 |
+| YAML | 499 | 128,334 |
 | Zig | 6 | 17,168 |
 
 Package counts are what the fetch actually admitted, not the ranking limit:

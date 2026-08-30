@@ -1,9 +1,9 @@
 /**
  * treebank-typescript: a from-scratch grammar for the TypeScript ∪
  * JavaScript union, JSX included, carrying the treebank vocabulary
- * (DESIGN.md §3) in its parse table.
+ * (notes/DESIGN.md §3) in its parse table.
  *
- * One parser, deliberately: DESIGN.md §4.2 planned typescript/tsx dialect
+ * One parser, deliberately: notes/DESIGN.md §4.2 planned typescript/tsx dialect
  * parsers because `<T>x` casts and JSX collide — but angle-bracket casts
  * are the one construct on the typescript side of that collision, they are
  * legacy style (`as` replaced them), and the corpus measures their
@@ -93,7 +93,7 @@ module.exports = grammar({
     '_access',
     '_attribute',
     // `_modifier` is demoted to the facet tier here; typescript partitions
-    // it. See roles.json and DESIGN.md 3.1.1.
+    // it. See roles.json and notes/DESIGN.md 3.1.1.
     ...tb.assertDemotable([]),
     '_interpolation',
   ]).map((name) => $[name]),

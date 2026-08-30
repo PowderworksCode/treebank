@@ -1,4 +1,4 @@
-//! The vocabulary-conformance checker (`treebank roles`, DESIGN.md §3.3).
+//! The vocabulary-conformance checker (`treebank roles`, notes/DESIGN.md §3.3).
 //!
 //! Everything here returns findings rather than failing fast, so one run
 //! reports every violation. An empty findings list is conformance.
@@ -149,7 +149,7 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
     findings
 }
 
-/// Role liveness (DESIGN.md §3.3 rule 5): given per-role occurrence counts
+/// Role liveness (notes/DESIGN.md §3.3 rule 5): given per-role occurrence counts
 /// from a corpus sweep, the roles that never fired. Because supertype
 /// matching is derivation-based, a role the grammar author forgot to
 /// thread at some position fails silently — zero matches over a large

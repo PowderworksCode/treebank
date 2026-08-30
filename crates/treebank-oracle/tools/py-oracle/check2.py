@@ -4,7 +4,7 @@
 # stdin:  one file path per line
 # stdout: "<path>\tvalid|invalid" per line
 #
-# The python2 half of the union oracle (DESIGN.md 4.3): the rust driver
+# The python2 half of the union oracle (notes/DESIGN.md 4.3): the rust driver
 # runs check.py under python3 first and this under python2 for whatever
 # python3 rejected — a file is valid if ANY version family accepts it.
 # This script must run under CPython 2.7, so it is written in the common

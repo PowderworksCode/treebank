@@ -83,6 +83,9 @@ jobs:
           - language: typescript
             ledger: crates/treebank-typescript/ledger.toml
             sweep_args: --lang typescript --grammar crates/treebank-typescript
+          - language: yaml
+            ledger: crates/treebank-yaml/ledger.toml
+            sweep_args: --lang yaml --grammar crates/treebank-yaml
           - language: zig
             ledger: crates/treebank-zig/ledger.toml
             sweep_args: --lang zig --grammar crates/treebank-zig
@@ -97,7 +100,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        if: matrix.language == 'typescript' || matrix.language == 'javascript'
+        if: matrix.language == 'typescript' || matrix.language == 'javascript' || matrix.language == 'yaml'
         with:
           node-version: "22"
       - name: install TypeScript oracle dependencies
@@ -108,6 +111,17 @@ jobs:
         if: matrix.language == 'javascript'
         working-directory: crates/treebank-oracle/tools/js-oracle
         run: npm ci --no-audit --no-fund
+      # YAML's oracle is a union of three legs and two implementations: the
+      # spec-first parser at 1.2 and at 1.1, then the libyaml lineage. All
+      # three are mandatory — a sweep missing one books files half the
+      # installed base reads as noise.
+      - name: install YAML oracle dependencies
+        if: matrix.language == 'yaml'
+        working-directory: crates/treebank-oracle/tools/yaml-oracle
+        run: npm ci --no-audit --no-fund
+      - name: install the libyaml half of the YAML oracle
+        if: matrix.language == 'yaml'
+        run: python3 -m pip install --quiet 'PyYAML==6.0.1'
 
       # Python and Zig are union grammars. Their legacy oracle legs are
       # mandatory: omitting one makes old-version syntax look like noise.

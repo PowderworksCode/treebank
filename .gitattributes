@@ -1,4 +1,4 @@
-# Generated grammar output. DESIGN.md §7 keeps `src/` committed on purpose —
+# Generated grammar output. notes/DESIGN.md §7 keeps `src/` committed on purpose —
 # cargo compiles `parser.c` through build.rs, the published crates carry it in
 # their `include` list, and `node-types.json` is `include_str!`d by the rust
 # bindings. I1 (ci.yml) proves it is byte-for-byte what grammar.js produces at
@@ -17,7 +17,7 @@
 crates/treebank-*/src/parser.c          linguist-generated=true -diff merge=binary
 
 # grammar.json and node-types.json stay diffable: a node appearing or vanishing
-# from node-types.json is exactly what the roles gate (DESIGN.md §5, I4) is
+# from node-types.json is exactly what the roles gate (notes/DESIGN.md §5, I4) is
 # about, and reading that change is part of reviewing a grammar edit. Marking
 # them generated only collapses them behind a click and keeps them out of the
 # repo's language stats.

@@ -1,16 +1,112 @@
 # A field guide to writing the parsers
 
-DESIGN.md says what a treebank grammar must *be* — the vocabulary it
-carries, the evidence it ships, the gates it passes. This document says
-how to *write* one that survives contact with a real corpus. Every rule
-here was paid for: each cites the incident that taught it, mostly from
-the ruby bring-up (the most lexically ambiguous language in the set) with
-the earlier grammars' lessons alongside. When a rule and your intuition
-disagree, re-read the incident before trusting the intuition.
+`notes/DESIGN.md` says what a treebank grammar must *be* — the vocabulary
+it carries, the evidence it ships, the gates it passes. This document
+says how to *write* one that survives contact with a real corpus. Every
+rule here was paid for: each cites the incident that taught it, mostly
+from the ruby bring-up (the most lexically ambiguous language in the set)
+with the earlier grammars' lessons alongside. When a rule and your
+intuition disagree, re-read the incident before trusting the intuition.
 
 The one-sentence version: **a parser is good in proportion to how early
 its decisions die.** Every construct that two readings survive is a debt,
 and the interest compounds in ways none of your tests will localise.
+
+Sections 1 through 10 are cited by number from `lint_policy.toml` files,
+grammar sources and `crates/treebank-cli/src/lint.rs`. Do not renumber
+them; append instead. Section 0 is orientation for anyone — human or
+agent — arriving at the repository rather than at a grammar.
+
+## 0. Orientation
+
+**The repository.** One Rust workspace, `members = ["crates/*"]` as a
+glob so a new crate joins the moment its directory exists. Nine grammar
+crates, plus `treebank` (the vocabulary as code and data, and the wasm
+pack loader), `treebank-cli` (the `treebank` binary — the only binary
+here), `treebank-corpus`, `treebank-lang`, `treebank-oracle` and
+`treebank-preprocessing`. `site/` is a separate bun/TypeScript project
+for treebank.dev, wired into the same CI, and easy to overlook because it
+is not Rust.
+
+**Building.** There is no `rust-toolchain.toml`; CI uses whatever stable
+the runner ships. `cargo build --workspace` and `cargo test --workspace`
+are the whole story for the Rust side. `Cargo.lock` is committed. The
+workspace raises `sha2` to `opt-level = 3` in debug builds on purpose, so
+`treebank status` stays interactive while verifying corpus-lock digests —
+do not "simplify" that profile away.
+
+**The tree-sitter CLI is pinned to 0.26.12** (`TREE_SITTER_VERSION` in
+`.github/workflows/ci.yml`, reasoned in `notes/DESIGN.md` §7). Generated
+parser output is committed, and CI regenerates it and fails on any diff,
+so a different CLI version will produce a diff that has nothing to do
+with your change:
+
+```sh
+cargo install tree-sitter-cli --version 0.26.12 --locked
+```
+
+**Three things are generated, committed, and diff-checked.** A red CI job
+that mentions none of your code is usually one of these:
+
+| generated | regenerate with |
+| --- | --- |
+| `crates/treebank-<lang>/src/` | `tree-sitter generate` in that crate |
+| `crates/treebank-<lang>/queries/*.scm` | `treebank queries --write` |
+| `site/public/status.json` | `bun run status` in `site/` (plain `node site/tools/build-status.mjs` also works) |
+
+The per-grammar query files are derived from the two files at
+`queries/highlights.scm` and `queries/locals.scm` in the repository root —
+those are the source, written against facet terms like `(_callable)`, and
+each generated copy says so in its header. Editing a generated copy in
+place fails `treebank queries --check` and is overwritten on the next
+write.
+
+**Gates for one grammar, in one command:**
+
+```sh
+cargo run -p treebank-cli -- verify crates/treebank-<lang>
+```
+
+which runs registration, reproducible generation, the corpus tests, the
+negative corpus, `roles`, `lint` and `rosetta` in one pass. CI's
+`grammars` matrix runs the same set a step at a time, and adds
+`treebank shape` for the grammars that have `test/shape` fixtures — c,
+cpp, java, python, ruby, rust and typescript, but not bash or zig.
+
+**The corpora are gigabytes and gitignored; `corpus-locks/` is what is
+committed.** A lock is the archive URL, byte count and SHA-256 plus a
+per-admitted-file digest — enough to recreate the exact population on a
+clean machine:
+
+```sh
+cargo run -p treebank-cli -- hydrate --lang <language>
+```
+
+`hydrate` does not resolve "latest": it downloads each recorded URL and
+verifies the digests. Never hand-edit a lock, and never copy an old
+`corpus/<language>/manifest.json` into place — manifests written before
+archive provenance was recorded cannot recreate their inputs. Regenerate
+a lock deliberately with `fetch --lock-only`, and review the diff as an
+evidence change, because the sweep population moved.
+
+**Per-pull-request CI does not sweep a real corpus.** It uses the small
+committed micro-corpora under `test/sweep-smoke/<language>/`. The full
+sweeps, the kinds check and the ledger diffs live in
+`.github/workflows/corpus-canary.yml`, which runs weekly. So a green pull
+request is not evidence about the corpus, and a ledger you changed will
+be checked days later.
+
+**The oracles need real toolchains.** A sweep adjudicates against the
+reference parser for that language, so running one locally means having
+what CI installs for it: Node for TypeScript and JavaScript, PyPy 2.7 for
+Python, a JDK for Java, Ruby, `libclang` for C and C++, and both Zig 0.11
+and a current Zig. Without them the sweep cannot tell a gap from a
+version difference, which is the distinction the whole exercise rests on.
+
+**`.github/workflows/fleet-lint.yml` is distributed by conf.** Edit it
+there; a local change is drift the next fleet sync reports. Its `hawk`
+job pins Rust 1.98.0 for itself, runs only when Rust changed, and is
+advisory — it never fails the build.
 
 ## 1. The ambiguity ladder
 

@@ -1,4 +1,4 @@
-//! The rosetta gate (DESIGN.md §5.4): the same program, written in every
+//! The rosetta gate (notes/DESIGN.md §5.4): the same program, written in every
 //! owned language, must yield the same role counts.
 //!
 //! This is the executable form of the promise that the shared vocabulary

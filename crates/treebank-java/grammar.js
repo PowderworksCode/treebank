@@ -1,6 +1,6 @@
 /**
  * treebank-java: a from-scratch grammar for Java 8 through 21, carrying the
- * treebank vocabulary (DESIGN.md §3) in its parse table.
+ * treebank vocabulary (notes/DESIGN.md §3) in its parse table.
  *
  * Threaded table-tier roles: see `supertypes` below. Omissions and the
  * reasons for them are in ledger.toml's roles_note.
@@ -48,7 +48,7 @@ module.exports = grammar({
     // a field declaration and a local variable declaration are the same
     // syntax in different places, so one alternation reachable from both a
     // class body and a block makes every field ambiguous with every local.
-    // See roles.json and DESIGN.md 3.1.1.
+    // See roles.json and notes/DESIGN.md 3.1.1.
     ...tb.assertDemotable([]),
     '_pattern',
     '_type',

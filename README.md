@@ -5,13 +5,13 @@ shared node vocabulary that is enforced in the parse table itself — so
 queries like `(_declaration)`, `(_loop)` and `(_callable)` mean the same
 thing across languages. Languages: **Python, Rust, TypeScript** (the
 TypeScript grammar also parses JavaScript), **Java, Ruby, Bash**, **C and
-C++** (the C++ grammar extends the C one rather than copying it), and
-**Zig**.
+C++** (the C++ grammar extends the C one rather than copying it), **Zig**,
+and **YAML**.
 
-**[`DESIGN.md`](DESIGN.md) is the authoritative document** — the vocabulary,
+**[`notes/DESIGN.md`](notes/DESIGN.md) is the authoritative document** — the vocabulary,
 its two tiers and the measurements that forced them, the version-union
 grammar policy, the testing invariants, and the crate layout. Start there.
-**[`FIELD_GUIDE.md`](FIELD_GUIDE.md)** is its companion for grammar
+**[`notes/field_guide.md`](notes/field_guide.md)** is its companion for grammar
 authors: what to do and what not to do when writing a parser, each rule
 paid for by a measured incident, enforced mechanically by `treebank lint`.
 
@@ -19,7 +19,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 
 | path | what it is |
 |---|---|
-| `DESIGN.md` | the design: vocabulary, invariants, layout, order of work |
+| `notes/DESIGN.md` | the design: vocabulary, invariants, layout, order of work |
 | `crates/treebank-python` | Python 2.7 ∪ 3.x in one grammar |
 | `crates/treebank-rust` | Rust editions 2015–2024 in one grammar |
 | `crates/treebank-typescript` | TypeScript ∪ JavaScript ∪ JSX in one grammar |
@@ -29,6 +29,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-c` | C89–C23 with the GNU extensions, preprocessor included |
 | `crates/treebank-cpp` | C++98–C++23, extending the C grammar through tree-sitter's own inheritance |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
+| `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
 | `crates/treebank` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
@@ -128,7 +129,7 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | negative corpus | accepts-invalid-code — the direction optimizing a pass rate drifts toward, and the one no corpus of real source can reveal |
 | `treebank roles` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
 | `treebank rosetta` | a role threaded in one grammar and forgotten in another (supertype matching is derivation-based, so a missed thread is otherwise silent) |
-| `treebank lint` | the FIELD_GUIDE.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
+| `treebank lint` | the notes/field_guide.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 
 The full corpora are gigabytes and gitignored, so per-change CI sweeps a
@@ -197,6 +198,15 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | Ruby | yes | — | — |
 | C / C++ | yes | — | — |
 | Zig | — | `zig fmt` | — |
+| YAML | — | — | — |
+
+YAML's three dashes are one fact stated three times: the language has no
+owning implementation, so there is no formatter and no printer to be the
+language's own — `prettier` and every library's re-serializer are third
+party, and this project does not substitute one for the other. Node spans
+are the exception and are a real gap rather than an absence: the pinned
+`yaml` package does carry source ranges, and a span oracle over them is the
+next capability this grammar should grow.
 
 The remaining dashes are real toolchain gaps, not forgotten registrations:
 the project does not substitute a third-party style formatter for a
@@ -218,7 +228,7 @@ it:
    `tree-sitter.json`, `roles.json`, `ledger.toml`, `build.rs`, the Rust
    bindings, and `test/corpus` + `test/negative`. `lint_policy.toml` and
    `shape_policy.toml` are optional and arrive later: the first ratchets
-   the FIELD_GUIDE.md smells once the grammar has settled, the second
+   the notes/field_guide.md smells once the grammar has settled, the second
    declares where the reference parser groups the tree differently on
    purpose. Both are advisory until written.
 2. **Register the language.** One line in the `languages!` block in
@@ -249,4 +259,4 @@ cargo test --workspace
 ```
 
 `tree-sitter-cli` is pinned at **0.26.12** for all grammar generation; see
-DESIGN.md §7 for why the pin is load-bearing.
+notes/DESIGN.md §7 for why the pin is load-bearing.

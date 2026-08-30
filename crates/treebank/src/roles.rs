@@ -1,4 +1,4 @@
-//! The `roles.json` facet manifest each grammar crate ships (DESIGN.md
+//! The `roles.json` facet manifest each grammar crate ships (notes/DESIGN.md
 //! §3.1). Facets are type-level: a node type is `_callable` wherever it
 //! occurs. The manifest also carries the grammar's `uncategorised` list —
 //! every named node outside the vocabulary, each with a reason — so that

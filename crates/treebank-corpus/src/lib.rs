@@ -20,6 +20,7 @@ mod python;
 mod ruby;
 mod rust;
 mod typescript;
+mod yaml;
 mod zig;
 
 use std::path::Path;

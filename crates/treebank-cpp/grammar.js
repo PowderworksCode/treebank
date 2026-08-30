@@ -1,6 +1,6 @@
 /**
  * treebank-cpp: a from-scratch grammar for C++, carrying the treebank
- * vocabulary (DESIGN.md §3) in its parse table.
+ * vocabulary (notes/DESIGN.md §3) in its parse table.
  *
  * **It extends treebank-c rather than copying it**, through tree-sitter's
  * own grammar inheritance. That is not a convenience: C++ genuinely is C's
@@ -132,7 +132,7 @@ module.exports = grammar(C, {
     // table. C++ does not: the same change asks for a conflict on
     // `_out_of_line_definition`, then on the two member forms, then on
     // `macro_modifier` against `_expression` in four widening combinations
-    // — the runaway shape DESIGN.md §8.1 records, where each conflict
+    // — the runaway shape notes/DESIGN.md §8.1 records, where each conflict
     // spawns the next. The rule is worth less here for the reason
     // `_top_level_item` gives above: a C++ header's declarations open with
     // `template`, `namespace` and access labels far more often than with a
@@ -613,7 +613,7 @@ module.exports = grammar(C, {
     // colon into one node meant `class D : public B` did not parse at all.
     //
     // Both are named nodes rather than anonymous tokens, because an
-    // anonymous token can never carry a role (DESIGN.md §3.2).
+    // anonymous token can never carry a role (notes/DESIGN.md §3.2).
     access_specifier: _ => choice('public', 'private', 'protected'),
 
     access_label: $ => seq($.access_specifier, ':'),
