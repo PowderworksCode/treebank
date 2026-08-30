@@ -86,6 +86,19 @@ jobs:
           - language: yaml
             ledger: crates/treebank-yaml/ledger.toml
             sweep_args: --lang yaml --grammar crates/treebank-yaml
+          # YAML is the first language here with a SECOND artifact corpus
+          # that is swept rather than only described. It hydrates from its
+          # own lock into its own directory and writes its own ledger block,
+          # so the two evidence blocks are canaried independently and
+          # neither can drift behind the other.
+          - language: yaml
+            hydrate_args: --lang yaml --lock corpus-locks/yaml-pypi.json --corpus corpus/yaml-pypi
+            ledger: crates/treebank-yaml/ledger.toml
+            sweep_args: >-
+              --lang yaml --grammar crates/treebank-yaml
+              --manifest corpus/yaml-pypi/manifest.json
+              --out corpus/yaml-pypi/reports/sweep.json
+              --ledger-block yaml_pypi_sweep
           - language: zig
             ledger: crates/treebank-zig/ledger.toml
             sweep_args: --lang zig --grammar crates/treebank-zig
@@ -198,8 +211,10 @@ jobs:
       # safely; a corrupt archive or lock mismatch fails identically each time.
       - name: hydrate the exact locked corpus
         run: |
+          args="${{ matrix.hydrate_args }}"
+          [ -n "$args" ] || args="--lang ${{ matrix.language }}"
           for attempt in 1 2 3; do
-            if ./target/debug/treebank hydrate --lang "${{ matrix.language }}"; then
+            if ./target/debug/treebank hydrate $args; then
               exit 0
             fi
             echo "hydrate attempt $attempt failed" >&2

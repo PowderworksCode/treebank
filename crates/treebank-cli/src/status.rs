@@ -686,12 +686,52 @@ fn short_hash(value: &str) -> &str {
     &value[..value.len().min(12)]
 }
 
+/// Every committed lock, keyed the way a ledger's `[corpus.*_sweep]` block
+/// names it.
+///
+/// `corpus-locks/<lang>.json` is the language's own corpus and keys as
+/// `<lang>`. `corpus-locks/<lang>-<name>.json` is a SECOND artifact corpus
+/// for the same language — a different population answering a different
+/// question, the way bash's debian and github do — and keys as
+/// `<lang>_<name>`, which is what `[corpus.<lang>_<name>_sweep]` reduces to.
+/// Without the second form a language's other corpus can only ever be
+/// described in prose, because nothing binds its numbers to inputs.
+fn lock_paths(root: &Path) -> Vec<(String, LangName, std::path::PathBuf)> {
+    let dir = root.join("corpus-locks");
+    let mut out = Vec::new();
+    for language in LangName::ALL {
+        let name = language.as_str();
+        let own = dir.join(format!("{name}.json"));
+        if own.is_file() {
+            out.push((name.to_string(), *language, own));
+        }
+        let Ok(entries) = std::fs::read_dir(&dir) else {
+            continue;
+        };
+        for entry in entries.flatten() {
+            let file = entry.file_name();
+            let Some(file) = file.to_str() else { continue };
+            let Some(stem) = file.strip_suffix(".json") else {
+                continue;
+            };
+            let Some(suffix) = stem.strip_prefix(&format!("{name}-")) else {
+                continue;
+            };
+            if suffix.is_empty() {
+                continue;
+            }
+            out.push((format!("{name}_{suffix}"), *language, entry.path()));
+        }
+    }
+    out.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| a.2.cmp(&b.2)));
+    out.dedup_by(|a, b| a.0 == b.0 && a.2 == b.2);
+    out
+}
+
 fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeMap<String, String> {
     let mut valid = BTreeMap::new();
-    for language in LangName::ALL {
-        let path = root
-            .join("corpus-locks")
-            .join(format!("{}.json", language.as_str()));
+    for (key, language, path) in lock_paths(root) {
+        let language = &language;
         if !path.is_file() {
             continue;
         }
@@ -737,7 +777,7 @@ fn validate_corpus_locks(root: &Path, errors: &mut Vec<String>) -> BTreeMap<Stri
             }
         }
         if lock_errors.is_empty() {
-            valid.insert(language.as_str().to_string(), lock_sha256);
+            valid.insert(key, lock_sha256);
         } else {
             errors.push(format!(
                 "{}: invalid corpus lock: {}",

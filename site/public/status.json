@@ -3,9 +3,9 @@
  "summary": {
   "languages": 12,
   "grammars": 11,
-  "corpus_locks": 12,
+  "corpus_locks": 13,
   "corpus_canaries": 11,
-  "current_corpus_evidence": 12,
+  "current_corpus_evidence": 13,
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
   "lint_ratchets": 11,
@@ -964,6 +964,18 @@
      "grammar_gaps": 0,
      "noise": 375,
      "pass_rate": "99.71%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "3516844c92f77dd5328bbac33b2dd0587618b454"
+    },
+    {
+     "language": "yaml_pypi",
+     "files": 2087,
+     "passed": 2084,
+     "failed": 3,
+     "grammar_gaps": 0,
+     "noise": 3,
+     "pass_rate": "99.86%",
      "freshness": "current",
      "freshness_reasons": [],
      "grammar_revision": "3516844c92f77dd5328bbac33b2dd0587618b454"

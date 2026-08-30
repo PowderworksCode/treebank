@@ -130,7 +130,28 @@ GitHub's own classification is the measurement that settles it, and it is worth 
 
 That place is real: GitOps cluster repositories, Ansible collections and roles, Home Assistant configurations, CIS hardening baselines, machine-generated manifest sets. It is where the second, third and fourth entries in this ranking come from, and between them the 499 packages carry 128,334 admitted files.
 
-`TREEBANK_YAML_CORPUS=pypi` selects the other source and asks the other question: what does YAML look like when it ships INSIDE software written in something else. A source distribution carries the workflows, the pre-commit configuration, the conda recipe, the OpenAPI document and the test fixtures, and those are where anchors, explicit keys, multi-document streams and tags actually occur. It is a far smaller corpus per package — many top packages carry no YAML at all — and a far wider one per file. It is implemented and NOT swept here; a pass rate over one population is not a pass rate over the other, and this ledger's number is from `github`.'''
+`TREEBANK_YAML_CORPUS=pypi` selects the other source and asks the other question: what does YAML look like when it ships INSIDE software written in something else. A source distribution carries the workflows, the pre-commit configuration, the conda recipe, the OpenAPI document and the test fixtures, and those are where anchors, explicit keys, multi-document streams and tags actually occur. It is a far smaller corpus per package — many top packages carry no YAML at all — and a far wider one per file. It is now swept too, and `second_corpus` below says what the second population showed. A pass rate over one is still not a pass rate over the other, and the two sweeps are recorded in separate blocks so that neither can be read as speaking for both; the headline sweep block is the `github` number and always will be.'''
+
+second_corpus = '''
+767 PyPI packages, 2,087 admitted YAML files: **2,084 passed, 99.86%, zero grammar gaps**. The three failures are corpus noise, and two of them are named `bad/template.yaml` and `config_invalid_yaml.yaml` — cfn-lint's deliberately-broken fixtures, which is the most cooperative noise a corpus has offered this grammar.
+
+The reason to run it was not a second pass rate. It was that `kinds_check` had just measured a hole: a directive occurs twice in 128,334 GitHub files, so the whole `%YAML` and `%TAG` production rested on the conformance suite and nothing else. Per thousand files, this corpus against that one:
+
+  directive          0.02 ->  3,870/1000k     247x denser
+  flow_mapping        216 -> 10,842            50x
+  flow_sequence       422 ->  5,931            14x
+  double_quote     18,841 -> 66,533             3.5x
+  block_scalar      2,732 ->  5,688             2.1x
+
+and, going the other way,
+
+  alias               250 ->     10.6          1/24th
+  anchor              182 ->      5.3          1/34th
+  tag              24,626 ->    652             1/38th
+
+The two populations are complements rather than one being a bigger version of the other, and that is FIELD_GUIDE.md §9's "two corpora, different biases" with numbers on it. A GitOps repository writes anchors and aliases constantly, because a cluster manifest is mostly repetition, and it writes tags constantly because Home Assistant's `!include` and `!secret` ARE tags. A Python source distribution writes almost none of those and writes what a machine emits instead: OpenAPI documents in flow style, and the directives nobody hand-writes.
+
+So the directive hole is closed by measurement rather than by argument — and the tag and anchor coverage that the second corpus lacks is the first one's. Neither would have said so alone.'''
 blind_to = '''
 Helm charts, and with them the single largest body of `.yaml` files in the world. A file whose lines open with `{{- if …}}` or `{% for … %}` is a template that RENDERS to YAML and is not YAML, so `admit` excludes it — see the reasoning in `treebank-corpus/src/yaml.rs`. Inline interpolation is deliberately kept: `image: {{ ansible_hostname }}` is legal YAML that every implementation reads, and excluding it would have thrown away most of an Ansible corpus. The exclusion is the right call and it is also a hole: whatever a Helm template does to a parser, this number does not know.
 
@@ -148,6 +169,17 @@ gap_files = 0
 noise_files = 375
 pass_rate = '99.71%'
 corpus_lock_sha256 = '1a0a66c78bbef3d54dadaae0f637f931a341e2cce37f252303f89ea9ced5dc76'
+grammar_sha256 = '8cf103e39460a99f8ac9491497873b178e657e60f8804d0c828f5faf28116353'
+grammar_revision = '3516844c92f77dd5328bbac33b2dd0587618b454'
+
+[corpus.yaml_pypi_sweep]
+files = 2087
+passed = 2084
+failed = 3
+gap_files = 0
+noise_files = 3
+pass_rate = '99.86%'
+corpus_lock_sha256 = '966a71dbd4c4bf3613b273f5886cdb54e36477f8498b95e3e851ecd4fcb36054'
 grammar_sha256 = '8cf103e39460a99f8ac9491497873b178e657e60f8804d0c828f5faf28116353'
 grammar_revision = '3516844c92f77dd5328bbac33b2dd0587618b454'
 

@@ -334,7 +334,12 @@ fn resolve_splits(
 /// numbers move; everything else in the ledger stays prose, and a grammar
 /// dir without a ledger (an upstream checkout under comparison) is left
 /// alone.
-fn write_ledger_block(grammar_dir: &Path, lang: treebank_lang::LangName, r: &Report) -> Result<()> {
+fn write_ledger_block(
+    grammar_dir: &Path,
+    lang: treebank_lang::LangName,
+    r: &Report,
+    named: Option<&str>,
+) -> Result<()> {
     let path = grammar_dir.join("ledger.toml");
     let Ok(text) = std::fs::read_to_string(&path) else {
         return Ok(());
@@ -355,12 +360,25 @@ fn write_ledger_block(grammar_dir: &Path, lang: treebank_lang::LangName, r: &Rep
             .map(|revision| format!("grammar_revision = '{revision}'\n"))
             .unwrap_or_default(),
     );
-    // One grammar may carry several corpora (typescript also sweeps the
-    // javascript corpus), so a per-language block name is tried first.
+    // One grammar may carry several corpora, in two different ways. It may
+    // sweep another LANGUAGE's (typescript also sweeps the javascript
+    // corpus), which the per-language name below covers; or it may have two
+    // artifact corpora for its own language that answer different questions
+    // (bash's debian and github, yaml's github and pypi), which nothing in
+    // the name can distinguish and `--ledger-block` names explicitly.
+    let named = named.map(|n| format!("[corpus.{n}]"));
     let per_lang = format!("[corpus.{lang}_sweep]");
-    let (header, start) = if let Some(i) = text.find(per_lang.as_str()) {
+    let (header, start) = if let Some(header) = named.as_deref() {
+        let i = find_header(&text, header).with_context(|| {
+            format!(
+                "{} declares no {header}; add the empty block before sweeping into it",
+                path.display()
+            )
+        })?;
+        (header, i)
+    } else if let Some(i) = find_header(&text, per_lang.as_str()) {
         (per_lang.as_str(), i)
-    } else if let Some(i) = text.find("[corpus.sweep]") {
+    } else if let Some(i) = find_header(&text, "[corpus.sweep]") {
         ("[corpus.sweep]", i)
     } else {
         return Ok(()); // no block declared; not ours to invent
@@ -384,6 +402,24 @@ fn write_ledger_block(grammar_dir: &Path, lang: treebank_lang::LangName, r: &Rep
         println!("sweep: ledger {header} updated at {}", path.display());
     }
     Ok(())
+}
+
+/// Where a TOML table header starts, as a HEADER rather than as text.
+///
+/// A ledger is mostly prose, and prose about a ledger names its blocks:
+/// "`[corpus.sweep]` is the github number" is a sentence a reader wants and
+/// an unanchored `find` treats as the block itself. Rewriting from there
+/// deletes the paragraph and everything after it up to the next section,
+/// which is a corrupted evidence file written by the tool whose whole
+/// purpose is to keep evidence honest. Anchoring to a line start costs one
+/// function.
+fn find_header(text: &str, header: &str) -> Option<usize> {
+    if text.starts_with(header) {
+        return Some(0);
+    }
+    text.match_indices(header)
+        .find(|(i, _)| text[..*i].ends_with('\n'))
+        .map(|(i, _)| i)
 }
 
 /// The last committed change to the generated inputs is useful provenance,
@@ -432,6 +468,7 @@ pub fn run(
     out: &Path,
     limit: Option<usize>,
     write_ledger: bool,
+    ledger_block: Option<&str>,
 ) -> Result<()> {
     let (language, fingerprint) = grammar::load(grammar_dir)?;
     let (manifest, corpus_lock_sha256) = Manifest::load_with_sha256(manifest_path)?;
@@ -853,7 +890,7 @@ pub fn run(
     std::fs::create_dir_all(out.parent().unwrap_or(Path::new(".")))?;
     std::fs::write(out, serde_json::to_string_pretty(&report)?)?;
     if write_ledger {
-        write_ledger_block(grammar_dir, lang, &report)?;
+        write_ledger_block(grammar_dir, lang, &report, ledger_block)?;
     }
     let report_md = out.with_file_name("REPORT.md");
     std::fs::write(&report_md, markdown(&report, corpus_root))?;
@@ -1137,4 +1174,34 @@ fn negative_inner(grammar_dir: &Path, dir: &Path, quiet: bool) -> Result<()> {
         println!("negative: all {total} files correctly rejected");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod ledger_block_tests {
+    use super::find_header;
+
+    /// The bug this exists for: a ledger's prose names its own blocks, and
+    /// an unanchored search rewrote from the middle of a sentence.
+    #[test]
+    fn a_block_named_in_prose_is_not_the_block() {
+        let text =
+            "note = '''\n`[corpus.sweep]` is the github number.'''\n\n[corpus.sweep]\nfiles = 1\n";
+        let at = find_header(text, "[corpus.sweep]").expect("the real header");
+        assert_eq!(&text[at..at + 14], "[corpus.sweep]");
+        assert!(text[..at].ends_with('\n'));
+        assert!(at > text.find("github number").unwrap());
+    }
+
+    #[test]
+    fn a_header_on_the_first_line_is_found() {
+        assert_eq!(
+            find_header("[corpus.sweep]\nfiles = 1\n", "[corpus.sweep]"),
+            Some(0)
+        );
+    }
+
+    #[test]
+    fn an_absent_header_is_absent() {
+        assert_eq!(find_header("note = 'x'\n", "[corpus.sweep]"), None);
+    }
 }
