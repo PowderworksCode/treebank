@@ -23,8 +23,27 @@
 ; --- the leaves a reader looks at first -----------------------------------
 
 (_comment) @comment
-(_string) @string
+
+; `_literal` BEFORE `_string`, and the order is the whole of it: the last
+; matching pattern wins, and the two terms overlap wherever a language has a
+; string literal that is also fully determined by its own text. In YAML they
+; overlap completely — `_literal` is every scalar and `_string` is the three
+; that are always strings — so with `_literal` last, `"quoted"` matched both
+; and rendered as a NUMBER. Every quoted scalar in the language did.
 (_literal) @number
+(_string) @string
+
+; --- the key of a pair ------------------------------------------------------
+;
+; A mapping key is not a value and should not be coloured like one. There is
+; no vocabulary TERM for a key — `_clause` is the subordinate piece and the
+; key is a field on it — so this reaches it through the field, which is also
+; what makes it self-limiting: expansion drops the members that have no
+; `key`, so a language whose clauses are `elif` and `case` contributes
+; nothing here and only the mapping-shaped ones do.
+
+; treebank: only-if _clause
+(_clause key: (_) @property)
 
 ; --- names ----------------------------------------------------------------
 ;
@@ -32,6 +51,17 @@
 ; patterns narrow.
 
 (_identifier) @variable
+
+; --- types ------------------------------------------------------------------
+;
+; After `_identifier`, so a name in type position is coloured as a type
+; rather than as the variable the broader pattern already claimed. Guarded
+; because python declares no `_type` — its annotations are ordinary
+; expressions — and YAML is what made the omission visible: a tag is the one
+; piece of YAML syntax that says what a node IS, and nothing coloured it.
+
+; treebank: only-if _type
+(_type) @type
 
 ; --- things that are called ------------------------------------------------
 ;
