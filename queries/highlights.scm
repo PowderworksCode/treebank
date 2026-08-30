@@ -34,8 +34,17 @@
 (_identifier) @variable
 
 ; --- things that are called ------------------------------------------------
+;
+; Guarded, because not every language treebank parses computes. YAML has no
+; callable and no invocation, and a pattern naming a term its grammar does
+; not declare is a QueryError at load time rather than a zero-match, so the
+; block is dropped for the grammars that lack the term instead of the file
+; failing to compile for them.
 
+; treebank: only-if _callable
 (_callable) @function
+
+; treebank: only-if _invocation
 (_invocation) @function.call
 
 ; --- control flow ----------------------------------------------------------
@@ -43,8 +52,17 @@
 ; These capture the whole construct rather than its keyword: the keyword is
 ; an anonymous token, and an anonymous token has no vocabulary term. A
 ; per-grammar supplement is where `if` and `while` themselves get coloured.
+;
+; Guarded for the same reason as the block above: a data language alters no
+; sequential execution because it has none.
 
+; treebank: only-if _loop
 (_loop) @keyword.repeat
+
+; treebank: only-if _branch
 (_branch) @keyword.conditional
+
+; treebank: only-if _jump
 (_jump) @keyword.return
+
 (_directive) @keyword.import

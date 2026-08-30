@@ -1,0 +1,2 @@
+first: &a value
+second: &b *a

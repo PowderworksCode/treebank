@@ -1,0 +1,53 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# a ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# This grammar's shape is worth stating before the numbers, because it is
+# unlike the others here and the numbers are a consequence of it. YAML's
+# structure is COLUMNS: where a collection begins and ends, how far a plain
+# scalar runs, whether `:` is an indicator or two characters of text are
+# all questions a context-free rule cannot ask. So the decisions live in
+# the external scanner — the highest rung of FIELD_GUIDE.md §1's ladder —
+# and the parse table is left with almost nothing to be ambiguous about.
+# Twenty externals is a lot; zero conflicts is the thing they buy.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). None. The three decisions that would
+# otherwise fork are all made a rung higher: `-` and `:` are two tokens
+# each where their meaning differs (an entry indicator against a dash in a
+# scalar; a colon following its key against one beginning its own line),
+# and the flow tier is ranked over the block tier by a static precedence.
+declared_conflicts = 0
+
+# Conflicts naming a supertype. None, following from the above.
+early_commit_conflicts = 0
+
+# prec.dynamic sites. None. A dynamic weight is the tool for a tie that
+# only reaches the cull, and there are no forks here to tie.
+dynamic_weights = 0
+
+# One spelling, two tokens (§4). Zero as this check measures it, which
+# counts a plain string token against an immediate token of the same text
+# in grammar.json. It is worth recording that the grammar DOES give one
+# spelling two tokens twice over — `:` as `_block_map_colon` and
+# `_own_line_colon`, and `-` as `_block_seq_bullet` against the first
+# character of a plain scalar — and that both are invisible here because
+# both are external. That is the arrangement §4 asks for rather than the
+# hazard it warns about: the scanner owns the spelling EVERYWHERE, decides
+# from its own state which token the text is, and never offers the parser
+# a choice it could starve on.
+same_text_tokens = 0
+
+# Keyword-shaped tokens outside every reserved set. Zero, and for once
+# that is a fact about the language rather than a discipline: YAML has no
+# keywords. `true`, `null` and `no` are plain scalars that a SCHEMA
+# resolves, not syntax — which is why this grammar has no opinion about
+# the Norway problem and why `word:` and `reserved:` are absent.
+unreserved_keywords = 0
+
+# Parse-table size. Not a correctness bound — a growth alarm. 527 states
+# is the smallest table in this repository by a wide margin, and that is
+# the scanner-heavy design showing up as a number.
+state_count = 527

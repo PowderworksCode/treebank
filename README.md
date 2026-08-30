@@ -5,8 +5,8 @@ shared node vocabulary that is enforced in the parse table itself — so
 queries like `(_declaration)`, `(_loop)` and `(_callable)` mean the same
 thing across languages. Languages: **Python, Rust, TypeScript** (the
 TypeScript grammar also parses JavaScript), **Java, Ruby, Bash**, **C and
-C++** (the C++ grammar extends the C one rather than copying it), and
-**Zig**.
+C++** (the C++ grammar extends the C one rather than copying it), **Zig**,
+and **YAML**.
 
 **[`DESIGN.md`](DESIGN.md) is the authoritative document** — the vocabulary,
 its two tiers and the measurements that forced them, the version-union
@@ -29,6 +29,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-c` | C89–C23 with the GNU extensions, preprocessor included |
 | `crates/treebank-cpp` | C++98–C++23, extending the C grammar through tree-sitter's own inheritance |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
+| `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
 | `crates/treebank` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
@@ -197,6 +198,15 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | Ruby | yes | — | — |
 | C / C++ | yes | — | — |
 | Zig | — | `zig fmt` | — |
+| YAML | — | — | — |
+
+YAML's three dashes are one fact stated three times: the language has no
+owning implementation, so there is no formatter and no printer to be the
+language's own — `prettier` and every library's re-serializer are third
+party, and this project does not substitute one for the other. Node spans
+are the exception and are a real gap rather than an absence: the pinned
+`yaml` package does carry source ranges, and a span oracle over them is the
+next capability this grammar should grow.
 
 The remaining dashes are real toolchain gaps, not forgotten registrations:
 the project does not substitute a third-party style formatter for a

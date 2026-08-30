@@ -1,0 +1,396 @@
+[
+  {
+    "type": "_directive",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "directive",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_expression",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "_literal",
+        "named": true
+      },
+      {
+        "type": "alias",
+        "named": true
+      },
+      {
+        "type": "annotated_node",
+        "named": true
+      },
+      {
+        "type": "block_mapping",
+        "named": true
+      },
+      {
+        "type": "block_sequence",
+        "named": true
+      },
+      {
+        "type": "flow_mapping",
+        "named": true
+      },
+      {
+        "type": "flow_sequence",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_literal",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "block_scalar",
+        "named": true
+      },
+      {
+        "type": "double_quote_scalar",
+        "named": true
+      },
+      {
+        "type": "plain_scalar",
+        "named": true
+      },
+      {
+        "type": "single_quote_scalar",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_name",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "anchor_name",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_type",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "tag",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "alias",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "anchor",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_name",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "annotated_node",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "_type",
+          "named": true
+        },
+        {
+          "type": "anchor",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "block_mapping",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_mapping_pair",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "block_mapping_pair",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "block_sequence",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": true,
+      "types": [
+        {
+          "type": "block_sequence_item",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "block_sequence_item",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": false,
+      "required": false,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "directive",
+    "named": true,
+    "fields": {
+      "name": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "directive_name",
+            "named": true
+          }
+        ]
+      },
+      "parameter": {
+        "multiple": true,
+        "required": false,
+        "types": [
+          {
+            "type": "directive_parameter",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "document",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_directive",
+          "named": true
+        },
+        {
+          "type": "_expression",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "flow_mapping",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "flow_pair",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "flow_pair",
+    "named": true,
+    "fields": {
+      "key": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_literal",
+            "named": true
+          },
+          {
+            "type": "alias",
+            "named": true
+          },
+          {
+            "type": "annotated_node",
+            "named": true
+          },
+          {
+            "type": "flow_mapping",
+            "named": true
+          },
+          {
+            "type": "flow_sequence",
+            "named": true
+          }
+        ]
+      },
+      "value": {
+        "multiple": false,
+        "required": false,
+        "types": [
+          {
+            "type": "_expression",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
+    "type": "flow_sequence",
+    "named": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "_expression",
+          "named": true
+        },
+        {
+          "type": "flow_pair",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": "stream",
+    "named": true,
+    "root": true,
+    "fields": {},
+    "children": {
+      "multiple": true,
+      "required": false,
+      "types": [
+        {
+          "type": "document",
+          "named": true
+        }
+      ]
+    }
+  },
+  {
+    "type": ",",
+    "named": false
+  },
+  {
+    "type": "anchor_name",
+    "named": true
+  },
+  {
+    "type": "block_scalar",
+    "named": true
+  },
+  {
+    "type": "comment",
+    "named": true,
+    "extra": true
+  },
+  {
+    "type": "directive_name",
+    "named": true
+  },
+  {
+    "type": "directive_parameter",
+    "named": true
+  },
+  {
+    "type": "double_quote_scalar",
+    "named": true
+  },
+  {
+    "type": "plain_scalar",
+    "named": true
+  },
+  {
+    "type": "single_quote_scalar",
+    "named": true
+  },
+  {
+    "type": "tag",
+    "named": true
+  }
+]

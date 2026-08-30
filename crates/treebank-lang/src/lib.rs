@@ -108,6 +108,7 @@ macro_rules! for_each_language {
             Cpp => "cpp", ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], Cpp, false, cxx::Cxx, c::Cpp, (CPP_SPANS, NONE, NONE);
             Ruby => "ruby", ["rb"], Ruby, true, ruby::Ruby, ruby::Ruby, (RB_SPANS, NONE, NONE);
             Zig => "zig", ["zig", "zon"], Zig, false, zig::Zig, zig::Zig, (NONE, ZIG_FORMAT, NONE);
+            Yaml => "yaml", ["yaml", "yml"], Yaml, false, yaml::Yaml, yaml::Yaml, (NONE, NONE, NONE);
         }
     };
 }
