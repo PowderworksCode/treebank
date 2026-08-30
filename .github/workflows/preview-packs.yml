@@ -35,6 +35,27 @@ name: preview packs
 # here has stayed open, and the objects a rule like that removes are ones no
 # deployment points at any more.
 
+# zizmor: ignore[dangerous-triggers]
+#
+# `workflow_run` is on zizmor's dangerous-triggers list and belongs there:
+# it runs with the base repository's secrets, and almost every use of it is
+# insecure because it goes on to run code the pull request controls. The
+# whole argument above is that this one does not, and the steps hold to it:
+#
+#   - the checkout is the DEFAULT BRANCH, never `workflow_run.head_sha`, so
+#     no script from the pull request is executed;
+#   - the artifacts are treated as UNTRUSTED DATA. They are unpacked outside
+#     the checkout, copied in by BASENAME so no path in the archive can
+#     traverse anywhere, and each one must begin with the WebAssembly magic
+#     bytes before it is kept. A poisoned artifact cannot overwrite the
+#     tooling that is about to run;
+#   - nothing here is interpolated into a `run:` script;
+#   - `permissions:` is read-only, and the R2 credential can write to one
+#     bucket and nothing else.
+#
+# The alternative the audit would prefer -- doing this on `pull_request` --
+# is the genuinely unsafe one, because it hands that credential to a
+# workflow file the pull request can rewrite.
 on:
   workflow_run:
     workflows: [ci]
@@ -62,30 +83,63 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
+      # OUTSIDE the checkout, deliberately. These bytes come from a pull
+      # request and the next step runs a script from this repository; an
+      # archive entry named `../../site/tools/build-packs-index.mjs` landing
+      # in the working tree first is the whole artifact-poisoning attack that
+      # makes `workflow_run` dangerous. Nothing untrusted is written where
+      # something trusted is about to be read.
+      #
       # `continue-on-error` because "there are no artifacts" is a NORMAL
-      # outcome here and the action treats it as a failure. A markdown-only
+      # outcome here and the action treats it as a failure: a markdown-only
       # pull request skips ci.yml's `discover` job and with it the whole wasm
-      # matrix, so there is nothing to download; without this, every docs PR
-      # would leave a red run in the Actions tab for a thing that worked
-      # correctly. The step below is what decides whether anything arrived.
+      # matrix. Without this, every docs PR would leave a red run in the
+      # Actions tab for a thing that worked correctly.
       - name: take the packs the pull request's build already checked
         continue-on-error: true
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: treebank-*-wasm-pack
           merge-multiple: true
-          path: site/public/packs
+          path: ${{ runner.temp }}/downloaded
           run-id: ${{ github.event.workflow_run.id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # A docs-only change skips the wasm jobs, so there may be nothing to
-      # publish. That is a normal outcome, not a failure: the preview reads
-      # main's packs and every grammar in it is one main already has.
-      - name: is there anything to publish
+      # By BASENAME, and only what looks like a pack. Two checks, and both
+      # are about the same thing: whatever the archive said its paths were,
+      # nothing lands anywhere but here, and nothing that is not a
+      # WebAssembly module lands at all.
+      #
+      # A docs-only run has nothing to stage, which is a normal outcome and
+      # not a failure: the preview reads main's packs, and every grammar in
+      # it is one main already has.
+      - name: stage them, as data
         id: staged
+        env:
+          DOWNLOADED: ${{ runner.temp }}/downloaded
         run: |
-          if compgen -G 'site/public/packs/treebank-*.wasm' >/dev/null; then
+          set -euo pipefail
+          mkdir -p site/public/packs
+          staged=0
+          while IFS= read -r -d "" file; do
+            name=$(basename "$file")
+            case "$name" in
+              treebank-*.wasm) ;;
+              *) continue ;;
+            esac
+            # `\0asm`, the WebAssembly preamble. A pack that does not start
+            # with it is not one, whatever it is called.
+            if [ "$(head -c 4 "$file" | od -An -tx1 | tr -d ' \n')" != "0061736d" ]; then
+              echo "::error::$name is not a WebAssembly module"
+              exit 1
+            fi
+            cp "$file" "site/public/packs/$name"
+            staged=$((staged + 1))
+          done < <(find "$DOWNLOADED" -type f -print0 2>/dev/null || true)
+
+          if [ "$staged" -gt 0 ]; then
             echo "any=true" >> "$GITHUB_OUTPUT"
+            echo "staged $staged pack(s)"
           else
             echo "any=false" >> "$GITHUB_OUTPUT"
             echo "::notice::no packs in this run; the preview reads main's"
