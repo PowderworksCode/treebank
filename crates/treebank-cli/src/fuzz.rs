@@ -99,7 +99,7 @@
 //! Reduced examples also collapse together, so the tape doubles as the
 //! clustering key: twenty seeds that find one bug shrink to one line.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use anyhow::{bail, Context, Result};
@@ -892,12 +892,91 @@ struct LanguageSection {
     declared: Vec<Declared>,
 }
 
+/// One declared decision, matched EITHER by the text a shrunk program starts
+/// with or by a node kind its tree contains. Exactly one, enforced at load.
+///
+/// `starts_with` is positional, and that is usually what you want: it is the
+/// narrowest thing that can be said, and the shrinker puts the construct
+/// first whenever the construct alone is the finding. It has one blind spot,
+/// and it is structural rather than incidental — a declared construct NESTED
+/// inside another statement escapes the entry. `print XX` matches; the same
+/// py2 print statement in `del XX ; print XX` does not, and neither does
+/// `` `XX` . XX += XX ``, which is the same backtick decision one level in.
+/// Widening the prefix cannot reach these: it would take an entry per
+/// enclosing statement, and a policy with that tail stops being readable long
+/// before it stops being incomplete.
+///
+/// `node_kind` is the way out that does NOT trade away narrowness. It names
+/// the construct itself, so it matches wherever the construct appears and
+/// nowhere else. It is if anything TIGHTER than a prefix: text cannot be
+/// mistaken for a construct, so `node_kind = 'print_statement'` never fires
+/// on the word `print` inside a string or an identifier the way a substring
+/// match would. Anonymous nodes are matched too — their kind is their own
+/// text — so an operator with no named node of its own, like py2's `<>`, is
+/// as declarable as a statement.
+///
+/// A kind no node of this grammar carries is rejected at load, for the same
+/// reason a `[<lang>]` section naming the wrong language is: a declaration
+/// that can never fire and a report that keeps calling the finding
+/// undeclared are the same silent failure.
+///
+/// It is NOT a free pass, and the file's own rule still governs: a matcher
+/// must be as narrow as the decision it records. `node_kind` widens the
+/// REACH of an entry while keeping its aim, and reach is enough to do harm
+/// where one node kind can be reached by two different decisions. Measured
+/// on python over 5000 seeds, declaring the five py2-union kinds moved 31
+/// findings out of undeclared and SIX of them should not have moved:
+///
+///     async def XX ( ( XX ) ) : XX      tuple_parameter, x2
+///     async with ` XX ` < XX : XX       repr_expression, x4
+///
+/// Each is a py2-only construct inside a py3-only one, so it is valid in
+/// NEITHER version — a real finding about the union, wearing the clothes of
+/// a declared one. `print_statement`, `exec_statement` and `<>` carried no
+/// such traffic and were safe. Measure before declaring; the count going
+/// down is not on its own evidence that it should have.
 #[derive(serde::Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Declared {
     /// Matches a shrunk program that starts with this text.
-    starts_with: String,
+    #[serde(default)]
+    starts_with: Option<String>,
+    /// Matches a shrunk program whose tree contains a node of this kind,
+    /// anonymous kinds included.
+    #[serde(default)]
+    node_kind: Option<String>,
     why: String,
+}
+
+impl Declared {
+    fn matches(&self, program: &str, kinds: &BTreeSet<String>) -> bool {
+        match (&self.starts_with, &self.node_kind) {
+            (Some(prefix), None) => program.starts_with(prefix),
+            (None, Some(kind)) => kinds.contains(kind),
+            // Rejected by `validate_matchers`; treated as matching nothing
+            // rather than everything if it ever gets here.
+            _ => false,
+        }
+    }
+}
+
+/// Every node kind in a program's tree, ANONYMOUS ones included, which is
+/// what lets `<>` be declared alongside `print_statement`.
+fn node_kinds_in(parser: &mut Parser, program: &str) -> BTreeSet<String> {
+    let mut out = BTreeSet::new();
+    let Some(tree) = parser.parse(program.as_bytes(), None) else {
+        return out;
+    };
+    let mut stack = vec![tree.root_node()];
+    while let Some(node) = stack.pop() {
+        out.insert(node.kind().to_string());
+        for i in 0..node.child_count() {
+            if let Some(child) = node.child(i as u32) {
+                stack.push(child);
+            }
+        }
+    }
+    out
 }
 
 impl FuzzPolicy {
@@ -947,10 +1026,61 @@ impl FuzzPolicy {
         )
     }
 
-    fn declared_reason(&self, lang: LangName, program: &str) -> Option<&str> {
+    fn declared_reason(
+        &self,
+        lang: LangName,
+        program: &str,
+        kinds: &BTreeSet<String>,
+    ) -> Option<&str> {
         self.entries_for(lang)
-            .find(|d| program.starts_with(&d.starts_with))
+            .find(|d| d.matches(program, kinds))
             .map(|d| d.why.as_str())
+    }
+
+    /// Exactly one matcher per entry. Neither is a declaration that can never
+    /// fire; both is a declaration whose meaning depends on which one this
+    /// code happens to test first.
+    fn validate_matchers(&self, lang: LangName) -> Result<()> {
+        for d in self.entries_for(lang) {
+            match (&d.starts_with, &d.node_kind) {
+                (Some(p), None) => anyhow::ensure!(
+                    !p.is_empty(),
+                    "fuzz_policy.toml has an empty starts_with, which matches every program"
+                ),
+                (None, Some(k)) => anyhow::ensure!(
+                    !k.is_empty(),
+                    "fuzz_policy.toml has an empty node_kind"
+                ),
+                (Some(p), Some(k)) => bail!(
+                    "fuzz_policy.toml entry sets BOTH starts_with = '{p}' and node_kind = '{k}'; use one matcher per entry so the declaration says one thing"
+                ),
+                (None, None) => bail!(
+                    "fuzz_policy.toml entry sets neither starts_with nor node_kind, so it can never apply"
+                ),
+            }
+        }
+        Ok(())
+    }
+
+    /// A `node_kind` this grammar never produces is a declaration that can
+    /// never fire — the same silent failure `validate_sections` exists to
+    /// catch, and worth the same loud error.
+    fn validate_node_kinds(&self, lang: LangName, language: &tree_sitter::Language) -> Result<()> {
+        let mut known = BTreeSet::new();
+        for id in 0..language.node_kind_count() {
+            if let Some(name) = language.node_kind_for_id(id as u16) {
+                known.insert(name.to_string());
+            }
+        }
+        for d in self.entries_for(lang) {
+            if let Some(kind) = &d.node_kind {
+                anyhow::ensure!(
+                    known.contains(kind),
+                    "fuzz_policy.toml declares node_kind = '{kind}', which is not a node kind this grammar produces — the declaration would never apply"
+                );
+            }
+        }
+        Ok(())
     }
 
     /// Whether anything at all is in force, which decides only whether the
@@ -1187,6 +1317,8 @@ pub fn run(
     let (language, _) = crate::grammar::load(grammar_dir)?;
     let mut parser = Parser::new();
     parser.set_language(&language)?;
+    policy.validate_matchers(lang)?;
+    policy.validate_node_kinds(lang, &language)?;
 
     let oracle = treebank_oracle::get(lang);
     let tmp = std::env::temp_dir().join(format!("treebank-fuzz-{}", std::process::id()));
@@ -1291,15 +1423,20 @@ pub fn run(
         *by_program.entry(program).or_insert(0) += 1;
     }
 
-    let mut findings: Vec<Finding> = by_program
-        .into_iter()
-        .map(|(program, seeds)| Finding {
-            declared: policy.declared_reason(lang, &program).map(String::from),
+    let mut findings: Vec<Finding> = Vec::new();
+    for (program, seeds) in by_program {
+        // The shrunk programs are few (tens), so parsing each one to ask
+        // which constructs it contains costs nothing worth measuring.
+        let kinds = node_kinds_in(&mut parser, &program);
+        findings.push(Finding {
+            declared: policy
+                .declared_reason(lang, &program, &kinds)
+                .map(String::from),
             bytes: program.len(),
             program,
             seeds,
-        })
-        .collect();
+        });
+    }
     findings.sort_by_key(|f| (f.bytes, f.program.clone()));
 
     let syntax_only = oracle.validate_syntax_only(&tmp, &[])?.is_some();
@@ -1435,6 +1572,7 @@ pub fn default_out(lang: LangName) -> PathBuf {
 #[cfg(test)]
 mod policy_tests {
     use super::{FuzzPolicy, LangName};
+    use std::collections::BTreeSet;
 
     fn parse(text: &str) -> FuzzPolicy {
         toml::from_str(text).expect("policy must parse")
@@ -1452,9 +1590,15 @@ starts_with = "print "
 why = "py2"
 "#,
         );
-        assert!(p.declared_reason(LangName::Python, "print x\n").is_some());
-        assert!(p.declared_reason(LangName::Rust, "print x\n").is_some());
-        assert!(p.declared_reason(LangName::Python, "exec x\n").is_none());
+        assert!(p
+            .declared_reason(LangName::Python, "print x\n", &BTreeSet::new())
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Rust, "print x\n", &BTreeSet::new())
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Python, "exec x\n", &BTreeSet::new())
+            .is_none());
     }
 
     /// The reason sections exist. One union grammar, two oracles: a
@@ -1472,10 +1616,10 @@ why = "union"
 "#,
         );
         assert!(p
-            .declared_reason(LangName::Javascript, "public var XX ;\n")
+            .declared_reason(LangName::Javascript, "public var XX ;\n", &BTreeSet::new())
             .is_some());
         assert!(
-            p.declared_reason(LangName::Typescript, "public var XX ;\n")
+            p.declared_reason(LangName::Typescript, "public var XX ;\n", &BTreeSet::new())
                 .is_none(),
             "a javascript declaration must not silence the typescript leg"
         );
@@ -1495,16 +1639,16 @@ why = "one"
 "#,
         );
         assert!(p
-            .declared_reason(LangName::Javascript, "shared x\n")
+            .declared_reason(LangName::Javascript, "shared x\n", &BTreeSet::new(),)
             .is_some());
         assert!(p
-            .declared_reason(LangName::Typescript, "shared x\n")
+            .declared_reason(LangName::Typescript, "shared x\n", &BTreeSet::new(),)
             .is_some());
         assert!(p
-            .declared_reason(LangName::Javascript, "only x\n")
+            .declared_reason(LangName::Javascript, "only x\n", &BTreeSet::new(),)
             .is_some());
         assert!(p
-            .declared_reason(LangName::Typescript, "only x\n")
+            .declared_reason(LangName::Typescript, "only x\n", &BTreeSet::new(),)
             .is_none());
         assert!(
             !p.is_empty(LangName::Typescript),
@@ -1527,12 +1671,95 @@ rule = "javascript reason"
         assert_eq!(p.rule_for(LangName::Typescript), "shared reason");
     }
 
+    fn kinds(names: &[&str]) -> BTreeSet<String> {
+        names.iter().map(|s| s.to_string()).collect()
+    }
+
+    /// The blind spot `node_kind` exists for: the same decision, one level in.
+    #[test]
+    fn a_node_kind_matches_a_nested_construct_that_a_prefix_cannot() {
+        let p = parse(
+            r#"
+[[declared]]
+node_kind = "print_statement"
+why = "py2 print statement"
+"#,
+        );
+        let nested = kinds(&["module", "print_statement", "identifier"]);
+        assert!(
+            p.declared_reason(LangName::Python, "del XX ; print XX\n", &nested)
+                .is_some(),
+            "a nested print statement is the same decision as a leading one"
+        );
+        assert!(
+            parse("[[declared]]\nstarts_with = \"print \"\nwhy = \"x\"")
+                .declared_reason(LangName::Python, "del XX ; print XX\n", &nested)
+                .is_none(),
+            "which is exactly what starts_with cannot reach"
+        );
+    }
+
+    /// Tighter than a substring match, which is the point: text that merely
+    /// LOOKS like the construct is not the construct.
+    #[test]
+    fn a_node_kind_does_not_fire_on_lookalike_text() {
+        let p = parse(
+            r#"
+[[declared]]
+node_kind = "print_statement"
+why = "py2 print statement"
+"#,
+        );
+        let no_print = kinds(&["module", "expression_statement", "string"]);
+        assert!(
+            p.declared_reason(LangName::Python, "XX = \" print XX \"\n", &no_print)
+                .is_none(),
+            "the word inside a string literal is not a print statement"
+        );
+    }
+
+    /// Anonymous nodes carry their own text as their kind, so an operator
+    /// with no named node of its own is still declarable.
+    #[test]
+    fn an_anonymous_node_kind_is_declarable() {
+        let p = parse("[[declared]]\nnode_kind = \"<>\"\nwhy = \"py2 inequality\"");
+        assert!(p
+            .declared_reason(LangName::Python, "XX <> XX\n", &kinds(&["module", "<>"]))
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Python, "XX < XX\n", &kinds(&["module", "<"]))
+            .is_none());
+    }
+
+    #[test]
+    fn an_entry_must_carry_exactly_one_matcher() {
+        let both = parse(
+            "[[declared]]\nstarts_with = \"print \"\nnode_kind = \"print_statement\"\nwhy = \"x\"",
+        );
+        assert!(
+            both.validate_matchers(LangName::Python).is_err(),
+            "two matchers make the entry's meaning depend on evaluation order"
+        );
+        let neither = parse("[[declared]]\nwhy = \"x\"");
+        assert!(
+            neither.validate_matchers(LangName::Python).is_err(),
+            "an entry with no matcher can never fire"
+        );
+        let empty = parse("[[declared]]\nstarts_with = \"\"\nwhy = \"x\"");
+        assert!(
+            empty.validate_matchers(LangName::Python).is_err(),
+            "an empty prefix matches every program"
+        );
+        let ok = parse("[[declared]]\nnode_kind = \"print_statement\"\nwhy = \"x\"");
+        assert!(ok.validate_matchers(LangName::Python).is_ok());
+    }
+
     #[test]
     fn an_empty_policy_declares_nothing() {
         let p = FuzzPolicy::default();
         assert!(p.is_empty(LangName::Javascript));
         assert!(p
-            .declared_reason(LangName::Javascript, "anything\n")
+            .declared_reason(LangName::Javascript, "anything\n", &BTreeSet::new())
             .is_none());
     }
 
