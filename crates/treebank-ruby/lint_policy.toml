@@ -1,11 +1,11 @@
 # Accepted structural debt, per `treebank lint` check — the ratchet that
-# keeps the FIELD_GUIDE.md smells from growing back. Every number here is
+# keeps the notes/field_guide.md smells from growing back. Every number here is
 # a ceiling: going over fails CI, dropping under prints a reminder to
 # tighten. Each carries the reason the debt is accepted, because a
 # baseline nobody can explain is just a number that rots.
 
 [baselines]
-# Each declared conflict is a GLR fork site (FIELD_GUIDE.md §2). Most of
+# Each declared conflict is a GLR fork site (notes/field_guide.md §2). Most of
 # these are the case/in pattern tier sharing spellings with expressions
 # and the keyword-method-name family; the identifier/callee family was
 # factored away (§1) and must not return. Four declarations generation no

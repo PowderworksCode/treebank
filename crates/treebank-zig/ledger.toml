@@ -6,7 +6,7 @@ language = 'zig'
 versions = '''
 Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar.
 
-The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.'''
+The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per notes/DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.'''
 generate_cli = '0.26.12'
 vocabulary = '0.1.0'
 parser_note = '''
@@ -82,7 +82,7 @@ family = 'zig'
 tool = 'zig fmt --stdin, via tools/zig-oracle/check.sh'
 version = 'zig 0.16.0 (current) and zig 0.11.0 (legacy), as `zig` and `zig-0.11` on PATH'
 role = '''
-The union oracle for a union grammar (DESIGN.md §4.3): a file is valid Zig if ANY version family accepts it. The current release judges every file and whatever it rejects is re-judged by 0.11.
+The union oracle for a union grammar (notes/DESIGN.md §4.3): a file is valid Zig if ANY version family accepts it. The current release judges every file and whatever it rejects is re-judged by 0.11.
 
 The second family is REQUIRED, not a nicety, and Zig needs it more than any other language here, because Zig REMOVES syntax. `usingnamespace` was deleted in 0.15 and `async`/`await`/`suspend` have not compiled since 0.11, so a sweep run with only the current oracle books every file using one of those as noise -- which is precisely the half of the version union that would then go unmeasured. Measured on this corpus: over the 2,558 files of the 0.11.0 tree, the current oracle rejects 125 and the 0.11 oracle rejects 38, so the union rescues 87 files a current-only sweep would have booked as noise -- 87 files whose gaps would never have been counted.
 
@@ -96,7 +96,7 @@ files = 4
 note = '''
 `.async = async,` and `.await = await,` in `std.Io.Dispatch`, `Kqueue`, `Threaded` and `Uring`. Zig REMOVED `async`/`await` from the language, so in 0.15 and later they are ordinary identifiers -- and in 0.11 through 0.14 they are prefix operators. Both readings are in this corpus and the grammar cannot have both, because keyword extraction is a LEXER decision: wherever `async_expression` is a valid parse, the token is the keyword and never the identifier.
 
-DESIGN.md §4.2 says the latest version wins when two conflict, and that rule is deliberately NOT applied here. Measured over the corpus: 116 files use `async`/`await` as a prefix operator (37 in 0.11.0, 76 across 0.12-0.14, 3 later) and 54 use them as identifiers (all in 0.15 and 0.16). Applying §4.2 would trade 116 passing files for these 4 -- most of the 54 identifier uses are field NAMES after a `.`, where the keyword is not valid and already lex as identifiers. The four that fail are the ones where the identifier is a VALUE.
+notes/DESIGN.md §4.2 says the latest version wins when two conflict, and that rule is deliberately NOT applied here. Measured over the corpus: 116 files use `async`/`await` as a prefix operator (37 in 0.11.0, 76 across 0.12-0.14, 3 later) and 54 use them as identifiers (all in 0.15 and 0.16). Applying §4.2 would trade 116 passing files for these 4 -- most of the 54 identifier uses are field NAMES after a `.`, where the keyword is not valid and already lex as identifiers. The four that fail are the ones where the identifier is a VALUE.
 
 Tried and rejected: making `async_expression`'s operand optional. It parses all four, and it is a lie -- the file means the identifier `async` and the tree would say `async_expression`. That is precisely the silent mis-parse the `shape` gate exists to catch, so it is not worth 4 files.'''
 

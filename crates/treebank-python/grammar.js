@@ -1,6 +1,6 @@
 /**
  * treebank-python: a from-scratch grammar for the union of Python 2.7 and
- * every Python 3, carrying the treebank vocabulary (DESIGN.md §3) in its
+ * every Python 3, carrying the treebank vocabulary (notes/DESIGN.md §3) in its
  * parse table.
  *
  * Threaded table-tier roles (18): _statement _expression _declaration
@@ -1243,7 +1243,7 @@ module.exports = grammar({
  * concrete types that occur nowhere but a parameter list, so type-level
  * facet membership selects exactly the nodes occurrence-level supertype
  * membership would have. `(_parameter)` through treebank is unchanged.
- * See roles.json's `demoted` and DESIGN.md section 3.4.
+ * See roles.json's `demoted` and notes/DESIGN.md section 3.4.
  *
  * @param {string} prefix   rule-name prefix for this family of rules
  * @param {Object} p        the language-level pieces, which differ between

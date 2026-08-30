@@ -80,7 +80,7 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         }
     }
 
-    // 4b. The FIELD_GUIDE.md smell detector, enforced where the grammar
+    // 4b. The notes/field_guide.md smell detector, enforced where the grammar
     //     has written its lint_policy.toml ratchets, advisory otherwise.
     match crate::lint::run(grammar_dir) {
         Ok(()) => println!("  lint          ok"),

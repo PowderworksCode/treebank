@@ -12,7 +12,7 @@ impl Oracle for Python {
         LangName::Python
     }
 
-    /// The union oracle for a union grammar (DESIGN.md §4.3): a file is
+    /// The union oracle for a union grammar (notes/DESIGN.md §4.3): a file is
     /// valid python if ANY version family accepts it. CPython 3 judges
     /// every file first via tools/py-oracle/check.py; whatever it rejects
     /// is re-judged by CPython 2.7 via check2.py. Both go through

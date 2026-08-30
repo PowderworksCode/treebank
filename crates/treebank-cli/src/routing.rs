@@ -9,7 +9,7 @@
 //! language and `route` returned `0` for every file, so nine callers built
 //! a one-element `Vec<Language>` and indexed it at zero. The construct it
 //! was built for was the TypeScript/JavaScript dialect split, and
-//! DESIGN.md §4.2 settled that with one union grammar — the legacy `<T>x`
+//! notes/DESIGN.md §4.2 settled that with one union grammar — the legacy `<T>x`
 //! cast measured at ~zero corpus incidence and carried as a ledgered
 //! known-gap. Generality kept for a case that was measured and rejected
 //! costs a `Vec` and an index at every call site and buys nothing; a

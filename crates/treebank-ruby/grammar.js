@@ -1,7 +1,7 @@
 /**
  * treebank-ruby: a from-scratch grammar for Ruby 3.x (accepting the older
  * spellings that cost nothing), carrying the treebank vocabulary
- * (DESIGN.md §3) in its parse table.
+ * (notes/DESIGN.md §3) in its parse table.
  *
  * Ruby is expression-oriented the way rust is — `x = if c then 1 else 2
  * end` is ordinary code — so `_control_flow` and its children thread
@@ -252,7 +252,7 @@ module.exports = grammar({
     // ── the statement tier ───────────────────────────────────────────
     // Almost everything is an expression, so `_statement → _expression`
     // is a derivation chain, not a wrapper: one occurrence answers both
-    // queries, which is DESIGN.md §2 fact 2 working as intended.
+    // queries, which is notes/DESIGN.md §2 fact 2 working as intended.
     _statement: $ => choice(
       $._expression,
       $.if_modifier,
@@ -871,7 +871,7 @@ module.exports = grammar({
 
     forward_argument: $ => alias($._dot3, '...'),
 
-    // prec.LEFT for the jump-keyword reason (FIELD_GUIDE.md §6): at
+    // prec.LEFT for the jump-keyword reason (notes/field_guide.md §6): at
     // `yield • unless` the bare yield must reduce so the `unless` becomes
     // a modifier. prec.right shifted it into the arguments, and the
     // swallowed modifier's body then ate the enclosing `end` — one wrong
@@ -887,7 +887,7 @@ module.exports = grammar({
     // ── blocks ───────────────────────────────────────────────────────
     // The parameters may sit on their own line below the opener; the
     // pre-parameter terminator is tied to them so it can never also read
-    // as the body's first item (one owner per newline, FIELD_GUIDE.md §7).
+    // as the body's first item (one owner per newline, notes/field_guide.md §7).
     do_block: $ => seq(
       'do',
       optional(choice(

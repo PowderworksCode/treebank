@@ -38,7 +38,7 @@ impl Oracle for Zig {
         LangName::Zig
     }
 
-    /// The union oracle for a union grammar (DESIGN.md §4.3): a file is
+    /// The union oracle for a union grammar (notes/DESIGN.md §4.3): a file is
     /// valid Zig if ANY version family accepts it. The current release
     /// judges every file, and whatever it rejects is re-judged by 0.11.
     ///

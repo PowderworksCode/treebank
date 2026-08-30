@@ -13,7 +13,7 @@ lex_note = '''
 [[ignore]]
 signature = 'FunctionDef <- function_definition'
 why = '''
-CPython puts decorators in a separate `decorator_list` and starts FunctionDef at `def`; our `function_definition` starts at the first decorator, because DESIGN.md §3 makes decorators `_attribute` members OF the definition. A deliberate difference in where the construct begins.'''
+CPython puts decorators in a separate `decorator_list` and starts FunctionDef at `def`; our `function_definition` starts at the first decorator, because notes/DESIGN.md §3 makes decorators `_attribute` members OF the definition. A deliberate difference in where the construct begins.'''
 
 [[ignore]]
 signature = 'AsyncFunctionDef <- function_definition'
@@ -27,7 +27,7 @@ why = 'See `FunctionDef <- function_definition`.'
 [[ignore]]
 signature = 'If <- if_statement'
 why = '''
-CPython has no elif: it nests a second `If` inside the first one's `orelse`, so every `elif` is a new If starting at the `elif` keyword. We model it as an `elif_clause`, which is what the `_clause` vocabulary term exists for (DESIGN.md §3). Ours keeps the chain flat and says which clause is which.'''
+CPython has no elif: it nests a second `If` inside the first one's `orelse`, so every `elif` is a new If starting at the `elif` keyword. We model it as an `elif_clause`, which is what the `_clause` vocabulary term exists for (notes/DESIGN.md §3). Ours keeps the chain flat and says which clause is which.'''
 
 [[ignore]]
 signature = 'arg <- parameter'

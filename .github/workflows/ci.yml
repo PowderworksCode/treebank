@@ -6,7 +6,7 @@ on:
   pull_request:
 
 env:
-  # DESIGN.md §7: regenerating with a different CLI silently changes what
+  # notes/DESIGN.md §7: regenerating with a different CLI silently changes what
   # the grammar accepts, so the pin is load-bearing rather than hygiene.
   # It matches the tree-sitter runtime library consumers link, so a query
   # that validates here cannot be an impossible pattern there.
@@ -236,7 +236,7 @@ jobs:
       - name: vocabulary conformance
         run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
 
-      # The FIELD_GUIDE.md smell detector: declared-conflict growth, early
+      # The notes/field_guide.md smell detector: declared-conflict growth, early
       # commits between parallel tiers, same-text token splits, unreserved
       # keywords, scanner/externals drift, parse-table growth. Enforced
       # against the grammar's lint_policy.toml ratchets where one exists;
@@ -361,7 +361,7 @@ jobs:
           path: ~/.cache/treebank
           key: wasm-toolchain-${{ runner.os }}-${{ hashFiles('tools/wasm-pack/toolchain.sh') }}
       - run: pip install wasmtime
-      # DESIGN.md §7 makes wasm a first-class artifact, so packs are built
+      # notes/DESIGN.md §7 makes wasm a first-class artifact, so packs are built
       # and checked on every change rather than at release time: a grammar
       # that cannot cross to wasm should fail here, not in a consumer's
       # browser. check.sh also asserts byte-reproducibility, that a real
