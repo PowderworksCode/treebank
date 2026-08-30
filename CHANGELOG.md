@@ -11,6 +11,34 @@ Only the Rust API is versioned.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-30
+
+### Changed
+
+- Packs are driven by [wasmer](https://wasmer.io) rather than wasmtime.
+  wasmtime's `build.rs` compiles C helpers in every configuration that can
+  execute wasm, so building it for musl needed a musl C cross-compiler on
+  PATH and no feature avoided it. That made this crate unhostable by a
+  consumer shipping static musl binaries. wasmer's tree compiles no C, and
+  both `x86_64-unknown-linux-musl` and `aarch64-unknown-linux-musl` now
+  cross-build with rust-lld alone. The `pack` feature's dependencies change
+  with it: `wasmer` and `blake3` in place of `wasmtime` and `wasmtime-wasi`.
+- `fetch` uses ureq 3 with the [graviola](https://github.com/ctz/graviola)
+  rustls provider rather than ureq 2 with ring. ring's `build.rs` compiles C
+  and assembly through `cc`, so `aarch64-unknown-linux-musl` could not be
+  built at all; graviola is Rust and inline assembly with no C. Roots still
+  come from the platform verifier, so a proxy presenting its own certificate
+  authority keeps working, and proxies still come from the environment.
+
+### Added
+
+- `fetch-bytes`: acquisition without an engine. The manifest resolution, the
+  content-addressed cache, the sha256 check and the stale-manifest fallback,
+  handing back bytes -- for a host that already has its own wasm runtime and
+  would otherwise link a second one to reuse any of it. Adds
+  `Pack::bytes_verified`, `fetch_bytes` and `fetch_pinned_bytes`. `fetch` is
+  now `["fetch-bytes", "pack"]`, so it behaves exactly as before.
+
 ## [0.2.1] - 2026-08-29
 
 ### Fixed

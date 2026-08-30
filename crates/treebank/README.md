@@ -161,13 +161,13 @@ For a build that must not reach the network, keep `pack` and hand the bytes in
 yourself with `Pack::from_path` or `Pack::from_bytes`:
 
 ```toml
-treebank = { version = "0.2", default-features = false, features = ["pack"] }
+treebank = { version = "0.3", default-features = false, features = ["pack"] }
 ```
 
 For the vocabulary and query expansion alone, with no runtime:
 
 ```toml
-treebank = { version = "0.2", default-features = false }
+treebank = { version = "0.3", default-features = false }
 ```
 
 ## Also in here
