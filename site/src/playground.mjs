@@ -11,12 +11,16 @@
 // -- see a `function_definition` in your own code, click it, read the
 // production that admitted it.
 
-import { errorsIn, Pack, Query, walk } from "./pack.mjs";
 import { expandQuery } from "./expand.mjs";
+import { errorsIn, Pack, Query, walk } from "./pack.mjs";
 
 const E = (s) =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
 
 // Packs are content-addressed: `treebank-python-<hash>.wasm` is those bytes
 // or does not exist, because the build asserts byte reproducibility. The
@@ -29,7 +33,8 @@ const E = (s) =>
 // being about whatever was current that day.
 const PACKS = "/packs/";
 const POINTER_URL = (name) => `${PACKS}treebank-${name}.wasm`;
-const HASHED_URL = (name, hash) => `${PACKS}treebank-${name}-${hash.slice(0, 12)}.wasm`;
+const HASHED_URL = (name, hash) =>
+  `${PACKS}treebank-${name}-${hash.slice(0, 12)}.wasm`;
 
 // tb_parse runs on the main thread. A megabyte of source is a fraction of a
 // second and fine; ten is a frozen tab. The cap is honest about what this
@@ -44,11 +49,13 @@ const SAMPLES = {
   c: "int main(void) {\n    int xs[] = {1, 2, 3};\n    return xs[0];\n}\n",
   cpp: "template <typename T>\nauto sum(const std::vector<T>& xs) -> T {\n    return std::accumulate(xs.begin(), xs.end(), T{});\n}\n",
   java: "record Point(int x, int y) {\n    Point {\n        if (x < 0) throw new IllegalArgumentException();\n    }\n}\n",
-  python: "def greet(name: str = 'world') -> str:\n    match name.split():\n        case [first, *rest]:\n            return f'hello {first}'\n        case _:\n            return 'hello'\n",
-  ruby: "class Greeter\n  def initialize(name) = @name = name\n  def call = \"hello #{@name}\"\nend\n",
+  python:
+    "def greet(name: str = 'world') -> str:\n    match name.split():\n        case [first, *rest]:\n            return f'hello {first}'\n        case _:\n            return 'hello'\n",
+  ruby: 'class Greeter\n  def initialize(name) = @name = name\n  def call = "hello #{@name}"\nend\n',
   rust: "fn largest<T: PartialOrd>(xs: &[T]) -> Option<&T> {\n    xs.iter().reduce(|a, b| if a > b { a } else { b })\n}\n",
-  typescript: "type Result<T> = { ok: true; value: T } | { ok: false; error: string };\n\nconst unwrap = <T,>(r: Result<T>): T => {\n  if (!r.ok) throw new Error(r.error);\n  return r.value;\n};\n",
-  zig: "const std = @import(\"std\");\n\npub fn main() !void {\n    const xs = [_]u8{ 1, 2, 3 };\n    std.debug.print(\"{d}\\n\", .{xs.len});\n}\n",
+  typescript:
+    "type Result<T> = { ok: true; value: T } | { ok: false; error: string };\n\nconst unwrap = <T,>(r: Result<T>): T => {\n  if (!r.ok) throw new Error(r.error);\n  return r.value;\n};\n",
+  zig: 'const std = @import("std");\n\npub fn main() !void {\n    const xs = [_]u8{ 1, 2, 3 };\n    std.debug.print("{d}\\n", .{xs.len});\n}\n',
 };
 
 // A capture list is one row each; a query like `(_) @x` matches everything.
@@ -106,7 +113,9 @@ class Playground {
     this.queryOut = this.root.querySelector(".pg-qout");
     this.queryHint = this.root.querySelector(".pg-qhint");
 
-    this.select.addEventListener("change", () => this.choose(this.select.value));
+    this.select.addEventListener("change", () =>
+      this.choose(this.select.value),
+    );
     this.source.addEventListener("input", () => this.schedule());
     this.queryBox.addEventListener("input", () => this.schedule());
     // A capture names a byte range, so clicking one can show it rather than
@@ -126,7 +135,8 @@ class Playground {
       if (!response.ok) throw new Error(`${response.status}`);
       const grammars = await response.json();
       this.select.innerHTML = grammars
-        .map((g) => `<option value="${E(g.name)}">${E(g.name)}</option>`).join("");
+        .map((g) => `<option value="${E(g.name)}">${E(g.name)}</option>`)
+        .join("");
       const params = new URLSearchParams(location.search);
       const wanted = params.get("g");
       const start = grammars.some((g) => g.name === wanted) ? wanted : "python";
@@ -146,7 +156,7 @@ class Playground {
     if (this.packs !== undefined) return this.packs;
     try {
       const response = await fetch(`${PACKS}index.json`);
-      this.packs = response.ok ? (await response.json()).packs ?? null : null;
+      this.packs = response.ok ? ((await response.json()).packs ?? null) : null;
     } catch {
       this.packs = null;
     }
@@ -176,8 +186,7 @@ class Playground {
       this.pack = await Pack.load(url);
     } catch (error) {
       this.stateBox.textContent = "";
-      this.treeBox.innerHTML =
-        `<p class="broken">Could not load the ${E(name)} parser: ${E(error.message)}</p>
+      this.treeBox.innerHTML = `<p class="broken">Could not load the ${E(name)} parser: ${E(error.message)}</p>
 <p class="dim">The packs are built artifacts. If this is a local checkout, run
 <code>./tools/wasm-pack/build.sh ${E(name)} --out site/public/packs</code>
 then <code>bun run packs</code>.</p>`;
@@ -213,11 +222,12 @@ then <code>bun run packs</code>.</p>`;
     // whatever happened to be current that day.
     const pin = this.hash
       ? ` <a class="pg-pin" href="?g=${E(this.name)}&pack=${E(this.hash.slice(0, 12))}"
-title="A link to this exact parser, which cannot change under you">pack ${
-        E(this.hash.slice(0, 12))
-      } — permalink</a>`
+title="A link to this exact parser, which cannot change under you">pack ${E(
+          this.hash.slice(0, 12),
+        )} — permalink</a>`
       : ' <span class="dim">(unpinned: no manifest, so this is whatever is current)</span>';
-    this.provBox.innerHTML = `Read from the pack itself: ${bits.join(" · ")}.${pin}<br>` +
+    this.provBox.innerHTML =
+      `Read from the pack itself: ${bits.join(" · ")}.${pin}<br>` +
       `<a href="/grammars/${E(this.name)}/">Read the ${E(this.name)} grammar reference →</a>`;
   }
 
@@ -265,10 +275,15 @@ than fail honestly.</p>`;
       this.errorBox.innerHTML = '<p class="pg-ok">Parses cleanly.</p>';
       return;
     }
-    const rows = errors.slice(0, 25).map((e) =>
-      `<li><span class="pg-badge ${e.kind === "MISSING" ? "missing" : "err"}">${e.kind}</span>
+    const rows = errors
+      .slice(0, 25)
+      .map(
+        (e) =>
+          `<li><span class="pg-badge ${e.kind === "MISSING" ? "missing" : "err"}">${e.kind}</span>
 <span class="mono">${e.row + 1}:${e.column + 1}</span>
-${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
+${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`,
+      )
+      .join("");
     this.errorBox.innerHTML = `<p class="pg-bad">${errors.length} error node${
       errors.length === 1 ? "" : "s"
     }.</p><ul class="pg-errlist">${rows}</ul>${
@@ -291,7 +306,11 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
     this.queryBox.disabled = false;
     this.queryHint.innerHTML =
       `Facets in ${E(this.name)}: ` +
-      facets.map((f) => `<button type="button" class="pg-facet mono">${E(f)}</button>`).join(" ") +
+      facets
+        .map(
+          (f) => `<button type="button" class="pg-facet mono">${E(f)}</button>`,
+        )
+        .join(" ") +
       ` — expanded here before the query runs, the same way ` +
       `<code>Pack::query</code> expands them.`;
     for (const button of this.queryHint.querySelectorAll(".pg-facet")) {
@@ -327,7 +346,8 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
     if (!this.pack?.canQuery) return;
     const source = this.queryBox.value.trim();
     if (!source) {
-      this.queryOut.innerHTML = '<p class="dim">Write a query to run it against the tree above.</p>';
+      this.queryOut.innerHTML =
+        '<p class="dim">Write a query to run it against the tree above.</p>';
       return;
     }
 
@@ -336,7 +356,11 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
       // With node-types, so a member that cannot take a field the pattern
       // asks for is dropped rather than making the whole alternation an
       // impossible pattern. Same call the crate makes.
-      expanded = expandQuery(source, this.pack.roles.facets ?? {}, this.pack.nodeTypes);
+      expanded = expandQuery(
+        source,
+        this.pack.roles.facets ?? {},
+        this.pack.nodeTypes,
+      );
       query = this.compile(expanded);
     } catch (error) {
       this.dropQuery();
@@ -345,39 +369,48 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
       // facet fails as a whole when any one member cannot take a field the
       // pattern asks for, and seeing the alternation is what makes that
       // legible instead of mysterious.
-      const shown = expanded && expanded !== source
-        ? `<pre class="pg-expanded mono">${E(expanded)}</pre>`
-        : "";
-      this.queryOut.innerHTML =
-        `<p class="broken">${E(error.message)}</p>${shown}`;
+      const shown =
+        expanded && expanded !== source
+          ? `<pre class="pg-expanded mono">${E(expanded)}</pre>`
+          : "";
+      this.queryOut.innerHTML = `<p class="broken">${E(error.message)}</p>${shown}`;
       return;
     }
 
     const { captures, truncated } = query.run(root, { limit: MAX_CAPTURES });
-    const expansion = expanded !== source
-      ? `<details class="pg-expansion"><summary class="dim">expanded to ${
-          E(query.patternCount)} pattern${query.patternCount === 1 ? "" : "s"}</summary>` +
-        `<pre class="pg-expanded mono">${E(expanded)}</pre></details>`
-      : "";
+    const expansion =
+      expanded !== source
+        ? `<details class="pg-expansion"><summary class="dim">expanded to ${E(
+            query.patternCount,
+          )} pattern${query.patternCount === 1 ? "" : "s"}</summary>` +
+          `<pre class="pg-expanded mono">${E(expanded)}</pre></details>`
+        : "";
 
     if (!captures.length) {
-      this.queryOut.innerHTML =
-        `${expansion}<p class="dim">No matches in this source.</p>`;
+      this.queryOut.innerHTML = `${expansion}<p class="dim">No matches in this source.</p>`;
       return;
     }
 
-    const rows = captures.map((c) =>
-      `<li data-start="${c.startByte}" data-end="${c.endByte}" title="Select this range in the source">
+    const rows = captures
+      .map(
+        (c) =>
+          `<li data-start="${c.startByte}" data-end="${c.endByte}" title="Select this range in the source">
 <span class="pg-cap mono">@${E(c.name)}</span>
 <a class="pg-type" href="/grammars/${E(this.name)}/#r-${E(c.type)}"
    title="Read the production for ${E(c.type)}">${E(c.type)}</a>
 <span class="mono dim">${c.startRow + 1}:${c.startColumn + 1}</span>
-<span class="pg-span">${c.startByte}–${c.endByte}</span></li>`).join("");
+<span class="pg-span">${c.startByte}–${c.endByte}</span></li>`,
+      )
+      .join("");
 
-    this.queryOut.innerHTML = `${expansion}<p class="pg-ok">${captures.length}${
-      truncated ? "+" : ""} capture${captures.length === 1 ? "" : "s"}.</p>` +
+    this.queryOut.innerHTML =
+      `${expansion}<p class="pg-ok">${captures.length}${
+        truncated ? "+" : ""
+      } capture${captures.length === 1 ? "" : "s"}.</p>` +
       `<ul class="pg-caplist">${rows}</ul>` +
-      (truncated ? `<p class="dim">Stopped at ${MAX_CAPTURES.toLocaleString()}.</p>` : "");
+      (truncated
+        ? `<p class="dim">Stopped at ${MAX_CAPTURES.toLocaleString()}.</p>`
+        : "");
   }
 
   // Byte offsets are what a capture carries; a textarea counts UTF-16 code
@@ -393,30 +426,40 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`).join("");
     // Put the selection roughly in view: a textarea will not scroll to a
     // selection on its own.
     const before = this.source.value.slice(0, start).split("\n").length - 1;
-    const lineHeight = parseFloat(getComputedStyle(this.source).lineHeight) || 18;
+    const lineHeight =
+      parseFloat(getComputedStyle(this.source).lineHeight) || 18;
     this.source.scrollTop = Math.max(0, (before - 3) * lineHeight);
   }
 
   showTree(root, ms, bytes) {
     const parts = [];
-    const seen = walk(this.pack, root, (n) => {
-      const error = n.flags & 2 || n.flags & 8;
-      parts.push(
-        `<div class="pg-node${error ? " bad" : ""}" style="--d:${n.depth}">` +
-          (n.field ? `<span class="pg-field">${E(n.field)}:</span>` : "") +
-          `<a class="pg-type" href="/grammars/${E(this.name)}/#r-${E(n.type)}"` +
-          ` title="Read the production for ${E(n.type)}">${E(n.type)}</a>` +
-          `<span class="pg-span">${n.startByte}–${n.endByte}</span></div>`,
-      );
-    }, { namedOnly: true, budget: MAX_NODES });
+    const seen = walk(
+      this.pack,
+      root,
+      (n) => {
+        const error = n.flags & 2 || n.flags & 8;
+        parts.push(
+          `<div class="pg-node${error ? " bad" : ""}" style="--d:${n.depth}">` +
+            (n.field ? `<span class="pg-field">${E(n.field)}:</span>` : "") +
+            `<a class="pg-type" href="/grammars/${E(this.name)}/#r-${E(n.type)}"` +
+            ` title="Read the production for ${E(n.type)}">${E(n.type)}</a>` +
+            `<span class="pg-span">${n.startByte}–${n.endByte}</span></div>`,
+        );
+      },
+      { namedOnly: true, budget: MAX_NODES },
+    );
 
-    const capped = seen >= MAX_NODES
-      ? `<p class="dim">Stopped at ${MAX_NODES.toLocaleString()} nodes.</p>` : "";
+    const capped =
+      seen >= MAX_NODES
+        ? `<p class="dim">Stopped at ${MAX_NODES.toLocaleString()} nodes.</p>`
+        : "";
     this.treeBox.innerHTML =
       `<p class="dim pg-stat">${seen.toLocaleString()} named node${seen === 1 ? "" : "s"}
 from ${bytes.toLocaleString()} bytes in ${ms.toFixed(1)} ms</p>` +
-      parts.join("") + capped;
+      parts.join("") +
+      capped;
   }
 }
 
-for (const root of document.querySelectorAll(".playground")) new Playground(root);
+for (const root of document.querySelectorAll(".playground"))
+  new Playground(root);

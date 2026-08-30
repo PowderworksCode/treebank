@@ -1,6 +1,6 @@
 [package]
 name = "treebank"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 license = "MIT"
 homepage = "https://treebank.dev"
@@ -22,19 +22,54 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
 # The pack loader. Optional because the vocabulary half of this crate is
-# useful without a parser, and wasmtime is a large dependency to impose on
+# useful without a parser, and an engine is a large dependency to impose on
 # someone who only wants to expand a facet query.
-wasmtime = { version = "48", optional = true, default-features = false, features = ["runtime", "cranelift", "std", "anyhow"] }
-wasmtime-wasi = { version = "48", optional = true }
+#
+# wasmer rather than wasmtime, and the reason is cross-compilation: wasmtime's
+# own build.rs compiles C helpers whenever `runtime` and `std` are on -- which
+# is every configuration that can execute wasm -- so building it for musl needs
+# a musl C cross-compiler on PATH. Straitjacket ships static musl binaries for
+# x86_64 and aarch64 from a plain `cargo build`, with no cross toolchain and no
+# container, and could not host a pack at all while this crate required one.
+# wasmer's tree compiles no C, so both targets cross-build with rust-lld alone.
+wasmer = { version = "7", optional = true, default-features = false, features = ["sys", "cranelift"] }
+# Not used directly. wasmer pulls blake3, whose build.rs compiles NEON assembly
+# with cc on aarch64 -- which needs `aarch64-linux-musl-gcc` and so breaks the
+# aarch64 musl cross-build that swapping to wasmer exists to make possible.
+# `pure` selects the Rust implementation instead, and naming blake3 here is what
+# unifies that feature across the whole graph, including for consumers that do
+# not know blake3 is in their tree.
+blake3 = { version = "1", optional = true, default-features = false, features = ["pure"] }
 
 # Fetching grammars. Same versions the rest of the workspace already uses, so
 # a checkout does not carry two HTTP stacks.
-ureq = { version = "2", optional = true, features = ["native-certs", "proxy-from-env"] }
+# ureq 3 with its crypto provider left unset, so `rustls-graviola` can supply
+# one. The default `rustls` feature pulls ring, whose build.rs compiles C and
+# assembly through cc -- which wants `aarch64-linux-musl-gcc` and so cannot
+# cross-compile to the musl targets a host like straitjacket ships on. Graviola
+# is Rust and inline assembly with no C at all, so both musl targets build with
+# no cross toolchain, which is the same reason blake3 is pinned to `pure`
+# downstream. Proxies are read from the environment by default in ureq 3.
+ureq = { version = "3", optional = true, default-features = false, features = [
+    "rustls-no-provider",
+    "platform-verifier",
+    "gzip",
+] }
+# The crypto provider for the above; neither is usable alone, since ureq has no
+# provider and graviola has no client.
+rustls-graviola = { version = "0.4", optional = true }
 sha2 = { version = "0.10", optional = true }
 
 [features]
 default = ["pack", "fetch"]
-pack = ["dep:wasmtime", "dep:wasmtime-wasi", "dep:sha2"]
+pack = ["dep:wasmer", "dep:blake3", "dep:sha2"]
 # Downloading a grammar rather than being handed one. Implies `pack`, since
 # what is fetched is a pack.
-fetch = ["pack", "dep:ureq"]
+fetch = ["fetch-bytes", "pack"]
+# Acquisition without an engine: the manifest, the cache and the hash check,
+# handing back bytes. For a host with its own runtime, so that reusing this
+# does not mean linking a second engine beside the one it already has.
+fetch-bytes = ["dep:ureq", "dep:rustls-graviola", "dep:sha2"]
+
+[dev-dependencies]
+sha2 = "0.10"

@@ -1,4 +1,4 @@
-//! The rosetta gate (DESIGN.md §5.4): the same program, written in every
+//! The rosetta gate (notes/DESIGN.md §5.4): the same program, written in every
 //! owned language, must yield the same role counts.
 //!
 //! This is the executable form of the promise that the shared vocabulary
@@ -80,9 +80,8 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
             let (language, _) = crate::grammar::load(&grammar_dir)?;
             let roles = treebank::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
             let facets: BTreeMap<String, Vec<String>> = roles.facets.into_iter().collect();
-            let node_types = treebank::node_types::NodeTypes::load(
-                &grammar_dir.join("src/node-types.json"),
-            )?;
+            let node_types =
+                treebank::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
 
             let source = std::fs::read_to_string(&program)?;
             let tree = {
@@ -98,11 +97,8 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
             }
 
             for (query_src, want) in &expected.queries {
-                let expanded = treebank::expand::expand_with_types(
-                    query_src,
-                    &facets,
-                    Some(&node_types),
-                )?;
+                let expanded =
+                    treebank::expand::expand_with_types(query_src, &facets, Some(&node_types))?;
                 let query = tree_sitter::Query::new(&language, &expanded)
                     .with_context(|| format!("{name}/{lang}: bad query `{query_src}`"))?;
                 let mut cursor = tree_sitter::QueryCursor::new();

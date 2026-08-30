@@ -14,7 +14,14 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { Grammar, groupsOf, precedences, roleIndex, toEbnf, toRr } from "../src/grammar.mjs";
+import {
+  Grammar,
+  groupsOf,
+  precedences,
+  roleIndex,
+  toEbnf,
+  toRr,
+} from "../src/grammar.mjs";
 import { diagram } from "../src/railroad.mjs";
 
 const DATA = join(import.meta.dir, "..", "public", "grammars");

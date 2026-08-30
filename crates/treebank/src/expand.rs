@@ -38,9 +38,7 @@ fn top_level_field_constraints(body: &str) -> Vec<(String, Vec<String>)> {
             }
             b'a'..=b'z' | b'_' if depth == 0 => {
                 let start = i;
-                while i < bytes.len()
-                    && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_')
-                {
+                while i < bytes.len() && (bytes[i].is_ascii_alphanumeric() || bytes[i] == b'_') {
                     i += 1;
                 }
                 if bytes.get(i) == Some(&b':') {
@@ -161,13 +159,17 @@ pub fn expand_with_types(
                     let needed = top_level_field_constraints(&body);
                     let compatible = |m: &str| -> bool {
                         let Some(nt) = node_types else { return true };
-                        let Some(declared) = nt.fields.get(m) else { return true };
+                        let Some(declared) = nt.fields.get(m) else {
+                            return true;
+                        };
                         needed.iter().all(|(f, want)| {
-                            let Some(have) = declared.get(f) else { return false };
+                            let Some(have) = declared.get(f) else {
+                                return false;
+                            };
                             if want.is_empty() {
                                 return true;
                             }
-                            // Derivation-based, DESIGN.md §2 fact 4: a
+                            // Derivation-based, notes/DESIGN.md §2 fact 4: a
                             // supertype pattern only matches where the
                             // field DECLARES that supertype (the value
                             // derives through it). `namespace_definition`'s
@@ -177,13 +179,11 @@ pub fn expand_with_types(
                             // is declared toward what is asked, never the
                             // other way.
                             want.iter().any(|w| {
-                                have.contains(w)
-                                    || have.iter().any(|h| nt.closure(h).contains(w))
+                                have.contains(w) || have.iter().any(|h| nt.closure(h).contains(w))
                             })
                         })
                     };
-                    let kept: Vec<&String> =
-                        members.iter().filter(|m| compatible(m)).collect();
+                    let kept: Vec<&String> = members.iter().filter(|m| compatible(m)).collect();
                     if kept.is_empty() {
                         bail!(
                             "facet `{name}`: no member satisfies the field constraint(s) {needed:?}"

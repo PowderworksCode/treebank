@@ -1,8 +1,8 @@
 use std::path::Path;
 
-use anyhow::Result;
 use crate::rank::RankedCrate;
 use crate::{debian, Ecosystem};
+use anyhow::Result;
 use treebank_lang::LangName;
 
 pub struct Cxx;
@@ -183,7 +183,10 @@ int f(void);
             Path::new("a/b.h"),
             b"namespace ns {\nclass X {};\n}\n"
         ));
-        assert!(header_is_cxx(Path::new("ncurses/c++/cursesw.h"), b"int x;\n"));
+        assert!(header_is_cxx(
+            Path::new("ncurses/c++/cursesw.h"),
+            b"int x;\n"
+        ));
     }
 
     #[test]
@@ -199,18 +202,30 @@ int f(void);
         ));
     }
 
+    fn sloc(ansic: i64, cpp: i64) -> debian::Sloc {
+        debian::Sloc {
+            version: "1".into(),
+            langs: [("ansic".to_string(), ansic), ("cpp".to_string(), cpp)]
+                .into_iter()
+                .collect(),
+        }
+    }
+
     #[test]
     fn the_two_filters_partition_a_package() {
         // A package cannot satisfy both: one wants ansic >= cpp, the other
         // wants cpp > ansic.
-        for (ansic, cpp) in [(5000i64, 100i64), (100, 5000), (3000, 3000)] {
-            let s = debian::Sloc {
-                version: "1".into(),
-                langs: [("ansic".to_string(), ansic), ("cpp".to_string(), cpp)]
-                    .into_iter()
-                    .collect(),
-            };
-            assert!(!(is_c(&s) && is_cxx(&s)), "ansic={ansic} cpp={cpp}");
-        }
+        assert!(
+            !(is_c(&sloc(5000, 100)) && is_cxx(&sloc(5000, 100))),
+            "mostly C"
+        );
+        assert!(
+            !(is_c(&sloc(100, 5000)) && is_cxx(&sloc(100, 5000))),
+            "mostly C++"
+        );
+        assert!(
+            !(is_c(&sloc(3000, 3000)) && is_cxx(&sloc(3000, 3000))),
+            "an even split"
+        );
     }
 }

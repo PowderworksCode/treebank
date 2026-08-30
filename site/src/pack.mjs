@@ -24,7 +24,8 @@ function wasiStubs(instance) {
   const bytesWritten = (iovs, count, out) => {
     const view = new DataView(instance().exports.memory.buffer);
     let total = 0;
-    for (let i = 0; i < count; i++) total += view.getUint32(iovs + i * 8 + 4, true);
+    for (let i = 0; i < count; i++)
+      total += view.getUint32(iovs + i * 8 + 4, true);
     view.setUint32(out, total, true);
     return 0;
   };
@@ -38,7 +39,10 @@ function wasiStubs(instance) {
   };
 }
 
-export const NAMED = 1, IS_ERROR = 2, HAS_ERROR = 4, MISSING = 8;
+export const NAMED = 1,
+  IS_ERROR = 2,
+  HAS_ERROR = 4,
+  MISSING = 8;
 
 export class Pack {
   static async load(url, { signal } = {}) {
@@ -70,7 +74,9 @@ export class Pack {
 
   cstr(ptr) {
     if (!ptr) return null;
-    return this.decoder.decode(this.mem.subarray(ptr, ptr + this.e.tb_strlen(ptr)));
+    return this.decoder.decode(
+      this.mem.subarray(ptr, ptr + this.e.tb_strlen(ptr)),
+    );
   }
 
   json(ptr, len) {
@@ -166,7 +172,8 @@ export class Query {
     // just typed the query.
     const err = e.tb_alloc(8);
     const handle = e.tb_query_new(src, bytes.length, err, err + 4);
-    let offset = 0, kind = 0;
+    let offset = 0,
+      kind = 0;
     if (!handle) {
       const view = new DataView(e.memory.buffer);
       offset = view.getUint32(err, true);
@@ -208,7 +215,9 @@ export class Query {
         }
         const view = new DataView(e.memory.buffer);
         found.push({
-          name: this.pack.cstr(e.tb_query_capture_name(this.handle, view.getUint32(out + 4, true))),
+          name: this.pack.cstr(
+            e.tb_query_capture_name(this.handle, view.getUint32(out + 4, true)),
+          ),
           pattern: view.getUint32(out, true),
           type: this.pack.cstr(e.tb_node_type(slot)),
           startByte: e.tb_node_start_byte(slot),
@@ -254,7 +263,12 @@ export class Tree {
 // view and the error list -- cannot disagree about what a node is. Nodes are
 // handles that must be freed, and forgetting one leaks the pack's heap for as
 // long as the page is open.
-export function walk(pack, node, visit, { namedOnly = true, budget = Infinity } = {}) {
+export function walk(
+  pack,
+  node,
+  visit,
+  { namedOnly = true, budget = Infinity } = {},
+) {
   const e = pack.e;
   let seen = 0;
 
@@ -267,14 +281,18 @@ export function walk(pack, node, visit, { namedOnly = true, budget = Infinity } 
     endByte: e.tb_node_end_byte(n),
     startRow: e.tb_node_start_row(n),
     startColumn: e.tb_node_start_column(n),
-    childCount: namedOnly ? e.tb_node_named_child_count(n) : e.tb_node_child_count(n),
+    childCount: namedOnly
+      ? e.tb_node_named_child_count(n)
+      : e.tb_node_child_count(n),
   });
 
   const recurse = (n, field, depth) => {
     if (seen >= budget) return;
     seen++;
     visit(describe(n, field, depth));
-    const count = namedOnly ? e.tb_node_named_child_count(n) : e.tb_node_child_count(n);
+    const count = namedOnly
+      ? e.tb_node_named_child_count(n)
+      : e.tb_node_child_count(n);
     for (let i = 0; i < count && seen < budget; i++) {
       const kid = e.tb_node_new();
       if (namedOnly) e.tb_node_named_child(n, i, kid);
@@ -282,7 +300,9 @@ export function walk(pack, node, visit, { namedOnly = true, budget = Infinity } 
       // Field names are the edge labels a query uses, and they belong to the
       // PARENT's view of the child -- which is why they are read here rather
       // than from the child itself.
-      const name = namedOnly ? null : pack.cstr(e.tb_node_field_name_for_child(n, i));
+      const name = namedOnly
+        ? null
+        : pack.cstr(e.tb_node_field_name_for_child(n, i));
       recurse(kid, name, depth + 1);
       e.tb_node_free(kid);
     }

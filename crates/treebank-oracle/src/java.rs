@@ -26,7 +26,7 @@ impl Oracle for Java {
     /// than a default: a file javac rejects there is not valid modern Java.
     /// `enum`, `assert` or `_` used as an identifier is 1.4-era code, and
     /// booking it as corpus noise is the right answer under the
-    /// latest-version-wins policy (DESIGN.md §4.2).
+    /// latest-version-wins policy (notes/DESIGN.md §4.2).
     /// One JVM for the whole run, not one per question.
     ///
     /// Measured: 0.57s of fixed cost per launch against 1.2ms per file. The

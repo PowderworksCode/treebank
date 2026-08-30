@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "scripts": {
+    "typecheck": "tsc --noEmit",
+    "lint": "biome lint .",
+    "format": "biome format .",
     "grammars": "node tools/build-grammars.mjs",
     "status": "node tools/build-status.mjs",
     "packs": "node tools/build-packs-index.mjs",
@@ -16,6 +19,9 @@
     "@powderworks/docs": "^0.2.0"
   },
   "devDependencies": {
+    "@biomejs/biome": "^2.5.2",
+    "@types/bun": "^1.4.0",
+    "typescript": "^7.0.2",
     "wrangler": "^4.123.0"
   }
 }

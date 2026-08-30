@@ -1,5 +1,5 @@
 //! Generate programs FROM the grammar and ask the oracle whether they are
-//! in the language (DESIGN.md §5.9).
+//! in the language (notes/DESIGN.md §5.9).
 //!
 //! Every other check starts from source somebody wrote. The sweep reads the
 //! corpus; `mutate` perturbs it; `roundtrip` reprints it. All three are
@@ -1638,16 +1638,17 @@ starts_with = "only "
 why = "one"
 "#,
         );
-        for lang in [LangName::Javascript, LangName::Typescript] {
-            assert!(p
-                .declared_reason(lang, "shared x\n", &BTreeSet::new())
-                .is_some());
-        }
         assert!(p
-            .declared_reason(LangName::Javascript, "only x\n", &BTreeSet::new())
+            .declared_reason(LangName::Javascript, "shared x\n", &BTreeSet::new(),)
             .is_some());
         assert!(p
-            .declared_reason(LangName::Typescript, "only x\n", &BTreeSet::new())
+            .declared_reason(LangName::Typescript, "shared x\n", &BTreeSet::new(),)
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Javascript, "only x\n", &BTreeSet::new(),)
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Typescript, "only x\n", &BTreeSet::new(),)
             .is_none());
         assert!(
             !p.is_empty(LangName::Typescript),

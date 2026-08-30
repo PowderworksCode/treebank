@@ -23,13 +23,14 @@
 //! consults no manifest, so it is reproducible and works offline once warm.
 
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
+#[cfg(feature = "pack")]
 use crate::pack::Pack;
 
 /// Where packs are served from. `TREEBANK_PACKS_URL` overrides it, for a
@@ -79,32 +80,65 @@ fn packs_dir() -> PathBuf {
     cache_dir().join("packs")
 }
 
+/// A pack is a few megabytes; the cap is here so a wrong URL that answers with
+/// something enormous fails rather than fills a disk.
+const BODY_LIMIT: u64 = 64 * 1024 * 1024;
+
+/// One agent for the process, holding one TLS setup.
+///
+/// The crypto provider is installed rather than passed per request because
+/// rustls keeps it as process state. Installing it is allowed to fail: that
+/// means the program embedding this library already chose a provider, and
+/// theirs should win over ours.
+///
+/// Roots come from the platform, which is what the `native-certs` feature did
+/// before and is what keeps a proxy presenting its own certificate authority
+/// working.
+fn agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        let _ = rustls_graviola::default_provider().install_default();
+        ureq::Agent::config_builder()
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+}
+
 fn get(url: &str) -> Result<Vec<u8>> {
-    let response = ureq::get(url)
+    let mut response = agent()
+        .get(url)
         .call()
         .with_context(|| format!("fetching {url}"))?;
-    let mut body = Vec::new();
     response
-        .into_reader()
-        // A pack is a few megabytes; the cap is here so a wrong URL that
-        // answers with something enormous fails rather than fills a disk.
-        .take(64 * 1024 * 1024)
-        .read_to_end(&mut body)
-        .with_context(|| format!("reading {url}"))?;
-    Ok(body)
+        .body_mut()
+        .with_config()
+        .limit(BODY_LIMIT)
+        .read_to_vec()
+        .with_context(|| format!("reading {url}"))
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Write through a temporary file in the same directory, then rename. Two
 /// processes fetching the same grammar at once is the ordinary case for a
 /// build, and a half-written pack in the cache would be read as a whole one.
 fn cache_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
-    let dir = path.parent().ok_or_else(|| anyhow!("no parent for {}", path.display()))?;
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow!("no parent for {}", path.display()))?;
     fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     let tmp = dir.join(format!(".{}.{}", std::process::id(), rand_suffix()));
     fs::write(&tmp, bytes).with_context(|| format!("writing {}", tmp.display()))?;
@@ -114,7 +148,10 @@ fn cache_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
 
 fn rand_suffix() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
     format!("{nanos:08x}")
 }
 
@@ -155,13 +192,10 @@ fn manifest() -> Result<Manifest> {
 ///
 /// Resolves the current version through the manifest, so it follows the
 /// grammar as it improves. Use [`fetch_pinned`] where that must not happen.
+#[cfg(feature = "pack")]
 pub fn fetch(grammar: &str) -> Result<Pack> {
-    let manifest = manifest()?;
-    let entry = manifest.packs.get(grammar).ok_or_else(|| {
-        let known: Vec<_> = manifest.packs.keys().cloned().collect();
-        anyhow!("no grammar named {grammar}; the manifest has {}", known.join(", "))
-    })?;
-    load_verified(&entry.key, &entry.sha256)
+    let (key, sha256) = key_for(grammar)?;
+    load_verified(&key, &sha256)
 }
 
 /// Load an exact pack by the hash in its filename, e.g. `d82f4fd5c5a9`.
@@ -169,11 +203,9 @@ pub fn fetch(grammar: &str) -> Result<Pack> {
 /// No manifest is consulted, so this is reproducible and needs no network
 /// once the bytes are cached. This is what a build that must not vary should
 /// call, and what a bug report's permalink names.
+#[cfg(feature = "pack")]
 pub fn fetch_pinned(grammar: &str, hash: &str) -> Result<Pack> {
-    if !hash.chars().all(|c| c.is_ascii_hexdigit()) || hash.len() < 8 {
-        bail!("{hash} is not a pack hash");
-    }
-    load_verified(&format!("treebank-{grammar}-{}.wasm", &hash[..12.min(hash.len())]), hash)
+    load_verified(&pinned_key(grammar, hash)?, hash)
 }
 
 /// The cache path a key would occupy, whether or not it is there.
@@ -181,14 +213,14 @@ pub fn cached_path(key: &str) -> PathBuf {
     packs_dir().join(key)
 }
 
-fn load_verified(key: &str, expected: &str) -> Result<Pack> {
+fn bytes_verified(key: &str, expected: &str) -> Result<Vec<u8>> {
     let path = cached_path(key);
 
     if let Ok(bytes) = fs::read(&path) {
         // A cache entry is named by its hash, so a mismatch means the file was
         // damaged or replaced. Re-fetching is the repair.
         if starts_with_hash(&sha256_hex(&bytes), expected) {
-            return Pack::from_bytes(&bytes).with_context(|| format!("loading cached {key}"));
+            return Ok(bytes);
         }
         let _ = fs::remove_file(&path);
     }
@@ -203,6 +235,60 @@ fn load_verified(key: &str, expected: &str) -> Result<Pack> {
         );
     }
     cache_atomically(&path, &bytes)?;
+    Ok(bytes)
+}
+
+fn key_for(grammar: &str) -> Result<(String, String)> {
+    let manifest = manifest()?;
+    let entry = manifest.packs.get(grammar).ok_or_else(|| {
+        let known: Vec<_> = manifest.packs.keys().cloned().collect();
+        anyhow!(
+            "no grammar named {grammar}; the manifest has {}",
+            known.join(", ")
+        )
+    })?;
+    Ok((entry.key.clone(), entry.sha256.clone()))
+}
+
+fn pinned_key(grammar: &str, hash: &str) -> Result<String> {
+    if !hash.chars().all(|c| c.is_ascii_hexdigit()) || hash.len() < 8 {
+        bail!("{hash} is not a pack hash");
+    }
+    Ok(format!(
+        "treebank-{grammar}-{}.wasm",
+        &hash[..12.min(hash.len())]
+    ))
+}
+
+/// The verified bytes of a pack, for a host that has its own runtime.
+///
+/// Everything [`fetch`] does except the last step. A consumer that drives
+/// packs through its own engine -- straitjacket materialises trees into an
+/// arena its rule library can walk, which this crate's lazy handles cannot
+/// satisfy -- would otherwise reimplement the manifest, the cache, the
+/// atomic install and the hash check, which is how two consumers come to
+/// disagree about which bytes are the python grammar.
+///
+/// Available without the `pack` feature, so taking it costs no engine.
+#[cfg(feature = "fetch-bytes")]
+pub fn fetch_bytes(grammar: &str) -> Result<Vec<u8>> {
+    let (key, sha256) = key_for(grammar)?;
+    bytes_verified(&key, &sha256)
+}
+
+/// The verified bytes of an exact pack, by the hash in its filename.
+///
+/// [`fetch_pinned`] without the engine, and the one a build that must not
+/// vary should call: no manifest is consulted, so it is reproducible and
+/// needs no network once the bytes are cached.
+#[cfg(feature = "fetch-bytes")]
+pub fn fetch_pinned_bytes(grammar: &str, hash: &str) -> Result<Vec<u8>> {
+    bytes_verified(&pinned_key(grammar, hash)?, hash)
+}
+
+#[cfg(feature = "pack")]
+fn load_verified(key: &str, expected: &str) -> Result<Pack> {
+    let bytes = bytes_verified(key, expected)?;
     Pack::from_bytes(&bytes).with_context(|| format!("loading {key}"))
 }
 
@@ -213,6 +299,7 @@ fn starts_with_hash(actual: &str, expected: &str) -> bool {
     !expected.is_empty() && actual.starts_with(&expected)
 }
 
+#[cfg(feature = "pack")]
 impl Pack {
     /// Load a grammar, downloading and caching it if necessary. See
     /// [`fetch`].

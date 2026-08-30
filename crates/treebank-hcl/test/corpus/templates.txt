@@ -1,0 +1,272 @@
+================================================================================
+a quoted template: literal runs, interpolations, escapes and the escaped introductions
+================================================================================
+
+plain      = "no interpolation here"
+mixed      = "arn:aws:s3:::${var.bucket}/*"
+adjacent   = "${var.a}${var.b}"
+escapes    = "a\tb\"c\\dé"
+not_interp = "$${literal} and %%{literal}"
+stripped   = "${~ var.a ~}"
+empty      = ""
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal)
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal)
+      (template_interpolation
+        expression: (get_attr
+          operand: (identifier)
+          name: (identifier)))
+      (template_literal)
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_interpolation
+        expression: (get_attr
+          operand: (identifier)
+          name: (identifier)))
+      (template_interpolation
+        expression: (get_attr
+          operand: (identifier)
+          name: (identifier)))
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal
+        (escape_sequence)
+        (escape_sequence)
+        (escape_sequence))
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal)
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_interpolation
+        expression: (get_attr
+          operand: (identifier)
+          name: (identifier)))
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (quote))))
+
+================================================================================
+a heredoc, in both markers, and its terminator rules
+================================================================================
+
+policy = <<EOT
+{
+  "Version": "2012-10-17"
+}
+EOT
+
+indented = <<-JSON
+  {
+    "a": ${var.a}
+  }
+  JSON
+
+empty = <<EOT
+EOT
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (heredoc_template
+      (heredoc_start)
+      (template_literal)
+      (heredoc_end)))
+  (attribute
+    name: (identifier)
+    value: (heredoc_template
+      (heredoc_start)
+      (template_literal)
+      (template_interpolation
+        expression: (get_attr
+          operand: (identifier)
+          name: (identifier)))
+      (template_literal)
+      (heredoc_end)))
+  (attribute
+    name: (identifier)
+    value: (heredoc_template
+      (heredoc_start)
+      (heredoc_end))))
+
+================================================================================
+template directives, nested, with an else branch and both strip markers
+================================================================================
+
+greeting = "%{ if var.name != "" }Hello ${var.name}%{ else }Hello there%{ endif }"
+
+list = "%{ for s in var.subnets }${s.name},%{ endfor }"
+
+stripped = "%{~ if var.on ~}on%{~ endif ~}"
+
+pairs = "%{ for k, v in var.tags }${k}=${v};%{ endfor }"
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_if
+        condition: (binary_expression
+          left: (get_attr
+            operand: (identifier)
+            name: (identifier))
+          right: (quoted_template
+            (quote)
+            (quote)))
+        consequence: (template_body
+          (template_literal)
+          (template_interpolation
+            expression: (get_attr
+              operand: (identifier)
+              name: (identifier))))
+        (else_clause
+          alternative: (template_body
+            (template_literal))))
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_for
+        binding: (identifier)
+        collection: (get_attr
+          operand: (identifier)
+          name: (identifier))
+        body: (template_body
+          (template_interpolation
+            expression: (get_attr
+              operand: (identifier)
+              name: (identifier)))
+          (template_literal)))
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_if
+        condition: (get_attr
+          operand: (identifier)
+          name: (identifier))
+        consequence: (template_body
+          (template_literal)))
+      (quote)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_for
+        binding: (identifier)
+        binding: (identifier)
+        collection: (get_attr
+          operand: (identifier)
+          name: (identifier))
+        body: (template_body
+          (template_interpolation
+            expression: (identifier))
+          (template_literal)
+          (template_interpolation
+            expression: (identifier))
+          (template_literal)))
+      (quote))))
+
+================================================================================
+a heredoc carries the same template sub-language, and either may nest in the other
+================================================================================
+
+script = <<EOT
+%{ for u in var.users ~}
+useradd ${u.name}
+%{ endfor ~}
+EOT
+
+nested = "${ <<EOT
+inner
+EOT
+}"
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (heredoc_template
+      (heredoc_start)
+      (template_for
+        binding: (identifier)
+        collection: (get_attr
+          operand: (identifier)
+          name: (identifier))
+        body: (template_body
+          (template_literal)
+          (template_interpolation
+            expression: (get_attr
+              operand: (identifier)
+              name: (identifier)))
+          (template_literal)))
+      (template_literal)
+      (heredoc_end)))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_interpolation
+        expression: (heredoc_template
+          (heredoc_start)
+          (template_literal)
+          (heredoc_end)))
+      (quote))))
+
+================================================================================
+block labels are string literals, not templates: no interpolation reaches them
+================================================================================
+
+resource "aws_instance" "web-01" {
+  ami = "ami-123"
+}
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (block
+    type: (identifier)
+    label: (string_lit)
+    label: (string_lit)
+    body: (body
+      (attribute
+        name: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote))))))

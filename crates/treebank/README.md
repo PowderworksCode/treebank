@@ -145,23 +145,29 @@ Both are on by default.
 
 | | |
 | --- | --- |
-| `pack` | load and parse with a grammar; brings a WASI runtime (`wasmtime`) |
+| `pack` | load and parse with a grammar; brings a WASI runtime (`wasmer`) |
 | `fetch` | download grammars; implies `pack` |
 
-`pack` brings wasmtime, which needs Rust 1.95. That floor is wasmtime's, not
+`pack` brings wasmer, which needs Rust 1.95. That floor is the runtime's, not
 this crate's, and turning the runtime off removes it.
+
+wasmer rather than wasmtime because of cross-compilation: wasmtime's build
+script compiles C helpers in every configuration that can execute wasm, so
+cross-compiling it to musl needs a musl C cross-compiler on `PATH`. wasmer's
+tree compiles no C, so a consumer shipping static musl binaries can host a pack
+from a plain `cargo build`.
 
 For a build that must not reach the network, keep `pack` and hand the bytes in
 yourself with `Pack::from_path` or `Pack::from_bytes`:
 
 ```toml
-treebank = { version = "0.2", default-features = false, features = ["pack"] }
+treebank = { version = "0.3", default-features = false, features = ["pack"] }
 ```
 
 For the vocabulary and query expansion alone, with no runtime:
 
 ```toml
-treebank = { version = "0.2", default-features = false }
+treebank = { version = "0.3", default-features = false }
 ```
 
 ## Also in here

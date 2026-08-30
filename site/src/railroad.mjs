@@ -27,20 +27,25 @@ export const VS = 8; // vertical space between choice branches
 export const CAP_RATIO = 10 / 12;
 
 const esc = (s) =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 
 // Neumaier summation. Widths are floats and a sequence can hold dozens of
 // them; adding left to right lets error accumulate into a coordinate. This
 // keeps a diagram a function of its grammar rather than of its addition
 // order, which is the same property the Python original reached for.
 function sum(values) {
-  let total = 0, compensation = 0;
+  let total = 0,
+    compensation = 0;
   for (const value of values) {
     const next = total + value;
-    compensation += Math.abs(total) >= Math.abs(value)
-      ? (total - next) + value
-      : (value - next) + total;
+    compensation +=
+      Math.abs(total) >= Math.abs(value)
+        ? total - next + value
+        : value - next + total;
     total = next;
   }
   return total + compensation;
@@ -111,7 +116,8 @@ export class Seq extends Node {
     super();
     const kept = items.filter((i) => !(i instanceof Skip));
     this.items = kept.length ? kept : [new Skip()];
-    this.width = sum(this.items.map((i) => i.width)) + 10 * (this.items.length - 1);
+    this.width =
+      sum(this.items.map((i) => i.width)) + 10 * (this.items.length - 1);
     this.up = Math.max(...this.items.map((i) => i.up));
     this.down = Math.max(...this.items.map((i) => i.down));
   }
@@ -225,16 +231,19 @@ export class Repeat extends Node {
     out.push(`<path d="M${x} ${y}h${2 * AR}"/>`);
     this.item.draw(x + 2 * AR, y, inner, out);
     out.push(`<path d="M${x + 2 * AR + inner} ${y}h${2 * AR}"/>`);
-    const dy = this.dy, span = this.dy - 2 * AR;
+    const dy = this.dy,
+      span = this.dy - 2 * AR;
     out.push(
       `<path d="M${x + this.width} ${y}` +
-        `a${AR} ${AR} 0 0 1 ${-AR} ${AR}` + `v${span}` +
+        `a${AR} ${AR} 0 0 1 ${-AR} ${AR}` +
+        `v${span}` +
         `a${AR} ${AR} 0 0 1 ${-AR} ${AR}"/>`,
     );
     this.sep.draw(x + 2 * AR, y + dy, inner, out);
     out.push(
       `<path d="M${x + 2 * AR} ${y + dy}` +
-        `a${AR} ${AR} 0 0 1 ${-AR} ${-AR}` + `v${-span}` +
+        `a${AR} ${AR} 0 0 1 ${-AR} ${-AR}` +
+        `v${-span}` +
         `a${AR} ${AR} 0 0 1 ${-AR} ${-AR}"/>`,
     );
   }

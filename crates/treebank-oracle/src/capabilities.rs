@@ -66,11 +66,14 @@ static BASH_SPANS: spans::BashSpans = spans::BashSpans;
 static RB_SPANS: spans::RubySpans = spans::RubySpans;
 static C_SPANS: spans::CSpans = spans::CSpans;
 static CPP_SPANS: spans::CppSpans = spans::CppSpans;
+static YAML_SPANS: spans::YamlSpans = spans::YamlSpans;
+static HCL_SPANS: spans::HclSpans = spans::HclSpans;
 
 static RUSTFMT: reformat::RustFmt = reformat::RustFmt;
 static BLACK: reformat::BlackFmt = reformat::BlackFmt;
 static TS_FORMAT: reformat::TypeScriptFmt = reformat::TypeScriptFmt;
 static ZIG_FORMAT: reformat::ZigFmt = reformat::ZigFmt;
+static TOFU_FORMAT: reformat::TofuFmt = reformat::TofuFmt;
 
 static PY_PRINT: unparse::PythonUnparser = unparse::PythonUnparser;
 static TS_PRINT: unparse::TypeScriptUnparser = unparse::TypeScriptUnparser;
@@ -122,6 +125,7 @@ mod tests {
             LangName::Typescript,
             LangName::Javascript,
             LangName::Zig,
+            LangName::Hcl,
         ] {
             assert!(get(lang).reformat.is_some(), "missing formatter for {lang}");
         }

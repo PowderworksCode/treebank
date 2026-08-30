@@ -33,7 +33,7 @@ strongest claim C admits, and the sweep numbers must be read as
 
 ## Why gcc cannot make that claim, measured
 
-`gcc -fsyntax-only` is the tool `DESIGN.md` names, and it is the wrong one.
+`gcc -fsyntax-only` is the tool `notes/DESIGN.md` names, and it is the wrong one.
 Two measured failures, gcc 13.3.0:
 
 | probe | gcc says | verdict if believed |

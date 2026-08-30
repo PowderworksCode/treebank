@@ -28,8 +28,12 @@ export const PREC_KINDS = {
 // railroad.mjs keeps its own, deliberately WITHOUT the apostrophe, because
 // that is what the engine it was ported from does. The two differ on purpose.
 export const escapeHtml = (s) =>
-  String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;").replace(/'/g, "&#x27;");
+  String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
 
 export class Grammar {
   // `bundle` is what tools/build-grammars.mjs writes: the three source files
@@ -42,7 +46,9 @@ export class Grammar {
     this.name = this.g.name;
     this.supertypes = new Set(this.g.supertypes ?? []);
     this.externals = new Set(
-      (this.g.externals ?? []).filter((e) => e.type === "SYMBOL").map((e) => e.name),
+      (this.g.externals ?? [])
+        .filter((e) => e.type === "SYMBOL")
+        .map((e) => e.name),
     );
     this.word = this.g.word;
     // public node types, so we can say which rules a consumer ever sees
@@ -74,8 +80,13 @@ export function commasep(node) {
 function stable(node) {
   return JSON.stringify(node, (_key, value) =>
     value && typeof value === "object" && !Array.isArray(value)
-      ? Object.fromEntries(Object.keys(value).sort().map((k) => [k, value[k]]))
-      : value);
+      ? Object.fromEntries(
+          Object.keys(value)
+            .sort()
+            .map((k) => [k, value[k]]),
+        )
+      : value,
+  );
 }
 
 export function toRr(node, g) {
@@ -105,7 +116,8 @@ export function toRr(node, g) {
       const blanks = members.filter((m) => m.type === "BLANK").length;
       const rest = members.filter((m) => m.type !== "BLANK");
       if (blanks && rest.length === 1) return rr.Optional(toRr(rest[0], g));
-      if (blanks) return rr.Optional(new rr.Choice(rest.map((m) => toRr(m, g))));
+      if (blanks)
+        return rr.Optional(new rr.Choice(rest.map((m) => toRr(m, g))));
       return new rr.Choice(members.map((m) => toRr(m, g)));
     }
     case "REPEAT":
@@ -115,7 +127,11 @@ export function toRr(node, g) {
     case "FIELD":
       return new rr.Labelled(toRr(node.content, g), node.name + ":", "field");
     case "ALIAS":
-      return new rr.Labelled(toRr(node.content, g), "as " + node.value, "alias");
+      return new rr.Labelled(
+        toRr(node.content, g),
+        "as " + node.value,
+        "alias",
+      );
     case "TOKEN":
     case "IMMEDIATE_TOKEN":
       return new rr.Labelled(
@@ -139,7 +155,9 @@ export function toRr(node, g) {
 
 // Precedence for parenthesising: choice binds loosest, then seq, then the
 // postfix repetition operators.
-export const P_CHOICE = 0, P_SEQ = 1, P_POSTFIX = 2;
+export const P_CHOICE = 0,
+  P_SEQ = 1,
+  P_POSTFIX = 2;
 
 export function toEbnf(node, g, ctx = P_CHOICE) {
   const paren = (s, mine) => (mine < ctx ? `(${s})` : s);
@@ -157,7 +175,10 @@ export function toEbnf(node, g, ctx = P_CHOICE) {
     case "BLANK":
       return '<span class="eps">&#949;</span>';
     case "SEQ":
-      return paren(node.members.map((m) => toEbnf(m, g, P_SEQ)).join(" "), P_SEQ);
+      return paren(
+        node.members.map((m) => toEbnf(m, g, P_SEQ)).join(" "),
+        P_SEQ,
+      );
     case "CHOICE": {
       const members = node.members;
       const rest = members.filter((m) => m.type !== "BLANK");
@@ -165,18 +186,25 @@ export function toEbnf(node, g, ctx = P_CHOICE) {
         if (rest.length === 1) return toEbnf(rest[0], g, P_POSTFIX) + "?";
         return `(${rest.map((m) => toEbnf(m, g, P_CHOICE)).join(" | ")})?`;
       }
-      return paren(members.map((m) => toEbnf(m, g, P_CHOICE)).join(" | "), P_CHOICE);
+      return paren(
+        members.map((m) => toEbnf(m, g, P_CHOICE)).join(" | "),
+        P_CHOICE,
+      );
     }
     case "REPEAT":
       return toEbnf(node.content, g, P_POSTFIX) + "*";
     case "REPEAT1":
       return toEbnf(node.content, g, P_POSTFIX) + "+";
     case "FIELD":
-      return `<span class="fld">${escapeHtml(node.name)}:</span>` +
-        toEbnf(node.content, g, P_POSTFIX);
+      return (
+        `<span class="fld">${escapeHtml(node.name)}:</span>` +
+        toEbnf(node.content, g, P_POSTFIX)
+      );
     case "ALIAS":
-      return toEbnf(node.content, g, P_POSTFIX) +
-        `<span class="al"> as ${escapeHtml(node.value)}</span>`;
+      return (
+        toEbnf(node.content, g, P_POSTFIX) +
+        `<span class="al"> as ${escapeHtml(node.value)}</span>`
+      );
     case "TOKEN":
     case "IMMEDIATE_TOKEN":
     case "RESERVED":
@@ -239,7 +267,9 @@ export function groupsOf(g, table) {
     const members = table[role].filter((m) => m in g.rules && !seen.has(m));
     if (members.length) {
       groups.push([role, members]);
-      members.forEach((m) => seen.add(m));
+      members.forEach((m) => {
+        seen.add(m);
+      });
     }
   }
   const names = Object.keys(g.rules);

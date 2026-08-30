@@ -59,7 +59,7 @@ One WebKit file, `Tools/TestWebKitAPI/Tests/WebCore/SerializedScriptValue.cpp`, 
 note = """
 The superseded first pass used 791 installed libstdc++ 13 headers: 224 passed, 449 were adjudicated as grammar gaps, 2 were configuration-inherent and 116 were noise, including 111 indeterminate, in 143 clusters. That population was intentionally pathological — template metaprogramming, SFINAE, concepts and `_GLIBCXX_*` macros — and was useful while the Debian acquisition path was unfinished, but its 28.32% pass rate and per-construct counts are not measurements of the locked corpus.
 
-It also established which C macro rules C++ could inherit without making the parse table diverge. The rejected leading modifier, declarator-initial and trailing-member forms collide with out-of-line definitions, lambda captures, multiplication and function definitions; DESIGN.md §8.1 retains that design evidence.
+It also established which C macro rules C++ could inherit without making the parse table diverge. The rejected leading modifier, declarator-initial and trailing-member forms collide with out-of-line definitions, lambda captures, multiplication and function definitions; notes/DESIGN.md §8.1 retains that design evidence.
 """
 
 [[oracles]]
@@ -75,7 +75,7 @@ primary and only, three-valued (valid / invalid / indeterminate), and the argume
 what = '''
 **Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern "C" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it.
 
-`T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern "C" { … }` all parse. DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.'''
+`T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern "C" { … }` all parse. notes/DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.'''
 
 [[deviations]]
 what = '''

@@ -5,6 +5,7 @@ mod incremental;
 mod kinds;
 mod lint;
 mod mutate;
+mod queries;
 mod recovery;
 mod reformat;
 mod rosetta;
@@ -316,7 +317,7 @@ enum Cmd {
         #[arg(long)]
         no_write_ledger: bool,
     },
-    /// Check a grammar for the structural smells FIELD_GUIDE.md names:
+    /// Check a grammar for the structural smells notes/field_guide.md names:
     /// declared-conflict growth, early commits between parallel tiers,
     /// same-text token splits, unreserved keywords, scanner/externals
     /// drift, and parse-table growth — judged against the grammar's
@@ -326,7 +327,7 @@ enum Cmd {
         /// src/scanner.c and lint_policy.toml
         grammar: PathBuf,
     },
-    /// Check a grammar's vocabulary conformance (DESIGN.md §3.3): declared
+    /// Check a grammar's vocabulary conformance (notes/DESIGN.md §3.3): declared
     /// supertypes from the closed table tier, every named node covered or
     /// deliberately uncategorised, required containments, and a valid
     /// roles.json facet manifest
@@ -334,8 +335,24 @@ enum Cmd {
         /// Grammar crate root: reads src/node-types.json and roles.json
         grammar: PathBuf,
     },
+    /// Generate each grammar's query files from queries/*.scm, expanding
+    /// facets into that grammar's own node types
+    Queries {
+        /// Where the vocabulary-level sources live [default: queries]
+        #[arg(long, default_value = "queries")]
+        source: PathBuf,
+        /// Where the grammar crates live [default: crates]
+        #[arg(long, default_value = "crates")]
+        crates: PathBuf,
+        /// Fail if a generated file is missing or out of date, writing nothing
+        #[arg(long)]
+        check: bool,
+        /// Report how much of each grammar's own corpus one file captures
+        #[arg(long)]
+        coverage: bool,
+    },
     /// Run the rosetta gate: the same program in every owned language must
-    /// yield the same role counts (DESIGN.md §5.4)
+    /// yield the same role counts (notes/DESIGN.md §5.4)
     Rosetta {
         /// Directory of rosetta cases [default: test/rosetta]
         #[arg(long, default_value = "test/rosetta")]
@@ -445,9 +462,8 @@ fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> O
     let text = std::fs::read_to_string(grammar_dir.join("ledger.toml")).ok()?;
     let v: toml::Value = toml::from_str(&text).ok()?;
     let stated = v.get("vocabulary")?.as_str()?;
-    (stated != expected).then(|| {
-        format!("ledger.toml states vocabulary {stated} but treebank carries {expected}")
-    })
+    (stated != expected)
+        .then(|| format!("ledger.toml states vocabulary {stated} but treebank carries {expected}"))
 }
 
 fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
@@ -719,6 +735,33 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
+        Cmd::Queries {
+            source,
+            crates,
+            check,
+            coverage,
+        } => {
+            if coverage {
+                // Every source file, so a new one is measured the day it
+                // lands rather than the day someone remembers this list.
+                let mut names: Vec<String> = std::fs::read_dir(&source)
+                    .with_context(|| format!("reading {}", source.display()))?
+                    .filter_map(|e| e.ok())
+                    .map(|e| e.file_name().to_string_lossy().to_string())
+                    .filter(|n| n.ends_with(".scm"))
+                    .collect();
+                names.sort();
+                for (i, name) in names.iter().enumerate() {
+                    if i > 0 {
+                        println!();
+                    }
+                    queries::coverage(&crates, name)?;
+                }
+                Ok(())
+            } else {
+                queries::run(&source, &crates, check)
+            }
+        }
         Cmd::Rosetta { dir, crates } => rosetta::run(&dir, &crates),
         Cmd::Verify {
             grammar,

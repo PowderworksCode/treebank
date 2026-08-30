@@ -80,7 +80,7 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         }
     }
 
-    // 4b. The FIELD_GUIDE.md smell detector, enforced where the grammar
+    // 4b. The notes/field_guide.md smell detector, enforced where the grammar
     //     has written its lint_policy.toml ratchets, advisory otherwise.
     match crate::lint::run(grammar_dir) {
         Ok(()) => println!("  lint          ok"),
@@ -257,9 +257,11 @@ mod tests {
             .unwrap()
             .filter_map(|entry| {
                 let entry = entry.ok()?;
-                entry.file_type().ok()?.is_dir().then(|| {
-                    entry.file_name().to_string_lossy().into_owned()
-                })
+                entry
+                    .file_type()
+                    .ok()?
+                    .is_dir()
+                    .then(|| entry.file_name().to_string_lossy().into_owned())
             })
             .collect();
         found.sort();
@@ -270,6 +272,9 @@ mod tests {
             .collect();
         registered.sort();
 
-        assert_eq!(found, registered, "sweep-smoke fixtures must match LangName::ALL");
+        assert_eq!(
+            found, registered,
+            "sweep-smoke fixtures must match LangName::ALL"
+        );
     }
 }

@@ -1,23 +1,21 @@
 {
  "schema_version": 1,
  "summary": {
-  "languages": 10,
-  "grammars": 9,
-  "corpus_locks": 10,
-  "corpus_canaries": 9,
-  "current_corpus_evidence": 10,
+  "languages": 12,
+  "grammars": 11,
+  "corpus_locks": 12,
+  "corpus_canaries": 11,
+  "current_corpus_evidence": 12,
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
-  "lint_ratchets": 9,
-  "shape_fixture_grammars": 7,
-  "wasm_packs": 9,
-  "query_files": 0,
+  "lint_ratchets": 11,
+  "shape_fixture_grammars": 10,
+  "wasm_packs": 11,
+  "query_files": 22,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
-  "no tree-sitter query files are configured",
-  "no grammar has a binding directory beyond Rust",
-  "span oracle configured but no checked-in shape fixtures: bash"
+  "no grammar has a binding directory beyond Rust"
  ],
  "errors": [],
  "grammars": {
@@ -42,7 +40,7 @@
    "tests": {
     "corpus_cases": 6,
     "negative_files": 5,
-    "shape_files": 0
+    "shape_files": 4
    },
    "known_deviations": {
     "shape": true,
@@ -55,7 +53,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -114,7 +112,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -207,7 +205,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -232,11 +230,100 @@
    "known_widenings": [],
    "deviations": [
     {
-     "summary": "**Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern \"C\" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it. `T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern \"C\" { … }` all parse. DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.",
+     "summary": "**Six C++ constructs are deliberately absent, and each was cut to make the parse table converge rather than because it is hard to write.** They are, with what each was costing: `f<int>(x)` — an explicit template argument list in EXPRESSION position, the one form that puts `a < b` and `a<b>` in competition at every comparison in the language; `T x(1)` — the parenthesised initialiser, whose parameter-list-or-argument-list ambiguity is the most vexing parse; `if (auto v = f(); v > 0)` — a declaration in a condition, and C++17's init-statement, which put a declaration reading and an expression reading behind every `if (`; `(args + ...)` — the fold expression, a third reading of an open paren; `1_km` — the user-defined literal, a second reading of every literal; and `extern \"C\" int f(void);` — the brace-less linkage specification, which has no terminator of its own and so made every top-level item ambiguous with the one before it. `T x{1}`, `T x = 1`, `std::vector<int> v;`, `A<B>::c`, `if constexpr (…)` and `extern \"C\" { … }` all parse. notes/DESIGN.md §8.1 records the whole sequence, including what did NOT help, so the next attempt starts after it.",
      "files": null
     },
     {
      "summary": "**A macro in a namespace head or body parses, and the compiler rejects it.** `namespace std _GLIBCXX_VISIBILITY(default) { … }` opens very nearly every libstdc++ header and `_GLIBCXX_BEGIN_NAMESPACE_VERSION` follows it; unexpanded, neither is anything. C admits the same shape at FILE SCOPE and C++ cannot afford to — a bare name where a declaration goes hands every `f(x)` a second reading, and that was measured: it was the last four declared conflicts before the table stopped converging. Here it is reachable from exactly two positions, both already committed by the `namespace` keyword before the macro appears. Measured before it was taken: the two positions are 200 and 73 files of 791.",
+     "files": null
+    }
+   ]
+  },
+  "hcl": {
+   "versions": "HCL 2, the native syntax, as specified in hclsyntax/spec.md and implemented by github.com/hashicorp/hcl/v2 -- `.hcl`, `.tf` and `.tfvars` in one grammar. THE LANGUAGE IS HCL AND TERRAFORM IS A DIALECT OF IT, and that decision is the one that shapes this crate. HCL2 is a general configuration syntax with a specification of its own, used by Terraform, OpenTofu, Packer, Nomad, Consul, Vault, Waypoint and anything else that embeds the library. What Terraform adds on top of it is a block SCHEMA (`resource` takes two labels, `variable` takes one), a function table (`jsonencode`, `cidrsubnet`), and a variable namespace (`var`, `local`, `each`) -- and every one of those is semantics. It adds no syntax at all: `resource \"aws_instance\" \"web\" { … }` is a block with two labels, `\"${var.x}\"` is an HCL2 template, and a `for` expression, a splat, a heredoc and a conditional are all in the spec above. There is no `.tf` production in grammar.js because there is no `.tf` syntax. So the crate is `treebank-hcl` and the registry gets ONE row, with `.tf` and `.tfvars` as extensions of it rather than a second `terraform` language pointing at this grammar. The registry's `grammar` column exists for exactly that second shape -- it is how `javascript` registers against the typescript crate -- and the discriminator for using it is this repository's own: a dialect earns a `LangName` when it brings its own CORPUS and its own ORACLE. JavaScript brings both, a different npm population and its own checker program. Terraform brings neither, and the reason is worth stating precisely: it does not bring a corpus TO HCL, it IS the corpus for HCL, and its oracle is the HCL parser, because `tofu fmt` gates on `hclsyntax.ParseConfig` before it will format anything. A `terraform` row would duplicate the fixtures, the negative corpus, the lint and shape policies and the capability triple, and would measure exactly nothing the `hcl` row does not. That is `.zon`'s situation rather than `.js`'s, and it gets `.zon`'s answer. What the naming leaves open is the useful direction. If Packer or Nomad HCL ever earns a corpus of its own -- a different population, ranked differently, biased differently -- that is a registration which points AT this grammar, which is the way round the dependency should run. A `treebank-terraform` would have made it point the wrong way, or made HCL a copy. Not covered, deliberately: the HCL JSON PROFILE (`.tf.json`, `.tfvars.json`). It is a second concrete syntax for the same information model, and a JSON parser is not this grammar with more rules -- it is a different grammar. The corpus does not admit those extensions, so they are absent rather than failing.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "hcl"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": true,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 12,
+    "facets": 6,
+    "named_nodes": 44,
+    "uncategorised": 11
+   },
+   "tests": {
+    "corpus_cases": 17,
+    "negative_files": 28,
+    "shape_files": 2
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": true,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 2
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": true,
+   "corpora": [
+    {
+     "language": "hcl",
+     "files": 19219,
+     "passed": 19219,
+     "failed": 0,
+     "grammar_gaps": 0,
+     "noise": 0,
+     "pass_rate": "100.00%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "455115367c2886c153ee32105685f17e927733a0"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "a comment inside a closing template directive",
+     "files": 0
+    }
+   ],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "An expression that is INCOMPLETE at the end of a line continues onto the next one here, and terminates in HCL. `x = a +` followed by `b` on the next line parses as one attribute here and is a parse error for hclsyntax; so do `x = a ?` / `b : c`, and every other form that ends a line mid-expression. The mechanism is the one the newline_note describes from the other side: where the parse table admits `_newline` the scanner offers one and the attribute ends correctly, and where it does not -- mid-expression, after an operator -- the newline falls through to `extras` and is trivia. **This never mis-parses valid HCL, and the boundary is worth stating precisely.** A COMPLETE expression at end of line is followed by a position where `_newline` is valid, so the scanner emits it and the item ends: `x = [1, 2]` followed by `[3]` on the next line is two items here as well, and errors as it should. Only an expression that cannot end where the line does is affected, and no valid file contains one. So the whole deviation lives on input HCL rejects, which is exactly the direction a corpus sweep cannot see -- `test/negative/` is where it is pinned down. The most visible instance is a BLOCK HEADER, and it is the one that motivated writing this up rather than filing it as a curiosity: a bare identifier on its own line followed by a block on the next joins them into one block with an extra label. Packer's own `fmt_errs/malformed.pkr.hcl` fixture is that shape. Fixing it needs the newline-inclusion mode hclsyntax has and an LR table does not, which would mean two copies of the expression grammar. Measured independently by `treebank mutate`: 101 of its 195 widenings are this deviation, and it is the largest class by a factor of three.",
+     "files": null
+    },
+    {
+     "summary": "Inside an OBJECT, a newline is a separator here and a significant token everywhere in HCL. `{a = 1\\nb = 2}` and `{a = 1,\\nb = 2}` parse correctly and `{a = 1\\n, b = 2}` is correctly rejected, because the separator rule spells that asymmetry out. What the grammar cannot say is that a newline is ALSO forbidden at the object's other positions: `{a =\\n1}`, `{a\\n= 1}` and `{a = 1 +\\n2}` all parse here and all three are errors for hclsyntax. Same root as the deviation above and the same reason it stands: inside an object hclsyntax keeps newlines in the token stream at every position, and reproducing that would need an object's expression grammar to be a second copy of the ordinary one.",
+     "files": null
+    },
+    {
+     "summary": "A block LABEL admits `${…}` and `%{…}` here; hclsyntax rejects both. A label is a `StringLit`, which is a quoted string with escapes and no template, and `blk \"${a}\" {}` is an error -- Terraform's own `invalid-files/interp-in-rsrc-label.tf` fixture is exactly that. The label is one token here, so it can validate the escape sequences (`blk \"a\\qb\" {}` is rejected, as it should be) but cannot also exclude an interpolation introduction without a lookahead-shaped regex the token DSL does not have. It is a widening on input HCL rejects; it has a negative fixture.",
+     "files": null
+    },
+    {
+     "summary": "The legacy index applies where hclsyntax has a NUMBER, and chains where hclsyntax stops at one. The legacy `.0` index exists only for compatibility with HCL's precursor language and the spec requires a conforming parser to accept it. It also says why it does not chain: in `foo.0.0`, `0.0` lexes as a number literal and the sequence is invalid. That is a LEXICAL consequence in hclsyntax and a rule here, and the rule is not reproduced -- `token.immediate(/\\.[0-9]+/)` matches `.0` and then `.1`. The same widening has a second spelling that only `treebank mutate` found, in 21 of its 195 widenings: `1.5.7` is one invalid number literal to hclsyntax and a float followed by a legacy index here. Narrowing the operand to exclude a number needs a second copy of the expression-term rule and risks a real gap -- `f(x).0` is legal, so the operand cannot simply be a traversal -- which is not a trade worth making for a construct nobody has written since HCL 1.",
+     "files": null
+    },
+    {
+     "summary": "A duplicate attribute name in one body parses here and is \"Attribute redefined\" for hclsyntax. It is a check the reference parser makes and a parse table cannot: `a = 1` twice is two well-formed declarations, and noticing that they collide is a pass over the body rather than a property of the derivation. It accounts for most of the accepts-invalid files found in the pre-corpus survey, all of them in the deliberately-invalid test data of Terraform and Vault, and for 31 of `treebank mutate`'s 195 widenings. Recorded here because the sweep is blind to it in principle, not because it is close to being fixed.",
+     "files": null
+    },
+    {
+     "summary": "An identifier's character classes are UAX#31's general categories and not the property itself. HCL defines an identifier as `ID_Start (ID_Continue | '-')*` under UAX#31, and hclsyntax uses Go's tables for it. This grammar uses the Unicode general categories those properties are built from -- `L`, `Nl`, `Mn`, `Mc`, `Nd`, `Pc` -- which is the same set apart from `Other_ID_Start` and `Other_ID_Continue`, two small lists of legacy code points the property adds on top (a handful of CJK and Georgian characters, some combining marks). So the difference is a NARROWING, on identifiers no configuration language is written in; nothing in the corpus is affected and nothing would be measured by a wider class. Recorded because the spec names a property and this names an approximation of it, and a reader should not have to diff the two to find that out.",
      "files": null
     }
    ]
@@ -261,7 +348,7 @@
    },
    "tests": {
     "corpus_cases": 5,
-    "negative_files": 7,
+    "negative_files": 10,
     "shape_files": 7
    },
    "known_deviations": {
@@ -275,7 +362,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -286,24 +373,24 @@
     {
      "language": "java",
      "files": 243576,
-     "passed": 243409,
-     "failed": 167,
-     "grammar_gaps": 167,
+     "passed": 243462,
+     "failed": 114,
+     "grammar_gaps": 114,
      "noise": 0,
-     "pass_rate": "99.93%",
+     "pass_rate": "99.95%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "2769c501beb46d93b7eb4fd9d1852d6499107099"
+     "grammar_revision": "19d9d02d42e4e6371098cfe374257b14ffcca6be"
     }
    ],
    "known_gaps": [
     {
-     "summary": "`case A -> …` where the case constant is a bare identifier",
-     "files": 539
+     "summary": "`record` and `when` used as ordinary identifiers",
+     "files": 85
     },
     {
-     "summary": "module declarations (`module-info.java`)",
-     "files": 83
+     "summary": "a trailing empty dimension on an array creation",
+     "files": 13
     }
    ],
    "known_widenings": [],
@@ -348,7 +435,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -506,7 +593,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -565,7 +652,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -700,7 +787,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,
@@ -827,8 +914,90 @@
     }
    ]
   },
+  "yaml": {
+   "versions": "YAML 1.1 and 1.2 in one grammar, `.yaml` and `.yml` alike. The union is NOMINAL here, and saying so is the first honest thing this file has to do, because the brief for this grammar assumed the opposite. YAML 1.1 and 1.2 genuinely differ and the installed base is genuinely split — libyaml and PyYAML descend from 1.1, ruamel and go-yaml v3 aim at 1.2 — but almost every difference between them is a RESOLUTION difference, and a grammar has no opinion about resolution. Whether `no` is a boolean, `0o14` an integer and `12:30` a sexagesimal number is decided by a SCHEMA applied to a scalar this grammar has already parsed. So the Norway problem is not a parse problem. Measured rather than argued. The `yaml` package is the only implementation available that can be asked BOTH version questions with everything else held constant, and over the 406 cases of yaml-test-suite its verdict changes on exactly ONE case between `version: \"1.2\"` and `version: \"1.1\"` — QLJ7, and that one is about whether a `%TAG` handle declared in the first document is still in scope in the second, which is a directive-scope rule rather than a production. Over 29 hand-picked probes at the constructs where the two versions are supposed to part company — the JSON-adjacent `{\"a\":1}`, a `%YAML 1.1` directive, tabs, flow-mapping keys, plain scalars containing a colon — the two versions agree on all 29. DESIGN.md §4.2's \"latest version wins\" is therefore never invoked, and there is no `version_policy.toml`: no construct is rejected on version grounds because no construct needed to be. What the oracle still carries a 1.1 leg for is that the claim is now measured instead of assumed, and the measurement is one case in 406. The split that IS real is between IMPLEMENTATIONS, not versions, and it is large: over the same 406 cases the spec-first parser and the libyaml lineage disagree on 71. That is the union this grammar's oracle is actually built over, and `[[oracles]]` says so.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "yaml"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 5,
+    "facets": 6,
+    "named_nodes": 22,
+    "uncategorised": 1
+   },
+   "tests": {
+    "corpus_cases": 11,
+    "negative_files": 17,
+    "shape_files": 5
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": true,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 2
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": true,
+   "corpora": [
+    {
+     "language": "yaml",
+     "files": 128334,
+     "passed": 127959,
+     "failed": 375,
+     "grammar_gaps": 0,
+     "noise": 375,
+     "pass_rate": "99.71%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "3516844c92f77dd5328bbac33b2dd0587618b454"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "an anchor or alias name containing a `:`",
+     "files": 0
+    }
+   ],
+   "known_widenings": [
+    {
+     "summary": "two anchors on one node, `&a` then `&b value`",
+     "files": null
+    },
+    {
+     "summary": "a comment with no whitespace in front of it, `\"foo\"#bar`",
+     "files": null
+    }
+   ],
+   "deviations": [
+    {
+     "summary": "A flow-mapping entry with no `:` is a bare node in this tree, not a pair with an empty value. `{ a, b }` and `{ http://foo.com }` produce two nodes and one node; the YAML data model produces two pairs and one pair, each with an empty value, and yaml-test-suite's event streams say so. This is the whole of the 3-case shape difference above (4ABK, 8KB6, 9BXH). It is deliberate. A tree-sitter tree describes what is WRITTEN, and no `:` is written there; inventing a pair with two empty halves would put two nodes in the tree with no text behind either. The consumer that wants the data model applies it above the parse, which is where DESIGN.md §1 puts every other semantic question.",
+     "files": null
+    },
+    {
+     "summary": "`&a foo: 1` anchors the KEY, not the mapping. YAML tells the two readings apart by a line break — properties followed by a newline and an indented block anchor the collection, properties on the same line as the key anchor the key — and this grammar encodes exactly that: `annotated_node` admits a block collection only behind the `_indented` marker, so `&a` / newline / ` foo: 1` anchors the mapping and the same-line form anchors the key. It is the same rule YAML applies, so this is a deviation only in that the mechanism is a token rather than a production.",
+     "files": null
+    }
+   ]
+  },
   "zig": {
-   "versions": "Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar. The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.",
+   "versions": "Zig 0.11 through 0.16 in one grammar, `.zig` and `.zon` alike -- a `.zon` file is one VALUE, usually `.{ … }` but sometimes a bare literal, so it is the same tokenizer and the same expression rules rather than a second grammar. The union is real rather than nominal here, because Zig is pre-1.0 and its syntax moved inside that window, in both directions. Multi-object `for` loops and ranges (`for (a, b, 0..) |x, y, i|`) arrived in 0.11, tuple-struct fields and `packed struct(u32)` backing integers with them; destructuring assignment (`const a, const b = tuple;`) in 0.12; the labelled switch and its `continue :sw value` dispatch in 0.14; the struct-literal `asm` clobber list in 0.15. Going the other way, `usingnamespace` was deprecated and then removed in 0.15, and `async`/`await`/`suspend`/`resume` and `anyframe` have not compiled since 0.11. Per notes/DESIGN.md §4.2 the latest version wins where two conflict; nothing here conflicts, so every one of those forms parses.",
    "generate_cli": "0.26.12",
    "vocabulary": "0.1.0",
    "languages": [
@@ -861,7 +1030,7 @@
      "rust"
     ],
     "wasm_pack": true,
-    "query_files": 0
+    "query_files": 2
    },
    "corpus_lock": true,
    "corpus_canary": true,

@@ -1,6 +1,6 @@
 /**
  * treebank-bash: a from-scratch grammar for GNU bash 5.x, carrying the
- * treebank vocabulary (DESIGN.md §3) in its parse table.
+ * treebank vocabulary (notes/DESIGN.md §3) in its parse table.
  *
  * Shell is not like the other languages here. There is no expression
  * grammar to speak of: almost everything is a WORD, and what a word means
@@ -599,7 +599,7 @@ module.exports = grammar({
 
     // ── expansion is where shell's values come from ──────────────────
     // `_literal` nests here because the vocabulary requires it to
-    // (DESIGN.md §3.3 rule 4) and because it is true of shell: a quoted
+    // (notes/DESIGN.md §3.3 rule 4) and because it is true of shell: a quoted
     // string is a thing that produces a value, which is what separates the
     // expression side of this grammar from the word side.
     _expression: $ => choice(

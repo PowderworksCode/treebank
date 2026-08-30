@@ -48,7 +48,7 @@ pub struct Cluster {
     pub macros: Vec<String>,
     /// Valid-in-SOME-version files the grammar rejects ON PURPOSE, because
     /// `version_policy.toml` declares the construct rejected and the CURRENT
-    /// version's oracle rejects it too (DESIGN.md §4.2). Excluded from
+    /// version's oracle rejects it too (notes/DESIGN.md §4.2). Excluded from
     /// `valid_paths`: no grammar change should fix these.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub version_paths: Vec<String>,
@@ -104,7 +104,7 @@ pub struct EvidenceProvenance {
 }
 
 /// Signatures a grammar declares it rejects on purpose, from
-/// `version_policy.toml` (DESIGN.md §4.2). Absent file means no declarations,
+/// `version_policy.toml` (notes/DESIGN.md §4.2). Absent file means no declarations,
 /// which is the normal case; a malformed one is an error, because silently
 /// treating it as empty would turn declared rejections back into gaps and
 /// send a fix agent chasing decisions.
@@ -551,7 +551,7 @@ pub fn run(
         &missing[..missing.len().min(5)],
     );
 
-    // Declared version-policy rejections (DESIGN.md §4.2). TWO conditions,
+    // Declared version-policy rejections (notes/DESIGN.md §4.2). TWO conditions,
     // both required: the cluster signature is declared in
     // `version_policy.toml`, AND the CURRENT version's oracle rejects the
     // file. The second is what keeps a declaration from becoming a
@@ -999,7 +999,7 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
              them **on purpose**. Do not try to fix them.\n\n\
              Where a construct is valid only in an older version AND admitting \
              it would change how CURRENT code parses, the current language wins \
-             (DESIGN.md §4.2). In a GLR grammar an admitted old form is not a \
+             (notes/DESIGN.md §4.2). In a GLR grammar an admitted old form is not a \
              quiet extra reading — it is a fork at every occurrence of the \
              token, and forks can win. Each construct below is declared in \
              `version_policy.toml` with its reasoning, and has a file in \
@@ -1080,7 +1080,7 @@ fn markdown(report: &Report, corpus_root: &Path) -> String {
          tests, re-run this sweep (pass count must beat {passed}), and \
          re-run the negative corpus.\n\
          4. Record the change and its before/after sweep numbers in the \
-         grammar's ledger — see `DESIGN.md` at the repo root.\n",
+         grammar's ledger — see `notes/DESIGN.md` at the repo root.\n",
         grammar = report.grammar,
         lang = report.lang,
         passed = report.passed,

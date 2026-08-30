@@ -55,22 +55,28 @@ function stats(g, precs) {
     ["declared conflicts", (g.g.conflicts ?? []).length],
     ["precedence levels", precs.size],
   ];
-  return `<div class="grammar-stats">${
-    items.map(([label, v]) => `<div><b>${v}</b><span>${label}</span></div>`).join("")
-  }</div>`;
+  return `<div class="grammar-stats">${items
+    .map(([label, v]) => `<div><b>${v}</b><span>${label}</span></div>`)
+    .join("")}</div>`;
 }
 
 function vocabulary(g, table, facet) {
   const parts = [];
-  for (const [title, group, cls] of [["Supertypes", table, "sup"], ["Facets", facet, "fac"]]) {
+  for (const [title, group, cls] of [
+    ["Supertypes", table, "sup"],
+    ["Facets", facet, "fac"],
+  ]) {
     const roles = Object.keys(group).sort();
     if (!roles.length) continue;
     parts.push(`<h3 class="vh">${title}</h3><dl class="vocab">`);
     for (const role of roles) {
-      const links = group[role].map((m) =>
-        m in g.rules
-          ? `<a href="#r-${E(m)}">${E(m)}</a>`
-          : `<span class="dead">${E(m)}</span>`).join("");
+      const links = group[role]
+        .map((m) =>
+          m in g.rules
+            ? `<a href="#r-${E(m)}">${E(m)}</a>`
+            : `<span class="dead">${E(m)}</span>`,
+        )
+        .join("");
       parts.push(`<dt class="${cls}">${E(role)}</dt><dd>${links}</dd>`);
     }
     parts.push("</dl>");
@@ -85,16 +91,18 @@ when the query loads.</p>${parts.join("")}`;
 
 function precedenceTable(precs) {
   if (!precs.size) return "";
-  const rows = [...precs.keys()].sort((a, b) => b - a).map((lvl) => {
-    const entries = precs.get(lvl);
-    const kinds = [...new Set(entries.map(([k]) => k))].sort();
-    const rules = [...new Set(entries.map(([, r]) => r))].sort();
-    return `<tr><td class="lvl">${lvl}</td><td class="kind">${
-      kinds.map((k) => `<code>${E(k)}</code>`).join(" ")
-    }</td><td>${
-      rules.map((r) => `<a href="#r-${E(r)}">${E(r)}</a>`).join("")
-    }</td></tr>`;
-  });
+  const rows = [...precs.keys()]
+    .sort((a, b) => b - a)
+    .map((lvl) => {
+      const entries = precs.get(lvl);
+      const kinds = [...new Set(entries.map(([k]) => k))].sort();
+      const rules = [...new Set(entries.map(([, r]) => r))].sort();
+      return `<tr><td class="lvl">${lvl}</td><td class="kind">${kinds
+        .map((k) => `<code>${E(k)}</code>`)
+        .join(" ")}</td><td>${rules
+        .map((r) => `<a href="#r-${E(r)}">${E(r)}</a>`)
+        .join("")}</td></tr>`;
+    });
   return `<h2 id="precedence">Precedence</h2>
 <p>What EBNF cannot show. Higher binds tighter; <code>prec.left</code> and
 <code>prec.right</code> pick a side when levels tie. For a <em>declared</em>
@@ -118,7 +126,8 @@ function badges(name, g) {
 // half, so the figure is left empty and filled when it is scrolled to.
 function ruleBlock(name, g) {
   const marks = badges(name, g)
-    .map(([label, cls]) => `<span class="badge b-${cls}">${label}</span>`).join("");
+    .map(([label, cls]) => `<span class="badge b-${cls}">${label}</span>`)
+    .join("");
   let ebnf;
   try {
     ebnf = toEbnf(g.rules[name], g);
@@ -151,21 +160,28 @@ function wire(root, g) {
   if (typeof IntersectionObserver === "undefined") {
     figures.forEach(draw);
   } else {
-    const seen = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        draw(entry.target);
-        seen.unobserve(entry.target);
-      }
-    }, { rootMargin: "400px 0px" });
-    figures.forEach((f) => seen.observe(f));
+    const seen = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (!entry.isIntersecting) continue;
+          draw(entry.target);
+          seen.unobserve(entry.target);
+        }
+      },
+      { rootMargin: "400px 0px" },
+    );
+    figures.forEach((f) => {
+      seen.observe(f);
+    });
   }
 
   // A link into a rule that has not been drawn yet must still land on it.
   const jump = () => {
     const id = location.hash.slice(1);
     if (!id.startsWith("r-")) return;
-    const figure = root.querySelector(`.rrbox[data-rule="${CSS.escape(id.slice(2))}"]`);
+    const figure = root.querySelector(
+      `.rrbox[data-rule="${CSS.escape(id.slice(2))}"]`,
+    );
     if (figure) draw(figure);
   };
   addEventListener("hashchange", jump);
@@ -181,14 +197,24 @@ function wire(root, g) {
     }
     for (const h of heads) {
       let any = false;
-      for (let n = h.nextElementSibling; n && n.tagName === "A"; n = n.nextElementSibling) {
-        if (!n.hidden) { any = true; break; }
+      for (
+        let n = h.nextElementSibling;
+        n && n.tagName === "A";
+        n = n.nextElementSibling
+      ) {
+        if (!n.hidden) {
+          any = true;
+          break;
+        }
       }
       h.hidden = !any;
     }
   });
   box?.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") { box.value = ""; box.dispatchEvent(new Event("input")); }
+    if (e.key === "Escape") {
+      box.value = "";
+      box.dispatchEvent(new Event("input"));
+    }
   });
 }
 
@@ -198,14 +224,26 @@ export function render(root, bundle, status) {
   const precs = precedences(g);
   const groups = groupsOf(g, table);
 
-  const rail = groups.map(([role, members]) =>
-    `<h4>${E(role)}</h4>` + members.map((m) =>
-      `<a href="#r-${E(m)}" data-name="${E(m.toLowerCase())}">${E(m)}</a>`).join(""),
-  ).join("");
+  const rail = groups
+    .map(
+      ([role, members]) =>
+        `<h4>${E(role)}</h4>` +
+        members
+          .map(
+            (m) =>
+              `<a href="#r-${E(m)}" data-name="${E(m.toLowerCase())}">${E(m)}</a>`,
+          )
+          .join(""),
+    )
+    .join("");
 
-  const productions = groups.map(([role, members]) =>
-    `<h3 class="grp">${E(role)}</h3>` + members.map((m) => ruleBlock(m, g)).join(""),
-  ).join("");
+  const productions = groups
+    .map(
+      ([role, members]) =>
+        `<h3 class="grp">${E(role)}</h3>` +
+        members.map((m) => ruleBlock(m, g)).join(""),
+    )
+    .join("");
 
   root.innerHTML = `${stats(g, precs)}
 <div class="grammar-cols">
@@ -237,7 +275,9 @@ async function mount(root) {
     // page, the status is an addition to it.
     const [response, status] = await Promise.all([
       fetch(`/grammars/${name}.json`),
-      fetch("/status.json").then((r) => (r.ok ? r.json() : null)).catch(() => null),
+      fetch("/status.json")
+        .then((r) => (r.ok ? r.json() : null))
+        .catch(() => null),
     ]);
     if (!response.ok) throw new Error(`${response.status} fetching ${name}`);
     // Layout depends on text metrics, and metrics before the webfont lands

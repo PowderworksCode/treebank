@@ -13,6 +13,7 @@ mod c;
 mod cxx;
 mod debian;
 mod github;
+mod hcl;
 mod java;
 mod javascript;
 mod npm;
@@ -20,6 +21,7 @@ mod python;
 mod ruby;
 mod rust;
 mod typescript;
+mod yaml;
 mod zig;
 
 use std::path::Path;

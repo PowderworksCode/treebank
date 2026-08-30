@@ -1,6 +1,6 @@
 /**
  * treebank-c: a from-scratch grammar for C, carrying the treebank
- * vocabulary (DESIGN.md §3) in its parse table.
+ * vocabulary (notes/DESIGN.md §3) in its parse table.
  *
  * Three facts about C decide the shape of this file.
  *
@@ -101,7 +101,7 @@ module.exports = grammar({
     // alone is only ever the whole list — so one alternation repeated by
     // commas necessarily accepts `f(..., int x)`. Both members are concrete
     // node types occurring nowhere else, so the facet selects exactly the
-    // nodes the supertype would have (DESIGN.md §3.1.1). See roles.json.
+    // nodes the supertype would have (notes/DESIGN.md §3.1.1). See roles.json.
     ...tb.assertDemotable([]),
   ]).map((name) => $[name]),
 

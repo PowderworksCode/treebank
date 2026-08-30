@@ -1,0 +1,58 @@
+# Accepted structural debt, per `treebank lint` — the ratchet that keeps
+# the FIELD_GUIDE.md smells from growing back. Every number here is a
+# ceiling: going over fails CI, dropping under prints a reminder to
+# tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+
+[baselines]
+# GLR fork sites (FIELD_GUIDE.md §2). NONE, and this is the value to
+# protect. Every ambiguity HCL has is settled a rung higher: the newline
+# decisions in the scanner, the keyword decisions by keyword extraction,
+# the operator ladder by static precedence, and the closing template
+# directives (`%{ endif }` and its two siblings) by being single tokens —
+# that last one was a declared conflict for about ten minutes and is
+# written up in grammar.js. A conflict added here needs an argument, not a
+# baseline bump.
+declared_conflicts = 0
+
+# Conflicts naming a supertype. None, because there are no conflicts.
+early_commit_conflicts = 0
+
+# prec.dynamic sites. None. Weights are the tool of last resort and this
+# grammar has never needed one; the first will need the cull analysis
+# FIELD_GUIDE.md §2 describes.
+dynamic_weights = 0
+
+# One spelling, two tokens (§4). None. The `"` is the case that could have
+# become one — it opens a quoted template and also appears inside the
+# `string_lit` token a block label is — and it does not, because the
+# scanner owns the template quote EVERYWHERE and `string_lit` is one whole
+# token rather than a `"` token with contents.
+same_text_tokens = 0
+
+# Keyword-shaped tokens outside every reserved set: else, endfor, endif,
+# false, for, if, in, null, true.
+#
+# UNLIKE EVERY OTHER GRAMMAR HERE, THIS IS NOT DEBT. FIELD_GUIDE.md §5 is
+# about a language whose keywords are reserved and whose grammar forgot to
+# say so; HCL's own specification says the opposite in as many words:
+# "There are no globally-reserved words, but in some contexts certain
+# identifiers are reserved to function as keywords." Measured against
+# hclsyntax: `for = 1`, `x = for`, `true {}`, `if = 1` and
+# `[for for in y : for]` are all VALID HCL, and this grammar parses every
+# one of them, because tree-sitter's keyword extraction re-lexes the word
+# token as a keyword only in states where the keyword is valid — which is
+# exactly the rule the specification states. Populating `reserved` here
+# would be the bug.
+#
+# The number is the whole keyword vocabulary and should not move unless the
+# language gains a keyword. test/negative carries both directions: that
+# `for` still wins where a for-expression may begin, and that a keyword
+# used as a name outside those positions still parses.
+unreserved_keywords = 9
+
+# Parse-table size. Not a correctness bound — a growth alarm. 474 states is
+# the smallest table in the repository by more than an order of magnitude
+# (zig's is 8,339), which is what a small language with no declared
+# conflicts and one expression grammar looks like.
+state_count = 474

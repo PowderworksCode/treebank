@@ -170,21 +170,31 @@ Both are on by default.
 | `pack` | load and parse with a grammar; brings a WASI runtime |
 | `fetch` | download grammars; implies `pack` |
 
-`pack` brings wasmtime, which needs Rust 1.95. That floor is wasmtime's rather
-than this crate's, and it goes away with the runtime. It is kept current
-deliberately: a pack is code from the network, and the sandbox running it is
-the thing standing between a grammar and the machine.
+`pack` brings wasmer. It is kept current deliberately: a pack is code from the
+network, and the sandbox running it is the thing standing between a grammar and
+the machine.
+
+`pack` needs Rust 1.95. That floor is the runtime's rather than this crate's,
+and it goes away with the runtime.
+
+wasmer rather than wasmtime because of cross-compilation. wasmtime's build
+script compiles C helpers in every configuration that can execute wasm, so
+building it for musl needs a musl C cross-compiler on `PATH`. A consumer
+shipping static musl binaries — straitjacket does, for x86_64 and aarch64, from
+a plain `cargo build` — could not host a pack at all while this crate required
+one. wasmer's tree compiles no C, so both targets cross-build with `rust-lld`
+alone.
 
 For a build that must not reach the network, keep `pack` and drop `fetch`:
 
 ```toml
-treebank = { version = "0.2", default-features = false, features = ["pack"] }
+treebank = { version = "0.3", default-features = false, features = ["pack"] }
 ```
 
 For the vocabulary and query expansion alone, with no runtime:
 
 ```toml
-treebank = { version = "0.2", default-features = false }
+treebank = { version = "0.3", default-features = false }
 ```
 
 ## Any other language

@@ -1,0 +1,5 @@
+seq: [1, two, [nested, {k: v}]]
+map: {a: 1, b: [x], "c": 3}
+mixed:
+  - {a: [1, 2]}
+  - [{b: 3}]

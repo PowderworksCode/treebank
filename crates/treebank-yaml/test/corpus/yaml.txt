@@ -1,0 +1,390 @@
+================================================================================
+block mappings and sequences
+================================================================================
+
+name: treebank
+nested:
+  a: 1
+  b: two
+list:
+  - one
+  - two
+compact:
+- x: 1
+  y: 2
+- z
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_mapping
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (plain_scalar))
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (plain_scalar))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_sequence
+          (block_sequence_item
+            (plain_scalar))
+          (block_sequence_item
+            (plain_scalar))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_sequence
+          (block_sequence_item
+            (block_mapping
+              (block_mapping_pair
+                key: (plain_scalar)
+                value: (plain_scalar))
+              (block_mapping_pair
+                key: (plain_scalar)
+                value: (plain_scalar))))
+          (block_sequence_item
+            (plain_scalar)))))))
+
+================================================================================
+flow collections
+================================================================================
+
+seq: [1, two, [nested, {k: v}]]
+map: {a: 1, b: [x], "c": 3}
+empty: []
+trailing: [a, b,]
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (flow_sequence
+          (plain_scalar)
+          (plain_scalar)
+          (flow_sequence
+            (plain_scalar)
+            (flow_mapping
+              (flow_pair
+                key: (plain_scalar)
+                value: (plain_scalar))))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (flow_mapping
+          (flow_pair
+            key: (plain_scalar)
+            value: (plain_scalar))
+          (flow_pair
+            key: (plain_scalar)
+            value: (flow_sequence
+              (plain_scalar)))
+          (flow_pair
+            key: (double_quote_scalar)
+            value: (plain_scalar))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (flow_sequence))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (flow_sequence
+          (plain_scalar)
+          (plain_scalar))))))
+
+================================================================================
+scalars: plain, quoted and block
+================================================================================
+
+plain: a value with spaces
+folded_plain: one
+  two
+single: 'it''s here'
+double: "a \"quoted\" \n escape"
+literal: |
+  line one
+  line two
+folded: >-
+  folded
+  text
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (single_quote_scalar))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (double_quote_scalar))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_scalar))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_scalar)))))
+
+================================================================================
+anchors, aliases and tags
+================================================================================
+
+base: &defaults
+  a: 1
+use: *defaults
+typed: !!str 5
+custom: !mytag
+  k: v
+both: &x !!int 7
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (anchor
+            name: (anchor_name))
+          (block_mapping
+            (block_mapping_pair
+              key: (plain_scalar)
+              value: (plain_scalar)))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (alias
+          name: (anchor_name)))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (tag)
+          (plain_scalar)))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (tag)
+          (block_mapping
+            (block_mapping_pair
+              key: (plain_scalar)
+              value: (plain_scalar)))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (anchor
+            name: (anchor_name))
+          (tag)
+          (plain_scalar))))))
+
+================================================================================
+explicit keys, empty values and complex keys
+================================================================================
+
+? explicit
+: value
+empty:
+keyless:
+? [a, b]
+: pair
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar))
+      (block_mapping_pair
+        key: (plain_scalar))
+      (block_mapping_pair
+        key: (plain_scalar))
+      (block_mapping_pair
+        key: (flow_sequence
+          (plain_scalar)
+          (plain_scalar))
+        value: (plain_scalar)))))
+
+================================================================================
+documents, directives and comments
+================================================================================
+
+%YAML 1.2
+---
+# a comment
+a: 1
+...
+---
+second: document
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (directive
+      name: (directive_name)
+      parameter: (directive_parameter))
+    (comment)
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar))))
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar)))))
+
+================================================================================
+properties over a zero-indented sequence
+================================================================================
+
+seq:
+ &anchor
+- a
+- b
+plain: value
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (anchor
+            name: (anchor_name))
+          (block_sequence
+            (block_sequence_item
+              (plain_scalar))
+            (block_sequence_item
+              (plain_scalar)))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar)))))
+
+================================================================================
+a document end marker with no document in front of it
+================================================================================
+
+first: document
+...
+...
+---
+second: document
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar))))
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar)))))
+
+
+================================================================================
+a dash as a key, and a comment above a blank line
+================================================================================
+
+map:
+  -: ""
+  # a comment, then a line of trailing spaces
+  
+  other: 1
+after: 2
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_mapping
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (double_quote_scalar))
+          (comment)
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (plain_scalar))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar)))))
+
+
+================================================================================
+an alias as a mapping key
+================================================================================
+
+anchored: &app homepage
+serviceAccount:
+  *app: {}
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (annotated_node
+          (anchor
+            name: (anchor_name))
+          (plain_scalar)))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_mapping
+          (block_mapping_pair
+            key: (alias
+              name: (anchor_name))
+            value: (flow_mapping)))))))
+
+
+================================================================================
+a quoted scalar folding onto its own column
+================================================================================
+
+- name: Assert
+  debug:
+    msg: "one line;
+    a second at the mapping's own column"
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_sequence
+      (block_sequence_item
+        (block_mapping
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (plain_scalar))
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (block_mapping
+              (block_mapping_pair
+                key: (plain_scalar)
+                value: (double_quote_scalar)))))))))
+

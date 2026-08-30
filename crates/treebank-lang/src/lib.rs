@@ -108,6 +108,20 @@ macro_rules! for_each_language {
             Cpp => "cpp", ["cc", "cpp", "cxx", "hpp", "hh", "hxx"], Cpp, false, cxx::Cxx, c::Cpp, (CPP_SPANS, NONE, NONE);
             Ruby => "ruby", ["rb"], Ruby, true, ruby::Ruby, ruby::Ruby, (RB_SPANS, NONE, NONE);
             Zig => "zig", ["zig", "zon"], Zig, false, zig::Zig, zig::Zig, (NONE, ZIG_FORMAT, NONE);
+            Yaml => "yaml", ["yaml", "yml"], Yaml, false, yaml::Yaml, yaml::Yaml, (YAML_SPANS, NONE, NONE);
+            // HCL2 native syntax. THE LANGUAGE IS HCL AND TERRAFORM IS A
+            // DIALECT OF IT: `.tf` and `.tfvars` are Terraform's file names
+            // for this syntax, and everything Terraform adds on top of it —
+            // a block schema, a function table, a variable namespace — is
+            // semantics, not syntax. So Terraform is three extensions here
+            // rather than a second registration, for the reason `.zon` is one
+            // of Zig's rather than a language of its own: a dialect earns a
+            // `LangName` when it brings its own corpus and its own oracle,
+            // and Terraform brings neither. It brings the corpus FOR HCL, and
+            // its oracle is the HCL parser that `tofu fmt` itself gates on.
+            // If Packer or Nomad HCL ever earns a corpus of its own, that is
+            // the registration which points at this grammar.
+            Hcl => "hcl", ["hcl", "tf", "tfvars"], Hcl, false, hcl::Hcl, hcl::Hcl, (HCL_SPANS, TOFU_FORMAT, NONE);
         }
     };
 }

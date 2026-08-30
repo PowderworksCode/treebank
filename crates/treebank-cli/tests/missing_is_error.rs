@@ -37,7 +37,8 @@ fn missing_token_counts_as_error() {
     // corpus (its jobs guard fixtures, not corpora), so the probe skips
     // there rather than asserting against an input that may recover with
     // an ERROR node instead of a MISSING token.
-    let Ok(src) = std::fs::read(root.join("corpus/bash/src/basecamp__omarchy-fa955bfa9d2c/test/cli"))
+    let Ok(src) =
+        std::fs::read(root.join("corpus/bash/src/basecamp__omarchy-fa955bfa9d2c/test/cli"))
     else {
         eprintln!("skipped: corpus not present");
         return;
@@ -45,6 +46,9 @@ fn missing_token_counts_as_error() {
     let tree = p.parse(&src, None).unwrap();
     let sexp = tree.root_node().to_sexp();
     let has_missing = sexp.contains("MISSING");
-    eprintln!("has_missing={has_missing} has_error={}", tree.root_node().has_error());
+    eprintln!(
+        "has_missing={has_missing} has_error={}",
+        tree.root_node().has_error()
+    );
     assert_eq!(has_missing, tree.root_node().has_error());
 }

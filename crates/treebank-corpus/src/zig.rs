@@ -33,7 +33,7 @@ const DOWNLOAD_INDEX: &str = "https://ziglang.org/download/index.json";
 /// weighted toward repositories that are maintained, so it is weighted
 /// toward RECENT Zig, and it under-represents the older forms —
 /// `usingnamespace`, the pre-0.12 `for` loop, `async`/`await` before they
-/// were shelved — that the version-union policy (DESIGN.md §4.2) still
+/// were shelved — that the version-union policy (notes/DESIGN.md §4.2) still
 /// requires the grammar to parse. That is the gap the `upstream` source
 /// exists to close: one release per minor covers every syntax generation
 /// by construction.
