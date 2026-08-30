@@ -188,13 +188,13 @@ alone.
 For a build that must not reach the network, keep `pack` and drop `fetch`:
 
 ```toml
-treebank = { version = "0.2", default-features = false, features = ["pack"] }
+treebank = { version = "0.3", default-features = false, features = ["pack"] }
 ```
 
 For the vocabulary and query expansion alone, with no runtime:
 
 ```toml
-treebank = { version = "0.2", default-features = false }
+treebank = { version = "0.3", default-features = false }
 ```
 
 ## Any other language
