@@ -122,6 +122,7 @@ noise_files = 0
 pass_rate = '100.00%'
 corpus_lock_sha256 = '094490533a198bdf63e4d811dfbd03db053cda71e424f85929800aa0902ccb52'
 grammar_sha256 = 'b619ba8323a1cfc9ba65b4dc2a269c7b88f8637602d86597c2eff3900c474059'
+grammar_revision = '455115367c2886c153ee32105685f17e927733a0'
 
 [corpus.sweep_history]
 note = '''
