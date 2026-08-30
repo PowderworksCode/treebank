@@ -116,7 +116,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
-        if: matrix.language == 'typescript' || matrix.language == 'javascript'
+        if: matrix.language == 'typescript' || matrix.language == 'javascript' || matrix.language == 'yaml'
         with:
           node-version: "22"
       - name: install TypeScript oracle dependencies
@@ -127,6 +127,16 @@ jobs:
         if: matrix.language == 'javascript'
         working-directory: crates/treebank-oracle/tools/js-oracle
         run: npm ci --no-audit --no-fund
+      # YAML's oracle is a union over two implementations, and both halves
+      # are mandatory: without the libyaml leg every file the spec-first
+      # parser rejects and half the installed base reads becomes noise.
+      - name: install YAML oracle dependencies
+        if: matrix.language == 'yaml'
+        working-directory: crates/treebank-oracle/tools/yaml-oracle
+        run: npm ci --no-audit --no-fund
+      - name: install the libyaml half of the YAML oracle
+        if: matrix.language == 'yaml'
+        run: python3 -m pip install --quiet 'PyYAML==6.0.1'
 
       # Python and Zig grammars cover historical syntax too. Their legacy
       # oracle legs are mandatory: omitting one would mislabel old-version

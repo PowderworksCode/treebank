@@ -1,0 +1,9 @@
+{
+  "name": "yaml-oracle",
+  "private": true,
+  "type": "module",
+  "description": "Syntax-only YAML reference check for the treebank oracle",
+  "dependencies": {
+    "yaml": "2.9.0"
+  }
+}

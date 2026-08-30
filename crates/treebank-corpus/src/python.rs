@@ -23,24 +23,7 @@ impl Ecosystem for Python {
     /// the fetch driver skips them, exactly as Java skips artifacts with no
     /// sources jar.
     fn resolve(&self, pkg: &RankedCrate) -> Result<(String, String)> {
-        let url = format!("https://pypi.org/pypi/{}/json", pkg.name);
-        let doc: serde_json::Value = ureq::get(&url)
-            .call()
-            .with_context(|| format!("GET {url}"))?
-            .into_json()?;
-        let version = doc["info"]["version"]
-            .as_str()
-            .with_context(|| format!("{}: no info.version", pkg.name))?
-            .to_string();
-        let sdist = doc["urls"]
-            .as_array()
-            .with_context(|| format!("{}: no urls array", pkg.name))?
-            .iter()
-            .find(|u| u["packagetype"] == "sdist")
-            .and_then(|u| u["url"].as_str())
-            .with_context(|| format!("{} {version}: publishes no sdist", pkg.name))?
-            .to_string();
-        Ok((version, sdist))
+        resolve_sdist(pkg)
     }
 
     /// `.py` only — the single extension tree-sitter-python's
@@ -71,7 +54,28 @@ impl Ecosystem for Python {
 /// this the same *kind* of metric as crates.io and npm downloads (traffic),
 /// unlike Java's dependent-repos proxy. The ledger says so, and records the
 /// dataset's own `last_update` at fetch time.
-fn rank_pypi(k: usize) -> Result<Vec<RankedCrate>> {
+pub(crate) fn resolve_sdist(pkg: &RankedCrate) -> Result<(String, String)> {
+    let url = format!("https://pypi.org/pypi/{}/json", pkg.name);
+    let doc: serde_json::Value = ureq::get(&url)
+        .call()
+        .with_context(|| format!("GET {url}"))?
+        .into_json()?;
+    let version = doc["info"]["version"]
+        .as_str()
+        .with_context(|| format!("{}: no info.version", pkg.name))?
+        .to_string();
+    let sdist = doc["urls"]
+        .as_array()
+        .with_context(|| format!("{}: no urls array", pkg.name))?
+        .iter()
+        .find(|u| u["packagetype"] == "sdist")
+        .and_then(|u| u["url"].as_str())
+        .with_context(|| format!("{} {version}: publishes no sdist", pkg.name))?
+        .to_string();
+    Ok((version, sdist))
+}
+
+pub(crate) fn rank_pypi(k: usize) -> Result<Vec<RankedCrate>> {
     const URL: &str = "https://hugovk.github.io/top-pypi-packages/top-pypi-packages.min.json";
     let doc: serde_json::Value = ureq::get(URL)
         .call()

@@ -1,0 +1,35 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_binding": [
+      "anchor"
+    ],
+    "_clause": [
+      "block_mapping_pair",
+      "block_sequence_item",
+      "flow_pair"
+    ],
+    "_comment": [
+      "comment"
+    ],
+    "_identifier": [
+      "anchor_name",
+      "directive_name"
+    ],
+    "_scope": [
+      "document",
+      "stream"
+    ],
+    "_string": [
+      "block_scalar",
+      "double_quote_scalar",
+      "single_quote_scalar"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "directive_parameter",
+      "reason": "an argument of a directive: a version number, a tag handle, a tag prefix. One node type because the syntax does not distinguish them — which argument means what is the directive's own semantics, and this grammar has no opinion about it"
+    }
+  ]
+}

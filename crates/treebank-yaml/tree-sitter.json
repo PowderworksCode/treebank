@@ -1,0 +1,23 @@
+{
+  "grammars": [
+    {
+      "name": "yaml",
+      "camelcase": "Yaml",
+      "scope": "source.yaml",
+      "file-types": [
+        "yaml",
+        "yml"
+      ],
+      "injection-regex": "^ya?ml$",
+      "first-line-regex": "^#!.*\\byaml\\b"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "YAML 1.1 and 1.2 in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

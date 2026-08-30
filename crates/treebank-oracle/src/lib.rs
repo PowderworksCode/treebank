@@ -34,6 +34,7 @@ mod spans;
 mod stdin_oracle;
 mod typescript;
 mod unparse;
+mod yaml;
 mod zig;
 
 use std::collections::HashMap;
