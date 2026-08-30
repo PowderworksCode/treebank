@@ -6,7 +6,8 @@ queries like `(_declaration)`, `(_loop)` and `(_callable)` mean the same
 thing across languages. Languages: **Python, Rust, TypeScript** (the
 TypeScript grammar also parses JavaScript), **Java, Ruby, Bash**, **C and
 C++** (the C++ grammar extends the C one rather than copying it), **Zig**,
-and **YAML**.
+**YAML**, and **HCL** (the HCL2 native syntax, which is what Terraform's
+`.tf` and `.tfvars` are written in).
 
 **[`notes/DESIGN.md`](notes/DESIGN.md) is the authoritative document** — the vocabulary,
 its two tiers and the measurements that forced them, the version-union
@@ -30,6 +31,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-cpp` | C++98–C++23, extending the C grammar through tree-sitter's own inheritance |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
+| `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf` and `.tfvars`, because Terraform is a dialect of HCL and adds a schema rather than syntax |
 | `crates/treebank` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
@@ -199,6 +201,7 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | C / C++ | yes | — | — |
 | Zig | — | `zig fmt` | — |
 | YAML | yes | — | — |
+| HCL / Terraform | yes | `tofu fmt` | — |
 
 YAML's two dashes are one fact stated twice: the language has no owning
 implementation, so there is no formatter and no printer to be the
@@ -207,6 +210,14 @@ party, and this project does not substitute one for the other. Its spans
 come from the same `yaml` package the verdict oracle's 1.2 leg uses, which
 is the most conformant implementation available rather than a reference,
 and `shape_policy.toml` says what that makes the check blind to.
+
+HCL's one dash is the same kind of fact: `hclwrite` is a token-preserving
+tree, and this project does not call a token-preserving formatter an AST
+printer. Its spans and its formatter come from different places for a
+reason ledger.toml records — the boundaries from the MPL `hcl` library
+that IS the reference parser, the formatting from OpenTofu, because
+`tofu fmt`'s alignment rules live in Terraform and its fork rather than in
+HCL.
 
 The remaining dashes are real toolchain gaps, not forgotten registrations:
 the project does not substitute a third-party style formatter for a

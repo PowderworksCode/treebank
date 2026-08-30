@@ -1,0 +1,447 @@
+================================================================================
+literals, and the three keywords that are literals only where a value may go
+================================================================================
+
+count      = 3
+threshold  = 1.5
+ratio      = 2.5e-3
+enabled    = true
+disabled   = false
+unset      = null
+true       = "an attribute may be named for a keyword"
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (integer))
+  (attribute
+    name: (identifier)
+    value: (float))
+  (attribute
+    name: (identifier)
+    value: (float))
+  (attribute
+    name: (identifier)
+    value: (true))
+  (attribute
+    name: (identifier)
+    value: (false))
+  (attribute
+    name: (identifier)
+    value: (null))
+  (attribute
+    name: (identifier)
+    value: (quoted_template
+      (quote)
+      (template_literal)
+      (quote))))
+
+================================================================================
+the operator ladder, with HCL's own precedence
+================================================================================
+
+ok      = 1 + 2 * 3 - 4 / 5 % 6 > 7 == !flag && a || b
+negated = -count
+grouped = (a + b) * c
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (binary_expression
+      left: (binary_expression
+        left: (binary_expression
+          left: (binary_expression
+            left: (binary_expression
+              left: (binary_expression
+                left: (integer)
+                right: (binary_expression
+                  left: (integer)
+                  right: (integer)))
+              right: (binary_expression
+                left: (binary_expression
+                  left: (integer)
+                  right: (integer))
+                right: (integer)))
+            right: (integer))
+          right: (unary_expression
+            operand: (identifier)))
+        right: (identifier))
+      right: (identifier)))
+  (attribute
+    name: (identifier)
+    value: (unary_expression
+      operand: (identifier)))
+  (attribute
+    name: (identifier)
+    value: (binary_expression
+      left: (parenthesized_expression
+        (binary_expression
+          left: (identifier)
+          right: (identifier)))
+      right: (identifier))))
+
+================================================================================
+the conditional, right associative, and not an ExprTerm
+================================================================================
+
+name = var.override != "" ? var.override : local.default
+tier = a ? b : c ? d : e
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (conditional
+      condition: (binary_expression
+        left: (get_attr
+          operand: (identifier)
+          name: (identifier))
+        right: (quoted_template
+          (quote)
+          (quote)))
+      consequence: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      alternative: (get_attr
+        operand: (identifier)
+        name: (identifier))))
+  (attribute
+    name: (identifier)
+    value: (conditional
+      condition: (identifier)
+      consequence: (identifier)
+      alternative: (conditional
+        condition: (identifier)
+        consequence: (identifier)
+        alternative: (identifier)))))
+
+================================================================================
+tuples and objects, with the separators each admits
+================================================================================
+
+empty_tuple  = []
+zones        = ["a", "b", "c"]
+trailing     = [1, 2,]
+empty_object = {}
+inline       = { a = 1, b = 2 }
+colons       = { "a" : 1 }
+computed_key = { (local.key) = 1 }
+multiline = {
+  Name = "web"
+  Env  = "prod"
+}
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (tuple))
+  (attribute
+    name: (identifier)
+    value: (tuple
+      (quoted_template
+        (quote)
+        (template_literal)
+        (quote))
+      (quoted_template
+        (quote)
+        (template_literal)
+        (quote))
+      (quoted_template
+        (quote)
+        (template_literal)
+        (quote))))
+  (attribute
+    name: (identifier)
+    value: (tuple
+      (integer)
+      (integer)))
+  (attribute
+    name: (identifier)
+    value: (object))
+  (attribute
+    name: (identifier)
+    value: (object
+      (object_elem
+        key: (identifier)
+        value: (integer))
+      (object_elem
+        key: (identifier)
+        value: (integer))))
+  (attribute
+    name: (identifier)
+    value: (object
+      (object_elem
+        key: (quoted_template
+          (quote)
+          (template_literal)
+          (quote))
+        value: (integer))))
+  (attribute
+    name: (identifier)
+    value: (object
+      (object_elem
+        key: (parenthesized_expression
+          (get_attr
+            operand: (identifier)
+            name: (identifier)))
+        value: (integer))))
+  (attribute
+    name: (identifier)
+    value: (object
+      (object_elem
+        key: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote)))
+      (object_elem
+        key: (identifier)
+        value: (quoted_template
+          (quote)
+          (template_literal)
+          (quote))))))
+
+================================================================================
+for expressions over both collection kinds, with a condition and grouping
+================================================================================
+
+names    = [for s in var.subnets : s.name]
+indexed  = [for i, s in var.subnets : "${i}-${s.name}"]
+filtered = [for s in var.subnets : s.name if s.public]
+by_name  = {for s in var.subnets : s.name => s.cidr}
+grouped  = {for s in var.subnets : s.zone => s.name...}
+first    = [for k, h in var.hosts : h if h.ip != ""][0]
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (for_tuple_expr
+      binding: (identifier)
+      collection: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      result: (get_attr
+        operand: (identifier)
+        name: (identifier))))
+  (attribute
+    name: (identifier)
+    value: (for_tuple_expr
+      binding: (identifier)
+      binding: (identifier)
+      collection: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      result: (quoted_template
+        (quote)
+        (template_interpolation
+          expression: (identifier))
+        (template_literal)
+        (template_interpolation
+          expression: (get_attr
+            operand: (identifier)
+            name: (identifier)))
+        (quote))))
+  (attribute
+    name: (identifier)
+    value: (for_tuple_expr
+      binding: (identifier)
+      collection: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      result: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      condition: (for_cond
+        condition: (get_attr
+          operand: (identifier)
+          name: (identifier)))))
+  (attribute
+    name: (identifier)
+    value: (for_object_expr
+      binding: (identifier)
+      collection: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      key: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      value: (get_attr
+        operand: (identifier)
+        name: (identifier))))
+  (attribute
+    name: (identifier)
+    value: (for_object_expr
+      binding: (identifier)
+      collection: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      key: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      value: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      grouping: (ellipsis)))
+  (attribute
+    name: (identifier)
+    value: (index
+      operand: (for_tuple_expr
+        binding: (identifier)
+        binding: (identifier)
+        collection: (get_attr
+          operand: (identifier)
+          name: (identifier))
+        result: (identifier)
+        condition: (for_cond
+          condition: (binary_expression
+            left: (get_attr
+              operand: (identifier)
+              name: (identifier))
+            right: (quoted_template
+              (quote)
+              (quote)))))
+      key: (integer))))
+
+================================================================================
+function calls, including a provider-namespaced one and an expanded argument
+================================================================================
+
+upper    = max(1, 2, 3)
+none     = timestamp()
+expanded = min(local.numbers...)
+trailing = concat(a, b,)
+scoped   = provider::aws::arn_parse(var.arn)
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (function_call
+      function: (function_name
+        (identifier))
+      (arguments
+        (integer)
+        (integer)
+        (integer))))
+  (attribute
+    name: (identifier)
+    value: (function_call
+      function: (function_name
+        (identifier))))
+  (attribute
+    name: (identifier)
+    value: (function_call
+      function: (function_name
+        (identifier))
+      (arguments
+        (get_attr
+          operand: (identifier)
+          name: (identifier))
+        (ellipsis))))
+  (attribute
+    name: (identifier)
+    value: (function_call
+      function: (function_name
+        (identifier))
+      (arguments
+        (identifier)
+        (identifier))))
+  (attribute
+    name: (identifier)
+    value: (function_call
+      function: (function_name
+        (identifier)
+        (identifier)
+        (identifier))
+      (arguments
+        (get_attr
+          operand: (identifier)
+          name: (identifier))))))
+
+================================================================================
+the access operators: attribute, index, legacy index, and both splats
+================================================================================
+
+attr        = aws_instance.web.id
+index       = var.list[0]
+legacy      = var.list.0
+attr_splat  = aws_instance.web.*.id
+full_splat  = aws_instance.web[*].private_ip
+chained     = module.vpc.subnets[0].tags["Name"]
+on_call     = element(var.list, 0).id
+
+--------------------------------------------------------------------------------
+
+(config_file
+  (attribute
+    name: (identifier)
+    value: (get_attr
+      operand: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      name: (identifier)))
+  (attribute
+    name: (identifier)
+    value: (index
+      operand: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      key: (integer)))
+  (attribute
+    name: (identifier)
+    value: (legacy_index
+      operand: (get_attr
+        operand: (identifier)
+        name: (identifier))))
+  (attribute
+    name: (identifier)
+    value: (attr_splat
+      operand: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      name: (identifier)))
+  (attribute
+    name: (identifier)
+    value: (full_splat
+      operand: (get_attr
+        operand: (identifier)
+        name: (identifier))
+      name: (identifier)))
+  (attribute
+    name: (identifier)
+    value: (index
+      operand: (get_attr
+        operand: (index
+          operand: (get_attr
+            operand: (get_attr
+              operand: (identifier)
+              name: (identifier))
+            name: (identifier))
+          key: (integer))
+        name: (identifier))
+      key: (quoted_template
+        (quote)
+        (template_literal)
+        (quote))))
+  (attribute
+    name: (identifier)
+    value: (get_attr
+      operand: (function_call
+        function: (function_name
+          (identifier))
+        (arguments
+          (get_attr
+            operand: (identifier)
+            name: (identifier))
+          (integer)))
+      name: (identifier))))

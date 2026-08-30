@@ -79,6 +79,7 @@ pub(crate) struct RustFmt;
 pub(crate) struct BlackFmt;
 pub(crate) struct TypeScriptFmt;
 pub(crate) struct ZigFmt;
+pub(crate) struct TofuFmt;
 
 #[derive(Deserialize)]
 struct BatchFormatted {
@@ -268,6 +269,34 @@ impl Reformatter for TypeScriptFmt {
 
     fn available(&self) -> bool {
         which("node").is_some() && which("npm").is_some()
+    }
+}
+
+/// HCL's formatter is OpenTofu's, and the choice of fork is a licence
+/// decision recorded in ledger.toml rather than a coin toss.
+///
+/// It is also the one HCL operation the `hcl` library cannot perform.
+/// `tofu fmt` is `hclwrite.ParseConfig` followed by OpenTofu's own
+/// `formatBody` walk — the alignment rules are Terraform's, not HCL's, and
+/// they live in Terraform and its fork. `terraform fmt` would do the same
+/// job under BUSL-1.1; OpenTofu is the MPL-2.0 implementation of it, forked
+/// from Terraform 1.5.x with that code path intact.
+///
+/// `-` is the stdin form, and stdin is what this needs anyway: `tofu fmt`
+/// in path mode only formats files whose names it recognises (`.tf`,
+/// `.tofu`, `.tfvars`, `.tftest.hcl`), so a plain `.hcl` file handed to it
+/// by name is silently skipped rather than formatted.
+impl Reformatter for TofuFmt {
+    fn tool(&self) -> &'static str {
+        "tofu fmt"
+    }
+
+    fn reformat(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, Reformatted>> {
+        format_stdin(srcroot, paths, &["tofu", "fmt", "-"])
+    }
+
+    fn available(&self) -> bool {
+        which("tofu").is_some()
     }
 }
 

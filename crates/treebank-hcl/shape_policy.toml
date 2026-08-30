@@ -1,0 +1,132 @@
+# Declared exceptions for `treebank shape`, HCL edition. Every entry names
+# WHY, and every one was reproduced on a minimal file before it was written
+# down — nothing goes in here to make a number go down. The oracle is
+# hclsyntax itself, the same parser the validity verdict comes from, so
+# these are places where the REFERENCE PARSER and this grammar draw the
+# same code differently, not places where either is wrong about it.
+#
+# The list is short because the check was used to fix the grammar first
+# rather than to describe it. Three findings were fixed rather than
+# declared, and they are worth naming because the fixes are the reason the
+# rest of this file is small:
+#
+#   - The `"` of a quoted template and the `<<EOT` / `EOT` of a heredoc
+#     were HIDDEN external tokens, so three lexemes the language spells had
+#     no node anywhere in the tree. They are `quote`, `heredoc_start` and
+#     `heredoc_end` now. That was twelve lexical signatures across twelve
+#     different parent node kinds.
+#   - `template_literal` was one node per CHUNK, so an escape sequence or a
+#     heredoc line boundary split a literal that hclsyntax coalesces into
+#     one `LiteralValueExpr`. It is one node per RUN now, with the escapes
+#     inside it. That was 117 files in the first 2,000.
+#   - `heredoc_end` stopped at the delimiter word, leaving the trailing
+#     spaces of the delimiter line in nobody's node.
+
+rule = '''
+Boundaries `treebank shape` may ignore, as `"<hclsyntaxType> <- <our_kind>"` pairs — the oracle's node type and the node of OURS that straddles the span it reported. Pairs rather than bare types, so forgiving the top-level body's leading trivia cannot also silence a real disagreement about a block's body, where the spans do align and stay checked.'''
+
+lex_note = '''
+The token check compares against `hclsyntax.LexConfig`, the reference parser's own scanner. One-directional as always: its boundaries must be a SUBSET of ours — finer is fine, coarser means we glued together things the language keeps apart.
+
+Three token types are dropped in the oracle rather than declared here, and the precedent is CPython's: `TokenNewline` and `TokenComment` are trivia the grammar routes through `extras`, and `TokenEOF` marks no text. py-oracle/spans.py drops NEWLINE, NL, INDENT, DEDENT and COMMENT for the same reason. HCL's newline is unusual in being SIGNIFICANT trivia — it terminates an attribute — but it is still a hidden token with no node, so there is no boundary to compare and nothing an entry here could say about it.
+
+The four declared coarsenesses below are the places we deliberately keep one token where hclsyntax has several. Everything else stays checked: every identifier, number, operator, delimiter and template boundary in the language.'''
+
+[[ignore]]
+signature = '*hclsyntax.Body <- config_file'
+why = '''
+The TOP-LEVEL body only, and it is about leading trivia at the start of a file. hclsyntax's root `Body` begins at its first real token; a tree-sitter root node owns the whole document, so a comment before the first item is INSIDE our tree and leading blank lines are outside it. Both directions occur and both are one boundary at offset zero. Minimal: a file beginning with `/* c */`, and a file beginning with a blank line. A block's body is a different pair (`*hclsyntax.Body <- body`) and is not covered here — those spans align exactly, braces included, and stay checked.'''
+
+[[ignore]]
+signature = '*hclsyntax.RelativeTraversalExpr <- full_splat'
+why = '''
+The PROJECTION of a splat. In `a[*].id`, hclsyntax builds `SplatExpr{Source: a, Each: RelativeTraversalExpr}` and gives the projection its own node spanning `[*].id` — the operand is not in it. Our `full_splat` is one node over the whole expression, because the operand is what the splat applies TO and a tree that separates them has to invent the anonymous symbol hclsyntax uses to join them back up (which is why its `AnonSymbolExpr` is dropped in the oracle: it is zero-width). Minimal: `x = a[*].id`.'''
+
+[[ignore]]
+signature = '*hclsyntax.RelativeTraversalExpr <- attr_splat'
+why = 'The attribute-only spelling of the same thing: `x = a.*.arn` gives a projection spanning `.arn`.'
+
+[[ignore]]
+signature = '*hclsyntax.RelativeTraversalExpr <- get_attr'
+why = '''
+The same projection where the access AFTER the splat is what straddles it: `a[*].template.name` puts our `get_attr` over the span hclsyntax gives the projection.'''
+
+[[ignore]]
+signature = '*hclsyntax.RelativeTraversalExpr <- index'
+why = 'The same, with an index rather than an attribute after the splat: `a[*].identity[0]`.'
+
+[[ignore]]
+signature = '*hclsyntax.IndexExpr <- index'
+why = 'The same, where the projection itself is an index: `a[*].address[count.index]`.'
+
+[[ignore]]
+signature = '*hclsyntax.SplatExpr <- full_splat'
+why = '''
+Nested splats: `a[*].service[*].tls[*]` is a splat whose projection contains another, so the inner `SplatExpr` spans a suffix of our outer `full_splat`. Same family as the four above.'''
+
+[[ignore]]
+signature = '*hclsyntax.LiteralValueExpr <- template_literal'
+why = '''
+An INDENTED heredoc (`<<-`). hclsyntax strips the common leading indentation and stamps the stripped offset into the span, so its literal starts two or four bytes after the line does; our `template_literal` keeps the text as written. Ruby's ledger has the identical entry for CRuby's `<<~`: the reference parser is encoding a TRANSFORMATION, not a boundary in the source. Minimal: a `<<-EOT` heredoc with indented content.'''
+
+[[ignore]]
+signature = '*hclsyntax.LiteralValueExpr <- quoted_template'
+why = '''
+`"…$$${x}…"` — a `$$` escape immediately followed by an interpolation. hclsyntax and this grammar split the run at different offsets around the third `$`; both agree there is an escape and an interpolation, and disagree by one byte about where the literal before it ends. Two files in the corpus.'''
+
+[[ignore]]
+signature = '*hclsyntax.TemplateExpr <- template_body'
+why = '''
+One branch of a template `if` directive. hclsyntax spans the branch from its first part to its last part's EXPRESSION, so `%{ if c }with label ${var.p}%{ endif }` gives a branch ending at `p` rather than at the `}` that closes the interpolation — a range that stops inside a construct it contains. Our `template_body` ends at the interpolation's closing brace. Minimal: the example above.'''
+
+[[lex_ignore]]
+signature = 'token start inside `string_lit`'
+why = '''
+A block label. hclsyntax lexes it as `TokenOQuote`, `TokenQuotedLit`, `TokenCQuote`; we keep one `string_lit` token, and that is not an oversight — the label must NOT open the scanner's template mode, because a label is a `StringLit` and cannot interpolate, so it has to be a token the internal lexer owns end to end. Declared coarseness, in the place the language itself draws the line between a template and a literal.'''
+
+[[lex_ignore]]
+signature = 'token end inside `string_lit`'
+why = 'The other edge of `token start inside `string_lit``.'
+
+[[lex_ignore]]
+signature = 'token start inside `template_literal`'
+why = '''
+hclsyntax emits one `TokenStringLit` per LINE inside a heredoc, because its scanner has to look at each line to find the terminator; the parser then coalesces the run into one `LiteralValueExpr`. The two halves of the reference implementation disagree with each other, and this grammar matches the NODE — the run — because that is the shape a consumer reads. The scanner's own tokens are per line as well, but they are hidden, so they contribute no boundary. Python's f-string entries are the precedent for declaring a coarseness where the reference lexer encodes its own bookkeeping.'''
+
+[[lex_ignore]]
+signature = 'token end inside `template_literal`'
+why = 'The other edge of `token start inside `template_literal``.'
+
+[[lex_ignore]]
+signature = 'token start inside `legacy_index`'
+why = '''
+`foo.0`, the HIL-compatibility index the spec requires a conforming parser to accept. hclsyntax lexes it as `.` plus a number; we keep `.0` as one `token.immediate`, because the two characters have to be read as a unit anyway — the spec's own explanation of why `foo.0.0` is invalid is that `0.0` would otherwise lex as a number.'''
+
+[[lex_ignore]]
+signature = 'token end inside `legacy_index`'
+why = 'The other edge of `token start inside `legacy_index``.'
+
+[[lex_ignore]]
+signature = 'token start inside `template_if`'
+why = '''
+`%{ endif }` is ONE token here and three to hclsyntax, and that single token is what buys this grammar its zero declared conflicts — the whole argument is in grammar.js beside the rule and in ledger.toml's known_gaps. A deliberate coarseness at a closing delimiter, paid for with a real gap (a comment inside the closer) rather than with a fork at every `%{` in the language.'''
+
+[[lex_ignore]]
+signature = 'token end inside `template_if`'
+why = 'The other edge of `token start inside `template_if``.'
+
+[[lex_ignore]]
+signature = 'token start inside `else_clause`'
+why = "`%{ else }`, for the reason given at `token start inside `template_if``."
+
+[[lex_ignore]]
+signature = 'token end inside `else_clause`'
+why = 'The other edge of `token start inside `else_clause``.'
+
+[[lex_ignore]]
+signature = 'token start inside `template_for`'
+why = "`%{ endfor }`, for the reason given at `token start inside `template_if``."
+
+[[lex_ignore]]
+signature = 'token end inside `template_for`'
+why = 'The other edge of `token start inside `template_for``.'

@@ -1,0 +1,215 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'hcl'
+versions = '''
+HCL 2, the native syntax, as specified in hclsyntax/spec.md and implemented by github.com/hashicorp/hcl/v2 -- `.hcl`, `.tf` and `.tfvars` in one grammar.
+
+THE LANGUAGE IS HCL AND TERRAFORM IS A DIALECT OF IT, and that decision is the one that shapes this crate. HCL2 is a general configuration syntax with a specification of its own, used by Terraform, OpenTofu, Packer, Nomad, Consul, Vault, Waypoint and anything else that embeds the library. What Terraform adds on top of it is a block SCHEMA (`resource` takes two labels, `variable` takes one), a function table (`jsonencode`, `cidrsubnet`), and a variable namespace (`var`, `local`, `each`) -- and every one of those is semantics. It adds no syntax at all: `resource "aws_instance" "web" { … }` is a block with two labels, `"${var.x}"` is an HCL2 template, and a `for` expression, a splat, a heredoc and a conditional are all in the spec above. There is no `.tf` production in grammar.js because there is no `.tf` syntax.
+
+So the crate is `treebank-hcl` and the registry gets ONE row, with `.tf` and `.tfvars` as extensions of it rather than a second `terraform` language pointing at this grammar. The registry's `grammar` column exists for exactly that second shape -- it is how `javascript` registers against the typescript crate -- and the discriminator for using it is this repository's own: a dialect earns a `LangName` when it brings its own CORPUS and its own ORACLE. JavaScript brings both, a different npm population and its own checker program. Terraform brings neither, and the reason is worth stating precisely: it does not bring a corpus TO HCL, it IS the corpus for HCL, and its oracle is the HCL parser, because `tofu fmt` gates on `hclsyntax.ParseConfig` before it will format anything. A `terraform` row would duplicate the fixtures, the negative corpus, the lint and shape policies and the capability triple, and would measure exactly nothing the `hcl` row does not. That is `.zon`'s situation rather than `.js`'s, and it gets `.zon`'s answer.
+
+What the naming leaves open is the useful direction. If Packer or Nomad HCL ever earns a corpus of its own -- a different population, ranked differently, biased differently -- that is a registration which points AT this grammar, which is the way round the dependency should run. A `treebank-terraform` would have made it point the wrong way, or made HCL a copy.
+
+Not covered, deliberately: the HCL JSON PROFILE (`.tf.json`, `.tfvars.json`). It is a second concrete syntax for the same information model, and a JSON parser is not this grammar with more rules -- it is a different grammar. The corpus does not admit those extensions, so they are absent rather than failing.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+parser_note = '''
+`src/parser.c` is the SMALLEST in this repository, and the parse table behind it is 474 states -- just under yaml's 527, and against zig's 8,339 and C++'s 26,576. That is worth a sentence because it is a fact about HCL rather than a claim about the grammar: HCL has one expression grammar with no type syntax beside it, no statements, no declarations beyond `name = value` and `type labels { … }`, and no operator whose meaning depends on what came before it. There are 44 named node types in the whole language.
+
+The two smallest tables are small for opposite reasons, which is worth noticing. YAML's is small because its structure is COLUMNS and a context-free rule cannot ask about a column, so almost everything was pushed into the scanner. HCL's is small because there is genuinely not much syntax, and the scanner does three things.
+
+The grammar declares ZERO conflicts, which only yaml also manages. Every ambiguity HCL contains is settled a rung above the parse table (FIELD_GUIDE.md §1): the newline decisions in the scanner, the keyword decisions by tree-sitter's keyword extraction, the operator ladder by static precedence, and the closing template directives by being single tokens. Two of those four are unusual enough to have their own paragraphs below: newline_note and keyword_note.'''
+roles_note = '''
+12 of 22 table-tier terms are threaded. The ten that are not are facts about HCL, and they cluster: this is a DECLARATIVE configuration language, so most of the vocabulary that describes executing code has nothing to point at.
+
+`_statement` has no member, and it is the absence that says the most. A body is a set of attributes and blocks, evaluated by the calling application in whatever order it likes; nothing here is "executed for effect as an element of a sequence". Both of a body's item kinds are `_declaration` instead, which makes `(_declaration)` over a `.tf` file the whole structural language rather than a subset of it.
+
+`_assignment` has no member either, and `attribute` is deliberately NOT one. HCL has no mutation and no places to store into: `region = "us-east-1"` introduces a named value, it does not overwrite one. Writing the same name twice in one body is an error rather than a second assignment -- hclsyntax reports "Attribute redefined" -- which is the clearest possible evidence that `=` here is a declaration and not a store.
+
+`_jump` and `_control_flow` beyond branch and loop: there is nothing to return from, nothing to break out of, nothing to throw. `_directive` likewise -- HCL reaches outside its own file never; Terraform's `module` block has a `source`, and what that means is the calling application's business, not the syntax's.
+
+`_callable` has no member: HCL DEFINES nothing invocable. The function table belongs to the embedding application, so the language has a call syntax (`_invocation`) and no callable declaration anywhere. It is the first grammar here where those two come APART -- yaml omits both, having neither -- and the shared `queries/highlights.scm` already guarded `(_callable)` for yaml's sake, so nothing was needed for it. What HCL did need is the guard on `(_directive)`: it computes, and it still never reaches outside its own file.
+
+`_parameter`, `_modifier`, `_attribute`, `_pattern`, `_type`: none has a member. There are no formal parameters (a function's parameters live in the host's Go code), no keyword-ish markers on a declaration, no annotation syntax, no destructuring or matching position, and no type syntax -- Terraform's `type = string` is an ordinary attribute whose value is an ordinary identifier, and the fact that Terraform then interprets it as a type constraint is precisely the semantics this grammar does not have.
+
+Four threadings are worth stating because a reader would otherwise assume the opposite.
+
+`attribute` and `block` are BOTH `_declaration`, and `_declaration` stays on the table tier rather than being demoted. Each member is a concrete node occurring nowhere but a body item, so a demotion would have been permitted; it is not taken, because the position is unpartitioned and the rule in DESIGN.md §3.1.1 is to use the table tier wherever the language leaves it that way.
+
+`_loop` holds the FOR-EXPRESSIONS, not the template `%{ for }` directive, and `_branch` holds the conditional and not `%{ if }`. That is measured rather than chosen by taste: a supertype is one alternation, so a `_control_flow` shared between the expression and template sub-languages is reachable at a template-part position AND as the start of a conditional's condition at that same position, and `tree-sitter generate` reports it as an unresolved conflict rather than as a widening a corpus might later find. The terms went where the queries are -- over real Terraform, `[for s in var.subnets : s.name]` is what a `(_loop)` query is asking about. The directives carry `_scope` (they do bind their loop variables) and are recorded in roles.json's `uncategorised` with the reason.
+
+`_name` holds `identifier` and nothing else, and `string_lit` -- the quoted form of a block label -- is therefore in the `_string` facet only, not in `_literal`. `_literal` is an occurrence-level role, and the only place a `string_lit` occurs is a block label, which is a naming position and not a value position. Admitting `_literal` there would have admitted `blk 1 {}`, which HCL rejects.
+
+`quoted_template` is NOT a `_literal`, for python's reason exactly: the rule can carry an interpolation, and `_literal` quantifies over the RULE rather than the instance, so no instance of it qualifies. `_string` is the facet that answers "find every string" over the quoted, heredoc and label forms together.'''
+
+newline_note = '''
+HCL IS NEWLINE SENSITIVE, and only in some of its brackets. This is the decision the grammar is built around and it is the one a reader will not expect from the specification, whose EBNF says the opposite in two places.
+
+Measured against hclsyntax, at the top of a body and inside a block: a newline TERMINATES an attribute (`x = a +` then a line break is a parse error, not a continuation) and SEPARATES items (`a = 1 b = 2` on one line is rejected). Inside `(…)`, `[…]`, a call's arguments and an index it is invisible: `[1 +\n2]` is fine and `[1\n2]` is a missing-comma error, so a tuple's elements are separated by commas alone. Inside an OBJECT it is significant again and is an element separator -- `{a = 1\nb = 2}` is valid -- but not symmetrically: `{a = 1,\nb = 2}` is valid and `{a = 1\n, b = 2}` is not, because a newline after a comma is trivia and a comma after a newline is a second separator. The spec's `tuple = "[" (Expression (("," | Newline) Expression)* ","?)? "]"` says newline is a tuple separator and the implementation says it is not; the prose has priority, as the spec's own notation section warns.
+
+hclsyntax expresses all of this with a newline-inclusion STACK inside a recursive-descent parser. An LR table cannot carry that mode without two copies of the expression grammar, so the decision is pushed a rung higher instead (FIELD_GUIDE.md §1): `_newline` is an external token, and the scanner emits one only where `valid_symbols` says the table wants it. Everywhere else the newline falls through to `extras` and is trivia. The whole of "newlines are invisible inside brackets" therefore costs zero rules -- a tuple simply never admits `_newline`, so the scanner never offers one -- and the object's asymmetry is one `optional($._newline)` inside the separator rule.
+
+One measured consequence of using the scanner this way, because it cost real files before it was found: `extras` and the external scanner are NOT interchangeable ways of disposing of whitespace. A named extra (a comment) sends tree-sitter's lexer round the loop again and the scanner is re-consulted; an anonymous whitespace extra is skipped inside the internal lexer and the scanner is NOT. So a scanner-owned token sitting behind a newline -- the `"` opening a quoted template as an element of a multi-line list, the `<<` of a heredoc -- is never offered at all unless the scanner steps over the newline itself. Every string in every multi-line tuple in the corpus failed until `skip_trivia` existed. The gap it closed was 394 files of the 12,053 in the pre-corpus survey.
+
+What this arrangement CANNOT express is one position, and it is declared as a deviation below: inside an object, where newlines are significant EVERYWHERE rather than only at separator positions.'''
+
+keyword_note = '''
+HCL HAS NO RESERVED WORDS, which inverts FIELD_GUIDE.md §5, and the inversion is the specification's own: "There are no globally-reserved words, but in some contexts certain identifiers are reserved to function as keywords."
+
+Measured against hclsyntax, all of these are VALID HCL and all of them parse here: `for = 1`, `if = 1`, `in = 1`, `true = 1`, `for {}`, `true {}`, `x = for`, `x = if`, `x = {if = 1}` and -- the case that settles it -- `[for for in y : for]`, in which the same three letters are a keyword, a loop variable and a value expression. Going the other way, `{for = 1}` and `[for, a]` are parse ERRORS, because `for` immediately after the `[` or `{` that could open a for-expression is always the keyword.
+
+tree-sitter's keyword extraction is exactly that rule: the word token is re-lexed as a keyword only in states where the keyword is valid. So `word: $ => $.identifier` with NO reserved set is not the omission §5 warns about -- populating `reserved` here would be the bug, and would reject nine forms hclsyntax accepts. `lint_policy.toml` records the nine keyword-shaped tokens as a baseline that is not debt, and `test/negative/` carries the direction that a corpus of valid code cannot show: that `for` still wins where a for-expression may begin.'''
+
+shape_check = '''
+`treebank shape` — node BOUNDARIES from `hclsyntax.Walk`, and token boundaries from `hclsyntax.LexConfig`, over the whole corpus. 19,219 files, 2,227,614 oracle nodes, **0 missed**, against ten declared granularity differences in shape_policy.toml.
+
+The zero is the second number in this file that would be worth distrusting on its own, so here is what it cost. The check found four things and three of them were FIXED rather than declared:
+
+  - The `"` of a quoted template and the `<<EOT` / `EOT` of a heredoc were HIDDEN external tokens. They have to be external, because the scanner's template-mode stack opens and closes on them, and an external token is either named or hidden with no anonymous option — so three lexemes the language spells had no node anywhere in the tree. Twelve lexical signatures across twelve parent node kinds, all of them one cause.
+  - `template_literal` was one node per CHUNK, so an escape sequence or a heredoc line boundary split a run that hclsyntax coalesces into one `LiteralValueExpr`. 117 files in the first 2,000.
+  - `heredoc_end` stopped at the delimiter word, leaving the trailing spaces of the delimiter line in nobody's node.
+  - And the fix for the first of those introduced the 32-file regression described in sweep_history, which the corpus sweep could not see and this check found immediately.
+
+The one direction it cannot see is a widening: an oracle node must have one of ours, and a node of ours that the oracle does not have is allowed, because finer is fine. `mutation_check` is the measurement for the other direction.'''
+
+mutation_check = '''
+`treebank mutate` — 2,000 corpus files x 10 mutants, seed 1: swap, delete or replace a token in a file the oracle calls valid, then ask whether anything we still ACCEPT the oracle now rejects. It is the only check here that measures the accepts-invalid direction over real code, and it is the one that proves the sweep can report a non-zero number at all.
+
+18,862 mutants: 13,991 rejected by the grammar, 4,676 agreed, **195 widenings in 118 clusters**. 161 of the 195 were reconstructed from the report and put back to `tofu fmt` to see what hclsyntax objects to, and they fall entirely inside the deviations declared below:
+
+  101  "Invalid block definition" / "Argument or block definition required" / "Invalid attribute name" / "Invalid expression" — the newline deviation. hclsyntax's message for the largest class says the rule in as many words: "A block definition must have block content delimited by { and }, STARTING ON THE SAME LINE as the block header."
+   31  "Attribute redefined" — the duplicate-attribute deviation.
+   21  "Invalid number literal" — the legacy-index deviation, in its second spelling: a mutant that produces `"" >= 1.5.7` is an invalid number to hclsyntax and a float followed by a legacy index here.
+
+The remaining 34 could not be reproduced from the example line the report records, and were not adjudicated. No cluster required a deviation that was not already written down, which is the result this check exists to give or to deny.'''
+
+reformat_check = '''
+`treebank reformat` — every corpus file through `tofu fmt`, asserting our tree does not move. A formatter preserves the program and rewrites its layout, so a tree that changes is our bug: a rule reading layout it should not, or a token that only lexes when it abuts its neighbour.
+
+19,219 files, 411 actually reformatted (18,760 were already canonical and carry no signal — registry modules are formatted code, which is one of the biases blind_to names), **0 diverged**, 48 skipped.
+
+The 48 are skipped rather than counted because `tofu fmt` rewrote TOKENS and not only layout: it normalises `//` comments to `#`, which changes the text a `comment` node spans and is a transformation rather than a reflow. Counting those as divergence would report a formatter's opinion as a grammar defect.'''
+
+[corpus]
+source = 'the 500 most-downloaded modules on registry.terraform.io (fetched 2026-08-30), each from the GitHub archive of the release tag the registry names'
+files = 19219
+packages = 499
+ranking_note = '''
+This is the STRONGEST ranking signal in the repository, and saying so is the point of this paragraph rather than a boast, because it is the direct counterpart to zig's.
+
+Zig has no registry, so its corpus is ranked by GitHub stars, and its ledger spends a paragraph on why that is weak: attention rather than use, a metric that costs nothing and never decays. The Terraform Registry publishes a real cumulative DOWNLOAD count per module -- a count of `terraform init` runs, by machines that actually consumed the code. The top module here has 408 million of them and the five-hundredth still has 243,830. Nobody stars their way into this ranking, and a module that stopped being used stops climbing it.
+
+The ranking comes from the registry's v2 API with `sort=-downloads`, which is what the registry's own browse page calls; the documented v1 list endpoint has no ordering at all and returns modules in registry order, so its first page is partner modules with five-digit counts. Resolution then uses v1, which is the documented one, for each module's current version and release tag. The lock records the archive's SHA-256, so a tag that later moves is caught by hydration rather than silently fetched.
+
+499 of the 500 are here. `waveaccounting/chatbot-slack-configuration/aws` is the one that is not: the registry still names release tag `v1.1.0` and GitHub answers 404 for it, so the fetch skipped the module rather than guessing at another tag. A corpus short by one module, which is the failure mode to want.'''
+blind_to = '''
+ROOT MODULES, which is to say most of the Terraform anyone writes.
+
+A published registry module is reusable LIBRARY code, and that is a narrower thing than it sounds. It is parameterised, so it is heavy on `variable` and `output` blocks and light on literal values. It is written to be called, so it rarely contains the `provider`, `terraform` and `backend` blocks that every real configuration begins with. It is versioned and reviewed, so it is machine-formatted (`tofu fmt` has been over nearly all of it) and its idioms are conservative. The Terraform that most people write is the other thing: a `main.tf` in an infrastructure repository that calls those modules, wires up state and credentials, and is never published anywhere. Add private module registries inside companies and the population this corpus can see is the minority of Terraform that is public and packaged.
+
+What that biases the numbers toward, concretely: heavy `for`-expression and `dynamic`-block use (library code parameterises), heavy interpolation, and very consistent formatting -- so the newline-sensitivity deviations declared below are under-exercised here precisely because a formatted file never has an expression straddling a line break in the position that would trigger them. It biases AGAINST the long literal heredocs (IAM policies, cloud-init, user-data scripts) that root modules are full of, and against hand-written files that have never been through a formatter.
+
+And it is blind to the rest of HCL. Packer, Nomad, Consul, Vault and Waypoint configuration is the same syntax with a different schema, and none of it is in a Terraform module registry. The pre-corpus survey covered some of it by hand -- 12,053 files across the Terraform, Vault, Consul, Nomad, Packer, Terragrunt and hcl repositories -- but that is not this corpus and is not this number.'''
+
+[corpus.sweep]
+files = 19219
+passed = 19219
+failed = 0
+gap_files = 0
+noise_files = 0
+pass_rate = '100.00%'
+corpus_lock_sha256 = '094490533a198bdf63e4d811dfbd03db053cda71e424f85929800aa0902ccb52'
+grammar_sha256 = 'b619ba8323a1cfc9ba65b4dc2a269c7b88f8637602d86597c2eff3900c474059'
+grammar_revision = '455115367c2886c153ee32105685f17e927733a0'
+
+[corpus.sweep_history]
+note = '''
+ONE sweep, and it passed every file, which is a number to be suspicious of rather than pleased with. It is stated first and then argued down.
+
+A 100% pass rate means the sweep MEASURED NOTHING. The oracle is only consulted about files the grammar failed, so with zero failures it was never asked a question; the sweep proved that 19,219 files parse and proved nothing at all about the adjudication behind it. What proves that path works is elsewhere: the committed micro-corpus in `test/sweep-smoke/hcl/`, whose two files are one valid and one deliberately invalid, and which fails if the oracle cannot tell them apart.
+
+It is also not the first attempt, and the intermediate numbers are the interesting ones. The grammar was developed against a hand-assembled survey of 12,053 files -- the Terraform, Vault, Consul, Nomad, Packer, Terragrunt and hcl repositories, chosen because they are the HCL a registry corpus cannot see -- and that survey went 92.1% -> 100% across three findings, each of which is a construct rather than a guess:
+
+  - 394 files: a scanner-owned token behind a NEWLINE was never offered, because an anonymous whitespace extra does not send tree-sitter's lexer round the loop again. Every string in every multi-line list failed. See newline_note.
+  - 1 file: a for-expression is an ExprTerm in HCL and may be indexed --
+    `[for k, h in var.hosts : h if h.ip != ""][0]` is how a module picks the first match -- and `_loop` was not reachable from the suffix operators.
+  - 32 files, found after the corpus sweep already read 100%: a shared rule for the two quote symbols made both valid at once, so the scanner popped its template mode where it should have pushed and every heredoc containing a nested quoted template stopped parsing. `treebank shape` found it, not the sweep.
+
+The last of those is the argument for not trusting this number on its own. The corpus sweep was green before and after.'''
+
+[[oracles]]
+family = 'hcl'
+tool = 'hclsyntax.ParseConfig, via tools/hcl-oracle (Go)'
+version = "github.com/hashicorp/hcl/v2 v2.24.0, pinned in the oracle's go.mod and go.sum"
+role = '''
+The reference parser IS A LIBRARY here rather than a binary, and that is the finding rather than a shortcut.
+
+`terraform fmt` and `tofu fmt` are the obvious candidates and both of them gate on this same call before they will touch a file: OpenTofu's `processFile` runs `hclsyntax.ParseConfig` and returns its diagnostics unformatted if it has errors. So the verdict a formatter would give IS this verdict, and taking it directly costs one ~100 MB binary less and removes an entire class of "which subcommand did we mean" from the evidence.
+
+**The licence was checked before anything was wired, not after.** HashiCorp moved Terraform to BUSL-1.1 in August 2023 -- 1.5.7 is the last MPL-2.0 release, and IBM's acquisition completing in February 2025 changed the name on the file and not the terms. The `hcl` library stayed MPL-2.0 along with the rest of HashiCorp's libraries. So NOTHING UNDER BUSL IS PINNED ANYWHERE IN THIS REPOSITORY: the validity oracle is the MPL library, and the formatter capability (see below) is OpenTofu, which is the MPL-2.0 fork under the Linux Foundation. The dependency is fetched by `go build` from a committed `go.sum` rather than vendored, the same arrangement as the C oracle's libclang and the TypeScript oracle's `npm ci` -- a tool the gate calls, never code this repository ships.
+
+**This is the syntactic question and only the syntactic question.** `terraform validate` is the tool a reader will expect here and it is deliberately NOT used: it resolves providers, modules and type constraints, needs a `terraform init` before it can say anything at all, and answers whether a configuration is well FORMED -- which is not what a grammar is measured against. `hclsyntax.ParseConfig` reads one file's bytes, follows no `source`, and has never heard of `aws_instance`. The boundary is the library's own, not our discipline's, which is the property that makes it trustworthy.
+
+An unreadable file is never an invalid file: the oracle exits non-zero with no verdict rather than answering `invalid`, because an `invalid` verdict books a file the grammar failed as corpus NOISE. The survey found this immediately -- Packer's test data contains a DIRECTORY named `build.pkr.hcl`, and the oracle stopped rather than calling it invalid.
+
+One thing it checks beyond pure syntax: duplicate attribute names within one body. `a = 1` written twice is "Attribute redefined", which no parse table can express. That is a widening on our side rather than a gap, so the sweep is structurally blind to it; it is declared below and has its own negative fixture.'''
+
+[[deviations]]
+what = '''
+An expression that is INCOMPLETE at the end of a line continues onto the next one here, and terminates in HCL.
+
+`x = a +` followed by `b` on the next line parses as one attribute here and is a parse error for hclsyntax; so do `x = a ?` / `b : c`, and every other form that ends a line mid-expression. The mechanism is the one the newline_note describes from the other side: where the parse table admits `_newline` the scanner offers one and the attribute ends correctly, and where it does not -- mid-expression, after an operator -- the newline falls through to `extras` and is trivia.
+
+**This never mis-parses valid HCL, and the boundary is worth stating precisely.** A COMPLETE expression at end of line is followed by a position where `_newline` is valid, so the scanner emits it and the item ends: `x = [1, 2]` followed by `[3]` on the next line is two items here as well, and errors as it should. Only an expression that cannot end where the line does is affected, and no valid file contains one. So the whole deviation lives on input HCL rejects, which is exactly the direction a corpus sweep cannot see -- `test/negative/` is where it is pinned down.
+
+The most visible instance is a BLOCK HEADER, and it is the one that motivated writing this up rather than filing it as a curiosity: a bare identifier on its own line followed by a block on the next joins them into one block with an extra label. Packer's own `fmt_errs/malformed.pkr.hcl` fixture is that shape.
+
+Fixing it needs the newline-inclusion mode hclsyntax has and an LR table does not, which would mean two copies of the expression grammar.
+
+Measured independently by `treebank mutate`: 101 of its 195 widenings are this deviation, and it is the largest class by a factor of three.'''
+
+[[deviations]]
+what = '''
+Inside an OBJECT, a newline is a separator here and a significant token everywhere in HCL.
+
+`{a = 1\nb = 2}` and `{a = 1,\nb = 2}` parse correctly and `{a = 1\n, b = 2}` is correctly rejected, because the separator rule spells that asymmetry out. What the grammar cannot say is that a newline is ALSO forbidden at the object's other positions: `{a =\n1}`, `{a\n= 1}` and `{a = 1 +\n2}` all parse here and all three are errors for hclsyntax.
+
+Same root as the deviation above and the same reason it stands: inside an object hclsyntax keeps newlines in the token stream at every position, and reproducing that would need an object's expression grammar to be a second copy of the ordinary one.'''
+
+[[deviations]]
+what = '''
+A block LABEL admits `${…}` and `%{…}` here; hclsyntax rejects both.
+
+A label is a `StringLit`, which is a quoted string with escapes and no template, and `blk "${a}" {}` is an error -- Terraform's own `invalid-files/interp-in-rsrc-label.tf` fixture is exactly that. The label is one token here, so it can validate the escape sequences (`blk "a\qb" {}` is rejected, as it should be) but cannot also exclude an interpolation introduction without a lookahead-shaped regex the token DSL does not have. It is a widening on input HCL rejects; it has a negative fixture.'''
+
+[[deviations]]
+what = '''
+The legacy index applies where hclsyntax has a NUMBER, and chains where hclsyntax stops at one.
+
+The legacy `.0` index exists only for compatibility with HCL's precursor language and the spec requires a conforming parser to accept it. It also says why it does not chain: in `foo.0.0`, `0.0` lexes as a number literal and the sequence is invalid. That is a LEXICAL consequence in hclsyntax and a rule here, and the rule is not reproduced -- `token.immediate(/\.[0-9]+/)` matches `.0` and then `.1`.
+
+The same widening has a second spelling that only `treebank mutate` found, in 21 of its 195 widenings: `1.5.7` is one invalid number literal to hclsyntax and a float followed by a legacy index here. Narrowing the operand to exclude a number needs a second copy of the expression-term rule and risks a real gap -- `f(x).0` is legal, so the operand cannot simply be a traversal -- which is not a trade worth making for a construct nobody has written since HCL 1.'''
+
+[[deviations]]
+what = '''
+A duplicate attribute name in one body parses here and is "Attribute redefined" for hclsyntax.
+
+It is a check the reference parser makes and a parse table cannot: `a = 1` twice is two well-formed declarations, and noticing that they collide is a pass over the body rather than a property of the derivation. It accounts for most of the accepts-invalid files found in the pre-corpus survey, all of them in the deliberately-invalid test data of Terraform and Vault, and for 31 of `treebank mutate`'s 195 widenings. Recorded here because the sweep is blind to it in principle, not because it is close to being fixed.'''
+
+[[deviations]]
+what = '''
+An identifier's character classes are UAX#31's general categories and not the property itself.
+
+HCL defines an identifier as `ID_Start (ID_Continue | '-')*` under UAX#31, and hclsyntax uses Go's tables for it. This grammar uses the Unicode general categories those properties are built from -- `L`, `Nl`, `Mn`, `Mc`, `Nd`, `Pc` -- which is the same set apart from `Other_ID_Start` and `Other_ID_Continue`, two small lists of legacy code points the property adds on top (a handful of CJK and Georgian characters, some combining marks). So the difference is a NARROWING, on identifiers no configuration language is written in; nothing in the corpus is affected and nothing would be measured by a wider class. Recorded because the spec names a property and this names an approximation of it, and a reader should not have to diff the two to find that out.'''
+
+[[known_gaps]]
+construct = 'a comment inside a closing template directive'
+files = 0
+note = '''
+`%{ /* c */ endif }` is valid HCL and is rejected here. So are the same shapes for `%{ else }` and `%{ endfor }`.
+
+The three closing directives are single tokens, and that is what buys this grammar its zero declared conflicts. `template_body` is a named rule, so ending one is a REDUCE, and with `%{` spelling both "a nested directive begins" and "this body is over" the reduce and the shift compete on the same lookahead -- an LR(1) table cannot see the `if` or the `endif` behind it. The alternatives were a declared conflict with a dynamic weight (a cheap fork, dying one token later, but a fork at every `%{` in the language) or flattening `template_body` and `else_clause` away, which buys the table what it wants by throwing out the structure a consumer asked for. Making the closers one token each moves the decision to the lexer, where longest-match settles it for free.
+
+The cost is exactly this: the token admits horizontal space and newlines between `%{`, the keyword and `}`, because HCL does, and it cannot admit a comment because a token is a DFA over characters and a comment is a node. Zero files in the pre-corpus survey of 12,053 contained one.'''

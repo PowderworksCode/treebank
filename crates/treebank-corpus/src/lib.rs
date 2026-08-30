@@ -13,6 +13,7 @@ mod c;
 mod cxx;
 mod debian;
 mod github;
+mod hcl;
 mod java;
 mod javascript;
 mod npm;
