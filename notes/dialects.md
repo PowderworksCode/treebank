@@ -20,11 +20,11 @@ is never built again.**
 
 §4.2's rule — one grammar per language, accepting the union of its
 versions, the latest winning where readings collide — rests on
-measurement, and it works where its premise holds. Python 2.7 ∪ 3.x sweeps 297,257 of 298,354
-files with two gap files. Rust carries editions 2015–2024 in one table.
-Java, C and YAML the same. The premise is an **ordering**: versions form a
-line, so "the latest version wins" is a decision rule, and
-`version_policy.toml` names the losses.
+measurement, and it works where its premise holds. Python 2.7 ∪ 3.x
+sweeps 297,257 of 298,354 files with two gap files. Rust carries
+editions 2015–2024 in one table. Java, C and YAML the same. The premise
+is an **ordering**: versions form a line, so "the latest version wins"
+is a decision rule, and `version_policy.toml` names the losses.
 
 Four findings mark where the premise ends.
 
@@ -229,6 +229,30 @@ The checker (`treebank roles` grows three rules, or a sibling
 An entry may carry the version bound it narrows away (`match_statement`
 → 3.10) so `version_of()` can report a floor as well as a family.
 Nothing further builds on that today — §4.2's restraint, kept.
+
+**The matcher is not hypothetical, and neither is its limit.** `fuzz`
+grew `node_kind` for the same problem one rung over: a `starts_with`
+prefix is positional, so a declared construct nested inside another
+statement escapes its entry, and the way out that keeps the aim is to
+name the construct rather than its position. It matches wherever the
+construct appears and nowhere else, anonymous kinds included (py2's `<>`
+is as declarable as a statement), and the loader rejects a kind the
+grammar never produces — rule 1 above, already built. `narrowing.json`
+should match the same way, and the two files should agree about what a
+py2 construct is rather than each keeping a list.
+
+The measurement that arrived with it bounds what any narrowing can
+claim, which is why it belongs here. Declaring the five py2-union kinds
+on python moved 31 fuzz findings out of undeclared, and **six should not
+have moved**: `async def XX((XX)): XX` and ``async with `XX` < XX: XX``
+put a py2-only construct inside a py3-only one, so they are valid in
+NEITHER version — a real finding wearing a declared one's clothes.
+Read as a narrowing rule, that says a py2-only node kind in a file does
+not make the file py2. A manifest entry answers *this occurrence sits
+outside the row*, never *this file belongs to the other row*; the
+second
+question is the oracle's, which is why rule 3 checks the manifest
+against the verdict vector rather than deriving a verdict from it.
 
 What a manifest can never do is change a reading — a limit to declare,
 not to discover: a `python2` manifest over the union
