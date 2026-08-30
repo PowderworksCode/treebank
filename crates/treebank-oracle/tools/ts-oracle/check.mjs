@@ -44,7 +44,9 @@ function verdict(path) {
   const src = read(path);
   try {
     const sf = ts.createSourceFile(path, src, ts.ScriptTarget.Latest, false, scriptKind(path));
-    return (sf.parseDiagnostics ?? []).length === 0;
+    // parseDiagnostics is internal to the compiler and absent from its
+    // public types, but it is the only purely syntactic verdict it exposes.
+    return (/** @type {any} */ (sf).parseDiagnostics ?? []).length === 0;
   } catch {
     return false;
   }

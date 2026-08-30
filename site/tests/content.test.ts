@@ -38,10 +38,12 @@ describe("every grammar has a page", () => {
     const data = join(import.meta.dir, "..", "public", "grammars");
     const bundles = readdirSync(data)
       .filter((f) => f.endsWith(".json") && f !== "index.json")
-      .map((f) => f.replace(/\.json$/, "")).sort();
+      .map((f) => f.replace(/\.json$/, ""))
+      .sort();
     const pages = readdirSync(join(CONTENT_DIR, "grammars"))
       .filter((f) => f.endsWith(".md") && f !== "index.md")
-      .map((f) => f.replace(/\.md$/, "")).sort();
+      .map((f) => f.replace(/\.md$/, ""))
+      .sort();
     expect(bundles.length).toBeGreaterThan(0);
     expect(pages).toEqual(bundles);
   });

@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // The compiler options are fleet policy and live in tsconfig.base.json,
+  // which conf writes here. Only what is specific to this site belongs below.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // bun:test, and the Bun-flavoured ImportMeta the tests read import.meta.dir
+    // from.
+    "types": ["bun"],
+    // The tests import the site's own ESM modules, which are .mjs. allowJs
+    // lets the checker follow them; checkJs stays off because those files
+    // carry no annotations and `strict` over them reports their absence
+    // rather than a mistake.
+    "allowJs": true,
+    // Dependencies ship untranspiled ESM, so allowJs otherwise follows an
+    // import into node_modules and grades someone else's source as ours.
+    "maxNodeModuleJsDepth": 0
+  },
+  // The Worker and the tests are the TypeScript surface. src/ and tools/ are
+  // ESM JavaScript -- browser scripts and build scripts -- and out/ and
+  // public/ hold what the build derives from crates/.
+  "include": ["worker.ts", "tests/**/*.ts"]
+}

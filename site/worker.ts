@@ -82,11 +82,14 @@ async function fromBucket(
   return new Response(object.body, { headers });
 }
 
-async function resolvePointer(bucket: R2BucketLike, name: string): Promise<string | null> {
+async function resolvePointer(
+  bucket: R2BucketLike,
+  name: string,
+): Promise<string | null> {
   const manifest = await bucket.get(MANIFEST_KEY);
   if (!manifest || manifest.body === null) return null;
   try {
-    const parsed = await new Response(manifest.body).json() as {
+    const parsed = (await new Response(manifest.body).json()) as {
       packs?: Record<string, { key?: string }>;
     };
     const key = parsed.packs?.[name]?.key;
@@ -97,17 +100,29 @@ async function resolvePointer(bucket: R2BucketLike, name: string): Promise<strin
   }
 }
 
-async function servePack(request: Request, env: Env, file: string): Promise<Response | null> {
+async function servePack(
+  request: Request,
+  env: Env,
+  file: string,
+): Promise<Response | null> {
   if (!env.PACKS) return null;
 
   if (file === MANIFEST_KEY) {
-    return fromBucket(request, env.PACKS, MANIFEST_KEY, MANIFEST, "application/json");
+    return fromBucket(
+      request,
+      env.PACKS,
+      MANIFEST_KEY,
+      MANIFEST,
+      "application/json",
+    );
   }
   if (HASHED.test(file)) {
     return fromBucket(request, env.PACKS, file, IMMUTABLE, "application/wasm");
   }
+  // The group is checked rather than asserted: a matched pattern always has
+  // it, but noUncheckedIndexedAccess is right that the type does not say so.
   const pointed = POINTED.exec(file);
-  if (pointed) {
+  if (pointed?.[1]) {
     const key = await resolvePointer(env.PACKS, pointed[1]);
     if (!key) return null;
     return fromBucket(request, env.PACKS, key, POINTER, "application/wasm");
@@ -135,10 +150,13 @@ export default {
       return asset;
     }
 
-    const path = url.pathname !== "/" && url.pathname.endsWith("/")
-      ? url.pathname.slice(0, -1)
-      : url.pathname;
-    const twin = await env.ASSETS.fetch(new URL(`${path}/index.md`, url.origin));
+    const path =
+      url.pathname !== "/" && url.pathname.endsWith("/")
+        ? url.pathname.slice(0, -1)
+        : url.pathname;
+    const twin = await env.ASSETS.fetch(
+      new URL(`${path}/index.md`, url.origin),
+    );
     if (twin.status === 404) return asset;
 
     const response = new Response(twin.body, twin);

@@ -28,7 +28,10 @@ const prepared = grammars.map((g) => ({
 const out = cases.map(({ grammar, query, filtered }) => {
   const g = prepared[grammar];
   try {
-    return { ok: true, value: expandQuery(query, g.facets, filtered ? g.nodeTypes : null) };
+    return {
+      ok: true,
+      value: expandQuery(query, g.facets, filtered ? g.nodeTypes : null),
+    };
   } catch (e) {
     return { ok: false, error: String(e.message ?? e) };
   }

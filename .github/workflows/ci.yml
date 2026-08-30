@@ -123,6 +123,14 @@ jobs:
         if: matrix.language == 'typescript'
         working-directory: crates/treebank-oracle/tools/ts-oracle
         run: npm ci --no-audit --no-fund
+      # The oracle is plain ESM that drives the TypeScript compiler, and it
+      # reaches for two internal APIs to do it. Checking it here, where its
+      # dependencies are already installed, is what stops a typescript bump
+      # from moving one of them out from under us silently.
+      - name: typecheck the TypeScript oracle
+        if: matrix.language == 'typescript'
+        working-directory: crates/treebank-oracle/tools/ts-oracle
+        run: npm run typecheck
       - name: install JavaScript oracle dependencies
         if: matrix.language == 'javascript'
         working-directory: crates/treebank-oracle/tools/js-oracle
@@ -326,6 +334,22 @@ jobs:
       - name: install
         working-directory: site
         run: bun install --frozen-lockfile
+
+      # Typecheck, lint and format are named here rather than left to a
+      # discovering workflow, because a task list is what makes a gate
+      # readable: a reader -- or ordnung, which reads workflows -- can see
+      # what this repository runs without running it.
+      - name: typecheck
+        working-directory: site
+        run: bun run typecheck
+
+      - name: lint
+        working-directory: site
+        run: bun run lint
+
+      - name: format
+        working-directory: site
+        run: bun run format
 
       # The build derives the reference pages and their data from crates/ --
       # a directory with a grammar.js in it is a grammar, the same rule the

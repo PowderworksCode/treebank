@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // The compiler options are fleet policy and live in tsconfig.base.json,
+  // which conf writes here. Only what this oracle needs on top belongs below.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    // The oracle is a Node program written in plain ESM: it is a TypeScript
+    // project because it drives the TypeScript compiler, not because it is
+    // written in TypeScript.
+    "allowJs": true,
+    "checkJs": true,
+    // `strict` over source with no annotations reports the absence of JSDoc
+    // rather than a mistake -- 37 of the 42 findings were "parameter
+    // implicitly has an any type". Off, the checker still catches what it is
+    // here for: a misspelled name, a property that does not exist, a call
+    // with the wrong arity.
+    "strict": false,
+    "types": ["node"],
+    // Dependencies ship untranspiled ESM, so allowJs otherwise follows an
+    // import into node_modules and grades typescript's own source as ours.
+    "maxNodeModuleJsDepth": 0
+  },
+  "include": ["*.mjs"]
+}

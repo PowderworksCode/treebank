@@ -3,7 +3,13 @@
   "private": true,
   "type": "module",
   "description": "Syntax-only TypeScript reference check for the treebank oracle",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
   "dependencies": {
     "typescript": "^5.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.0"
   }
 }

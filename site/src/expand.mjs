@@ -69,7 +69,6 @@ function matchingParen(s, open) {
   throw new Error("unbalanced parentheses in query");
 }
 
-
 // node-types.json, in the shape the filtering needs. Same projection as
 // crates/treebank/src/node_types.rs: named types, supertype -> direct named
 // subtypes, and type -> field -> the types that field may hold.
@@ -87,7 +86,10 @@ export function parseNodeTypes(json) {
     }
     fields.set(e.type, perField);
     if (e.subtypes?.length) {
-      supertypes.set(e.type, e.subtypes.filter((x) => x.named).map((x) => x.type));
+      supertypes.set(
+        e.type,
+        e.subtypes.filter((x) => x.named).map((x) => x.type),
+      );
     }
   }
   return { named, supertypes, fields };
@@ -194,15 +196,18 @@ export function expandQuery(query, facets, nodeTypes = null) {
       NAME.lastIndex = nameStart;
       const name = (NAME.exec(query) ?? [""])[0];
       const nameEnd = nameStart + name.length;
-      const members = Object.prototype.hasOwnProperty.call(facets, name)
-        ? facets[name]
-        : undefined;
+      const members = Object.hasOwn(facets, name) ? facets[name] : undefined;
       if (members) {
-        if (members.length === 0) throw new Error(`facet \`${name}\` has no members`);
+        if (members.length === 0)
+          throw new Error(`facet \`${name}\` has no members`);
         const close = matchingParen(query, i);
         // The body is everything between the name and the close paren, itself
         // expanded first so a facet nested inside a facet resolves inside out.
-        const body = expandQuery(query.slice(nameEnd, close), facets, nodeTypes);
+        const body = expandQuery(
+          query.slice(nameEnd, close),
+          facets,
+          nodeTypes,
+        );
 
         // Drop members a depth-0 field constraint cannot hold for. This is
         // what tree-sitter itself checks for a NATIVE supertype pattern,
@@ -221,8 +226,11 @@ export function expandQuery(query, facets, nodeTypes = null) {
             // Derivation-based: the field must DECLARE the type asked for, or
             // declare a supertype that derives to it. The closure runs from
             // what is declared toward what is asked, never the other way.
-            return want.some((w) =>
-              have.has(w) || [...have].some((h) => closure(nodeTypes, h).has(w)));
+            return want.some(
+              (w) =>
+                have.has(w) ||
+                [...have].some((h) => closure(nodeTypes, h).has(w)),
+            );
           });
         });
         if (kept.length === 0) {

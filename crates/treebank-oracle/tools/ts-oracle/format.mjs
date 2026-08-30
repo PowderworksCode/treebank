@@ -47,8 +47,12 @@ for (const raw of fs.readFileSync(0, "utf8").split("\n")) {
       getCanonicalFileName: (name) => name,
       useCaseSensitiveFileNames: () => true,
     };
-    const context = ts.formatting.getFormatContext(settings, host);
-    const edits = ts.formatting.formatDocument(file, context);
+    // ts.formatting is the compiler's own formatter, and internal: it is
+    // not in the public types, which is the price of not reaching for a
+    // third-party style tool here.
+    const internal = /** @type {any} */ (ts);
+    const context = internal.formatting.getFormatContext(settings, host);
+    const edits = internal.formatting.formatDocument(file, context);
     process.stdout.write(`${JSON.stringify({ path, source: applyEdits(source, edits) })}\n`);
   } catch (error) {
     process.stdout.write(`${JSON.stringify({ path, skipped: String(error.message ?? error) })}\n`);

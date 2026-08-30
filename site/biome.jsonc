@@ -1,0 +1,25 @@
+{
+  // Biome only discovers biome.json or biome.jsonc, and the fleet's settings
+  // arrive next to them as biome.base.json. This file is the line that joins
+  // them; the rules themselves are conf's, and belong there.
+  //
+  // "root" has to be said out loud: biome.base.json declares itself nested, so
+  // a config extending it inherits that, looks for a parent it will never
+  // find, and silently falls back to Biome's defaults -- which format with
+  // tabs.
+  "root": true,
+  "extends": ["./biome.base.json"],
+  "files": {
+    "includes": [
+      // Derived from crates/ by tools/build-status.mjs and the build scripts,
+      // and regenerated in CI to prove the site is not quoting numbers this
+      // repository has stopped agreeing with. A formatter rewriting the
+      // snapshot would fail that comparison for a reason nobody changed.
+      "!public",
+      // Stylesheets are the fleet's other tool's business: conf writes a
+      // .stylelintrc.json and fleet-js runs Stylelint over them. Two
+      // formatters over one file is a fight, not a gate.
+      "!**/*.css"
+    ]
+  }
+}

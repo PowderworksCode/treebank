@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json.schemastore.org/tsconfig",
+  // A JavaScript project, so there is no fleet tsconfig.base.json here to
+  // extend -- conf writes that only where a project is TypeScript. What
+  // follows is the base, minus the settings that only mean something once a
+  // file carries annotations.
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "moduleDetection": "force",
+    "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
+    // `strict` over source with no JSDoc reports the absence of annotations
+    // rather than a mistake. Off, the checker still catches a misspelled
+    // name, a property that does not exist, a call with the wrong arity.
+    "strict": false,
+    // @babel/parser ships untranspiled, so allowJs otherwise follows the
+    // import into node_modules and grades someone else's source as ours.
+    "maxNodeModuleJsDepth": 0,
+    "noFallthroughCasesInSwitch": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"]
+  },
+  "include": ["*.mjs"],
+  "exclude": ["node_modules"]
+}
