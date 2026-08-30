@@ -89,6 +89,9 @@ jobs:
           - language: zig
             ledger: crates/treebank-zig/ledger.toml
             sweep_args: --lang zig --grammar crates/treebank-zig
+          - language: hcl
+            ledger: crates/treebank-hcl/ledger.toml
+            sweep_args: --lang hcl --grammar crates/treebank-hcl
 
     steps:
       # Sweep provenance names the last commit that changed the generated
@@ -155,6 +158,14 @@ jobs:
       - name: expose the pinned libclang to the oracle build
         if: matrix.language == 'c' || matrix.language == 'cpp'
         run: echo "TREEBANK_LLVM_DIR=$LLVM_PATH" >> "$GITHUB_ENV"
+
+      # The HCL oracle is a Go program built against a pinned
+      # hashicorp/hcl. Go pins the toolchain here so the version is a
+      # recorded fact rather than whatever the runner image ships.
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        if: matrix.language == 'hcl'
+        with:
+          go-version: "1.24"
 
       - uses: step-security/setup-zig@1e9fbd457bcc3587b58845344a267f12f151709c # v2
         if: matrix.language == 'zig'

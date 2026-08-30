@@ -1,17 +1,17 @@
 {
  "schema_version": 1,
  "summary": {
-  "languages": 11,
-  "grammars": 10,
-  "corpus_locks": 11,
-  "corpus_canaries": 10,
-  "current_corpus_evidence": 11,
+  "languages": 12,
+  "grammars": 11,
+  "corpus_locks": 12,
+  "corpus_canaries": 11,
+  "current_corpus_evidence": 12,
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
-  "lint_ratchets": 10,
-  "shape_fixture_grammars": 9,
-  "wasm_packs": 10,
-  "query_files": 20,
+  "lint_ratchets": 11,
+  "shape_fixture_grammars": 10,
+  "wasm_packs": 11,
+  "query_files": 22,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
@@ -235,6 +235,95 @@
     },
     {
      "summary": "**A macro in a namespace head or body parses, and the compiler rejects it.** `namespace std _GLIBCXX_VISIBILITY(default) { … }` opens very nearly every libstdc++ header and `_GLIBCXX_BEGIN_NAMESPACE_VERSION` follows it; unexpanded, neither is anything. C admits the same shape at FILE SCOPE and C++ cannot afford to — a bare name where a declaration goes hands every `f(x)` a second reading, and that was measured: it was the last four declared conflicts before the table stopped converging. Here it is reachable from exactly two positions, both already committed by the `namespace` keyword before the macro appears. Measured before it was taken: the two positions are 200 and 73 files of 791.",
+     "files": null
+    }
+   ]
+  },
+  "hcl": {
+   "versions": "HCL 2, the native syntax, as specified in hclsyntax/spec.md and implemented by github.com/hashicorp/hcl/v2 -- `.hcl`, `.tf` and `.tfvars` in one grammar. THE LANGUAGE IS HCL AND TERRAFORM IS A DIALECT OF IT, and that decision is the one that shapes this crate. HCL2 is a general configuration syntax with a specification of its own, used by Terraform, OpenTofu, Packer, Nomad, Consul, Vault, Waypoint and anything else that embeds the library. What Terraform adds on top of it is a block SCHEMA (`resource` takes two labels, `variable` takes one), a function table (`jsonencode`, `cidrsubnet`), and a variable namespace (`var`, `local`, `each`) -- and every one of those is semantics. It adds no syntax at all: `resource \"aws_instance\" \"web\" { … }` is a block with two labels, `\"${var.x}\"` is an HCL2 template, and a `for` expression, a splat, a heredoc and a conditional are all in the spec above. There is no `.tf` production in grammar.js because there is no `.tf` syntax. So the crate is `treebank-hcl` and the registry gets ONE row, with `.tf` and `.tfvars` as extensions of it rather than a second `terraform` language pointing at this grammar. The registry's `grammar` column exists for exactly that second shape -- it is how `javascript` registers against the typescript crate -- and the discriminator for using it is this repository's own: a dialect earns a `LangName` when it brings its own CORPUS and its own ORACLE. JavaScript brings both, a different npm population and its own checker program. Terraform brings neither, and the reason is worth stating precisely: it does not bring a corpus TO HCL, it IS the corpus for HCL, and its oracle is the HCL parser, because `tofu fmt` gates on `hclsyntax.ParseConfig` before it will format anything. A `terraform` row would duplicate the fixtures, the negative corpus, the lint and shape policies and the capability triple, and would measure exactly nothing the `hcl` row does not. That is `.zon`'s situation rather than `.js`'s, and it gets `.zon`'s answer. What the naming leaves open is the useful direction. If Packer or Nomad HCL ever earns a corpus of its own -- a different population, ranked differently, biased differently -- that is a registration which points AT this grammar, which is the way round the dependency should run. A `treebank-terraform` would have made it point the wrong way, or made HCL a copy. Not covered, deliberately: the HCL JSON PROFILE (`.tf.json`, `.tfvars.json`). It is a second concrete syntax for the same information model, and a JSON parser is not this grammar with more rules -- it is a different grammar. The corpus does not admit those extensions, so they are absent rather than failing.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "hcl"
+   ],
+   "capabilities": {
+    "spans": true,
+    "formatter": true,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 12,
+    "facets": 6,
+    "named_nodes": 44,
+    "uncategorised": 11
+   },
+   "tests": {
+    "corpus_cases": 17,
+    "negative_files": 28,
+    "shape_files": 2
+   },
+   "known_deviations": {
+    "shape": true,
+    "fuzz": false,
+    "lint": true,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 2
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": true,
+   "evidence_freshness": "current",
+   "lint_ratchet": true,
+   "corpora": [
+    {
+     "language": "hcl",
+     "files": 19219,
+     "passed": 19219,
+     "failed": 0,
+     "grammar_gaps": 0,
+     "noise": 0,
+     "pass_rate": "100.00%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "f002e4064699c938ad8be2cd3fb6d8d9d8d27f93"
+    }
+   ],
+   "known_gaps": [
+    {
+     "summary": "a comment inside a closing template directive",
+     "files": 0
+    }
+   ],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "An expression that is INCOMPLETE at the end of a line continues onto the next one here, and terminates in HCL. `x = a +` followed by `b` on the next line parses as one attribute here and is a parse error for hclsyntax; so do `x = a ?` / `b : c`, and every other form that ends a line mid-expression. The mechanism is the one the newline_note describes from the other side: where the parse table admits `_newline` the scanner offers one and the attribute ends correctly, and where it does not -- mid-expression, after an operator -- the newline falls through to `extras` and is trivia. **This never mis-parses valid HCL, and the boundary is worth stating precisely.** A COMPLETE expression at end of line is followed by a position where `_newline` is valid, so the scanner emits it and the item ends: `x = [1, 2]` followed by `[3]` on the next line is two items here as well, and errors as it should. Only an expression that cannot end where the line does is affected, and no valid file contains one. So the whole deviation lives on input HCL rejects, which is exactly the direction a corpus sweep cannot see -- `test/negative/` is where it is pinned down. The most visible instance is a BLOCK HEADER, and it is the one that motivated writing this up rather than filing it as a curiosity: a bare identifier on its own line followed by a block on the next joins them into one block with an extra label. Packer's own `fmt_errs/malformed.pkr.hcl` fixture is that shape. Fixing it needs the newline-inclusion mode hclsyntax has and an LR table does not, which would mean two copies of the expression grammar. Measured independently by `treebank mutate`: 101 of its 195 widenings are this deviation, and it is the largest class by a factor of three.",
+     "files": null
+    },
+    {
+     "summary": "Inside an OBJECT, a newline is a separator here and a significant token everywhere in HCL. `{a = 1\\nb = 2}` and `{a = 1,\\nb = 2}` parse correctly and `{a = 1\\n, b = 2}` is correctly rejected, because the separator rule spells that asymmetry out. What the grammar cannot say is that a newline is ALSO forbidden at the object's other positions: `{a =\\n1}`, `{a\\n= 1}` and `{a = 1 +\\n2}` all parse here and all three are errors for hclsyntax. Same root as the deviation above and the same reason it stands: inside an object hclsyntax keeps newlines in the token stream at every position, and reproducing that would need an object's expression grammar to be a second copy of the ordinary one.",
+     "files": null
+    },
+    {
+     "summary": "A block LABEL admits `${…}` and `%{…}` here; hclsyntax rejects both. A label is a `StringLit`, which is a quoted string with escapes and no template, and `blk \"${a}\" {}` is an error -- Terraform's own `invalid-files/interp-in-rsrc-label.tf` fixture is exactly that. The label is one token here, so it can validate the escape sequences (`blk \"a\\qb\" {}` is rejected, as it should be) but cannot also exclude an interpolation introduction without a lookahead-shaped regex the token DSL does not have. It is a widening on input HCL rejects; it has a negative fixture.",
+     "files": null
+    },
+    {
+     "summary": "The legacy index applies where hclsyntax has a NUMBER, and chains where hclsyntax stops at one. The legacy `.0` index exists only for compatibility with HCL's precursor language and the spec requires a conforming parser to accept it. It also says why it does not chain: in `foo.0.0`, `0.0` lexes as a number literal and the sequence is invalid. That is a LEXICAL consequence in hclsyntax and a rule here, and the rule is not reproduced -- `token.immediate(/\\.[0-9]+/)` matches `.0` and then `.1`. The same widening has a second spelling that only `treebank mutate` found, in 21 of its 195 widenings: `1.5.7` is one invalid number literal to hclsyntax and a float followed by a legacy index here. Narrowing the operand to exclude a number needs a second copy of the expression-term rule and risks a real gap -- `f(x).0` is legal, so the operand cannot simply be a traversal -- which is not a trade worth making for a construct nobody has written since HCL 1.",
+     "files": null
+    },
+    {
+     "summary": "A duplicate attribute name in one body parses here and is \"Attribute redefined\" for hclsyntax. It is a check the reference parser makes and a parse table cannot: `a = 1` twice is two well-formed declarations, and noticing that they collide is a pass over the body rather than a property of the derivation. It accounts for most of the accepts-invalid files found in the pre-corpus survey, all of them in the deliberately-invalid test data of Terraform and Vault, and for 31 of `treebank mutate`'s 195 widenings. Recorded here because the sweep is blind to it in principle, not because it is close to being fixed.",
+     "files": null
+    },
+    {
+     "summary": "An identifier's character classes are UAX#31's general categories and not the property itself. HCL defines an identifier as `ID_Start (ID_Continue | '-')*` under UAX#31, and hclsyntax uses Go's tables for it. This grammar uses the Unicode general categories those properties are built from -- `L`, `Nl`, `Mn`, `Mc`, `Nd`, `Pc` -- which is the same set apart from `Other_ID_Start` and `Other_ID_Continue`, two small lists of legacy code points the property adds on top (a handful of CJK and Georgian characters, some combining marks). So the difference is a NARROWING, on identifiers no configuration language is written in; nothing in the corpus is affected and nothing would be measured by a wider class. Recorded because the spec names a property and this names an approximation of it, and a reader should not have to diff the two to find that out.",
      "files": null
     }
    ]

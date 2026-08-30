@@ -36,4 +36,8 @@
 ; Guarded for the same reason as the block above: a data language alters no
 ; sequential execution because it has none.
 
+; And guarded once more, for a language that computes but never reaches
+; outside its own file: HCL's `module` block is a block, and what its
+; `source` means is the calling application's business rather than the
+; syntax's.
 (_directive) @keyword.import
