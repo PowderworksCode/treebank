@@ -11,6 +11,8 @@
     "packs": "node tools/build-packs-index.mjs",
     "viewer": "cp src/grammar.mjs src/railroad.mjs src/grammar-viewer.mjs src/status.mjs src/status-view.mjs src/pack.mjs src/expand.mjs src/playground.mjs src/grammar.css public/",
     "build": "rm -rf out && bun run grammars && bun run packs && bun run viewer && powderworks-docs build content --out out --site treebank --license MIT --static public",
+    "social": "python3 node_modules/@powderworks/docs/tools/social-card.py --site treebank",
+    "social:check": "python3 node_modules/@powderworks/docs/tools/social-card.py --site treebank --check",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
     "test": "bun test"
