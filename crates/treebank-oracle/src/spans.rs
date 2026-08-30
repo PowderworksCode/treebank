@@ -111,6 +111,7 @@ pub(crate) struct BashSpans;
 pub(crate) struct RubySpans;
 pub(crate) struct CSpans;
 pub(crate) struct CppSpans;
+pub(crate) struct YamlSpans;
 
 #[derive(Deserialize)]
 struct RawFile {
@@ -137,6 +138,29 @@ impl SpanOracle for TypeScriptSpans {
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
         let lines =
             stdin_oracle::node_lines(&crate::tool("ts-oracle"), "spans.mjs", &[], srcroot, paths)?;
+        parse_jsonl(&lines, srcroot)
+    }
+}
+
+impl SpanOracle for YamlSpans {
+    /// The `yaml` package's own AST, the same parser `validate` asks at
+    /// 1.2. YAML has no owning implementation and therefore no reference
+    /// AST; this is the most conformant one available, and the ledger says
+    /// so where it says the same about the verdict oracle.
+    ///
+    /// A file that the 1.2 leg rejects comes back `skipped` rather than
+    /// with an empty span list. The union oracle accepts files this parser
+    /// does not — that is the whole point of its third leg — and a file
+    /// whose spans nobody can report is not a file the two trees agree
+    /// about, it is one nobody measured.
+    fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
+        let lines = stdin_oracle::node_lines(
+            &crate::tool("yaml-oracle"),
+            "spans.mjs",
+            &[],
+            srcroot,
+            paths,
+        )?;
         parse_jsonl(&lines, srcroot)
     }
 }
