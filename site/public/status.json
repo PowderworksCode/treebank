@@ -844,8 +844,8 @@
     "uncategorised": 1
    },
    "tests": {
-    "corpus_cases": 10,
-    "negative_files": 9,
+    "corpus_cases": 11,
+    "negative_files": 17,
     "shape_files": 0
    },
    "known_deviations": {
@@ -870,14 +870,14 @@
     {
      "language": "yaml",
      "files": 128334,
-     "passed": 128085,
-     "failed": 249,
+     "passed": 127959,
+     "failed": 375,
      "grammar_gaps": 0,
-     "noise": 249,
-     "pass_rate": "99.81%",
+     "noise": 375,
+     "pass_rate": "99.71%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "aaf6e6a53fbc74a5b1aad7bd337e7ace427819f2"
+     "grammar_revision": "3516844c92f77dd5328bbac33b2dd0587618b454"
     }
    ],
    "known_gaps": [
@@ -888,11 +888,11 @@
    ],
    "known_widenings": [
     {
-     "summary": "a bare document following another document without a `---` or a `...` between them",
+     "summary": "two anchors on one node, `&a` then `&b value`",
      "files": null
     },
     {
-     "summary": "two anchors on one node, `&a` then `&b value`",
+     "summary": "a comment with no whitespace in front of it, `\"foo\"#bar`",
      "files": null
     }
    ],

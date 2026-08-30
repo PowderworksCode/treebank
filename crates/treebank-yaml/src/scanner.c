@@ -89,6 +89,25 @@ typedef struct {
   // `a: 1` / `  b: 2` from parsing as a nested mapping keyed on a folded
   // scalar instead of being the error it is.
   bool multiline_scalar;
+  // `_indented` has just vouched for this position, so the node that opens
+  // here is allowed to be deeper than the collection around it. Without
+  // this the entry-position rule below would reject the first token of
+  // every indented value in the language.
+  bool at_node_start;
+  // A BARE document — a node with no `---` in front of it — is allowed
+  // only at the head of the stream or directly after a `...`. Everywhere
+  // else a document has to announce itself, and without this bit the text
+  // after a finished document quietly becomes a second one.
+  //
+  // It is scanner state because the rule is unbounded history: whether a
+  // `...` has been seen since the last document began. A context-free rule
+  // can encode that only as a two-state stream with four spellings of
+  // `document`, which is a great deal of grammar for one bit.
+  bool bare_document_allowed;
+  // A tab stood in the separation after an entry indicator. It has to
+  // outlive the scan that saw it, because the zero-width `_indented` sits
+  // between that scan and the one that would open the collection.
+  bool tab_after_indicator;
 } Scanner;
 
 static inline void advance(TSLexer *lexer) { lexer->advance(lexer, false); }
@@ -130,12 +149,21 @@ static inline void reopen_line(Scanner *s) {
   s->line_column = NO_COLUMN;
   s->json_key = false;
   s->multiline_scalar = false;
+  s->at_node_start = false;
+  s->tab_after_indicator = false;
+  // An entry indicator opens a document as surely as a scalar does.
+  s->bare_document_allowed = false;
 }
 
 // After ordinary content, nothing later on this line begins it.
 static inline void took_content(Scanner *s) {
   s->json_key = false;
   s->multiline_scalar = false;
+  s->at_node_start = false;
+  s->tab_after_indicator = false;
+  // The first content token of a document is where a bare one would have
+  // begun, so it is also where the permission for one ends.
+  s->bare_document_allowed = false;
 }
 
 // `---` or `...`, three of the same character followed by a space or a
@@ -261,12 +289,28 @@ static bool plain_can_start(int32_t c) {
 
 // ── quoted scalars ──────────────────────────────────────────────────────
 
+// A quoted scalar may span lines, but not a document boundary: `---` and
+// `...` at column 0 end the document whatever is open, so a quote left
+// hanging above one is unterminated rather than very long. Consumes the
+// break it is called on, and whatever the marker probe inspects — all of
+// it is scalar content when the answer is no.
+static bool quote_crosses_document(TSLexer *lexer) {
+  while (is_break(lexer->lookahead)) advance(lexer);
+  if (lexer->get_column(lexer) != 0) return false;
+  return at_document_marker(lexer);
+}
+
+
 static bool scan_single_quote(TSLexer *lexer, Scanner *s) {
   bool folded = false;
   advance(lexer);
   for (;;) {
     int32_t c = lexer->lookahead;
-    if (is_break(c)) folded = true;
+    if (is_break(c)) {
+      folded = true;
+      if (quote_crosses_document(lexer)) return false;
+      continue;
+    }
     if (c == 0) return false; // unterminated: not a token, let the parse fail
     if (c == '\'') {
       advance(lexer);
@@ -333,7 +377,11 @@ static bool scan_double_quote(TSLexer *lexer, Scanner *s) {
   advance(lexer);
   for (;;) {
     int32_t c = lexer->lookahead;
-    if (is_break(c)) folded = true;
+    if (is_break(c)) {
+      folded = true;
+      if (quote_crosses_document(lexer)) return false;
+      continue;
+    }
     if (c == 0) return false;
     if (c == '\\') {
       advance(lexer);
@@ -460,6 +508,14 @@ static bool scan_block_scalar(TSLexer *lexer, Scanner *s) {
 
   int32_t content_indent =
       seen_indent ? (parent < 0 ? 0 : parent) + explicit_indent : -1;
+  // The deepest all-space line seen before the first line with content on
+  // it. With no indentation indicator the first content line sets the
+  // block's indentation, and a leading blank line that reached FURTHER
+  // than that is an error rather than a longer blank: the spec says a
+  // leading all-space line must not have more spaces than the first
+  // non-empty one, because there would be no way to tell the difference
+  // between its indentation and its content.
+  int32_t leading_blank_indent = -1;
 
   for (;;) {
     if (!is_break(lexer->lookahead)) break;
@@ -468,12 +524,20 @@ static bool scan_block_scalar(TSLexer *lexer, Scanner *s) {
     while (lexer->lookahead == ' ') advance(lexer);
     int32_t c = lexer->lookahead;
     if (c == 0) break;
-    if (is_break(c)) continue; // a blank line, which may yet be interior
+    if (is_break(c)) {
+      // A blank line, which may yet be interior.
+      if (content_indent < 0) {
+        int32_t blank = (int32_t)lexer->get_column(lexer);
+        if (blank > leading_blank_indent) leading_blank_indent = blank;
+      }
+      continue;
+    }
     uint32_t column = lexer->get_column(lexer);
     if (content_indent < 0) {
       // No indicator: the first content line sets the indentation.
       if ((int32_t)column <= parent) break;
       content_indent = (int32_t)column;
+      if (leading_blank_indent > content_indent) return false;
     }
     if ((int32_t)column < content_indent) break;
     if (column == 0 && at_document_marker(lexer)) break;
@@ -522,12 +586,22 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   bool saw_break = false;
   bool at_line_head = lexer->get_column(lexer) == 0;
   bool tab_in_indent = false;
+  // A tab in the separation that FOLLOWS an entry indicator. `- ` and `? `
+  // count as indentation for whatever they introduce, and a block
+  // collection's indentation is spaces — so `-` tab `-` is not a nested
+  // sequence and `?` tab `key:` is not a mapping, though a tab in front of
+  // a SCALAR is ordinary separation and stays legal. `line_column` is
+  // NO_COLUMN exactly inside that region, which is what distinguishes it
+  // from a tab further along a line.
   for (;;) {
     int32_t c = lexer->lookahead;
     if (is_space(c)) {
       if (c == '\t' && at_line_head &&
           (int32_t)lexer->get_column(lexer) <= top_column(s)) {
         tab_in_indent = true;
+      }
+      if (c == '\t' && !at_line_head && s->line_column == NO_COLUMN) {
+        s->tab_after_indicator = true;
       }
       skip(lexer);
     } else if (is_break(c)) {
@@ -541,6 +615,7 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   }
   if (saw_break) {
     s->line_column = NO_COLUMN;
+    s->tab_after_indicator = false;
     // Inside a flow collection a line break is not a boundary, so a quoted
     // key keeps its right to an adjacent `:` across one: `{ "foo"` then
     // `  :bar }` is YAML 1.2's JSON rule spanning two lines.
@@ -690,6 +765,7 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
     bool compact_sequence =
         is_bullet && (int32_t)column == top && !top_is_sequence(s);
     if (valid_symbols[INDENTED] && ((int32_t)column > top || compact_sequence)) {
+      s->at_node_start = true;
       lexer->result_symbol = INDENTED;
       return true;
     }
@@ -703,13 +779,68 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
     }
   }
 
+  // A document may begin here — `_document_start` is offered nowhere else —
+  // and a bare one is not allowed to. `[ a ]` on one line and `invalid
+  // item` on the next is an error in YAML, and so is a `%YAML` directive
+  // with no `...` between it and the document above it.
+  //
+  // `_document_start` is live at every reduce point inside a document too
+  // — the parser can always imagine reducing what it has and starting a
+  // new one — so two more conditions say which of those is a real stream
+  // position. Nothing may be open (`level_count == 0`; the `:` of `a: 1`
+  // is mid-line precisely because its mapping is not pushed until the
+  // colon), and the token must begin its line, which no continuation of a
+  // document in progress does.
+  if (valid_symbols[DOCUMENT_START] && s->flow_depth == 0 &&
+      s->level_count == 0 && starts_the_line && !s->at_node_start &&
+      !is_marker && !s->bare_document_allowed) {
+    return false;
+  }
+
+  // At an ENTRY position — the next pair of an open mapping, the next entry
+  // of an open sequence — the content must sit at exactly the collection's
+  // column. Deeper is not a nested anything: a collection nests under a
+  // VALUE, and a value position offers `_indented`, which this one does
+  // not. `map:` / `  key1: 1` / `   key2: 2` is the error it looks like.
+  //
+  // Shallower is already handled: that is what `_block_end` is for, and a
+  // column between two open levels arrives here having closed the inner
+  // one and still being too deep for the outer.
+  if (s->flow_depth == 0 && starts_the_line && s->level_count > 0 &&
+      !s->at_node_start && !valid_symbols[INDENTED] &&
+      !valid_symbols[EMPTY_NODE] && (int32_t)column > top_column(s)) {
+    return false;
+  }
+
   if (is_marker) {
     bool start = c == '-';
     if (start ? !valid_symbols[DOCUMENT_START] : !valid_symbols[DOCUMENT_END]) {
       return false;
     }
     lexer->mark_end(lexer); // the three characters, not the space after
-    reopen_line(s);
+    // `---` may carry the document's node on its own line; `...` may not
+    // carry anything. Probing past `mark_end` costs nothing.
+    if (!start) {
+      while (is_space(lexer->lookahead)) advance(lexer);
+      if (!is_line_end(lexer->lookahead) && lexer->lookahead != '#') {
+        return false;
+      }
+    }
+    // NOT `reopen_line`: a `---` is not indentation the way a `-` is. A
+    // block collection may not begin on the marker's line — `--- key1: v`
+    // then `    key2: v` is an error, because the mapping would have to
+    // open at a column the marker already occupies — while a scalar or a
+    // flow node may. Leaving `line_column` at the marker's own column is
+    // what says so, and it costs nothing on the far commoner form where
+    // the node starts on the next line and the break resets it anyway.
+    took_content(s);
+    // A `...` returns the stream to the state it began in. So, for a
+    // different reason, does a `---`: the node it announces is still to
+    // come, begins its own line as often as not, and is this document's
+    // content rather than a document of its own. What ends the permission
+    // in both cases is the first CONTENT token, which is exactly where a
+    // document's node begins.
+    s->bare_document_allowed = true;
     lexer->result_symbol = start ? DOCUMENT_START : DOCUMENT_END;
     return true;
   }
@@ -719,7 +850,7 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   if (dash_then_space && !is_bullet) return false;
 
   if (is_bullet) {
-    if (!valid_symbols[BLOCK_SEQ_BULLET]) return false;
+    if (!valid_symbols[BLOCK_SEQ_BULLET] || s->tab_after_indicator) return false;
     lexer->mark_end(lexer); // the token is the `-` alone
     int32_t top = top_column(s);
     if (s->level_count == 0 || (int32_t)column > top ||
@@ -746,6 +877,12 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
     // starves the wrong one (FIELD_GUIDE.md §1, rung 1; §4's hazard used
     // on purpose, with the scanner owning the spelling everywhere).
     int colon = starts_the_line ? OWN_LINE_COLON : BLOCK_MAP_COLON;
+    // Whether the text is an indicator at all, before any rule about
+    // whether one is allowed here. A `:` that IS one and is merely
+    // forbidden must not fall through and become the first character of a
+    // plain scalar — `this` / ` is` / `  invalid: x` would swallow its own
+    // error and parse as one very long scalar.
+    bool spelled_as_indicator = indicator;
     // An implicit key in BLOCK context is one line — YAML's simple-key
     // rule — so a `:` that follows a scalar which folded across a break is
     // not an indicator at all, and `a: 1` / `  b: 2` is the error it looks
@@ -782,7 +919,7 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
       lexer->result_symbol = colon;
       return true;
     }
-    if (indicator || !valid_symbols[PLAIN_SCALAR]) return false;
+    if (spelled_as_indicator || !valid_symbols[PLAIN_SCALAR]) return false;
     return scan_plain(lexer, s, true);
   }
 
@@ -894,6 +1031,9 @@ unsigned tree_sitter_yaml_external_scanner_serialize(void *payload,
   i += sizeof(uint16_t);
   buffer[i++] = (char)s->json_key;
   buffer[i++] = (char)s->multiline_scalar;
+  buffer[i++] = (char)s->at_node_start;
+  buffer[i++] = (char)s->bare_document_allowed;
+  buffer[i++] = (char)s->tab_after_indicator;
   return i;
 }
 
@@ -902,8 +1042,10 @@ void tree_sitter_yaml_external_scanner_deserialize(void *payload,
                                                    unsigned length) {
   Scanner *s = (Scanner *)payload;
   memset(s, 0, sizeof(Scanner));
-  // A fresh parse starts at the head of the first line, inside nothing.
+  // A fresh parse starts at the head of the first line, inside nothing,
+  // and the first document in a stream is the one that may be bare.
   s->line_column = NO_COLUMN;
+  s->bare_document_allowed = true;
   if (length == 0) return;
   unsigned i = 0;
   s->level_count = (uint8_t)buffer[i++];
@@ -918,11 +1060,17 @@ void tree_sitter_yaml_external_scanner_deserialize(void *payload,
   i += sizeof(uint16_t);
   s->json_key = buffer[i++] != 0;
   s->multiline_scalar = buffer[i++] != 0;
+  s->at_node_start = buffer[i++] != 0;
+  s->bare_document_allowed = buffer[i++] != 0;
+  s->tab_after_indicator = buffer[i++] != 0;
 }
 
 void *tree_sitter_yaml_external_scanner_create(void) {
   Scanner *s = calloc(1, sizeof(Scanner));
-  if (s != NULL) s->line_column = NO_COLUMN;
+  if (s != NULL) {
+    s->line_column = NO_COLUMN;
+    s->bare_document_allowed = true;
+  }
   return s;
 }
 
