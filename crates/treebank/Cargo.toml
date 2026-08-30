@@ -43,7 +43,21 @@ blake3 = { version = "1", optional = true, default-features = false, features = 
 
 # Fetching grammars. Same versions the rest of the workspace already uses, so
 # a checkout does not carry two HTTP stacks.
-ureq = { version = "2", optional = true, features = ["native-certs", "proxy-from-env"] }
+# ureq 3 with its crypto provider left unset, so `rustls-graviola` can supply
+# one. The default `rustls` feature pulls ring, whose build.rs compiles C and
+# assembly through cc -- which wants `aarch64-linux-musl-gcc` and so cannot
+# cross-compile to the musl targets a host like straitjacket ships on. Graviola
+# is Rust and inline assembly with no C at all, so both musl targets build with
+# no cross toolchain, which is the same reason blake3 is pinned to `pure`
+# downstream. Proxies are read from the environment by default in ureq 3.
+ureq = { version = "3", optional = true, default-features = false, features = [
+    "rustls-no-provider",
+    "platform-verifier",
+    "gzip",
+] }
+# The crypto provider for the above; neither is usable alone, since ureq has no
+# provider and graviola has no client.
+rustls-graviola = { version = "0.4", optional = true }
 sha2 = { version = "0.10", optional = true }
 
 [features]
@@ -55,7 +69,7 @@ fetch = ["fetch-bytes", "pack"]
 # Acquisition without an engine: the manifest, the cache and the hash check,
 # handing back bytes. For a host with its own runtime, so that reusing this
 # does not mean linking a second engine beside the one it already has.
-fetch-bytes = ["dep:ureq", "dep:sha2"]
+fetch-bytes = ["dep:ureq", "dep:rustls-graviola", "dep:sha2"]
 
 [dev-dependencies]
 sha2 = "0.10"
