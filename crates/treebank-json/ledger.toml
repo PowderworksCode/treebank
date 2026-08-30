@@ -135,7 +135,7 @@ noise_files = 74
 pass_rate = '95.60%'
 corpus_lock_sha256 = 'a183d77e9464f2202a940cbfe95efd64c92803a04a98b2a7def27331ef7439e6'
 grammar_sha256 = '57d6a29f40eb057c46a1e76530f71fb27aab432233c1052cd2f312b665e324ac'
-grammar_revision = 'cb5405c4f2c1879ab0f197e6a5dfe42b9839b999'
+grammar_revision = '9be90f554815468474480154ee3dc1f899de135e'
 
 [[oracles]]
 family = 'json'
