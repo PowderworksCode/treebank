@@ -9,14 +9,13 @@
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
   "lint_ratchets": 10,
-  "shape_fixture_grammars": 7,
+  "shape_fixture_grammars": 8,
   "wasm_packs": 10,
   "query_files": 20,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
-  "no grammar has a binding directory beyond Rust",
-  "span oracle configured but no checked-in shape fixtures: bash"
+  "no grammar has a binding directory beyond Rust"
  ],
  "errors": [],
  "grammars": {
@@ -41,7 +40,7 @@
    "tests": {
     "corpus_cases": 6,
     "negative_files": 5,
-    "shape_files": 0
+    "shape_files": 4
    },
    "known_deviations": {
     "shape": true,
