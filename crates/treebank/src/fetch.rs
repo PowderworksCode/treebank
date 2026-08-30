@@ -125,14 +125,20 @@ fn get(url: &str) -> Result<Vec<u8>> {
 fn sha256_hex(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Write through a temporary file in the same directory, then rename. Two
 /// processes fetching the same grammar at once is the ordinary case for a
 /// build, and a half-written pack in the cache would be read as a whole one.
 fn cache_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
-    let dir = path.parent().ok_or_else(|| anyhow!("no parent for {}", path.display()))?;
+    let dir = path
+        .parent()
+        .ok_or_else(|| anyhow!("no parent for {}", path.display()))?;
     fs::create_dir_all(dir).with_context(|| format!("creating {}", dir.display()))?;
     let tmp = dir.join(format!(".{}.{}", std::process::id(), rand_suffix()));
     fs::write(&tmp, bytes).with_context(|| format!("writing {}", tmp.display()))?;
@@ -142,7 +148,10 @@ fn cache_atomically(path: &Path, bytes: &[u8]) -> Result<()> {
 
 fn rand_suffix() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
-    let nanos = SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.subsec_nanos()).unwrap_or(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.subsec_nanos())
+        .unwrap_or(0);
     format!("{nanos:08x}")
 }
 
@@ -233,7 +242,10 @@ fn key_for(grammar: &str) -> Result<(String, String)> {
     let manifest = manifest()?;
     let entry = manifest.packs.get(grammar).ok_or_else(|| {
         let known: Vec<_> = manifest.packs.keys().cloned().collect();
-        anyhow!("no grammar named {grammar}; the manifest has {}", known.join(", "))
+        anyhow!(
+            "no grammar named {grammar}; the manifest has {}",
+            known.join(", ")
+        )
     })?;
     Ok((entry.key.clone(), entry.sha256.clone()))
 }
@@ -242,7 +254,10 @@ fn pinned_key(grammar: &str, hash: &str) -> Result<String> {
     if !hash.chars().all(|c| c.is_ascii_hexdigit()) || hash.len() < 8 {
         bail!("{hash} is not a pack hash");
     }
-    Ok(format!("treebank-{grammar}-{}.wasm", &hash[..12.min(hash.len())]))
+    Ok(format!(
+        "treebank-{grammar}-{}.wasm",
+        &hash[..12.min(hash.len())]
+    ))
 }
 
 /// The verified bytes of a pack, for a host that has its own runtime.

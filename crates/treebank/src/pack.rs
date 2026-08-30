@@ -29,8 +29,8 @@ use std::collections::BTreeMap;
 use std::path::Path;
 
 use anyhow::{anyhow, bail, Context, Result};
-use sha2::{Digest, Sha256};
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 use wasmer::{Function, Imports, Instance, Memory, Module, Store, TypedFunction, Value};
 
 /// What a pack says about itself, read out of the module rather than from a
@@ -123,8 +123,7 @@ impl Pack {
     /// Load a pack from a file.
     pub fn from_path(path: impl AsRef<Path>) -> Result<Self> {
         let path = path.as_ref();
-        let bytes = std::fs::read(path)
-            .with_context(|| format!("reading {}", path.display()))?;
+        let bytes = std::fs::read(path).with_context(|| format!("reading {}", path.display()))?;
         Self::from_bytes(&bytes)
     }
 
@@ -246,7 +245,10 @@ impl Pack {
         if tree == 0 {
             return Err(anyhow!("parse failed"));
         }
-        Ok(Tree { pack: self, handle: tree })
+        Ok(Tree {
+            pack: self,
+            handle: tree,
+        })
     }
 }
 
@@ -277,7 +279,9 @@ fn refuse_every_import(module: &Module, store: &mut Store) -> Result<Imports> {
         imports.define(
             import.module(),
             import.name(),
-            Function::new(store, &signature, |_: &[Value]| Ok(vec![Value::I32(WASI_BADF)])),
+            Function::new(store, &signature, |_: &[Value]| {
+                Ok(vec![Value::I32(WASI_BADF)])
+            }),
         );
     }
     Ok(imports)
@@ -301,7 +305,10 @@ impl<'p> Tree<'p> {
             .tree_root
             .call(&mut *store, self.handle, node)
             .expect("tb_tree_root");
-        Node { pack: self.pack, handle: node }
+        Node {
+            pack: self.pack,
+            handle: node,
+        }
     }
 }
 
@@ -379,13 +386,20 @@ impl<'p> Node<'p> {
     pub fn child(&self, index: u32, named_only: bool) -> Result<Option<Node<'p>>> {
         let mut store = self.pack.store.borrow_mut();
         let kid = self.pack.f.node_new.call(&mut *store)?;
-        let f = if named_only { &self.pack.f.node_named_child } else { &self.pack.f.node_child };
+        let f = if named_only {
+            &self.pack.f.node_named_child
+        } else {
+            &self.pack.f.node_child
+        };
         let ok = f.call(&mut *store, self.handle, index, kid)?;
         if ok == 0 {
             self.pack.f.node_free.call(&mut *store, kid)?;
             return Ok(None);
         }
-        Ok(Some(Node { pack: self.pack, handle: kid }))
+        Ok(Some(Node {
+            pack: self.pack,
+            handle: kid,
+        }))
     }
 
     /// The field name the PARENT gives its `index`-th child, which is the edge
@@ -393,17 +407,28 @@ impl<'p> Node<'p> {
     /// which is why this is asked here rather than of the child.
     pub fn field_name_for_child(&self, index: u32) -> Result<Option<String>> {
         let mut store = self.pack.store.borrow_mut();
-        let ptr = self.pack.f.field_name_for_child.call(&mut *store, self.handle, index)?;
+        let ptr = self
+            .pack
+            .f
+            .field_name_for_child
+            .call(&mut *store, self.handle, index)?;
         if ptr == 0 {
             return Ok(None);
         }
-        Ok(Some(read_cstr(&mut store, &self.pack.memory, &self.pack.f, ptr)?))
+        Ok(Some(read_cstr(
+            &mut store,
+            &self.pack.memory,
+            &self.pack.f,
+            ptr,
+        )?))
     }
 
     /// Every named child, as a vector.
     pub fn named_children(&self) -> Result<Vec<Node<'p>>> {
         let count = self.child_count(true)?;
-        (0..count).filter_map(|i| self.child(i, true).transpose()).collect()
+        (0..count)
+            .filter_map(|i| self.child(i, true).transpose())
+            .collect()
     }
 }
 
@@ -413,7 +438,6 @@ impl Drop for Node<'_> {
         let _ = self.pack.f.node_free.call(&mut *store, self.handle);
     }
 }
-
 
 /// One capture from a query.
 #[derive(Debug, Clone)]
@@ -460,7 +484,8 @@ impl Pack {
             anyhow!(
                 "this {} pack cannot run queries: it is pack_abi {}, and queries need 3. \
                  Fetch a current pack, or use expand_query and your own query engine.",
-                self.provenance.language, self.provenance.pack_abi
+                self.provenance.language,
+                self.provenance.pack_abi
             )
         })?;
         let bytes = expanded.as_bytes();
@@ -535,7 +560,12 @@ impl Pack {
                 }
             };
 
-            found.push(Capture { name, kind, range: start..end, pattern });
+            found.push(Capture {
+                name,
+                kind,
+                range: start..end,
+                pattern,
+            });
         }
 
         self.f.free.call(&mut *store, out)?;
@@ -560,8 +590,10 @@ fn query_error(kind: u32) -> &'static str {
         // TSQueryErrorStructure: the pattern's shape cannot occur. Usually a
         // field asked of a node type that does not declare it, which is what
         // an expanded facet produces when one member lacks the field.
-        5 => "the query asks for a shape this grammar cannot produce, \
-              usually a field on a node type that does not have it",
+        5 => {
+            "the query asks for a shape this grammar cannot produce, \
+              usually a field on a node type that does not have it"
+        }
         6 => "the query names a language that is not this one",
         _ => "the query is not valid",
     }
@@ -586,12 +618,7 @@ mod query_error_tests {
     }
 }
 
-fn read_cstr(
-    store: &mut Store,
-    memory: &Memory,
-    f: &Abi,
-    ptr: u32,
-) -> Result<String> {
+fn read_cstr(store: &mut Store, memory: &Memory, f: &Abi, ptr: u32) -> Result<String> {
     if ptr == 0 {
         return Ok(String::new());
     }
@@ -650,12 +677,30 @@ impl QueryAbi {
     /// something to half-drive.
     fn bind(instance: &Instance, store: &mut Store) -> Option<Self> {
         Some(Self {
-            new: instance.exports.get_typed_function(&*store, "tb_query_new").ok()?,
-            delete: instance.exports.get_typed_function(&*store, "tb_query_delete").ok()?,
-            exec: instance.exports.get_typed_function(&*store, "tb_query_exec").ok()?,
-            cursor_delete: instance.exports.get_typed_function(&*store, "tb_query_cursor_delete").ok()?,
-            next_capture: instance.exports.get_typed_function(&*store, "tb_query_next_capture").ok()?,
-            capture_name: instance.exports.get_typed_function(&*store, "tb_query_capture_name").ok()?,
+            new: instance
+                .exports
+                .get_typed_function(&*store, "tb_query_new")
+                .ok()?,
+            delete: instance
+                .exports
+                .get_typed_function(&*store, "tb_query_delete")
+                .ok()?,
+            exec: instance
+                .exports
+                .get_typed_function(&*store, "tb_query_exec")
+                .ok()?,
+            cursor_delete: instance
+                .exports
+                .get_typed_function(&*store, "tb_query_cursor_delete")
+                .ok()?,
+            next_capture: instance
+                .exports
+                .get_typed_function(&*store, "tb_query_next_capture")
+                .ok()?,
+            capture_name: instance
+                .exports
+                .get_typed_function(&*store, "tb_query_capture_name")
+                .ok()?,
         })
     }
 }
@@ -725,7 +770,11 @@ fn compile_cached(store: &Store, bytes: &[u8]) -> Result<Module> {
         hasher.update(bytes);
         hasher.update(std::env::consts::ARCH.as_bytes());
         hasher.update(std::env::consts::OS.as_bytes());
-        hasher.finalize().iter().map(|b| format!("{b:02x}")).collect::<String>()
+        hasher
+            .finalize()
+            .iter()
+            .map(|b| format!("{b:02x}"))
+            .collect::<String>()
     };
     let path = compile_cache_dir().join(format!("{}.cwasm", &key[..32]));
 
@@ -770,10 +819,15 @@ fn compile_cache_dir() -> std::path::PathBuf {
         return std::path::PathBuf::from(dir).join("compiled");
     }
     if let Ok(dir) = std::env::var("XDG_CACHE_HOME") {
-        return std::path::PathBuf::from(dir).join("treebank").join("compiled");
+        return std::path::PathBuf::from(dir)
+            .join("treebank")
+            .join("compiled");
     }
     if let Ok(home) = std::env::var("HOME") {
-        return std::path::PathBuf::from(home).join(".cache").join("treebank").join("compiled");
+        return std::path::PathBuf::from(home)
+            .join(".cache")
+            .join("treebank")
+            .join("compiled");
     }
     std::env::temp_dir().join("treebank").join("compiled")
 }

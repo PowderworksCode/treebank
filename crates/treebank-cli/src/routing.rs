@@ -43,7 +43,8 @@ use treebank_preprocessing::Symbols;
 /// them read.
 pub fn preprocessing(lang: LangName) -> Option<&'static Symbols> {
     static AS_C: LazyLock<Symbols> = LazyLock::new(|| Symbols::new().undefined("__cplusplus"));
-    static AS_CXX: LazyLock<Symbols> = LazyLock::new(|| Symbols::new().defined("__cplusplus", 201703));
+    static AS_CXX: LazyLock<Symbols> =
+        LazyLock::new(|| Symbols::new().defined("__cplusplus", 201703));
     match lang {
         LangName::C => Some(&AS_C),
         LangName::Cpp => Some(&AS_CXX),
