@@ -103,14 +103,14 @@ The direction no corpus can see is the other one. Real files are valid, so no qu
 
 [corpus.sweep]
 files = 128334
-passed = 128085
-failed = 249
+passed = 127959
+failed = 375
 gap_files = 0
-noise_files = 249
-pass_rate = '99.81%'
+noise_files = 375
+pass_rate = '99.71%'
 corpus_lock_sha256 = '1a0a66c78bbef3d54dadaae0f637f931a341e2cce37f252303f89ea9ced5dc76'
-grammar_sha256 = '7cdd540548af88578d91ab627699ed21a7b805c8e07d62524ebde2e813fba9ab'
-grammar_revision = 'aaf6e6a53fbc74a5b1aad7bd337e7ace427819f2'
+grammar_sha256 = '8cf103e39460a99f8ac9491497873b178e657e60f8804d0c828f5faf28116353'
+grammar_revision = '3516844c92f77dd5328bbac33b2dd0587618b454'
 
 [corpus.sweep_history]
 note = '''
