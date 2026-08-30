@@ -139,7 +139,7 @@ must justify:
 
 3. **Static precedence.** Where a genuine shift/reduce remains, a
    `prec`/`prec.left`/`prec.right` annotation resolves it at GENERATE
-   time, for free at runtime. This is the right tool for operator
+   time, at no runtime cost. This is the right tool for operator
    ladders and for keyword-versus-continuation decisions (§6).
 
 4. **GLR with dynamic precedence — the floor, not the default.** A
@@ -368,6 +368,30 @@ honest:
   `return false` — `:` followed by `:` is a scope operator, not ours;
   `%` before a space is modulo, not a literal. Write the decline cases
   first; they're the spec.
+- **A declining scan writes nothing that lasts.** State the scanner sets
+  on its way to `return false` is not there on the next call: the runtime
+  restores the serialized state before each scan, and only a scan that
+  produced a token gets serialized. So a scanner cannot learn anything by
+  looking and then declining — whatever it noticed is gone, and the
+  internal lexer has meanwhile consumed the text it was looking at.
+
+  The corollary is the expensive half, and yaml paid for it. A scanner
+  that tracks anything about POSITION — an at-line-start bit, the column
+  the line's first content sat at, whether an indicator has been seen —
+  can only keep that true for tokens it OWNS. Every token the internal
+  lexer takes is a token the scanner never saw, and every token the
+  scanner declined is a scan whose notes were thrown away. Yaml's scanner
+  tracked the column of each line's first content in order to know where
+  a block collection may open, and `&a1` / `!!str` / `scalar1` across
+  three lines parsed as three documents because `&`, `*`, tags and `---`
+  were internal tokens: the scanner set the column while declining them,
+  lost it, and read the next line as a fresh document. The fix was not a
+  guard. It was moving every token that can begin a line into the
+  scanner, which is why that grammar owns twenty-one of them.
+
+  Decide early, then, whether the scanner needs position state at all. If
+  it does, the set of tokens it must own is not "the ambiguous ones" but
+  "every one that can appear where the state changes".
 
 ## 9. Measure like the sweep is watching, because it is
 

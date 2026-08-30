@@ -1,0 +1,12 @@
+name: treebank
+nested:
+  a: 1
+  b: two
+list:
+  - one
+  - two
+compact:
+- x: 1
+  y: 2
+- z
+after: tail

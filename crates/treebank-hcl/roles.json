@@ -1,0 +1,79 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {},
+  "facets": {
+    "_binding": [
+      "attribute",
+      "block"
+    ],
+    "_clause": [
+      "else_clause",
+      "for_cond"
+    ],
+    "_comment": [
+      "block_comment",
+      "comment"
+    ],
+    "_identifier": [
+      "identifier"
+    ],
+    "_scope": [
+      "body",
+      "config_file",
+      "for_object_expr",
+      "for_tuple_expr",
+      "template_for"
+    ],
+    "_string": [
+      "heredoc_template",
+      "quoted_template",
+      "string_lit"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "arguments",
+      "reason": "the parenthesised list itself; its elements carry `_argument`"
+    },
+    {
+      "node": "ellipsis",
+      "reason": "the `...` marker: argument expansion in a call, grouping mode in a for-object. It marks how a neighbouring expression is used and denotes nothing itself"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "a backslash escape inside a quoted template; a heredoc has none, because its backslash is ordinary text"
+    },
+    {
+      "node": "function_name",
+      "reason": "the possibly `::`-qualified name of a call — `provider::aws::arn_parse`. It cannot join `_name`, because `_name` is also the attribute-name and block-type position and HCL rejects `a::b` there; its own parts are `_name`, so a query for names still finds them"
+    },
+    {
+      "node": "heredoc_end",
+      "reason": "the delimiter word that closes a heredoc; the newline after it is not part of it, because HCL requires one and the attribute's own terminator is what consumes it"
+    },
+    {
+      "node": "heredoc_start",
+      "reason": "`<<EOT` or `<<-EOT` through the newline that ends the introduction; a delimiter, for `quote`'s reason"
+    },
+    {
+      "node": "object_elem",
+      "reason": "`key = value` inside an object literal — a position in a literal, not a declaration of the key"
+    },
+    {
+      "node": "quote",
+      "reason": "the `\"` opening or closing a quoted template. A node rather than a hidden token because it must be external -- the scanner's template-mode stack opens and closes on it -- and an external token can be named or hidden but never anonymous; hiding a lexeme the language spells would put it nowhere in the tree"
+    },
+    {
+      "node": "template_body",
+      "reason": "the parts of one branch of a template directive. Not `_body`, and the reason is mechanical rather than semantic: `_body` is also the block-body position, and a `_body` that admitted template text there would put `template_literal` in `valid_symbols` where a block's `{` is expected — at which point the scanner takes the `{` as literal text and the language stops parsing"
+    },
+    {
+      "node": "template_if",
+      "reason": "the template `%{ if }` directive, and its `%{ for }` sibling is out for the same reason but is covered by `_scope` instead. Both are control flow and belong in `_branch` and `_loop` on the meaning; neither can be there in the parse table, because a supertype is ONE alternation, so putting the expression and template forms together makes `_control_flow` reachable at a template-part position AND as the start of a conditional's condition at that same position — `tree-sitter generate` rejects it as an unresolved conflict rather than accepting it as a widening. The terms went where the queries are: over Terraform, `(_branch)` and `(_loop)` are asked about the conditional and the for-expression"
+    },
+    {
+      "node": "template_literal",
+      "reason": "one RUN of literal text inside a template, between its interpolations and directives, with any escape sequences inside it. One node per run rather than per chunk, because that is the boundary hclsyntax's coalesced `LiteralValueExpr` draws and `treebank shape` checks"
+    }
+  ]
+}

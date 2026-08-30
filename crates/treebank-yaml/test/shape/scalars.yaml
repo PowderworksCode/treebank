@@ -1,0 +1,12 @@
+plain: a value with spaces
+folded_plain: one
+  two
+single: 'it''s here'
+double: "a \"quoted\" escape"
+literal: |
+  line one
+  line two
+folded: >-
+  folded
+  text
+tail: end

@@ -462,9 +462,8 @@ fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> O
     let text = std::fs::read_to_string(grammar_dir.join("ledger.toml")).ok()?;
     let v: toml::Value = toml::from_str(&text).ok()?;
     let stated = v.get("vocabulary")?.as_str()?;
-    (stated != expected).then(|| {
-        format!("ledger.toml states vocabulary {stated} but treebank carries {expected}")
-    })
+    (stated != expected)
+        .then(|| format!("ledger.toml states vocabulary {stated} but treebank carries {expected}"))
 }
 
 fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
@@ -736,7 +735,12 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
-        Cmd::Queries { source, crates, check, coverage } => {
+        Cmd::Queries {
+            source,
+            crates,
+            check,
+            coverage,
+        } => {
             if coverage {
                 // Every source file, so a new one is measured the day it
                 // lands rather than the day someone remembers this list.

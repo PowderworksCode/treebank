@@ -1,0 +1,26 @@
+# Declared exceptions for `treebank shape`. Same contract as the python,
+# java and bash policies: pairs, hand-confirmed on corpus examples, nothing
+# here to make a number go down.
+#
+# One caution this policy shares with bash's and states for the same
+# reason: YAML has no owning implementation, so the span oracle is the
+# `yaml` package rather than the reference — there is no reference. A
+# declared pair here records whose grouping was kept, knowing neither party
+# is automatically right. It is the same package the verdict oracle's 1.2
+# leg uses, and the ledger says what that makes the whole check blind to.
+
+rule = '''
+Boundaries `treebank shape` may ignore, as `"<yaml-package node> <- <our_kind>"` pairs. Each is a place our tree groups the code differently on purpose or by a recorded not-yet decision, never a place we disagree about the code silently.'''
+
+baseline_missed = 29
+baseline_note = '''
+29 of 16,774,527 oracle nodes over a 20,000-file sample (19,968 checked; the other 32 are files the 1.2 leg rejects and the union oracle accepts, which come back `skipped` rather than counted as agreement).
+
+Left UNDECLARED on purpose, because declaring differences nobody has read is how a check quietly stops working. What they are, in the four clusters that remain: a document whose root node is indented, where the oracle counts the document from column 0 and we count it from the first token; a merge key carrying a tag (`- !!merge <<: *version`), where the package starts the mapping after the tag and we start it at the tag; and multi-line flow collections whose closing bracket sits on its own line. Each is a handful of occurrences in one or two files and none has been read closely enough to declare. Ratchet down, never up.'''
+
+[[ignore]]
+signature = 'pair <- block_mapping_pair'
+why = '''
+A pair whose value is EMPTY — `workflow_dispatch:` with nothing after it — ends at its colon in the oracle's tree and at the next content position in ours. The cause is `_empty_node`: it is the zero-width token that tells the parser the value is absent rather than on the next line, and the scanner emits it where the next content begins, which is past any comment and line break in between.
+
+Ours is the looser reading and it is a real difference, not a naming one. It was tried and NOT fixed: moving the marker out of the pair and into the mapping tightens the span and costs four of yaml-test-suite's error cases and seventeen of its event-stream shapes, because the marker is what disambiguates "this value is empty" from "this value is the next line" and the pair is where that decision is made. 206 of the sample's 235 misses, all of this one shape.'''
