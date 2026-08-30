@@ -313,6 +313,7 @@ module.exports = grammar({
     _flow_colon: $ => prec(3, choice($._block_map_colon, $._own_line_colon)),
 
     comment: $ => token(seq('#', /[^\n\r]*/)),
+    comment: $ => token(seq('#', /[^\n\r]*/)),
   },
 });
 

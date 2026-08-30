@@ -53,7 +53,20 @@ yaml-test-suite at da267a5, the case set the language's own community maintains:
 
 Two mis-parses were found this way and fixed, and neither was reachable from an accept/reject test: `seq:` / ` &anchor` / `- a` closed the mapping and started a new document rather than anchoring the sequence, and a `...` with no document in front of it produced an empty document that the file does not contain.
 
-**Rejects: 46 of 94.** This is the accepts-invalid direction and it is where the grammar is weakest; the number is stated rather than improved because most of what remains is not reachable from a grammar. See `blind_to`.'''
+**Rejects: 69 of 94.** This is the accepts-invalid direction, and it was 46 when the grammar landed. What closed the gap is written up in `narrowing` below, including the one rule that had to be taken back out again.'''
+
+narrowing = '''
+The accepts-invalid direction is the one no corpus can measure, because real files are valid. It was 46 of yaml-test-suite's 94 error cases at first light and is 69 now, and the seven rules that did it are worth naming because six of them are the same KIND of rule: a column, checked at a position where the parser cannot see one.
+
+* **An entry is at its collection's column.** The next pair of an open mapping and the next entry of an open sequence sit at exactly the column that collection opened at; deeper is not a nested anything, because a collection nests under a VALUE. The scanner tells the two positions apart by whether `_indented` is on offer, and declines at the wrong one. Five cases.
+* **A block collection may not open on the `---` line.** The marker is not indentation the way a `-` is, so `--- key1: v` / `    key2: v` has nowhere to put the mapping's indentation. Implemented by NOT resetting `line_column` at the marker, which is one call changed.
+* **A bare document may follow only the head of the stream or a `...`.** Everywhere else a document has to announce itself, which is what stops the text after a finished one from quietly becoming a second. This is unbounded history — has a `...` been seen since the last document began — so it is a bit in the scanner rather than the two-state stream with four spellings of `document` that a context-free rule would need. Six cases, and it is the rule this ledger previously declared unfixable.
+* **Nothing follows a `...` on its line.** A `---` may carry its document's node; a `...` may not carry anything.
+* **A quoted scalar does not cross a document marker.** `---` at column 0 ends the document whatever is open, so a quote left hanging above one is unterminated rather than very long.
+* **A tab may not separate an indicator from a collection.** `- ` and `? ` count as indentation for what they introduce, and indentation is spaces, so `-` tab `-` is not a nested sequence — while a tab in front of a SCALAR is ordinary separation and stays legal. Four cases.
+* **A leading blank line may not out-indent its block scalar.** With no indentation indicator the first content line sets the block's indentation, and an earlier all-space line that reached further than that is an error rather than a longer blank. Three cases.
+
+And one rule that was tried and REMOVED, which is the more useful half of this section. YAML says a quoted scalar folding onto another line must be indented past the collection that holds it, so `msg: "one line` / `    a second at the mapping's own column"` is not YAML. Every implementation reads it anyway, Ansible writes it by the thousand, and the sweep found 18 files that the rule turned from passing into gaps. It bought one suite case and cost eighteen real files, so it is gone and the shape has a corpus fixture instead. The union oracle exists to make exactly that call, and this is the first time it has been asked to.'''
 
 incremental_check = '''
 `treebank incremental` — 3,000 corpus files, 3 edits each, 9,000 edits: **0 diverged**. A reparse after an edit is byte-identical to a fresh parse of the edited text.
@@ -86,7 +99,7 @@ Everything else this corpus is blind to follows from what a GitOps repository is
 
 And the metric is stars, which is attention rather than use — the weakest popularity metric in this repository, and the one `lang::github` already describes. A star costs nothing and never decays.
 
-The direction no corpus can see is the other one. Real files are valid, so no quantity of them shows whether the grammar rejects what YAML rejects; `test/negative/` and the suite's 94 error cases are the only mirror, and they say 46 of 94.'''
+The direction no corpus can see is the other one. Real files are valid, so no quantity of them shows whether the grammar rejects what YAML rejects; `test/negative/` and the suite's 94 error cases are the only mirror, and they say 69 of 94.'''
 
 [corpus.sweep]
 files = 128334
@@ -101,9 +114,13 @@ grammar_revision = 'aaf6e6a53fbc74a5b1aad7bd337e7ace427819f2'
 
 [corpus.sweep_history]
 note = '''
-Three sweeps over the same 128,334 files: 99.80% -> 99.81% -> 99.81%, 8 gap files -> 1 -> 0. It is a short history because the corpus had little to say, and that is itself the finding: a population of GitOps manifests and Ansible roles exercises a narrow band of the language very hard and the rest of it not at all. Every construct this grammar found difficult — explicit keys, compact collections under properties, the two spellings of `:` — was settled against yaml-test-suite before the first sweep ran, and the sweep then found three defects the suite could not have.
+**The pass rate went DOWN in the last round and that is the improvement.** 99.81% to 99.71%, with gap files staying at 0. `pass_rate` counts every file the grammar accepts, and 126 of the files it used to accept are not YAML — a GPL licence text saved as `.yaml`, Ansible playbooks with a key indented one column too far, files with a second document nobody announced. Narrowing moves those from `passed` to `noise`, which is the whole point of narrowing, and it is why `gap_files` rather than `pass_rate` is the number to read. A grammar can reach 100% here by accepting everything.
 
-All three were about text that is invisible when you read a file and decisive when you lex one. A comment measured the next line's indentation to decide whether the collection above it had ended, and stopped at a line of trailing spaces; that closed every collection above a comment followed by a blank line, which in a hand-edited workflow is most of them (5 files). The `-` probe consumed its dash before deciding the dash was not an indicator, so `-: ""` lost its key (1 file). And the last one was not a defect at all but an implementation disagreement, recorded in known_gaps (1 file).
+Four sweeps over the same 128,334 files: 99.80% -> 99.81% -> 99.81% -> 99.71%, 8 gap files -> 1 -> 0 -> 0. It is a short history because the corpus had little to say, and that is itself the finding: a population of GitOps manifests and Ansible roles exercises a narrow band of the language very hard and the rest of it not at all. Every construct this grammar found difficult — explicit keys, compact collections under properties, the two spellings of `:` — was settled against yaml-test-suite before the first sweep ran, and the sweep then found three defects the suite could not have.
+
+The fourth round is the narrowing described in `narrowing` above, and the corpus earned its keep there twice over: it found nothing wrong with six of the seven new rules, and it killed the seventh outright — 18 files that a spec-accurate rule about quoted-scalar indentation turned into gaps, against one suite case it bought.
+
+The first three rounds were about text that is invisible when you read a file and decisive when you lex one. A comment measured the next line's indentation to decide whether the collection above it had ended, and stopped at a line of trailing spaces; that closed every collection above a comment followed by a blank line, which in a hand-edited workflow is most of them (5 files). The `-` probe consumed its dash before deciding the dash was not an indicator, so `-: ""` lost its key (1 file). And the last one was not a defect at all but an implementation disagreement, recorded in known_gaps (1 file).
 
 The 249 remaining failures are all corpus noise, and the union oracle is what says so rather than an assumption: every one of them is rejected by the spec-first parser at 1.2, by the same parser at 1.1, AND by libyaml. What they are is templates the admission filter did not catch — Helm charts whose braces happen to lex, Jinja that renders to YAML — and files that are simply broken.'''
 
@@ -139,21 +156,20 @@ The corpus decided it. `*alias:` as a mapping key appears in 8 of the 499 packag
 This is the one place in this grammar where DESIGN.md §4.2's "latest version wins" has an analogue and does not apply: the two readings are not two versions, they are two implementations that are both current, and the tiebreak had to be the corpus rather than a date.'''
 
 [[known_widenings]]
-construct = 'a bare document following another document without a `---` or a `...` between them'
-found_by = 'yaml-test-suite (KS4U, BD7L, JY7Z, TD5N, 3HFZ and others)'
-why_accepted = '''
-`stream` is `repeat(document)` and a document may be a bare node, so trailing text after a complete document starts a second one instead of failing. `[ … ]` on one line and `invalid item` on the next is two documents here and an error in YAML.'''
-why_not_fixed = '''
-The rule is real and the shape it needs is not expressible without a second document rule. YAML allows a bare document only first in the stream or after a `...`, which means one node type reachable from two positions with different alternatives — and two rules whose right-hand sides overlap are a reduce-reduce conflict on every lookahead (FIELD_GUIDE.md §3), which static precedence can only settle by killing one of them everywhere.
-
-It is the single largest remaining class in the accepts-invalid direction and it accounts for a fifth of what the suite still gets past this grammar. It is written down here rather than worked around, because the worked-around versions all cost something a corpus of real files would have paid for.'''
-
-[[known_widenings]]
 construct = 'two anchors on one node, `&a` then `&b value`'
 found_by = 'yaml-test-suite (4JVG)'
 why_accepted = '''
-`_properties` admits at most one anchor and one tag, so this parses as an anchored node with no content followed by a second document that is itself an anchored node — the widening above, wearing a different hat.'''
-why_not_fixed = 'it is the same rule; fixing that one fixes this one.'
+`_properties` admits at most one anchor and one tag, so a second anchor on a following line is read as the content of the first — an anchored node whose content is another anchored node, which the data model has no room for.'''
+why_not_fixed = '''
+Telling the two apart needs `_properties` to span line breaks, which is the one place `_indented` currently means "the content starts here" and would have to mean "more properties may still arrive". It is one case and the shape does not occur in 128,334 corpus files.'''
+
+[[known_widenings]]
+construct = 'a comment with no whitespace in front of it, `"foo"#bar`'
+found_by = 'yaml-test-suite (SU5Z, 9JBA, CVW2)'
+why_accepted = '''
+`comment` is an `extras` pattern, so it matches a `#` wherever one appears and there is nothing left for the parser to reject.'''
+why_not_fixed = '''
+Tried and backed out. Enforcing it means the scanner owning the token, and the scanner already does something else at a `#`: it scans forward to the next line with CODE on it to decide whether the collection above the comment has ended. Both want `mark_end` in a different place — the close is zero width at the comment's start, the comment ends at the line's end — and `mark_end` only moves forward. Emitting the comment first would put every trailing comment inside the block above it, which is a span regression for three suite cases.'''
 
 [[deviations]]
 what = '''

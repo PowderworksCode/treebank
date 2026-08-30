@@ -361,3 +361,30 @@ serviceAccount:
               name: (anchor_name))
             value: (flow_mapping)))))))
 
+
+================================================================================
+a quoted scalar folding onto its own column
+================================================================================
+
+- name: Assert
+  debug:
+    msg: "one line;
+    a second at the mapping's own column"
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_sequence
+      (block_sequence_item
+        (block_mapping
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (plain_scalar))
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (block_mapping
+              (block_mapping_pair
+                key: (plain_scalar)
+                value: (double_quote_scalar)))))))))
+
