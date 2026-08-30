@@ -4,8 +4,8 @@ Status: proposal. This note decides how treebank carries **language
 variation**: versions of one language (Python 2.7 against 3.x, MySQL 5.7
 against 8.4) and dialect siblings (MySQL against PostgreSQL, JSON against
 JSONC). It revises `notes/DESIGN.md` §4.2–4.3, which answer the version
-half of the question and are silent on the sibling half, and it is written
-against evidence already in this repository: eleven grammars and their
+half of the question and are silent on the sibling half, and it stands on
+evidence already in this repository: eleven grammars and their
 ledgers, one shelved dialect split (typescript/tsx), one measured
 impossibility (zig's `async`), one refusal argued in three legs (JSON
 against JSONC, #273) — and one failed attempt this note exists to not
@@ -19,12 +19,12 @@ is never built again.**
 ## 1. Where the union policy stands after eleven grammars
 
 §4.2's rule — one grammar per language, accepting the union of its
-versions, the latest winning where readings collide — is measured, and it
-works where its premise holds. Python 2.7 ∪ 3.x sweeps 297,257 of 298,354
+versions, the latest winning where readings collide — rests on
+measurement, and it works where its premise holds. Python 2.7 ∪ 3.x sweeps 297,257 of 298,354
 files with two gap files. Rust carries editions 2015–2024 in one table.
 Java, C and YAML the same. The premise is an **ordering**: versions form a
 line, so "the latest version wins" is a decision rule, and
-`version_policy.toml` is where its losses are declared.
+`version_policy.toml` names the losses.
 
 Four findings mark where the premise ends.
 
@@ -37,7 +37,7 @@ either. Every place their readings collide — and §3 shows they collide at
 the *lexer* — latest-wins has nothing to say, and the union becomes a coin
 toss somebody has to weight by hand, per collision, forever.
 
-**2. A union cannot be narrowed, and the widening is by design.** The
+**2. Nothing can narrow a union, and the widening is by design.** The
 python grammar's own `fuzz_policy.toml` declares `print `, `exec ` and
 `lambda (` as over-acceptance committed to on purpose: a py2 statement
 form is a widening against py3's parser *and is meant to be one*. That is
@@ -66,8 +66,8 @@ it in the concrete. That attempt built SQLite ∪ PostgreSQL ∪ MySQL as one
 grammar with a union oracle ("valid if either dialect accepts"), and
 every dialect's divergences were "accepted everywhere" — backticks,
 `::` casts, `#` comments, `ON DUPLICATE KEY UPDATE`, in every file alike.
-So the negative corpus surrendered by construction: `SELECT a # b` cannot
-be rejected for postgres while the same table must accept it for mysql,
+That surrendered the negative corpus by construction: one table
+cannot reject `SELECT a # b` for postgres while accepting it for mysql,
 and no widening in the mysql-shaped region of a postgres file is visible
 to any oracle the sweep consults. The same PR measured what visibility
 costs when it arrives late: adding the MySQL oracle took adjudicated gaps
@@ -83,10 +83,10 @@ cheap, and the repository has been using it as the only rung.
 The rule already exists, in `crates/treebank-lang` and argued at length in
 the HCL ledger: **a dialect earns a `LangName` when it brings its own
 corpus and its own oracle.** JavaScript brings both — a different npm
-population, its own checker — so it is a registry row served by the
+population, its own checker — so it gets a registry row served by the
 typescript crate, with its own corpus lock (`corpus-locks/javascript.json`)
 and its own sweep block (`[corpus.javascript_sweep]`). Terraform brings
-neither, so it is three file extensions on the `hcl` row.
+neither, so it amounts to three file extensions on the `hcl` row.
 
 This note generalizes that rule to the version axis, because it already
 fits without modification. A **version family** earns a row the same way a
@@ -95,8 +95,8 @@ population (modern PyPI); `python2` has its own oracle (CPython 2.7.18,
 built from source) and its own population (final py2-compatible releases —
 which the current ledger names as the union's declared blind spot: "the
 py2 half of the union leans entirely on the corpus tests and batteries").
-Both halves of the union already pay for their oracles; neither can be
-asked for by name.
+Both halves of the union already pay for their oracles; no consumer can
+ask for either by name.
 
 A **row** is: a canonical name, source extensions, a corpus lock, an
 oracle, a negative corpus, sweep numbers in the family ledger, and a
@@ -124,8 +124,8 @@ to ambiguity:
   is a copy that drifts."
 - **Refusal.** The variant is a different grammar wearing a familiar
   extension, or rests on documentation rather than measurement. HCL's JSON
-  profile ("a JSON parser is not this grammar with more rules — it is a
-  different grammar"), JSON5, NDJSON, T-SQL, PerfettoSQL. A refusal is
+  profile (a different grammar, not this grammar with more rules — its
+  ledger's own words, nearly), JSON5, NDJSON, T-SQL, PerfettoSQL. A refusal is
   recorded with its price, the way #273's `dialect_note` and the C macro
   story (§8.2) record theirs.
 
@@ -187,7 +187,8 @@ conflicts are lexical and fire in essentially every file:
   `LATERAL`, `RECURSIVE`, `FUNCTION` where 5.7 did not) — #162 could
   reserve only a 29-word compromise list for three dialects at once.
 
-So the sibling rule is absolute where the version rule was conditional:
+That makes the sibling rule absolute where the version rule was
+conditional:
 **a union across siblings is never built.** Within one row, §4.2 survives
 intact — a row that spans versions unions them, latest wins, and its
 `version_policy.toml` declares the losses. The three §4.2 cases become
@@ -202,10 +203,10 @@ by row. Each entry is a list of tree-sitter query patterns naming
 **out-of-row occurrences** — for `python3`: `(print_statement)`,
 `(exec_statement)`, the backtick repr, the old octal literal, the
 `except E, e:` clause shape. The pack ships it beside `roles.json` and
-expands it the same way facets are expanded; `Pack::fetch("python3")`
+expands it the way it already expands facets; `Pack::fetch("python3")`
 resolves to the shared parser plus the manifest, and a narrowed parse is
 parse-then-scan: the tree comes back with its out-of-row occurrences, or
-the parse is refused, at the consumer's option. Names are stable from day
+the call refuses the file, at the consumer's option. Names are stable from day
 one — a row that later earns rung 2 keeps its name and quietly stops
 needing its manifest.
 
@@ -216,7 +217,7 @@ The checker (`treebank roles` grows three rules, or a sibling
    node the table cannot produce is dead text, refused.
 2. **Liveness:** every pattern matches at least one file in the row's
    negative corpus (`test/negative/<row>/`), so a narrowing nobody can
-   trip is caught the way a role nobody threads is.
+   trip fails the gate the way a role nobody threads does.
 3. **The sweep cross-checks the manifest against the verdict vector.**
    §4.2 already records per-oracle verdicts per file and calls that
    vector "the hook a future `version_of()` builds on." This is that
@@ -227,10 +228,10 @@ The checker (`treebank roles` grows three rules, or a sibling
 
 An entry may carry the version bound it narrows away (`match_statement`
 → 3.10) so `version_of()` can report a floor as well as a family.
-Nothing further is built on that today — §4.2's restraint, kept.
+Nothing further builds on that today — §4.2's restraint, kept.
 
-What a manifest can never do is change a reading, and the limit is
-declared rather than discovered: a `python2` manifest over the union
+What a manifest can never do is change a reading — a limit to declare,
+not to discover: a `python2` manifest over the union
 table still hands a py2 consumer the call reading of `print (x)`, the
 py3 tuple reading of `print >> f, x`, and no parse at all for `True = 5`
 or `(True, False) = (1, 0)` — every one already recorded in the python
@@ -250,14 +251,15 @@ set" because the table under test was a union. Rows simplify it:
   5.7 leg), along with the honest blind spot the zig ledger already
   declares for anything that lived only between the endpoints.
 - **Widening tightens to the row.** Today's definition — accepted by us,
-  rejected by *every* version oracle — was the union's; per row it is
-  simply "the row's parser accepts what the row's oracle rejects."
+  rejected by *every* version oracle — was the union's; per row it
+  becomes simply "the row's parser accepts what the row's oracle
+  rejects."
   `treebank mutate` and `treebank fuzz` run per row against that single
   honest oracle, which is what restores their sight: a postgres-row fuzz
   finding of a backtick identifier is a widening again, where #162's
   union defined it as a feature.
 - **Cross-row verdicts stay recorded** (rule 3 of §4) but adjudicate
-  nothing; they validate manifests and power `version_of()`.
+  nothing; they check manifests and power `version_of()`.
 
 ## 6. SQL, planned as a family
 
@@ -278,13 +280,13 @@ shipping its own wasm pack. A fix to how a join parses lands in every
 dialect or in none — the cpp argument, inside one crate.
 
 **No `sql` row, ever.** "SQL" names the crate and the shared source, not
-a fetchable thing. The standard has no reference parser, and a row
-without an oracle cannot be swept — #162's T-SQL fringe "rests on
+a fetchable thing. The standard has no reference parser, and no sweep
+can adjudicate a row without an oracle — #162's T-SQL fringe "rests on
 documentation rather than measurement, and `deviations` says so," which
-is the epitaph for any oracle-less row. The generic-`.sql` consumer is
-served by `version_of()`'s sibling: parse against the dialect rows and
-report which accept, which is a *stronger* answer than one permissive
-table, because each verdict is backed by a real oracle.
+is the epitaph for any oracle-less row. `version_of()`'s sibling serves
+the generic-`.sql` consumer: parse against the dialect rows and report
+which accept, which is a *stronger* answer than one permissive table,
+because a real oracle backs each verdict.
 
 **The `postgres` row** comes first, because its oracle is the best in the
 family: libpg_query — the server's own parser, extracted, pinned per
@@ -300,26 +302,26 @@ the floors.
 throwaway `mysqld --skip-networking` judging `PREPARE` by **error code,
 not message** — 1064/1149 are the parser's; 1046/1049/1146/1054 are
 about a schema it deliberately doesn't have; 1295 means the statement
-parsed and the protocol won't carry it — is built, proven, and written
-up. Versions inside the row are rust's edition problem (8.0's newly
+parsed and the protocol won't carry it — already exists, proven and
+written up. Versions inside the row are rust's edition problem (8.0's newly
 reserved words against 5.7 identifiers) and take rust's solution:
 soft/reserved keyword machinery in one table, `version_policy.toml` for
 the collisions, a 5.7 oracle leg when the row claims 5.7. MySQL's
 versioned comments (`/*!80000 … */` — code to one version, comment to
-the rest) are the row's hardest single call and are decided in its
-ledger, not here.
+the rest) are the row's hardest single call, and its ledger decides
+them, not this note.
 
 **A `sqlite` row** is the natural third — #162's sqlite oracle (with its
-unterminated-fragment fix) is the cheapest in the family — but it is a
-registration, not a prerequisite.
+unterminated-fragment fix) is the cheapest in the family — and it lands
+as a registration, not a prerequisite.
 
 **Corpora, two populations each, per the field guide's two-corpora
 rule.** First-party: each engine's own test suite per released major —
 the zig upstream-tarball pattern, which is the population a version claim
 most needs — with the corpus adapter deciding what counts as SQL in
 mixed harness files (that judgment is the `Ecosystem` trait's whole job).
-Second: the migration/schema files of ranked OSS ecosystems, which is
-biased modern and machine-formatted, and says so in the ledger. #162's
+Second: the migration/schema files of ranked OSS ecosystems, which
+leans modern and machine-formatted, and says so in the ledger. #162's
 Debian walk survives as the *mixed* population that exercises routing and
 `version_of()`, not as a sweep population — sweeping unrouted
 mixed-dialect files is how the union trap re-enters through the corpus.
@@ -361,14 +363,14 @@ sweep's verdict vectors.
 `common/` core plus per-row deltas, the typescript/tsx mechanism
 in-crate. The `python3` table drops the py2 statement forms *and their
 soft-keyword machinery* — `print`/`exec` stop being soft keywords, and
-the field guide §5 reserved list can finally be taken at full strength,
-which the python ledger has wished for since it recorded
+the table can finally take the field guide §5 reserved list at full
+strength, which the python ledger has wished for since it recorded
 `return yield x` parsing as a variable read. The `python2` table restores
 every reading the union sacrificed and the ledger already itemizes —
 `print (x)` as a statement, `print >> f, x` as chevron print, `True = 5`,
 `(True, False) = (1, 0)` (the known undeclared gap), bare
-`await`/`nonlocal` as identifiers — and then **freezes**: the language is
-closed, so the table is write-once evidence with a dead-cheap canary.
+`await`/`nonlocal` as identifiers — and then **freezes**: the language
+ended, so the table is write-once evidence with a dead-cheap canary.
 
 Predictions phase 1 must check, stated now so the sweep can falsify them:
 per-table parse states and declared conflicts drop below the union's
@@ -381,11 +383,11 @@ books files the union has been mis-reading, not just mis-rejecting.
 `python3` row's sweep over the py3 population matches the union's
 numbers, `python` can alias `python3` and the third table can go; a
 mixed-vintage consumer is better served by two honest verdicts than one
-wide table. Until the numbers say that, the union stays what it is.
+wide table. Until the numbers say that, the union stays put.
 
 ## 8. The rest of the fleet
 
-Nothing moves uninvited. Rust, Java, C and YAML are ordered version
+Nothing moves uninvited. Rust, Java, C and YAML carry ordered version
 unions, measured and cheap — §4.2 remains their whole story, now as the
 within-row rule. TypeScript's un-split stands on its own ledger's
 re-argument (the generic-arrow fix that made the split unnecessary at
@@ -400,8 +402,8 @@ note's refusal rung, argued once and cited thereafter.
 
 - **`treebank-lang`:** rows for `python3`/`python2` (phase 0), `postgres`
   /`mysql` (with the family). The `grammar` column becomes crate + parser
-  name. Extension uniqueness relaxes to per-family: `.sql` is claimed by
-  the family with one designated default row (postgres, by the `.h`
+  name. Extension uniqueness relaxes to per-family: the family claims
+  `.sql` with one designated default row (postgres, by the `.h`
   precedent), and corpus adapters route their own files.
 - **Family crates:** `common/` + per-row `grammar.js` and `src/`;
   `tree-sitter.json` lists every generated grammar (upstream typescript's
@@ -419,7 +421,7 @@ note's refusal rung, argued once and cited thereafter.
 - **DESIGN.md:** §4.2 retitled ("one *source* per family; tables as
   narrow as the evidence wants"), the ladder and the sibling rule added,
   §4.3 revised per §5 of this note. The rewrite lands as its own small
-  PR once this note is agreed.
+  PR once this note settles.
 
 ## 10. Order of work
 
