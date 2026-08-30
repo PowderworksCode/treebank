@@ -8,7 +8,14 @@
 ;
 ; It is written once here because the vocabulary already carries the three
 ; things it needs. `_scope` is where names live, `_binding` is what introduces
-; one, and `_identifier` is what mentions one. All three are in every grammar.
+; one, and `_identifier` is what mentions one.
+;
+; Those three were called universal until JSON arrived, and JSON has none of
+; them: no scopes, no bindings, and no identifiers at all, since the thing
+; that looks like a name in `{"a": 1}` is a string literal. So every pattern
+; here is conditional and stands alone between blank lines, and JSON's
+; generated file is the comments with nothing under them — which is the
+; correct answer for a language in which no name can refer to anything.
 ;
 ; The captures are the conventional ones: an editor that understands
 ; nvim-treesitter's locals will understand these.
@@ -22,6 +29,7 @@
 ; counts differs per language -- a block, a function body, a module, a `do`
 ; end -- and each grammar declares its own members.
 
+; treebank: only-if _scope
 (_scope) @local.scope
 
 ; --- what introduces a name ------------------------------------------------
@@ -35,6 +43,7 @@
 ; treebank: only-if _callable
 (_callable name: (_) @local.definition.function)
 
+; treebank: only-if _binding
 (_binding name: (_) @local.definition.var)
 
 ; A parameter is a definition, and the one place a caller's name meets the
@@ -49,4 +58,5 @@
 ; it. The locals engine resolves each against the definitions in scope, so
 ; over-capturing here is cheap and under-capturing is not.
 
+; treebank: only-if _identifier
 (_identifier) @local.reference

@@ -21,7 +21,12 @@
 ; the specific cases come after the general ones.
 
 ; --- the leaves a reader looks at first -----------------------------------
+;
+; Guarded, because a comment is not universal either. JSON has no comment
+; syntax at all — RFC 8259 defines none, and a grammar that declared
+; `_comment` would be a grammar for JSONC.
 
+; treebank: only-if _comment
 (_comment) @comment
 
 ; `_literal` BEFORE `_string`, and the order is the whole of it: the last
@@ -48,8 +53,10 @@
 ; --- names ----------------------------------------------------------------
 ;
 ; `_identifier` is every name-shaped token, so it is the fallback that later
-; patterns narrow.
+; patterns narrow. Guarded because JSON has no identifiers: the thing in a
+; naming position there is a string literal, which `_string` already claims.
 
+; treebank: only-if _identifier
 (_identifier) @variable
 
 ; --- types ------------------------------------------------------------------
@@ -96,8 +103,10 @@
 (_jump) @keyword.return
 
 ; treebank: only-if _directive
-; And guarded once more, for a language that computes but never reaches
-; outside its own file: HCL's `module` block is a block, and what its
-; `source` means is the calling application's business rather than the
-; syntax's.
+; And guarded once more, for two languages rather than one. HCL computes
+; but never reaches outside its own file: its `module` block is a block,
+; and what the `source` inside it means is the calling application's
+; business rather than the syntax's. JSON does not compute at all — there
+; is no compilation unit for a directive to affect, and nothing to
+; compile.
 (_directive) @keyword.import

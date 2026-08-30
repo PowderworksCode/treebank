@@ -26,6 +26,7 @@ mod capabilities;
 mod hcl;
 mod java;
 mod javascript;
+mod json;
 mod python;
 mod reformat;
 mod ruby;

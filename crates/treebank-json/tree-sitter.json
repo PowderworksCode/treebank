@@ -1,0 +1,21 @@
+{
+  "grammars": [
+    {
+      "name": "json",
+      "camelcase": "Json",
+      "scope": "source.json",
+      "file-types": [
+        "json"
+      ],
+      "injection-regex": "^json$"
+    }
+  ],
+  "metadata": {
+    "version": "0.1.0",
+    "license": "MIT",
+    "description": "strict RFC 8259 JSON in one grammar, carrying the treebank node vocabulary",
+    "links": {
+      "repository": "https://github.com/PowderworksCode/treebank"
+    }
+  }
+}

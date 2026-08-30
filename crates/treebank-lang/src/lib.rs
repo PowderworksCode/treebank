@@ -122,6 +122,7 @@ macro_rules! for_each_language {
             // If Packer or Nomad HCL ever earns a corpus of its own, that is
             // the registration which points at this grammar.
             Hcl => "hcl", ["hcl", "tf", "tfvars"], Hcl, false, hcl::Hcl, hcl::Hcl, (HCL_SPANS, TOFU_FORMAT, NONE);
+            Json => "json", ["json"], Json, false, json::Json, json::Json, (NONE, NONE, NONE);
         }
     };
 }
