@@ -55,35 +55,57 @@ public class Check {
             System.exit(2);
         }
 
-        // Parse one file per task: files in a shared task share a diagnostic
-        // stream, and one file that makes javac give up would take its
-        // neighbours' verdicts with it.
-        try (StandardJavaFileManager fm =
-                     compiler.getStandardFileManager(null, null, StandardCharsets.UTF_8)) {
-            List<String> batch = new ArrayList<>();
-            for (String line = in.readLine(); line != null; line = in.readLine()) {
-                if (line.equals(SENTINEL)) {
-                    answer(compiler, fm, batch, out);
-                    batch.clear();
-                    out.println(SENTINEL);
-                    out.flush();
-                    continue;
-                }
-                String p = line.trim();
-                if (!p.isEmpty()) {
-                    batch.add(p);
-                }
+        List<String> batch = new ArrayList<>();
+        for (String line = in.readLine(); line != null; line = in.readLine()) {
+            if (line.equals(SENTINEL)) {
+                answer(compiler, batch, out);
+                batch.clear();
+                out.println(SENTINEL);
+                out.flush();
+                continue;
             }
-            // EOF with work outstanding: the single-batch mode.
-            answer(compiler, fm, batch, out);
+            String p = line.trim();
+            if (!p.isEmpty()) {
+                batch.add(p);
+            }
         }
+        // EOF with work outstanding: the single-batch mode.
+        answer(compiler, batch, out);
         out.flush();
     }
 
-    private static void answer(JavaCompiler compiler, StandardJavaFileManager fm,
-                               List<String> paths, PrintStream out) {
-        for (String path : paths) {
-            out.printf("%s\t%s%n", path, parses(compiler, fm, path) ? "valid" : "invalid");
+    // One file manager per BATCH, not one per process.
+    //
+    // StandardJavaFileManager caches the file objects it hands out, keyed by
+    // path. That is free for the sweep, where every path is a distinct corpus
+    // file read once. It is wrong for the persistent mode: `fuzz` asks about
+    // one derived program at a time and reuses the same scratch filename for
+    // every question, so a cached entry answers the NEXT program with the
+    // PREVIOUS program's verdict.
+    //
+    // The cost was not theoretical. Rewriting one path across 80 batches and
+    // alternating a valid program with an invalid one returned 29 wrong
+    // verdicts; unique filenames returned none, and so does this. Those wrong
+    // verdicts are what issues #187 and #190 are largely made of -- 121 of
+    // their 133 distinct programs do not reproduce, and a fixed --seed did
+    // not reproduce its own run.
+    //
+    // Per batch rather than per file because the cache is only a hazard
+    // ACROSS questions, and the sweep hands over hundreds of thousands of
+    // files in a handful of batches.
+    private static void answer(JavaCompiler compiler, List<String> paths, PrintStream out) {
+        if (paths.isEmpty()) {
+            return;
+        }
+        try (StandardJavaFileManager fm =
+                     compiler.getStandardFileManager(null, null, StandardCharsets.UTF_8)) {
+            for (String path : paths) {
+                out.printf("%s\t%s%n", path, parses(compiler, fm, path) ? "valid" : "invalid");
+            }
+        } catch (IOException e) {
+            System.err.println("java-oracle: file manager: " + e);
+            System.err.println("java-oracle: this is an oracle failure, not a verdict");
+            System.exit(1);
         }
     }
 
