@@ -456,6 +456,20 @@ jobs:
         working-directory: site
         run: bun test
 
+      # The card a link shows is committed, because nothing should have to
+      # draw an image to serve a page. Committed means it can go stale -- a
+      # tagline moves in the registry, or the face the generator names does --
+      # so this compares what it was drawn from against what the config says
+      # now. It is the inputs that are compared, not the pixels: freetype
+      # hints differently from one version to the next.
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install --quiet pillow
+      - name: the social card still matches the config
+        working-directory: site
+        run: bun run social:check
+
   wasm:
     name: wasm packs (${{ matrix.grammar }})
     runs-on: ubuntu-latest
