@@ -198,15 +198,15 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | Ruby | yes | — | — |
 | C / C++ | yes | — | — |
 | Zig | — | `zig fmt` | — |
-| YAML | — | — | — |
+| YAML | yes | — | — |
 
-YAML's three dashes are one fact stated three times: the language has no
-owning implementation, so there is no formatter and no printer to be the
+YAML's two dashes are one fact stated twice: the language has no owning
+implementation, so there is no formatter and no printer to be the
 language's own — `prettier` and every library's re-serializer are third
-party, and this project does not substitute one for the other. Node spans
-are the exception and are a real gap rather than an absence: the pinned
-`yaml` package does carry source ranges, and a span oracle over them is the
-next capability this grammar should grow.
+party, and this project does not substitute one for the other. Its spans
+come from the same `yaml` package the verdict oracle's 1.2 leg uses, which
+is the most conformant implementation available rather than a reference,
+and `shape_policy.toml` says what that makes the check blind to.
 
 The remaining dashes are real toolchain gaps, not forgotten registrations:
 the project does not substitute a third-party style formatter for a

@@ -68,6 +68,19 @@ The accepts-invalid direction is the one no corpus can measure, because real fil
 
 And one rule that was tried and REMOVED, which is the more useful half of this section. YAML says a quoted scalar folding onto another line must be indented past the collection that holds it, so `msg: "one line` / `    a second at the mapping's own column"` is not YAML. Every implementation reads it anyway, Ansible writes it by the thousand, and the sweep found 18 files that the rule turned from passing into gaps. It bought one suite case and cost eighteen real files, so it is gone and the shape has a corpus fixture instead. The union oracle exists to make exactly that call, and this is the first time it has been asked to.'''
 
+shape_check = '''
+`treebank shape` — node BOUNDARIES from the `yaml` package's own AST, compared against ours. **235 missed of 16,774,527 oracle nodes over a 20,000-file sample**, 0.0014%, in five clusters; 206 of them are one declared difference and the residue is ratcheted in `shape_policy.toml`. The five committed fixtures under `test/shape/` miss nothing, which is the ceiling CI enforces.
+
+This is the capability this ledger previously recorded as absent, and the entry it replaces said the wrong thing: the dash in the README's table was read as "no toolchain exposes this" when the truth was "nobody has written it yet". The `yaml` package has carried `range` on every node all along.
+
+Two adjustments were needed on the ORACLE side before the comparison meant anything, and both are worth naming because each one hid a real signal behind thousands of false ones.
+
+A collection's `range[1]` includes the comment trailing its last entry — the package hangs a comment off the node it follows — so comparing against it reported a boundary difference on every commented collection in the corpus. The oracle now reports the last entry's CONTENT end instead, recursively. That single change took the miss count from 2,621 to 8 over the same 2,000 files.
+
+And a document's range begins at its `---`, with the directives handed to a separate object carrying no range. Our tree puts them inside the document, which is what `l-directive-document` says, so the oracle walks the boundary back over the `%` lines above the marker. Declaring that difference instead would have meant an ignore entry reading `document <- document`, which is every document disagreement there could ever be.
+
+What it is blind to, stated as plainly as the verdict oracle's: this is not a reference parser, because YAML has none. It is the most conformant implementation available and the same one the 1.2 leg asks, so a boundary the two of us agree on is not thereby correct — it is agreed. The 32 files of the sample that the 1.2 leg rejects come back `skipped` rather than counted as agreement, which is the honest bucket and not a free one: those are files the union oracle calls valid and no span check has ever looked at.'''
+
 incremental_check = '''
 `treebank incremental` — 3,000 corpus files, 3 edits each, 9,000 edits: **0 diverged**. A reparse after an edit is byte-identical to a fresh parse of the edited text.
 

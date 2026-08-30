@@ -833,7 +833,7 @@
     "yaml"
    ],
    "capabilities": {
-    "spans": false,
+    "spans": true,
     "formatter": false,
     "printer": false
    },
@@ -846,10 +846,10 @@
    "tests": {
     "corpus_cases": 11,
     "negative_files": 17,
-    "shape_files": 0
+    "shape_files": 5
    },
    "known_deviations": {
-    "shape": false,
+    "shape": true,
     "fuzz": false,
     "lint": true,
     "version": false

@@ -1,0 +1,8 @@
+base: &defaults
+  a: 1
+use: *defaults
+typed: !!str 5
+custom: !mytag
+  k: v
+both: &x !!int 7
+after: done

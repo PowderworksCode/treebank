@@ -66,6 +66,7 @@ static BASH_SPANS: spans::BashSpans = spans::BashSpans;
 static RB_SPANS: spans::RubySpans = spans::RubySpans;
 static C_SPANS: spans::CSpans = spans::CSpans;
 static CPP_SPANS: spans::CppSpans = spans::CppSpans;
+static YAML_SPANS: spans::YamlSpans = spans::YamlSpans;
 
 static RUSTFMT: reformat::RustFmt = reformat::RustFmt;
 static BLACK: reformat::BlackFmt = reformat::BlackFmt;

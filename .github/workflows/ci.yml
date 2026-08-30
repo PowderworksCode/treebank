@@ -291,6 +291,14 @@ jobs:
         if: steps.fixtures.outputs.have == 'true' && (matrix.grammar == 'c' || matrix.grammar == 'cpp')
         run: sudo apt-get update -qq && sudo apt-get install -y libclang-dev
 
+      # YAML's span oracle is the `yaml` package's own AST — the same
+      # parser the verdict oracle's 1.2 leg asks — so the shape gate needs
+      # the oracle's dependencies installed, exactly as the sweep job does.
+      - name: install YAML span oracle dependencies
+        if: steps.fixtures.outputs.have == 'true' && matrix.grammar == 'yaml'
+        working-directory: crates/treebank-oracle/tools/yaml-oracle
+        run: npm ci --no-audit --no-fund
+
       # The java span oracle is javac's own parser through the single-file
       # source launcher, so this job needs the same JDK the `sweeps` job
       # pins and the ledger names. The runner image ships a JDK, but which
