@@ -528,11 +528,18 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   // inside, so a trailing comment does not extend the collection above it.
   if (c == '#') {
     if (valid_symbols[BLOCK_END] && s->flow_depth == 0 && s->level_count > 0) {
+      // Scan to the next line with CODE on it, past any run of comment and
+      // blank lines. A blank line is not always empty — a line of trailing
+      // spaces is the commonest whitespace in a hand-edited file — and
+      // measuring the column of its indentation instead of the next real
+      // line's closed every collection above a `# comment` that happened
+      // to be followed by one.
       for (;;) {
         while (!is_line_end(lexer->lookahead)) advance(lexer);
+        if (lexer->lookahead == 0) break;
         while (is_break(lexer->lookahead)) advance(lexer);
         while (is_space(lexer->lookahead)) advance(lexer);
-        if (lexer->lookahead == '#') continue;
+        if (lexer->lookahead == '#' || is_break(lexer->lookahead)) continue;
         break;
       }
       if (lexer->lookahead == 0 ||
@@ -552,8 +559,18 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   bool is_bullet = false;
   bool is_marker = false;
   bool dash_then_space = false;
+  // The probes below consume, and what they consume belongs to a plain
+  // scalar when they come to nothing: `-: ""` is a mapping whose key is a
+  // one-character scalar, and `..foo` is a scalar too. Losing that prefix
+  // is how `-: ""` became a parse error over a hundred thousand files.
+  bool probed = false;
   if (c == '-') {
     advance(lexer);
+    // A dash is plain-scalar content only where a plain scalar could
+    // continue past it. `[-]` is not a sequence and not a scalar either:
+    // inside a flow collection the bracket that follows is not plain-safe,
+    // so the dash belongs to nothing and the file is not YAML.
+    probed = !(s->flow_depth > 0 && is_flow_indicator(lexer->lookahead));
     if (is_blank_or_end(lexer->lookahead)) {
       dash_then_space = true;
       // An entry indicator only where a block collection may begin: at the
@@ -570,6 +587,7 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
       }
     }
   } else if (c == '.' && column == 0) {
+    probed = true;
     is_marker = scan_document_marker(lexer, '.');
   }
 
@@ -807,7 +825,7 @@ bool tree_sitter_yaml_external_scanner_scan(void *payload, TSLexer *lexer,
   }
 
   if (valid_symbols[PLAIN_SCALAR] && plain_can_start(c)) {
-    return scan_plain(lexer, s, false);
+    return scan_plain(lexer, s, probed);
   }
 
   return false;

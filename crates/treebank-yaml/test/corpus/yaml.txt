@@ -302,3 +302,34 @@ second: document
         key: (plain_scalar)
         value: (plain_scalar)))))
 
+
+================================================================================
+a dash as a key, and a comment above a blank line
+================================================================================
+
+map:
+  -: ""
+  # a comment, then a line of trailing spaces
+  
+  other: 1
+after: 2
+
+--------------------------------------------------------------------------------
+
+(stream
+  (document
+    (block_mapping
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (block_mapping
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (double_quote_scalar))
+          (comment)
+          (block_mapping_pair
+            key: (plain_scalar)
+            value: (plain_scalar))))
+      (block_mapping_pair
+        key: (plain_scalar)
+        value: (plain_scalar)))))
+
