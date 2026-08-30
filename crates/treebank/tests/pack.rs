@@ -47,7 +47,10 @@ fn parses_and_answers_for_itself() {
     let tree = pack.parse("def f(x):\n    return x + 1\n").expect("parse");
     let root = tree.root();
     assert_eq!(root.kind().unwrap(), "module");
-    assert!(!root.has_error().unwrap(), "clean source should not carry an error");
+    assert!(
+        !root.has_error().unwrap(),
+        "clean source should not carry an error"
+    );
     assert!(root.sexp().unwrap().starts_with("(module"));
     assert_eq!(root.byte_range().unwrap().start, 0);
 
@@ -60,7 +63,10 @@ fn parses_and_answers_for_itself() {
     let names: Vec<_> = (0..f.child_count(false).unwrap())
         .filter_map(|i| f.field_name_for_child(i).unwrap())
         .collect();
-    assert!(names.iter().any(|n| n == "name"), "expected a name field, got {names:?}");
+    assert!(
+        names.iter().any(|n| n == "name"),
+        "expected a name field, got {names:?}"
+    );
 }
 
 #[test]
@@ -69,7 +75,10 @@ fn reports_errors() {
     let pack = Pack::from_path(&path).expect("load");
     let tree = pack.parse("def f(:\n    return 1\n").expect("parse");
     let root = tree.root();
-    assert!(root.has_error().unwrap(), "broken source should carry an error");
+    assert!(
+        root.has_error().unwrap(),
+        "broken source should carry an error"
+    );
 }
 
 #[test]
@@ -82,8 +91,15 @@ fn expands_a_facet_query_against_the_packs_own_manifest() {
     let (term, members) = facets.iter().next().unwrap();
     let expanded = pack.expand_query(&format!("({term})")).expect("expand");
     // The whole point: the facet name is replaced by this grammar's members.
-    assert!(!expanded.contains(term), "facet should be expanded away: {expanded}");
-    assert!(expanded.contains(&members[0]), "expected {} in {expanded}", members[0]);
+    assert!(
+        !expanded.contains(term),
+        "facet should be expanded away: {expanded}"
+    );
+    assert!(
+        expanded.contains(&members[0]),
+        "expected {} in {expanded}",
+        members[0]
+    );
 }
 /// The vocabulary's whole purpose: one query, several languages, whatever each
 /// one calls its declarations. Skipped unless more than one pack is present,
@@ -92,9 +108,18 @@ fn expands_a_facet_query_against_the_packs_own_manifest() {
 fn one_query_runs_against_every_grammar() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
     let samples: Vec<(&str, &str)> = vec![
-        ("python", "def greet(n):\n    return n\n\nclass P:\n    pass\n"),
-        ("rust", "fn largest(x: u8) -> u8 { x }\nstruct P { a: u8 }\n"),
-        ("typescript", "function greet(n: string) { return n }\nclass P {}\n"),
+        (
+            "python",
+            "def greet(n):\n    return n\n\nclass P:\n    pass\n",
+        ),
+        (
+            "rust",
+            "fn largest(x: u8) -> u8 { x }\nstruct P { a: u8 }\n",
+        ),
+        (
+            "typescript",
+            "function greet(n: string) { return n }\nclass P {}\n",
+        ),
     ];
 
     let mut ran = 0;
@@ -118,11 +143,20 @@ fn one_query_runs_against_every_grammar() {
             "{lang}: expected both declarations, got {:?}",
             found.iter().map(|c| &c.kind).collect::<Vec<_>>()
         );
-        assert!(found.iter().all(|c| c.name == "decl"), "{lang}: capture name");
+        assert!(
+            found.iter().all(|c| c.name == "decl"),
+            "{lang}: capture name"
+        );
         // Ranges must point into the source that was parsed.
-        assert!(found.iter().all(|c| c.range.end <= src.len()), "{lang}: range");
+        assert!(
+            found.iter().all(|c| c.range.end <= src.len()),
+            "{lang}: range"
+        );
         // The node types differ per language; that is the point.
-        assert!(found.iter().any(|c| c.kind.contains("function")), "{lang}: a function");
+        assert!(
+            found.iter().any(|c| c.kind.contains("function")),
+            "{lang}: a function"
+        );
 
         // A facet has to be expanded before it can run at all.
         let callable = pack.query(&tree, "(_callable) @fn").expect("facet query");
@@ -139,10 +173,15 @@ fn one_query_runs_against_every_grammar() {
 
 #[test]
 fn a_broken_query_says_where() {
-    let Some(pack) = a_queryable_pack() else { return };
+    let Some(pack) = a_queryable_pack() else {
+        return;
+    };
     let tree = pack.parse("x = 1").expect("parse");
 
-    let err = pack.query(&tree, "(nonexistent_node) @x").unwrap_err().to_string();
+    let err = pack
+        .query(&tree, "(nonexistent_node) @x")
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("node type"), "should name the problem: {err}");
     assert!(err.contains("byte 1"), "should give the position: {err}");
 
@@ -163,7 +202,10 @@ fn an_older_pack_still_works_without_queries() {
         return;
     }
     let pack = Pack::from_path(&old).expect("an older pack must still load");
-    assert!(pack.provenance().pack_abi < 3, "fixture should predate queries");
+    assert!(
+        pack.provenance().pack_abi < 3,
+        "fixture should predate queries"
+    );
 
     // Everything that is not a query works exactly the same.
     let tree = pack.parse("def f(x):\n    return x\n").expect("parse");
@@ -172,9 +214,15 @@ fn an_older_pack_still_works_without_queries() {
     assert!(!pack.roles().facets.is_empty());
 
     // And a query fails with something a reader can act on.
-    let err = pack.query(&tree, "(_declaration) @d").unwrap_err().to_string();
+    let err = pack
+        .query(&tree, "(_declaration) @d")
+        .unwrap_err()
+        .to_string();
     assert!(err.contains("pack_abi"), "should name the version: {err}");
-    assert!(err.contains("expand_query"), "should offer the way round it: {err}");
+    assert!(
+        err.contains("expand_query"),
+        "should offer the way round it: {err}"
+    );
 }
 
 #[test]
@@ -190,7 +238,9 @@ fn hands_out_the_manifests_as_they_ship() {
     assert_eq!(facets.len(), pack.roles().facets.len());
 
     // And the node manifest, which is where table-tier membership lives.
-    let raw = pack.node_types_json().expect("an ABI 2 pack carries node types");
+    let raw = pack
+        .node_types_json()
+        .expect("an ABI 2 pack carries node types");
     let node_types: serde_json::Value = serde_json::from_str(raw).expect("node_types_json is json");
     assert!(node_types.as_array().is_some_and(|a| !a.is_empty()));
 }

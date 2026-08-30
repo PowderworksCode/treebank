@@ -78,7 +78,11 @@ impl NodeTypes {
                 );
             }
         }
-        Ok(NodeTypes { named, supertypes, fields })
+        Ok(NodeTypes {
+            named,
+            supertypes,
+            fields,
+        })
     }
 
     pub fn load(path: &Path) -> Result<NodeTypes> {
