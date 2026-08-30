@@ -24,6 +24,17 @@ fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..")
 }
 
+/// Whether a skip here is a bug rather than a missing tool.
+///
+/// The header above says this file makes the same bargain the pack tests make
+/// about packs. That bargain has two halves: skip when the tool is absent, and
+/// fail where a job promised it. Only the first was here, so a differential
+/// that compared nothing reported a pass -- the shape the pack tests already
+/// closed with TREEBANK_REQUIRE_PACK.
+fn node_is_required() -> bool {
+    std::env::var_os("TREEBANK_REQUIRE_NODE").is_some_and(|v| v != "0" && !v.is_empty())
+}
+
 fn have_node() -> bool {
     Command::new("node")
         .arg("--version")
@@ -39,7 +50,9 @@ fn have_node() -> bool {
 fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>, Option<String>)> {
     let mut out = Vec::new();
     let crates = root().join("crates");
-    let Ok(entries) = std::fs::read_dir(&crates) else { return out };
+    let Ok(entries) = std::fs::read_dir(&crates) else {
+        return out;
+    };
     let mut dirs: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     dirs.sort();
     for dir in dirs {
@@ -47,11 +60,17 @@ fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>, Option<String>)> {
         if !manifest.is_file() {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&manifest) else { continue };
+        let Ok(text) = std::fs::read_to_string(&manifest) else {
+            continue;
+        };
         let Ok(roles) = serde_json::from_str::<treebank::roles::RolesManifest>(&text) else {
             continue;
         };
-        let name = dir.file_name().unwrap().to_string_lossy().replace("treebank-", "");
+        let name = dir
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .replace("treebank-", "");
         let node_types = std::fs::read_to_string(dir.join("src/node-types.json")).ok();
         out.push((name, roles.facets, node_types));
     }
@@ -162,11 +181,19 @@ struct Answer {
 #[test]
 fn the_browsers_expander_agrees_with_this_one() {
     if !have_node() {
+        assert!(
+            !node_is_required(),
+            "TREEBANK_REQUIRE_NODE is set: node is not on PATH, so the expand \
+             parity differential compared nothing"
+        );
         eprintln!("node not on PATH; skipping the expand parity differential");
         return;
     }
     let grammars = grammars();
-    assert!(!grammars.is_empty(), "no roles.json found; the corpus would be vacuous");
+    assert!(
+        !grammars.is_empty(),
+        "no roles.json found; the corpus would be vacuous"
+    );
     assert!(
         grammars.iter().any(|(_, _, nt)| nt.is_some()),
         "no node-types.json found; the filtering half would not be exercised"
@@ -176,22 +203,36 @@ fn the_browsers_expander_agrees_with_this_one() {
     let mut cases: Vec<Case> = Vec::new();
     let mut labels: Vec<(String, String, bool)> = Vec::new();
     for (index, (grammar, facets, node_types)) in grammars.iter().enumerate() {
-        let Some(facet) = facets.keys().next() else { continue };
+        let Some(facet) = facets.keys().next() else {
+            continue;
+        };
         // Both modes: without node-types (what `expand` does) and with them
         // (what `Pack::expand_query` now does).
-        let modes: &[bool] = if node_types.is_some() { &[false, true] } else { &[false] };
+        let modes: &[bool] = if node_types.is_some() {
+            &[false, true]
+        } else {
+            &[false]
+        };
         for &filtered in modes {
             for template in CORPUS {
                 let query = template.replace("{facet}", facet);
                 labels.push((grammar.clone(), query.clone(), filtered));
-                cases.push(Case { grammar: index, query, filtered });
+                cases.push(Case {
+                    grammar: index,
+                    query,
+                    filtered,
+                });
             }
             // Every facet on its own, with a field constraint, so a grammar
             // with an odd member list is covered rather than only its first.
             for name in facets.keys() {
                 for query in [format!("({name})"), format!("({name} name: (a) @n)")] {
                     labels.push((grammar.clone(), query.clone(), filtered));
-                    cases.push(Case { grammar: index, query, filtered });
+                    cases.push(Case {
+                        grammar: index,
+                        query,
+                        filtered,
+                    });
                 }
             }
         }
@@ -200,7 +241,10 @@ fn the_browsers_expander_agrees_with_this_one() {
     let payload = Payload {
         grammars: grammars
             .iter()
-            .map(|(_, facets, nt)| Grammar { facets, node_types: nt.as_deref() })
+            .map(|(_, facets, nt)| Grammar {
+                facets,
+                node_types: nt.as_deref(),
+            })
             .collect(),
         cases: &cases,
     };
@@ -225,18 +269,30 @@ fn the_browsers_expander_agrees_with_this_one() {
         .stderr(Stdio::inherit())
         .spawn()
         .expect("spawning node");
-    child.stdin.take().unwrap().write_all(json.as_bytes()).expect("writing cases");
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(json.as_bytes())
+        .expect("writing cases");
     let output = child.wait_with_output().expect("running the parity driver");
     assert!(output.status.success(), "the parity driver failed");
 
     let answers: Vec<Answer> =
         serde_json::from_slice(&output.stdout).expect("parsing the driver's answers");
-    assert_eq!(answers.len(), cases.len(), "driver answered a different number of cases");
+    assert_eq!(
+        answers.len(),
+        cases.len(),
+        "driver answered a different number of cases"
+    );
 
     // Parse each grammar's node-types once, as the crate does.
     let parsed: Vec<Option<treebank::node_types::NodeTypes>> = grammars
         .iter()
-        .map(|(_, _, nt)| nt.as_deref().and_then(|j| treebank::node_types::NodeTypes::parse(j).ok()))
+        .map(|(_, _, nt)| {
+            nt.as_deref()
+                .and_then(|j| treebank::node_types::NodeTypes::parse(j).ok())
+        })
         .collect();
 
     let mut differences = Vec::new();
@@ -247,7 +303,11 @@ fn the_browsers_expander_agrees_with_this_one() {
             filtered_cases += 1;
         }
         let facets = &grammars[case.grammar].1;
-        let types = if *filtered { parsed[case.grammar].as_ref() } else { None };
+        let types = if *filtered {
+            parsed[case.grammar].as_ref()
+        } else {
+            None
+        };
         let mine = treebank::expand::expand_with_types(&case.query, facets, types);
         let theirs = &answers[i];
         let mode = if *filtered { "filtered" } else { "plain" };

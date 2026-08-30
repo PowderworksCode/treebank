@@ -18,7 +18,10 @@ pub fn packs_are_required() -> bool {
 
 /// Skip, unless a pack was promised. Panics with what to fix when one was.
 pub fn skip(reason: &str) {
-    assert!(!packs_are_required(), "TREEBANK_REQUIRE_PACK is set: {reason}");
+    assert!(
+        !packs_are_required(),
+        "TREEBANK_REQUIRE_PACK is set: {reason}"
+    );
     eprintln!("skipping: {reason}");
 }
 

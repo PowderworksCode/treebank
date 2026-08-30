@@ -46,7 +46,12 @@ fn a_second_load_uses_the_compiled_cache() {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().is_some_and(|x| x == "cwasm"))
         .collect();
-    assert_eq!(cached.len(), 1, "one compiled artifact, got {}", cached.len());
+    assert_eq!(
+        cached.len(),
+        1,
+        "one compiled artifact, got {}",
+        cached.len()
+    );
 
     // Deliberately loose. The point is that the second load does not recompile,
     // not that it hits a particular number on a particular machine.
