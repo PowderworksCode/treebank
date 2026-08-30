@@ -1,9 +1,12 @@
 name: fleet-lint
 
-# Fleet-managed by conf (.ordnung/managed/github/lint.yml): the static-analysis
-# floor every member runs — prose, workflow, shell, and public-API hygiene.
-# Edit it in conf and let ordnung distribute it; a local edit here is drift the
-# next fleet sync will report.
+# Distributed by Ordnung's `paranoid` tier: the static-analysis floor every
+# member runs — prose, workflow, shell, and public-API hygiene. Edit it in the
+# tier and let ordnung distribute it; a local edit here is drift the next fleet
+# sync will report.
+#
+# It replaces, by entry name, the codespell-only workflow the `recommended` tier
+# ships: the extra jobs are the checks this tier raises.
 on:
   push:
     branches: [main]
@@ -84,6 +87,35 @@ jobs:
           min-severity: high
           advanced-security: false
 
+  # Pull-request titles, held to the rule the commit-msg hook holds subjects to.
+  # A squash merge writes the title into the history, so on the default branch it
+  # is the message that lasts, and nothing was checking it.
+  title:
+    name: pr-title
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # The title arrives through the environment rather than interpolated into
+      # the script. It is text somebody else wrote, and `${{ }}` would paste it
+      # in as shell before the shell ever sees it as data.
+      - name: Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          # Git's own generated subjects pass untouched, as they do in the hook.
+          case "$TITLE" in
+              "Merge "*|"Revert "*) exit 0 ;;
+          esac
+          if printf '%s' "$TITLE" |
+              grep -qE '^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9./_-]+\))?!?: .+'; then
+              exit 0
+          fi
+          echo "::error::pull-request title must follow Conventional Commits: type(scope): summary"
+          echo "  types: feat fix docs style refactor perf test build ci chore revert"
+          echo "  got:   $TITLE"
+          exit 1
+
   # Prose style, over the Markdown a member writes. Vale fetches the packages
   # named in .vale.ini at run time, so the styles are versioned by that file
   # rather than committed here.
@@ -139,8 +171,17 @@ jobs:
             echo "no stylesheets tracked"
             exit 0
           fi
+          # stylelint-config-standard extends stylelint-config-recommended, so
+          # both have to be resolvable from wherever stylelint runs — `bunx
+          # stylelint` alone brings neither, and fails on the extends rather
+          # than on the CSS. They go in a scratch directory, and
+          # --config-basedir points the resolution there, so a repository that
+          # writes CSS still does not declare a linter it never imports.
+          tools=$(mktemp -d)
+          (cd "$tools" && bun add --silent stylelint@17.14.1 stylelint-config-standard@40.0.0)
           # shellcheck disable=SC2086 — the file list is deliberately split.
-          bunx --bun stylelint@16 --config .stylelintrc.json $sheets
+          "$tools/node_modules/.bin/stylelint" \
+            --config .stylelintrc.json --config-basedir "$tools" $sheets
 
   shell:
     name: shellcheck
