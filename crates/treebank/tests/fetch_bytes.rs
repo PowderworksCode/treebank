@@ -32,7 +32,11 @@ fn digest(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
     let mut hasher = Sha256::new();
     hasher.update(bytes);
-    hasher.finalize().iter().map(|b| format!("{b:02x}")).collect()
+    hasher
+        .finalize()
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect()
 }
 
 /// Seed the cache with `content` under the name `hash` claims, and return
@@ -66,7 +70,10 @@ fn a_cache_entry_that_does_not_match_its_name_is_discarded() {
     // Offline this then fails at the download, which is the point -- what is
     // under test is that the bytes on disk were never handed back.
     let _ = fetch_pinned_bytes("python", &hash);
-    assert!(!path.is_file(), "a mismatching entry should be removed, not trusted");
+    assert!(
+        !path.is_file(),
+        "a mismatching entry should be removed, not trusted"
+    );
 }
 
 #[test]

@@ -1494,12 +1494,22 @@ starts_with = "only "
 why = "one"
 "#,
         );
-        for lang in [LangName::Javascript, LangName::Typescript] {
-            assert!(p.declared_reason(lang, "shared x\n").is_some());
-        }
-        assert!(p.declared_reason(LangName::Javascript, "only x\n").is_some());
-        assert!(p.declared_reason(LangName::Typescript, "only x\n").is_none());
-        assert!(!p.is_empty(LangName::Typescript), "shared entry is in force");
+        assert!(p
+            .declared_reason(LangName::Javascript, "shared x\n")
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Typescript, "shared x\n")
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Javascript, "only x\n")
+            .is_some());
+        assert!(p
+            .declared_reason(LangName::Typescript, "only x\n")
+            .is_none());
+        assert!(
+            !p.is_empty(LangName::Typescript),
+            "shared entry is in force"
+        );
     }
 
     /// A section's own rule is what the run prints for that language;
@@ -1521,7 +1531,9 @@ rule = "javascript reason"
     fn an_empty_policy_declares_nothing() {
         let p = FuzzPolicy::default();
         assert!(p.is_empty(LangName::Javascript));
-        assert!(p.declared_reason(LangName::Javascript, "anything\n").is_none());
+        assert!(p
+            .declared_reason(LangName::Javascript, "anything\n")
+            .is_none());
     }
 
     /// A misspelling and a plausible-but-wrong language fail the same

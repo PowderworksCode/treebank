@@ -83,11 +83,26 @@ pub fn run(grammar_dir: &Path) -> Result<()> {
     ));
 
     if let Some(b) = b {
-        ratchet(&mut r, "declared_conflicts", conflicts, b.declared_conflicts);
-        ratchet(&mut r, "early_commit_conflicts", early, b.early_commit_conflicts);
+        ratchet(
+            &mut r,
+            "declared_conflicts",
+            conflicts,
+            b.declared_conflicts,
+        );
+        ratchet(
+            &mut r,
+            "early_commit_conflicts",
+            early,
+            b.early_commit_conflicts,
+        );
         ratchet(&mut r, "dynamic_weights", weights, b.dynamic_weights);
         ratchet(&mut r, "same_text_tokens", same_text, b.same_text_tokens);
-        ratchet(&mut r, "unreserved_keywords", unreserved, b.unreserved_keywords);
+        ratchet(
+            &mut r,
+            "unreserved_keywords",
+            unreserved,
+            b.unreserved_keywords,
+        );
         ratchet(&mut r, "state_count", states, b.state_count);
     }
 
@@ -101,10 +116,7 @@ pub fn run(grammar_dir: &Path) -> Result<()> {
         for f in r.hard_failures.iter().chain(r.over.iter()) {
             eprintln!("lint: FAIL {f}");
         }
-        bail!(
-            "{} lint failure(s)",
-            r.hard_failures.len() + r.over.len()
-        );
+        bail!("{} lint failure(s)", r.hard_failures.len() + r.over.len());
     }
     if policy.is_none() {
         println!(
@@ -140,7 +152,10 @@ fn ratchet(r: &mut Report, name: &str, actual: usize, baseline: Option<usize>) {
 /// enum census is textual and deliberately dumb: the first `enum { … }`
 /// block in scanner.c, one identifier per comma.)
 fn check_scanner_enum(dir: &Path, grammar: &serde_json::Value, r: &mut Report) {
-    let externals = grammar["externals"].as_array().map(|a| a.len()).unwrap_or(0);
+    let externals = grammar["externals"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
     if externals == 0 {
         return;
     }
@@ -150,14 +165,17 @@ fn check_scanner_enum(dir: &Path, grammar: &serde_json::Value, r: &mut Report) {
         ));
         return;
     };
-    let Some(open) = scanner.find("enum ").and_then(|i| scanner[i..].find('{').map(|j| i + j + 1))
+    let Some(open) = scanner
+        .find("enum ")
+        .and_then(|i| scanner[i..].find('{').map(|j| i + j + 1))
     else {
         r.hard_failures
             .push("externals declared but no enum found in scanner.c".into());
         return;
     };
     let Some(close) = scanner[open..].find('}') else {
-        r.hard_failures.push("unterminated enum in scanner.c".into());
+        r.hard_failures
+            .push("unterminated enum in scanner.c".into());
         return;
     };
     let names: Vec<&str> = scanner[open..open + close]
@@ -176,7 +194,10 @@ fn check_scanner_enum(dir: &Path, grammar: &serde_json::Value, r: &mut Report) {
 }
 
 fn check_conflicts(grammar: &serde_json::Value, r: &mut Report) -> usize {
-    let n = grammar["conflicts"].as_array().map(|a| a.len()).unwrap_or(0);
+    let n = grammar["conflicts"]
+        .as_array()
+        .map(|a| a.len())
+        .unwrap_or(0);
     if n > 0 {
         r.findings.push(format!(
             "{n} declared conflict(s): each is a GLR fork site, and past the \
@@ -310,7 +331,9 @@ fn check_unreserved_keywords(grammar: &serde_json::Value, r: &mut Report) -> usi
                 if o.get("type").and_then(|t| t.as_str()) == Some("STRING") {
                     if let Some(s) = o.get("value").and_then(|s| s.as_str()) {
                         let word_shaped = s.len() > 1
-                            && s.chars().next().is_some_and(|c| c.is_ascii_lowercase() || c == '_')
+                            && s.chars()
+                                .next()
+                                .is_some_and(|c| c.is_ascii_lowercase() || c == '_')
                             && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
                         if word_shaped {
                             out.insert(s.to_string());

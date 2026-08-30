@@ -232,9 +232,10 @@ fn load_policy(grammar_dir: &Path, lang: LangName) -> Result<Option<LanguagePoli
         return Ok(None);
     };
     let policy: KindsPolicy = toml::from_str(&text).context("parse kinds_policy.toml")?;
-    Ok(policy.languages.into_iter().find_map(|(name, section)| {
-        (name == lang.as_str()).then_some(section)
-    }))
+    Ok(policy
+        .languages
+        .into_iter()
+        .find_map(|(name, section)| (name == lang.as_str()).then_some(section)))
 }
 
 /// Hold the declaration to the measurement, both ways.
@@ -262,7 +263,9 @@ fn check_policy(report: &KindsReport, policy: &LanguagePolicy) -> Result<()> {
         println!("  UNDECLARED  {item} — no corpus file builds it and kinds_policy.toml does not say why");
     }
     for item in &stale {
-        println!("  STALE       {item} — the corpus builds it now; delete its kinds_policy.toml entry");
+        println!(
+            "  STALE       {item} — the corpus builds it now; delete its kinds_policy.toml entry"
+        );
     }
     if undeclared.is_empty() && stale.is_empty() {
         println!(
@@ -679,7 +682,10 @@ mod tests {
         let err = check_policy(&r, &policy(&["with_statement", "&&="]))
             .expect_err("wrong token must fail");
         let msg = err.to_string();
-        assert!(msg.contains("1 undeclared") && msg.contains("1 stale"), "{msg}");
+        assert!(
+            msg.contains("1 undeclared") && msg.contains("1 stale"),
+            "{msg}"
+        );
     }
 
     /// The committed policy must parse and must name the language it is

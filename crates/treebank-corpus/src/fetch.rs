@@ -135,7 +135,9 @@ fn download(url: &str, max_bytes: Option<u64>) -> Result<Vec<u8>> {
             Some(fallback) => {
                 eprintln!("hydrate: {url} failed ({primary}); retrying {fallback}");
                 download_once(&fallback, max_bytes).map_err(|second| {
-                    primary.context(format!("snapshot fallback {fallback} also failed: {second}"))
+                    primary.context(format!(
+                        "snapshot fallback {fallback} also failed: {second}"
+                    ))
                 })
             }
         },

@@ -51,7 +51,16 @@ jobs:
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
+      # The expand parity differential runs here and needs node. It is
+      # installed rather than assumed: ubuntu-latest happens to ship one, and
+      # a differential that silently skips when an image changes is the green
+      # nothing TREEBANK_REQUIRE_PACK already had to end elsewhere.
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
       - run: cargo test --workspace
+        env:
+          TREEBANK_REQUIRE_NODE: "1"
 
       # The publish path runs on every change, uploading nothing. Otherwise it
       # is first exercised by the tag that publishes, which is the one moment

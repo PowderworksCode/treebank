@@ -257,9 +257,11 @@ mod tests {
             .unwrap()
             .filter_map(|entry| {
                 let entry = entry.ok()?;
-                entry.file_type().ok()?.is_dir().then(|| {
-                    entry.file_name().to_string_lossy().into_owned()
-                })
+                entry
+                    .file_type()
+                    .ok()?
+                    .is_dir()
+                    .then(|| entry.file_name().to_string_lossy().into_owned())
             })
             .collect();
         found.sort();
@@ -270,6 +272,9 @@ mod tests {
             .collect();
         registered.sort();
 
-        assert_eq!(found, registered, "sweep-smoke fixtures must match LangName::ALL");
+        assert_eq!(
+            found, registered,
+            "sweep-smoke fixtures must match LangName::ALL"
+        );
     }
 }

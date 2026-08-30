@@ -253,8 +253,12 @@ fn a_wildcard_field_value_constrains_presence_only() {
 
     // A wildcard anywhere in an alternation makes the whole constraint
     // presence-only.
-    let q = expand_with_types("(_callable name: [(_) (identifier)])", &facets, Some(&types))
-        .unwrap();
+    let q = expand_with_types(
+        "(_callable name: [(_) (identifier)])",
+        &facets,
+        Some(&types),
+    )
+    .unwrap();
     assert_eq!(q, "[(function_definition name: [(_) (identifier)])]");
 
     // A bare `_` with no parens was already presence-only; it stays that way.
@@ -262,8 +266,7 @@ fn a_wildcard_field_value_constrains_presence_only() {
     assert_eq!(q, "[(function_definition name: _)]");
 
     // And a real type name still filters on the type, not merely presence.
-    let q = expand_with_types("(_callable name: (identifier) @n)", &facets, Some(&types))
-        .unwrap();
+    let q = expand_with_types("(_callable name: (identifier) @n)", &facets, Some(&types)).unwrap();
     assert_eq!(q, "[(function_definition name: (identifier) @n)]");
 }
 
