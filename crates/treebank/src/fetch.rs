@@ -23,8 +23,8 @@
 //! consults no manifest, so it is reproducible and works offline once warm.
 
 use std::fs;
-use std::io::Read;
 use std::path::{Path, PathBuf};
+use std::sync::OnceLock;
 
 use anyhow::{anyhow, bail, Context, Result};
 use serde::Deserialize;
@@ -80,19 +80,46 @@ fn packs_dir() -> PathBuf {
     cache_dir().join("packs")
 }
 
+/// A pack is a few megabytes; the cap is here so a wrong URL that answers with
+/// something enormous fails rather than fills a disk.
+const BODY_LIMIT: u64 = 64 * 1024 * 1024;
+
+/// One agent for the process, holding one TLS setup.
+///
+/// The crypto provider is installed rather than passed per request because
+/// rustls keeps it as process state. Installing it is allowed to fail: that
+/// means the program embedding this library already chose a provider, and
+/// theirs should win over ours.
+///
+/// Roots come from the platform, which is what the `native-certs` feature did
+/// before and is what keeps a proxy presenting its own certificate authority
+/// working.
+fn agent() -> &'static ureq::Agent {
+    static AGENT: OnceLock<ureq::Agent> = OnceLock::new();
+    AGENT.get_or_init(|| {
+        let _ = rustls_graviola::default_provider().install_default();
+        ureq::Agent::config_builder()
+            .tls_config(
+                ureq::tls::TlsConfig::builder()
+                    .root_certs(ureq::tls::RootCerts::PlatformVerifier)
+                    .build(),
+            )
+            .build()
+            .into()
+    })
+}
+
 fn get(url: &str) -> Result<Vec<u8>> {
-    let response = ureq::get(url)
+    let mut response = agent()
+        .get(url)
         .call()
         .with_context(|| format!("fetching {url}"))?;
-    let mut body = Vec::new();
     response
-        .into_reader()
-        // A pack is a few megabytes; the cap is here so a wrong URL that
-        // answers with something enormous fails rather than fills a disk.
-        .take(64 * 1024 * 1024)
-        .read_to_end(&mut body)
-        .with_context(|| format!("reading {url}"))?;
-    Ok(body)
+        .body_mut()
+        .with_config()
+        .limit(BODY_LIMIT)
+        .read_to_vec()
+        .with_context(|| format!("reading {url}"))
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
