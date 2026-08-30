@@ -154,8 +154,13 @@ impl SpanOracle for YamlSpans {
     /// whose spans nobody can report is not a file the two trees agree
     /// about, it is one nobody measured.
     fn spans(&self, srcroot: &Path, paths: &[String]) -> Result<HashMap<String, FileSpans>> {
-        let lines =
-            stdin_oracle::node_lines(&crate::tool("yaml-oracle"), "spans.mjs", &[], srcroot, paths)?;
+        let lines = stdin_oracle::node_lines(
+            &crate::tool("yaml-oracle"),
+            "spans.mjs",
+            &[],
+            srcroot,
+            paths,
+        )?;
         parse_jsonl(&lines, srcroot)
     }
 }
