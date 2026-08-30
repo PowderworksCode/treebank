@@ -23,6 +23,7 @@
 mod bash;
 mod c;
 mod capabilities;
+mod hcl;
 mod java;
 mod javascript;
 mod python;
