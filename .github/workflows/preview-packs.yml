@@ -35,8 +35,6 @@ name: preview packs
 # here has stayed open, and the objects a rule like that removes are ones no
 # deployment points at any more.
 
-# zizmor: ignore[dangerous-triggers]
-#
 # `workflow_run` is on zizmor's dangerous-triggers list and belongs there:
 # it runs with the base repository's secrets, and almost every use of it is
 # insecure because it goes on to run code the pull request controls. The
@@ -56,7 +54,11 @@ name: preview packs
 # The alternative the audit would prefer -- doing this on `pull_request` --
 # is the genuinely unsafe one, because it hands that credential to a
 # workflow file the pull request can rewrite.
-on:
+#
+# The marker has to sit INSIDE the finding's span -- which is this whole
+# `on:` block -- so it rides on the key rather than heading the paragraph
+# that explains it.
+on: # zizmor: ignore[dangerous-triggers]
   workflow_run:
     workflows: [ci]
     types: [completed]
