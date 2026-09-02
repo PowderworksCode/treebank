@@ -8,3 +8,8 @@ node_modules/
 # wasm packs (built by CI, uploaded per run)
 /dist/
 __pycache__/
+
+# `vale sync` downloads the style packages named in .vale.ini to here. That
+# file's own comment is the rule: the styles are versioned by .vale.ini and
+# fetched at run time, not committed.
+/.vale/
