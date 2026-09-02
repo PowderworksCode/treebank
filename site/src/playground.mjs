@@ -13,6 +13,7 @@
 
 import { expandQuery } from "./expand.mjs";
 import { errorsIn, Pack, Query, walk } from "./pack.mjs";
+import { SAMPLES } from "./samples.mjs";
 
 const E = (s) =>
   String(s)
@@ -43,20 +44,6 @@ const MAX_BYTES = 400_000;
 // A tree view is one DOM node per syntax node. Past a few thousand the cost
 // is the browser's layout, not the parse, so the walk stops and says so.
 const MAX_NODES = 4_000;
-
-const SAMPLES = {
-  bash: 'greet() {\n  local name=${1:?need a name}\n  printf \'hi %s\\n\' "${name@Q}"\n}\n\nfor f in *.txt; do greet "$f"; done\n',
-  c: "int main(void) {\n    int xs[] = {1, 2, 3};\n    return xs[0];\n}\n",
-  cpp: "template <typename T>\nauto sum(const std::vector<T>& xs) -> T {\n    return std::accumulate(xs.begin(), xs.end(), T{});\n}\n",
-  java: "record Point(int x, int y) {\n    Point {\n        if (x < 0) throw new IllegalArgumentException();\n    }\n}\n",
-  python:
-    "def greet(name: str = 'world') -> str:\n    match name.split():\n        case [first, *rest]:\n            return f'hello {first}'\n        case _:\n            return 'hello'\n",
-  ruby: 'class Greeter\n  def initialize(name) = @name = name\n  def call = "hello #{@name}"\nend\n',
-  rust: "fn largest<T: PartialOrd>(xs: &[T]) -> Option<&T> {\n    xs.iter().reduce(|a, b| if a > b { a } else { b })\n}\n",
-  typescript:
-    "type Result<T> = { ok: true; value: T } | { ok: false; error: string };\n\nconst unwrap = <T,>(r: Result<T>): T => {\n  if (!r.ok) throw new Error(r.error);\n  return r.value;\n};\n",
-  zig: 'const std = @import("std");\n\npub fn main() !void {\n    const xs = [_]u8{ 1, 2, 3 };\n    std.debug.print("{d}\\n", .{xs.len});\n}\n',
-};
 
 // A capture list is one row each; a query like `(_) @x` matches everything.
 const MAX_CAPTURES = 500;
@@ -150,6 +137,20 @@ class Playground {
     }
   }
 
+  // Which deployment this is, when the answer changes what a failure means.
+  // Only read after something has already gone wrong, so the ordinary path
+  // costs nothing.
+  async preview() {
+    try {
+      const response = await fetch(`${PACKS}preview.json`);
+      if (!response.ok) return null;
+      const parsed = await response.json();
+      return typeof parsed?.branch === "string" ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+
   // The manifest is advisory: without it the pointer still works, and the
   // page loses pinning rather than the parser.
   async manifest() {
@@ -186,10 +187,21 @@ class Playground {
       this.pack = await Pack.load(url);
     } catch (error) {
       this.stateBox.textContent = "";
-      this.treeBox.innerHTML = `<p class="broken">Could not load the ${E(name)} parser: ${E(error.message)}</p>
-<p class="dim">The packs are built artifacts. If this is a local checkout, run
+      // A missing pack means different things in different places, and the
+      // unhelpful version of this message told a reviewer on a preview URL to
+      // go and run a build script on their laptop.
+      const preview = await this.preview();
+      const why = preview
+        ? `<p class="dim">This is a preview of <code>${E(preview.branch)}</code>. Its packs are
+published by CI after the build that made this page, so a grammar this branch
+adds appears here a few minutes after its checks go green — reload then. A
+grammar the branch did not change is served from what <code>main</code>
+published, so this one is new here.</p>`
+        : `<p class="dim">The packs are built artifacts. If this is a local checkout, run
 <code>./tools/wasm-pack/build.sh ${E(name)} --out site/public/packs</code>
 then <code>bun run packs</code>.</p>`;
+      this.treeBox.innerHTML = `<p class="broken">Could not load the ${E(name)} parser: ${E(error.message)}</p>
+${why}`;
       return;
     }
     const ms = Math.round(performance.now() - started);
