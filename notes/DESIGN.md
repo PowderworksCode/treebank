@@ -325,29 +325,102 @@ grade it.
   worse than a tree that varies.
 - `extras` carry comments and whitespace only.
 
-### 4.2 One grammar per language, across versions
+### 4.2 One grammar source per family; tables as narrow as the evidence wants
 
-A language gets one grammar accepting the **union of its versions** — no
-python2 crate, no per-edition Rust grammars.
+A language **family** — a language with its versions, or a language with its
+dialect siblings — shares one grammar source, forever. What varies is how
+many parse tables that source generates and how many rows the registry
+presents. Measurement decides both, and `notes/dialects.md` carries the full
+argument with the incidents behind it; this section is the rule it produced.
 
-- **Python**: 2.7 ∪ 3.x. The union adds the py2 `print` and `exec`
-  statements, `except E, e:` clauses, backtick repr, and old-style octal
-  literals, parsed alongside py3 syntax.
+- **Python**: 2.7 ∪ 3.x in one table today. The union adds the py2 `print`
+  and `exec` statements, `except E, e:` clauses, backtick repr, and
+  old-style octal literals, parsed alongside py3 syntax.
 - **Rust**: editions 2015–2024 together. The real work is contextual
   keywords: `async`, `dyn`, `try`, `gen` are identifiers in older editions
   and keywords in newer ones, and the union grammar accepts both readings.
-- **TypeScript**: every TS version, **and JavaScript** — TS is the union
-  language of JS, so this is the same philosophy applied across a language
-  boundary. One grammar source, **two generated parsers**: `typescript`
-  (`.ts`, `.mts`, `.cts`) and `tsx` (`.tsx`, `.jsx`, `.js`, `.mjs`,
-  `.cjs`). Two parsers because `<T>x` is a cast in `.ts` and an unclosed
-  JSX element in `.tsx` — a genuine grammatical ambiguity, not a precedence
-  problem; no single parse table exists.
+- **TypeScript**: every TS version, **and JavaScript**, in one table —
+  `typescript` and `javascript` are two rows over one parser. The dialect
+  pair this section once planned (`typescript` / `tsx`) stayed unbuilt
+  because `<T>x` casts measure at approximately zero corpus files, and
+  `treebank-typescript/ledger.toml` prices that as a standing quote rather
+  than a closed question.
 
-#### When versions conflict, the latest version wins
+#### Two kinds of difference, and only one buys a table
 
-A union grammar is not a promise to parse every version equally. Three cases,
-and they are decided differently:
+**An accept-set difference** admits text the sibling forbids while building
+the same tree wherever both admit it. `print x` builds a `print_statement`
+no python3 file can contain, and no python3 parse moves because that rule
+sits elsewhere in the table. One table serves both variants, and the
+narrower one rejects after the parse (below).
+
+**A reading difference** needs the same bytes to become a different token or
+a different tree. Zig removed `async`, and keyword extraction happens in the
+lexer, so wherever the keyword reading is valid the identifier reading
+cannot lex — 116 corpus files want the operator, 54 want the identifier, and
+`treebank-zig/ledger.toml` names the 4 files that fall. `<T>x` is a cast in
+`.ts` and an unclosed JSX element in `.tsx`. `'It\'s'` closes at different
+bytes under MySQL and PostgreSQL, and `SELECT 1--2` is arithmetic to one and
+a comment to the other. No single parse table holds either reading pair, and
+no manifest repairs one afterwards, because both mechanisms run downstream
+of the parse.
+
+**Only a reading difference at measured incidence buys a second parse
+table** — measured, because TypeScript priced its split at approximately
+zero files and kept one table, and zig priced its at 4 and kept one too.
+
+#### Rows: what a corpus and an oracle earn
+
+A **row** is a registry entry: a canonical name, source extensions, a corpus
+lock, an oracle, a negative corpus, sweep numbers in the family ledger, and a
+fetchable pack. A dialect or a version family earns one by bringing **its own
+corpus and its own oracle** — the rule `crates/treebank-lang` already
+applies, and the reason `javascript` holds a row served by the typescript
+crate (a different npm population, its own checker) while Terraform amounts
+to three file extensions on `hcl` (neither).
+
+A row need not be a parse table of its own. Rows may share one, exactly as
+`javascript` shares typescript's.
+
+The version axis takes that rule unmodified. `python3` has its own oracle
+(CPython 3, pinned) and its own population; `python2` has CPython 2.7.18
+built from source and a vintage population of its own. Both halves of the
+union already pay for their oracles, and neither answers to a name.
+
+#### The registration ladder
+
+Take the highest rung that expresses the variant — the discipline
+`notes/field_guide.md` §1 applies to ambiguity:
+
+0. **Extensions on an existing row.** The variant adds semantics, not
+   syntax: Terraform on `hcl`, `.zon` on `zig`.
+1. **A row over a shared parser.** Own corpus and oracle, and the shared
+   table already reads its text correctly. `javascript` today. Where the
+   row's accept-set is narrower than the table's, a narrowing manifest
+   closes the difference.
+2. **A row with its own parse table, generated from the family's shared
+   source.** A reading difference at measured incidence earns this, and
+   nothing else does.
+3. **A row with its own crate, extending a base grammar.** The variant is a
+   language of its own with a superset community: `cpp` over `c`, through
+   tree-sitter's own inheritance, because a second copy is a copy that
+   drifts.
+
+**Refusal** is the fifth answer and carries its price in the ledger: HCL's
+JSON profile, JSON5, NDJSON, T-SQL, PerfettoSQL. A variant that is a
+different grammar wearing a familiar extension, or one whose claim rests on
+documentation rather than on an oracle, gets no row.
+
+Two brakes keep the row set closed. A row's corpus must be a population that
+exists *because the variant does* — ranked and locked on its own, never a
+filter over another row's lock — and its oracle a separately pinned reference
+implementation. Minor-version narrowing inside a family (`match` arrives in
+3.10) earns a manifest entry, never a `python3.10` row.
+
+#### Within a row, the latest version wins
+
+A row that spans versions accepts their union, and that union is not a
+promise to parse every version equally. Three cases, decided differently:
 
 1. **The same text means different things in different versions.** The latest
    version's reading wins. `print >> f, x` is a py2 print statement and a py3
@@ -370,25 +443,89 @@ and they are decided differently:
    competing reading in any later version, so no current program is at risk
    from them.
 
-The cases that fall under (2) are recorded per grammar in
-`version_policy.toml` and, because a policy nobody checks is a comment,
-each one also gets a file in `test/negative/` — so the rejection is a gate,
-not a note. The sweep reads that file and books matching failures as
-`version` rather than `gap` (§4.3).
+Each row records its case-(2) constructs in `version_policy.toml` and,
+because a policy nobody checks is a comment, gives each one a file in
+`test/negative/` — so the rejection is a gate, not a note. The sweep reads
+that file and books matching failures as `version` rather than `gap` (§4.3).
+An entry whose `valid_in` lies wholly in another row stops being policy and
+becomes that row's ordinary negative fixture.
 
-Which version a given file belongs to is deliberately **not** answered now.
-The sweep records per-version oracle verdicts anyway (§4.3) — that verdict
-vector is the hook a future `version_of()` builds on, and nothing more is
-built today.
+#### Across siblings, never
 
-### 4.3 What "valid" means with multiple versions
+Versions form a line, which is what makes "the latest wins" a decision rule.
+Siblings form no line: MySQL does not obsolete PostgreSQL, and JSONC does not
+obsolete JSON, so nothing arbitrates where their readings collide and the
+union becomes a coin somebody weights by hand, per collision, forever.
+
+The cost is not only a missing rule. **A union across siblings blinds the
+instruments,** and this repository has measured that twice. A grammar wider
+than every oracle that exists is wide exactly where no oracle can contradict
+it; `treebank-json/ledger.toml` refuses JSONC on that ground. The concrete
+case came first: an abandoned SQLite ∪ PostgreSQL ∪ MySQL grammar accepted
+every dialect's divergences everywhere, which surrenders the negative corpus
+by construction — one table cannot reject `SELECT a # b` for postgres while
+accepting it for mysql — and adding one more oracle to it moved adjudicated
+gaps from 48 to 364 in a single sweep, with nothing about the grammar
+changed. **A union across siblings is never built.**
+
+#### Narrowing a shared table
+
+A rung-1 row narrower than the table it shares carries `narrowing.json` in
+the family crate, one key per row, listing the **out-of-row occurrences** as
+patterns — for `python3`: `print_statement`, `exec_statement`, backtick
+repr, the old octal literal, the `except E, e:` clause shape. The pack ships
+it beside `roles.json` and expands it the way it expands facets, so
+`Pack::fetch("python3")` resolves to the shared parser plus the manifest and
+a narrowed parse is parse-then-scan: the tree returns carrying its
+out-of-row occurrences, or the call refuses the file, at the consumer's
+option.
+
+Name the construct rather than its position. `fuzz_policy.toml`'s
+`node_kind` matcher already works this way for the same reason a positional
+prefix cannot see a construct nested inside another statement, and the
+loader there rejects a kind the grammar never produces. The checker holds
+`narrowing.json` to the `roles.json` standard: every pattern compiles
+against the row's grammar, every pattern matches at least one file in the
+row's negative corpus, and the sweep cross-checks the manifest against the
+verdict vector — for every corpus file another row's oracle accepts and this
+row's rejects, at least one of this row's patterns must fire.
+
+A manifest can never change a reading, and that limit is declared rather
+than discovered: a `python2` manifest over the union table still hands its
+consumer the call reading of `print (x)`, the py3 tuple reading of
+`print >> f, x`, and no parse at all for `True = 5`. That residue is the
+rung-2 case for a second table, priced and waiting.
+
+#### Which version a file belongs to
+
+`version_of()` is now buildable and was not before. The sweep records the
+per-oracle verdict vector per file (§4.3), the manifests say which
+occurrences fall outside which row, and an entry may carry the version bound
+it narrows away (`match_statement` → 3.10) so the answer can name a floor as
+well as a family. One measured caution bounds what it may claim: declaring
+python's five py2-union kinds moved 31 fuzz findings out of undeclared and
+six should not have moved, because a py2-only construct nested inside a
+py3-only one is valid in *neither* version. A py2-only node kind in a file
+therefore does not make the file py2. A manifest entry answers whether an
+OCCURRENCE sits outside a row; which row a FILE belongs to stays the
+oracle's question.
+
+### 4.3 What "valid" means, per row
 
 A parse failure on real code is only a bug if the code is actually valid, so
 every language carries **oracles** — reference parsers, pinned like
 compilers: tool + version + flags + declared positions + a smoke test that
 runs before any verdict is trusted.
 
-With a version-union grammar there is one oracle per version family:
+**A row's own oracle defines valid, for that row.** Each row sweeps its own
+locked population, and a file its own oracle rejects is noise. Where a row
+itself spans versions the legs remain, and a file is valid for the row when
+any leg accepts — zig runs its two release endpoints, python runs CPython 3
+and CPython 2.7. That union oracle belongs inside a row and never across
+siblings, for §4.2's reason: across siblings it would excuse precisely the
+over-acceptance the sweep exists to find.
+
+The oracles, one per version family within the row: 
 
 - **python**: CPython 3 `compile(src, path, 'exec')`, and CPython 2.7's
   `compile` where a python2 exists; when CI has no python2 binary, py2
@@ -399,23 +536,26 @@ With a version-union grammar there is one oracle per version family:
 - **typescript**: `tsc` parse per dialect; V8 as a secondary oracle for
   plain `.js`.
 
-Adjudication over the version set:
+Adjudication, over the row's version set and no wider:
 
-- **gap** — the grammar rejects a file that **any** version-oracle accepts,
-  *and* the rejection is not a declared version-policy rejection (§4.2).
-  Otherwise a bug; the union must cover every version it claims.
+- **gap** — the grammar rejects a file that **any** of the row's
+  version-oracles accepts, *and* the rejection is not a declared
+  version-policy rejection (§4.2). Otherwise a bug; the row must cover every
+  version it claims.
 - **version** — the grammar rejects a file that only an OLDER version-oracle
   accepts, and `version_policy.toml` declares that construct rejected. Both
   conditions are required: the declaration alone cannot suppress a failure
   that the CURRENT oracle calls valid, so a real gap can never hide behind a
   policy entry.
-- **widening** — the grammar accepts a file that **every** version-oracle
-  rejects. Sweeps cannot catch this direction (real corpora are almost
-  entirely valid code), which is what the negative corpus exists for:
-  `test/negative/` holds files invalid under *every* version, and
-  `test/negative/<version>/` files that must stay invalid for that
-  version's oracle — the guard against the union quietly becoming
-  "anything parses".
+- **widening** — the row's parser accepts what the row's oracle rejects.
+  Scoping this to the row is what keeps `mutate` and `fuzz` able to see: a
+  backtick identifier found against a postgres row is a widening again,
+  where a three-dialect union had defined it as a feature. Sweeps cannot
+  catch this direction (real corpora are almost entirely valid code), which
+  is what the negative corpus exists for: `test/negative/` holds files
+  invalid under *every* version the row claims, and
+  `test/negative/<version>/` files that must stay invalid for that version's
+  oracle — the guard against a row quietly becoming "anything parses".
 - **mis-shape** — the grammar ACCEPTS a file and builds the wrong tree for
   it. None of the above can see this, and it is not a rare corner: five were
   found in TypeScript within a day of looking, including
@@ -432,7 +572,9 @@ Adjudication over the version set:
   noise. The sweep measures that cost rather than assuming it small, by
   asking `ast.parse` about every noise file, and reports the count. It is
   currently zero; the one construct it found is fixed.
-- the sweep stores the full per-oracle verdict vector per file.
+- the sweep stores the full per-oracle verdict vector per file. Verdicts
+  from OTHER rows' oracles are recorded and adjudicate nothing: they check
+  the narrowing manifests and answer `version_of()` (§4.2).
 
 ### 5.6 The shape check (`treebank shape`)
 
