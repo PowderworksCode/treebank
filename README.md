@@ -258,7 +258,13 @@ it:
    [`crates/treebank-oracle/src/capabilities.rs`](crates/treebank-oracle/src/capabilities.rs)
    — node boundaries, a formatter, a tree printer. `None` is a real answer
    as long as it comes with the sentence saying why.
-6. **Add a row** to the table at the top of this file.
+6. **Add a row** to the table at the top of this file, and a **playground
+   sample** in [`site/src/samples.mjs`](site/src/samples.mjs) — a few lines
+   that show the language being itself. The playground's grammar list is
+   derived from `crates/`, so a language with no sample arrives in the menu,
+   loads its parser and shows an empty editor;
+   `site/tests/playground.test.ts` is what turns that into a failing test
+   instead of something nobody notices.
 
 Steps 3, 4 and 5 are exhaustive `match`es, so the compiler asks for them;
 step 2 is what `treebank verify` checks; step 1 is the reason the language
