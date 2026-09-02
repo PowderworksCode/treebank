@@ -316,6 +316,19 @@ enum Cmd {
         /// ledger block.
         #[arg(long)]
         no_write_ledger: bool,
+        /// Which `[corpus.*]` block in the ledger this run's numbers
+        /// belong to, without the brackets — `pypi_sweep` for a second
+        /// corpus of a language that already has one. Defaults to the
+        /// per-language block, then to `sweep`.
+        ///
+        /// A language may have two artifact corpora that answer different
+        /// questions (bash's debian and github, zig's upstream and github,
+        /// yaml's github and pypi), and a pass rate over one is not a pass
+        /// rate over the other. Without this the second one can only be
+        /// described in prose, and a number that reaches a ledger by being
+        /// typed is the thing this tool exists to prevent.
+        #[arg(long)]
+        ledger_block: Option<String>,
     },
     /// Check a grammar for the structural smells notes/field_guide.md names:
     /// declared-conflict growth, early commits between parallel tiers,
@@ -725,6 +738,7 @@ fn main() -> anyhow::Result<()> {
             out,
             limit,
             no_write_ledger,
+            ledger_block,
         } => sweep::run(
             lang,
             &grammar,
@@ -732,6 +746,7 @@ fn main() -> anyhow::Result<()> {
             &lang_path(lang, out, "reports/sweep.json"),
             limit,
             !no_write_ledger,
+            ledger_block.as_deref(),
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),

@@ -30,7 +30,7 @@ concurrency:
 
 jobs:
   sweep:
-    name: ${{ matrix.language }} corpus evidence
+    name: ${{ matrix.corpus || matrix.language }} corpus evidence
     runs-on: ubuntu-latest
     timeout-minutes: 180
     strategy:
@@ -85,6 +85,16 @@ jobs:
             sweep_args: --lang typescript --grammar crates/treebank-typescript
           - language: yaml
             ledger: crates/treebank-yaml/ledger.toml
+            sweep_args: --lang yaml --grammar crates/treebank-yaml
+          # YAML is the first language here with a SECOND artifact corpus
+          # that is swept rather than only described. It hydrates from its
+          # own lock into its own directory and writes its own ledger block,
+          # so the two evidence blocks are canaried independently and
+          # neither can drift behind the other.
+          - language: yaml
+            corpus: yaml-pypi
+            ledger: crates/treebank-yaml/ledger.toml
+            ledger_block: yaml_pypi_sweep
             sweep_args: --lang yaml --grammar crates/treebank-yaml
           - language: zig
             ledger: crates/treebank-zig/ledger.toml
@@ -190,16 +200,18 @@ jobs:
       - name: restore verified package archives
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
-          path: corpus/${{ matrix.language }}/cache
-          key: ${{ matrix.language }}-corpus-${{ hashFiles(format('corpus-locks/{0}.json', matrix.language)) }}
+          path: corpus/${{ matrix.corpus || matrix.language }}/cache
+          key: ${{ matrix.corpus || matrix.language }}-corpus-${{ hashFiles(format('corpus-locks/{0}.json', matrix.corpus || matrix.language)) }}
 
       # A transient registry failure may interrupt a clean hydrate. Successful
       # archives are already digest-verified in the cache, so retrying resumes
       # safely; a corrupt archive or lock mismatch fails identically each time.
       - name: hydrate the exact locked corpus
         run: |
+          corpus="${{ matrix.corpus || matrix.language }}"
           for attempt in 1 2 3; do
-            if ./target/debug/treebank hydrate --lang "${{ matrix.language }}"; then
+            if ./target/debug/treebank hydrate --lang "${{ matrix.language }}" \
+                 --lock "corpus-locks/$corpus.json" --corpus "corpus/$corpus"; then
               exit 0
             fi
             echo "hydrate attempt $attempt failed" >&2
@@ -210,9 +222,17 @@ jobs:
       - name: sweep and enforce the committed evidence
         run: |
           cp "${{ matrix.ledger }}" "$RUNNER_TEMP/ledger.committed"
-          ./target/debug/treebank sweep ${{ matrix.sweep_args }} \
-            --manifest "corpus/${{ matrix.language }}/manifest.json" \
-            --out "corpus/${{ matrix.language }}/reports/sweep.json"
+          corpus="${{ matrix.corpus || matrix.language }}"
+          # A language may have two corpora that answer different questions,
+          # and then each writes its own `[corpus.*]` block. `--ledger-block`
+          # is appended only where the matrix names one, so every other row
+          # invokes exactly the command it did before.
+          block=""
+          [ -z "${{ matrix.ledger_block }}" ] || block="--ledger-block ${{ matrix.ledger_block }}"
+          # shellcheck disable=SC2086
+          ./target/debug/treebank sweep ${{ matrix.sweep_args }} $block \
+            --manifest "corpus/$corpus/manifest.json" \
+            --out "corpus/$corpus/reports/sweep.json"
           if [ "${{ matrix.evidence }}" = "reproducible" ]; then
             # Enforces every field the corpus and grammar bytes determine and
             # reports the adjudication-derived ones. Restores the ledger after,
@@ -221,7 +241,7 @@ jobs:
               "$RUNNER_TEMP/ledger.committed" "${{ matrix.ledger }}"
             git checkout -- "${{ matrix.ledger }}"
           elif ! git diff --exit-code -- "${{ matrix.ledger }}"; then
-            echo "::error::${{ matrix.language }} corpus evidence differs from the committed ledger"
+            echo "::error::${{ matrix.corpus || matrix.language }} corpus evidence differs from the committed ledger"
             echo "Update the lock or grammar deliberately, rerun the full sweep, and review the new evidence."
             exit 1
           fi
@@ -240,13 +260,15 @@ jobs:
       - name: hold the corpus blind spots to their policy
         if: ${{ !contains(matrix.sweep_args, '--limit') }}
         run: |
+          corpus="${{ matrix.corpus || matrix.language }}"
           ./target/debug/treebank kinds ${{ matrix.sweep_args }} --check \
-            --out "corpus/${{ matrix.language }}/reports/kinds.json"
+            --manifest "corpus/$corpus/manifest.json" \
+            --out "corpus/$corpus/reports/kinds.json"
 
       - name: upload the corpus report
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.language }}-corpus-report
-          path: corpus/${{ matrix.language }}/reports/
+          name: ${{ matrix.corpus || matrix.language }}-corpus-report
+          path: corpus/${{ matrix.corpus || matrix.language }}/reports/
           if-no-files-found: ignore

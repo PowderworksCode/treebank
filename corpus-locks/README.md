@@ -32,7 +32,10 @@ admission rules, and verifies that the resulting file set has no missing,
 extra, or changed entries. Only then does it publish `corpus/<language>/src`
 and its `manifest.json`.
 
-All eleven registered languages have a lock. A lock pins inputs; it does not claim
+All eleven registered languages have a lock, and YAML has two: it is the
+first language here whose second artifact corpus is swept rather than only
+described, so `yaml-pypi.json` pins it and `[corpus.pypi_sweep]` records
+it. A lock pins inputs; it does not claim
 that CI sweeps the full population.
 
 | language | pinned packages | admitted source files |
@@ -47,6 +50,7 @@ that CI sweeps the full population.
 | Rust | 1,000 | 27,307 |
 | TypeScript | 1,000 | 11,991 |
 | YAML | 499 | 128,334 |
+| YAML (pypi) | 767 | 2,087 |
 | Zig | 6 | 17,168 |
 
 Package counts are what the fetch actually admitted, not the ranking limit:
