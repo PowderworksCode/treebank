@@ -121,7 +121,14 @@ macro_rules! for_each_language {
             // its oracle is the HCL parser that `tofu fmt` itself gates on.
             // If Packer or Nomad HCL ever earns a corpus of its own, that is
             // the registration which points at this grammar.
-            Hcl => "hcl", ["hcl", "tf", "tfvars"], Hcl, false, hcl::Hcl, hcl::Hcl, (HCL_SPANS, TOFU_FORMAT, NONE);
+            //
+            // `.tofu` is `.tf` under another name: OpenTofu 1.8 added it so a
+            // module can carry OpenTofu-only code that Terraform will not
+            // read, and it takes precedence over the `.tf` beside it. Same
+            // syntax, so it is an extension here rather than anything else —
+            // and it was missing while `tofu fmt` was already this grammar's
+            // pinned formatter, which is the inconsistency that found it.
+            Hcl => "hcl", ["hcl", "tf", "tofu", "tfvars"], Hcl, false, hcl::Hcl, hcl::Hcl, (HCL_SPANS, TOFU_FORMAT, NONE);
         }
     };
 }

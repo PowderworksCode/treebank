@@ -31,7 +31,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-cpp` | C++98–C++23, extending the C grammar through tree-sitter's own inheritance |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
-| `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf` and `.tfvars`, because Terraform is a dialect of HCL and adds a schema rather than syntax |
+| `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf`, `.tofu` and `.tfvars`, because Terraform and OpenTofu are dialects of HCL and add a schema rather than syntax |
 | `crates/treebank` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
