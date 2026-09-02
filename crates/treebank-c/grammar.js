@@ -1268,7 +1268,7 @@ module.exports = grammar({
       choice('asm', '__asm__', '__asm'),
       repeat($.asm_qualifier),
       '(',
-      field('assembly_code', choice($.string_literal, $.concatenated_string)),
+      field('assembly_code', $._asm_string),
       optional(seq(
         ':',
         commaSep(optional($.asm_operand)),
@@ -1277,7 +1277,7 @@ module.exports = grammar({
           commaSep(optional($.asm_operand)),
           optional(seq(
             ':',
-            commaSep(optional(choice($.string_literal, $.concatenated_string))),
+            commaSep(optional($._asm_string)),
             optional(seq(':', commaSep(optional($._name)))),
           )),
         )),
@@ -1294,11 +1294,53 @@ module.exports = grammar({
 
     asm_operand: $ => seq(
       optional(seq('[', field('symbol', $._name), ']')),
-      field('constraint', choice($.string_literal, $.concatenated_string)),
+      field('constraint', $._asm_string),
       '(',
       field('value', $._expression),
       ')',
     ),
+
+    // An asm operand is ASSEMBLER TEXT, not a C string, and the general
+    // string vocabulary is wrong for it in two measured ways. Both were
+    // checked against clang in all three positions this rule set feeds --
+    // `assembly_code`, an operand `constraint`, and the clobber list:
+    //
+    //   asm(L"nop");                  cannot use wide string literal in 'asm'
+    //   asm("nop" : : L"r"(x));       same
+    //   asm("nop" ::: L"memory");     same
+    //   asm("nop" IDENT);             expected ')'
+    //
+    // So the encoding prefixes `string_literal` carries (`L"`, `u"`, `U"`,
+    // `u8"`) are excluded, and so is the trailing macro identifier
+    // `concatenated_string` admits for the format-macro idiom. Plain
+    // concatenation is legal in all three positions and stays.
+    //
+    // Aliased back to `string_literal` and `concatenated_string`, so the
+    // vocabulary, `roles.json` and every existing tree shape are unchanged.
+    // This narrows what is ADMITTED, never what is reported.
+    _asm_string: $ => choice(
+      alias($._asm_string_literal, $.string_literal),
+      alias($._asm_concatenated_string, $.concatenated_string),
+    ),
+
+    // `string_literal`'s body verbatim, minus the prefix alternation.
+    _asm_string_literal: $ => seq(
+      '"',
+      repeat(choice(
+        token.immediate(prec(1, /[^\\"\n]+/)),
+        $.escape_sequence,
+        token.immediate(/\\\r?\n/),
+      )),
+      '"',
+    ),
+
+    _asm_concatenated_string: $ => prec.right(seq(
+      alias($._asm_string_literal, $.string_literal),
+      repeat1(choice(
+        alias($._asm_string_literal, $.string_literal),
+        $.identifier,
+      )),
+    )),
 
     // ── expressions ──────────────────────────────────────────────────
     // `comma_expression` is deliberately NOT a member. C's own grammar

@@ -65,4 +65,4 @@ unreserved_keywords = 129
 # inflate the table faster than factoring does. 26,576 states is 3.5x the
 # next largest grammar (ruby, 7,635) and is the direct cost of the 71
 # conflicts above.
-state_count = 26576
+state_count = 26532

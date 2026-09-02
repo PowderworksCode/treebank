@@ -32,12 +32,12 @@ No build system is run. Generated headers, package include paths, feature macros
 files = 121957
 passed = 30123
 failed = 91834
-gap_files = 15601
-noise_files = 75966
+gap_files = 14608
+noise_files = 76968
 pass_rate = '24.70%'
 corpus_lock_sha256 = 'a93921d6f4c21adab6a703414bd23db7204f668f1723d7ceb06105cb9852f679'
-grammar_sha256 = 'bb5a8327289255d296d8c3b063a93017e7b126e0294604da06239e961bc010cb'
-grammar_revision = '96bea7cf5629e506d24e7db8a89556e71baa7bab'
+grammar_sha256 = '3a8ea88365a2f71ce9db2512a78367ec0b1409064a7d216eb4e8357d9722d37c'
+grammar_revision = 'bf95c39d6d6ceae2acb8d612e3ff86df72c7fbe7'
 
 [corpus.gaps]
 # Everything the sweep's ledger writer does not carry. It owns

@@ -63,4 +63,4 @@ unreserved_keywords = 95
 
 # Parse-table size. Not a correctness bound — a growth alarm: conflicts
 # inflate the table faster than factoring does.
-state_count = 3033
+state_count = 2989

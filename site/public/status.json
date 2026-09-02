@@ -98,12 +98,12 @@
    },
    "tests": {
     "corpus_cases": 23,
-    "negative_files": 16,
+    "negative_files": 19,
     "shape_files": 1
    },
    "known_deviations": {
     "shape": false,
-    "fuzz": false,
+    "fuzz": true,
     "lint": true,
     "version": false
    },
@@ -125,12 +125,12 @@
      "files": 84473,
      "passed": 62539,
      "failed": 21934,
-     "grammar_gaps": 6392,
+     "grammar_gaps": 6393,
      "noise": 11320,
      "pass_rate": "74.03%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "96bea7cf5629e506d24e7db8a89556e71baa7bab"
+     "grammar_revision": "bf95c39d6d6ceae2acb8d612e3ff86df72c7fbe7"
     }
    ],
    "known_gaps": [
@@ -191,7 +191,7 @@
    },
    "tests": {
     "corpus_cases": 10,
-    "negative_files": 12,
+    "negative_files": 13,
     "shape_files": 1
    },
    "known_deviations": {
@@ -218,12 +218,12 @@
      "files": 121957,
      "passed": 30123,
      "failed": 91834,
-     "grammar_gaps": 15601,
-     "noise": 75966,
+     "grammar_gaps": 14608,
+     "noise": 76968,
      "pass_rate": "24.70%",
      "freshness": "current",
      "freshness_reasons": [],
-     "grammar_revision": "96bea7cf5629e506d24e7db8a89556e71baa7bab"
+     "grammar_revision": "bf95c39d6d6ceae2acb8d612e3ff86df72c7fbe7"
     }
    ],
    "known_gaps": [],
