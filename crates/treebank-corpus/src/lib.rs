@@ -16,6 +16,7 @@ mod github;
 mod hcl;
 mod java;
 mod javascript;
+mod json;
 mod npm;
 mod python;
 mod ruby;

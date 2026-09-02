@@ -1,17 +1,17 @@
 {
  "schema_version": 1,
  "summary": {
-  "languages": 12,
-  "grammars": 11,
-  "corpus_locks": 12,
-  "corpus_canaries": 11,
-  "current_corpus_evidence": 12,
+  "languages": 13,
+  "grammars": 12,
+  "corpus_locks": 13,
+  "corpus_canaries": 12,
+  "current_corpus_evidence": 13,
   "stale_corpus_evidence": 0,
   "unbound_corpus_evidence": 0,
-  "lint_ratchets": 11,
+  "lint_ratchets": 12,
   "shape_fixture_grammars": 10,
-  "wasm_packs": 11,
-  "query_files": 22,
+  "wasm_packs": 12,
+  "query_files": 24,
   "non_rust_binding_grammars": 0
  },
  "warnings": [
@@ -397,6 +397,82 @@
    "deviations": [
     {
      "summary": "`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to a facet is the alternative if it ever matters.",
+     "files": null
+    }
+   ]
+  },
+  "json": {
+   "versions": "RFC 8259 (2017), strictly. That is a decision about which JSON to ship rather than a version, and it is the decision the whole crate is built around, so it is argued below at more length than any other line here. JSON does have versions, and the union over them is one sentence: RFC 4627 (2006) required a JSON text to be an object or an array, RFC 7159 (2014) lifted that and RFC 8259 keeps it lifted, so `3`, `\"x\"` and `null` are each a whole document. DESIGN.md §4.2 says the latest version wins where two conflict; nothing else in JSON's history conflicts, because the grammar has not otherwise changed since 2006 and ECMA-404 states the same one. That exhausts the version question, which is why this section is really about something else.",
+   "generate_cli": "0.26.12",
+   "vocabulary": "0.1.0",
+   "languages": [
+    "json"
+   ],
+   "capabilities": {
+    "spans": false,
+    "formatter": false,
+    "printer": false
+   },
+   "roles": {
+    "supertypes": 2,
+    "facets": 2,
+    "named_nodes": 11,
+    "uncategorised": 3
+   },
+   "tests": {
+    "corpus_cases": 16,
+    "negative_files": 188,
+    "shape_files": 0
+   },
+   "known_deviations": {
+    "shape": false,
+    "fuzz": false,
+    "lint": true,
+    "version": false
+   },
+   "distribution": {
+    "bindings": [
+     "rust"
+    ],
+    "wasm_pack": true,
+    "query_files": 2
+   },
+   "corpus_lock": true,
+   "corpus_canary": true,
+   "external_scanner": false,
+   "evidence_freshness": "current",
+   "lint_ratchet": true,
+   "corpora": [
+    {
+     "language": "json",
+     "files": 1683,
+     "passed": 1609,
+     "failed": 74,
+     "grammar_gaps": 0,
+     "noise": 74,
+     "pass_rate": "95.60%",
+     "freshness": "current",
+     "freshness_reasons": [],
+     "grammar_revision": "9be90f554815468474480154ee3dc1f899de135e"
+    }
+   ],
+   "known_gaps": [],
+   "known_widenings": [],
+   "deviations": [
+    {
+     "summary": "A leading UTF-8 byte order mark is accepted, and this grammar did not decide that. tree-sitter's input layer strips a BOM before the lexer runs, which is checkable rather than assumed: the same three bytes anywhere but the start of the file are an `UNEXPECTED 65279`. RFC 8259 §8.1 says an implementation MAY ignore a leading BOM, so accepting it conforms and serde_json rejecting it conforms. It arrived as one suite fixture — `i_structure_UTF-8_BOM_empty_object` — and it is not a curiosity: it is the ONLY class in which this grammar and its oracle disagree over 58,028 files of real JSON, and it accounts for all 10 of those disagreements. Every one is a Windows-authored config file, mostly Minecraft add-on manifests. It is recorded because a reader looking for the rule that allows it will not find one in grammar.js, and because a future tree-sitter that stopped stripping BOMs would silently turn 10 passing files into failures with nothing in this crate having changed.",
+     "files": null
+    },
+    {
+     "summary": "Numbers are not range-checked, `\\\\u` escapes are not paired, and nesting is not depth-limited. All three are accepts-more-than-the-oracle and all three are deliberate: RFC 8259 leaves each to the implementation (§6, §8.2, §9) and each is a property of the VALUE rather than of the text. Enforcing surrogate pairing is the only one a grammar could express at all — it would mean a rule admitting `\\\\uD800` only when followed by a low surrogate — and it is refused because a lone surrogate is legal in a conforming JSON text that a `WTF-8` consumer reads fine, and rejecting it would put this grammar on one side of a question the standard declines to answer.",
+     "files": null
+    },
+    {
+     "summary": "Duplicate keys are accepted, with no node marking them. `{\"a\":1,\"a\":2}` parses as an object with two `pair` children and the tree keeps both, which is more than the oracle can say — serde_json's `Value` keeps the last and discards the first, as do CPython and jq. This is a deviation in the grammar's FAVOUR and it is recorded because it is the one measurable way the parse tree carries information the reference implementation destroys, which matters to anyone using the tree to lint or rewrite a document rather than to read a value out of it. RFC 8259 §4 calls the behaviour unpredictable and does not forbid the input.",
+     "files": null
+    },
+    {
+     "summary": "ACCEPTS-INVALID IS ONE CLASS AND IT IS THE BOM ABOVE. The entry exists to record that this is a measured claim rather than an unexamined one, and to name what did the measuring, because a sweep cannot: a sweep adjudicates only the files the grammar FAILED, so a file the grammar accepts and the oracle rejects is invisible to it. Four independent checks look in that direction. 188 must-reject files written by someone with no knowledge of this grammar: 0 accepted. 30,110 corpus mutants: 0 widenings. 5,000 grammar derivations at complete alternative coverage: 0 widenings. And a whole-corpus cross-check of the grammar against the oracle in BOTH directions, over both corpora: on npm's 1,683 files they agree on every one (1,609 accepted by both, 74 rejected by both); on the github corpus's 56,345 they disagree on 10, and all 10 are a leading UTF-8 BOM. The shapes that could have shown up here and did not are worth naming so the absence is legible. Three of them are accepted by this grammar and refused by the oracle, as the `i_` results show: a number past the range of an f64 such as `1e999`, a `\\\\u` escape that is half a surrogate pair, and nesting deeper than serde_json's limit of 128. In 58,028 files of real JSON, not one occurs. (Duplicate keys are not in that list: both sides accept them, which is its own deviation below.) That is a statement about what JSON people actually write as much as about the grammar.",
      "files": null
     }
    ]

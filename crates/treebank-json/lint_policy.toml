@@ -1,0 +1,61 @@
+# Accepted structural debt, per `treebank lint` check — the ratchet that
+# keeps the notes/field_guide.md smells from growing back. Every number
+# here is a ceiling: going over fails CI, dropping under prints a reminder
+# to tighten. Each carries the reason the debt is accepted, because a
+# baseline nobody can explain is just a number that rots.
+#
+# Written on the grammar's first commit rather than later, which is not
+# how the other grammars got theirs. The usual reason to wait is that a
+# grammar is still moving and a premature ceiling has to be raised;
+# nothing about JSON is still moving. The whole language is one page of
+# ABNF that has not changed since 2006, so today's counts are the final
+# counts, and a policy written now is a policy that means something.
+
+[baselines]
+# GLR fork sites (notes/field_guide.md §2). None, and none is available to be
+# spent: JSON is LL(1). Every construct is decided by its first token —
+# `{`, `[`, `"`, a digit or a minus, `t`, `f`, `n` — with no two
+# productions sharing one. A conflict appearing here would mean a rule
+# had been added that JSON does not have.
+declared_conflicts = 0
+
+# Conflicts naming a supertype. None, and it follows from the line above.
+early_commit_conflicts = 0
+
+# prec.dynamic sites. None. There is no ambiguity to weight.
+dynamic_weights = 0
+
+# One spelling, two tokens (§4). ONE, and it is the only structural debt
+# in this grammar: the closing quote of a string is `token.immediate('"')`
+# while the opening one is plain `'"'`.
+#
+# It is not avoidable in tree-sitter and the alternative is a silent
+# mis-parse rather than a rejection. `extras` does not stop at a rule
+# boundary, so with a skippable closing quote the lexer may skip
+# whitespace INSIDE a string: `"<TAB>"` then parses as an empty string
+# with the tab booked as extras, and RFC 8259 §7 forbids an unescaped
+# control character there. The file that proves it is
+# test/negative/n_string_unescaped_tab.json, which the grammar accepted
+# until the close was made immediate.
+#
+# The risk §4 warns about — a fork starving at the lexer because the
+# other spelling was picked — cannot arise here, because there are no
+# forks: `declared_conflicts` is 0. A quote is the open in exactly one
+# lexer state and the close in exactly one other.
+same_text_tokens = 1
+
+# Keyword-shaped tokens outside every reserved set. Zero, and for a
+# reason no other grammar here can claim: the check counts keyword-shaped
+# tokens that could be swallowed by an identifier, and JSON has no
+# identifier. `true`, `false` and `null` are the only bare words in the
+# language and there is no context in which any other bare word is legal,
+# so `word:` is unset, there is nothing for them to collide with, and the
+# leak this baseline exists to cap cannot open.
+unreserved_keywords = 0
+
+# Parse-table size. 32 states, against 1,245 for java, 3,911 for bash,
+# 7,635 for ruby and 8,339 for zig. Not a correctness bound — a growth
+# alarm, and on a table this small it is a sharp one: any real addition to
+# this grammar moves it, so a JSONC or JSON5 relaxation could not arrive
+# quietly.
+state_count = 32

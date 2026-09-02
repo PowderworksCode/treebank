@@ -7,6 +7,10 @@
 ; Omitted: yaml has no _callable, _invocation, _loop, _branch, _jump.
 
 ; --- the leaves a reader looks at first -----------------------------------
+;
+; Guarded, because a comment is not universal either. JSON has no comment
+; syntax at all — RFC 8259 defines none, and a grammar that declared
+; `_comment` would be a grammar for JSONC.
 
 [(comment)] @comment
 
@@ -33,7 +37,8 @@
 ; --- names ----------------------------------------------------------------
 ;
 ; `_identifier` is every name-shaped token, so it is the fallback that later
-; patterns narrow.
+; patterns narrow. Guarded because JSON has no identifiers: the thing in a
+; naming position there is a string literal, which `_string` already claims.
 
 [(anchor_name) (directive_name)] @variable
 
@@ -64,8 +69,10 @@
 ; Guarded for the same reason as the block above: a data language alters no
 ; sequential execution because it has none.
 
-; And guarded once more, for a language that computes but never reaches
-; outside its own file: HCL's `module` block is a block, and what its
-; `source` means is the calling application's business rather than the
-; syntax's.
+; And guarded once more, for two languages rather than one. HCL computes
+; but never reaches outside its own file: its `module` block is a block,
+; and what the `source` inside it means is the calling application's
+; business rather than the syntax's. JSON does not compute at all — there
+; is no compilation unit for a directive to affect, and nothing to
+; compile.
 (_directive) @keyword.import

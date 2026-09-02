@@ -1,0 +1,7 @@
+{
+  "name": "sweep-smoke",
+  "version": 1,
+  "ok": true,
+  "tags": ["a", "b"],
+  "nested": { "empty": {}, "none": null }
+}

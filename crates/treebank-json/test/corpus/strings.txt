@@ -1,0 +1,125 @@
+================================================================================
+the empty string has no content node
+================================================================================
+
+""
+
+--------------------------------------------------------------------------------
+
+(document
+  (string))
+
+================================================================================
+a string whose whole body is a space keeps it
+================================================================================
+
+" "
+
+--------------------------------------------------------------------------------
+
+(document
+  (string
+    (string_content)))
+
+================================================================================
+whitespace inside a string is content, never extras
+================================================================================
+
+["a b", "  ", " a ", "a  b"]
+
+--------------------------------------------------------------------------------
+
+(document
+  (array
+    (string
+      (string_content))
+    (string
+      (string_content))
+    (string
+      (string_content))
+    (string
+      (string_content))))
+
+================================================================================
+every escape RFC 8259 §7 defines, and the runs of content around them
+================================================================================
+
+["a\"b\\c\/d\be\ff\ng\rh\ti\u00e9j"]
+
+--------------------------------------------------------------------------------
+
+(document
+  (array
+    (string
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content)
+      (escape_sequence)
+      (string_content))))
+
+================================================================================
+adjacent escapes produce adjacent nodes with no content between them
+================================================================================
+
+"\n\tA"
+
+--------------------------------------------------------------------------------
+
+(document
+  (string
+    (escape_sequence)
+    (escape_sequence)
+    (string_content)))
+
+================================================================================
+a key is a string like any other, empty ones included
+================================================================================
+
+{"": 1, "A": 2, " ": 3}
+
+--------------------------------------------------------------------------------
+
+(document
+  (object
+    (pair
+      key: (string)
+      value: (number))
+    (pair
+      key: (string
+        (string_content))
+      value: (number))
+    (pair
+      key: (string
+        (string_content))
+      value: (number))))
+
+================================================================================
+non-ASCII text is ordinary content, one run
+================================================================================
+
+["héllo wörld", "日本語", "🎉"]
+
+--------------------------------------------------------------------------------
+
+(document
+  (array
+    (string
+      (string_content))
+    (string
+      (string_content))
+    (string
+      (string_content))))

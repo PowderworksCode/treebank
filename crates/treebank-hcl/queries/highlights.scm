@@ -10,6 +10,10 @@
 ; the field the pattern asks for.
 
 ; --- the leaves a reader looks at first -----------------------------------
+;
+; Guarded, because a comment is not universal either. JSON has no comment
+; syntax at all — RFC 8259 defines none, and a grammar that declared
+; `_comment` would be a grammar for JSONC.
 
 [(block_comment) (comment)] @comment
 
@@ -34,7 +38,8 @@
 ; --- names ----------------------------------------------------------------
 ;
 ; `_identifier` is every name-shaped token, so it is the fallback that later
-; patterns narrow.
+; patterns narrow. Guarded because JSON has no identifiers: the thing in a
+; naming position there is a string literal, which `_string` already claims.
 
 [(identifier)] @variable
 

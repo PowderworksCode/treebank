@@ -1,8 +1,17 @@
 # The skipped directories are test corpora: real-world source samples and
 # their lock files, whose content is quoted from upstream, not authored here.
 # They must byte-match their sources, so spelling is never "fixed" in them.
+#
+# test/negative and test/jsontestsuite are skipped for a stronger version of
+# the same reason: a must-reject corpus is text that is DELIBERATELY
+# malformed, so a spell checker pointed at one is being asked to report the
+# fixtures. JSON's is the case that made it visible — nst/JSONTestSuite ships
+# `[fals]` and `[tru`, truncated keywords whose whole purpose is to be
+# rejected, and codespell reads them as misspellings of "false" and "true".
+# Twelve of those files are not valid UTF-8 either, on purpose.
+#
 # ignore-words-list: "Nd" is the Unicode \p{Nd} category in grammar regexes;
 # "Wirth" is Niklaus Wirth, of railroad-diagram fame (site/src/railroad.mjs).
 [codespell]
-skip = corpus-locks,*/test/corpus,*/test/corpus/*
+skip = corpus-locks,*/test/corpus,*/test/corpus/*,*/test/negative,*/test/negative/*,*/test/jsontestsuite,*/test/jsontestsuite/*
 ignore-words-list = nd,wirth

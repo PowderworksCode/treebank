@@ -1,0 +1,185 @@
+# The grammar's evidence file: what it covers, what it is measured
+# against, and every place it knowingly differs from the reference
+# parser. Prose rather than data, which is why it is TOML.
+
+language = 'json'
+versions = '''
+RFC 8259 (2017), strictly. That is a decision about which JSON to ship rather than a version, and it is the decision the whole crate is built around, so it is argued below at more length than any other line here.
+
+JSON does have versions, and the union over them is one sentence: RFC 4627 (2006) required a JSON text to be an object or an array, RFC 7159 (2014) lifted that and RFC 8259 keeps it lifted, so `3`, `"x"` and `null` are each a whole document. DESIGN.md §4.2 says the latest version wins where two conflict; nothing else in JSON's history conflicts, because the grammar has not otherwise changed since 2006 and ECMA-404 states the same one. That exhausts the version question, which is why this section is really about something else.'''
+generate_cli = '0.26.12'
+vocabulary = '0.1.0'
+
+dialect_note = '''
+The candidates were strict RFC 8259, JSONC (comments and trailing commas — `tsconfig.json` and every VS Code config), JSON5, and NDJSON. These are DIALECTS, not versions: JSONC does not obsolete JSON and JSON5 does not obsolete JSONC, each is defined by its own tool rather than by a successor standard, and each is a different superset. So §4.2's "latest version wins" has nothing to order and cannot decide it. The zig ledger's question is the one that can: a union is free when admitting the extra form costs the current language nothing, and paid for when it does not.
+
+For JSONC the cost is conflict-free and non-zero, which is an unusual combination and the reason this took measuring rather than arguing. There is no ambiguity to speak of: no `//`, `/*` or `,}` can begin a valid strict parse, so admitting them adds no fork, no conflict and no parse states. What it adds is ACCEPTANCE. Measured against nst/JSONTestSuite, comments and trailing commas turn six must-reject files into accepted ones — `{"a":"b"}/**/`, `{"a":"b"}//`, `{"a":/*comment*/"b"}`, `{"id":0,}`, `["",]`, `[1,]`, and a seventh if the one whose key is also invalid UTF-8 is counted. `.zon` joining `.zig` costs nothing at all in this sense; JSONC costs six files out of the strongest negative corpus in this repository, and there is no version ordering available to justify spending them.
+
+The second half of the argument is what the six files would BUY, and it is less than it looks. JSONC's habitat is `.json` files whose consumer happens to be permissive — `tsconfig.json`, `.eslintrc.json`, `launch.json` — not `.jsonc` files. So the extension registry, which is where a dialect distinction would live (javascript to typescript's grammar is the model), cannot express this one: registering `.jsonc` would collect the rare file and miss every common one. To make `tsconfig.json` parse, the `json` grammar itself has to be permissive.
+
+And that is the third and decisive part. A permissive grammar here would be systematically wider than EVERY oracle that exists, in exactly the region it had just widened — so the sweep, which adjudicates every grammar failure against a reference parser, could not see the widening it had bought. This is the `zig ast-check` trap pointed the other way. Zig's danger was an oracle too willing to say `invalid`, which excuses real gaps; ours would be a grammar the oracle can never contradict. Both end at a flawless-looking measurement of nothing.
+
+The cost of strictness is real and it is measured rather than waved at. Over the corpus swept below, 74 of 1,683 files are not strict JSON: 54 with a trailing comma, 20 with a comment. 71 of those 74 are named `tsconfig.json` — 79% of all the `tsconfig.json` in the corpus. They enter the corpus (`Ecosystem::classify` deliberately does not filter them out, because filtering them would be marking our own exam), the grammar rejects them, the oracle agrees they are not JSON, and they are booked as noise. That is what strictness costs and it is one filename.
+
+NDJSON is refused for a sharper reason: it changes the start symbol from one value to a sequence of them, which is not a widening at the leaves but at the root. It legalises trailing content everywhere and costs `[][]` and `{"a": true} "x"` outright. JSON5 is refused because it is a different TOKENIZER — single-quoted strings, unquoted `IdentifierName` keys, hex literals, `+`/`Infinity`/`NaN`, line continuations — with its own extension, its own reference parser and its own spec; it would multiply this grammar several times over and change what a number and a string are.
+
+What would reopen the question: a JSONC implementation with an OWNER, so that step 4's requirement — a grammar with no reference parser cannot be swept — could be met for the second dialect, plus evidence that `.jsonc` is carrying the files rather than `.json`. Neither holds today. If both did, the shape of the answer is a second generated parser from this same grammar.js and a second registered language, the way typescript and tsx already work; it is not a second grammar crate.'''
+
+parser_note = '''
+`src/parser.c` is 24 KB and the table has 32 states, against zig's 20 MB and 8,339. It is worth saying why so a reader does not assume something is missing.
+
+JSON is LL(1) and there is nothing else to it. Every production is decided by its first token — `{`, `[`, `"`, a digit or a minus, `t`, `f`, `n` — and no two share one, so there is not a single conflict to declare, not one precedence and not one dynamic weight. The grammar has no external scanner either, and unlike most grammars here that is not a milestone still to be reached: JSON's tokenizer has no state to carry. No indentation, no delimiter to remember, no keyword that is sometimes an identifier, because there are no identifiers.
+
+The one structural smell in the whole grammar is in lint_policy.toml and is a same-text token split: the closing quote of a string is `token.immediate('"')` while the opening one is not. It is not cosmetic. `extras` does not stop at a rule boundary, so with a skippable close the lexer may skip whitespace INSIDE a string, and `"<TAB>"` parses as an EMPTY string with the tab booked as extras — a clean tree for a file RFC 8259 §7 rejects. n_string_unescaped_tab is the file that caught it, and it was caught because the grammar was run against the suite before the ledger was written rather than after.'''
+
+roles_note = '''
+Two of twenty-two table-tier terms are threaded, and two of seven facets. That is the fewest in the repository by a wide margin and it is the correct answer rather than an unfinished one: JSON has no statements, no declarations, no names, no types, no control flow, no calls and no comments, so the twenty absences are facts about the language rather than omissions to be filled in later. A reader should be able to check the claim, so the ones that could plausibly have gone the other way are argued rather than listed.
+
+`_expression` and `_literal` are both present, and `_literal` is NESTED inside `_expression` rather than beside it — `_expression -> _literal -> string | number | true | false | null`, with `object` and `array` beside `_literal` under `_expression`. A sibling arrangement would put every value in two supertypes at one position, which generate rejects outright, and the containment the vocabulary requires (`_literal` inside `_expression`) is delivered by the nesting itself.
+
+`object` and `array` are deliberately NOT `_literal`, and this is the one place the vocabulary's own definition was read and then declined. (`string` IS both `_literal` and `_string`, which is the overlap the shared highlight file orders around — `_literal` before `_string`, so a string that is also a literal still renders as a string.) "Value fully determined by its own text, for every instance of the rule" — a JSON object satisfies that. `{"a": 1}` denotes exactly one value and always will, which is what separates it from a TypeScript object literal whose members can be calls. JSON is therefore the only language here where `(_literal)` and `(_expression)` COULD match the same node set. They are kept apart anyway, because `_literal` is the term a consumer reaches for meaning "an atom", and a language in which `(_literal)` matches a 40 MB document would make the term incomparable across the nine other grammars — which is the only thing the vocabulary is for. The deviation is from the definition, in favour of the definition's purpose, and it is recorded here so it is a decision rather than an oversight.
+
+`_name` has no member, and this is the absence most likely to look wrong. `{"a": 1}` has something in a naming position. But `_name` is the role for a NAME in a naming position, and JSON has no identifiers at all — the thing in that position is a string literal, and typescript already spells a string-keyed property as a plain `string` rather than as `_name`. So `(_name)` finds nothing here and `(_string)` finds keys and values alike, which is the truth about a language where nothing can refer to anything.
+
+`_member` has no member either, for the reason typescript gives for the same node: `pair` is `key: value` inside a VALUE, and `_member` is an element of a type's body. JSON has no types.
+
+`pair` is `_clause` instead, and the two comparable grammars disagree about that node, so the choice is argued rather than copied. Typescript leaves its own `pair` uncategorised; yaml threads `block_mapping_pair`, `block_sequence_item` and `flow_pair` as `_clause`. JSON follows yaml, because the question the two languages are answering is the same one and typescript's is not: a mapping pair is the load-bearing structure of a DATA document, not one syntax for writing a literal inside a general-purpose language. The practical consequence is the shared `queries/highlights.scm` pattern `(_clause key: (_) @property)`, which is how a key gets coloured as a key rather than as the string it happens to be — every JSON highlighter in existence does that, and without the thread this one would have been the exception.
+
+`_comment` has no member, and that is the dialect decision restated at the vocabulary level: RFC 8259 has no comment syntax, so a grammar with a `_comment` member would be a JSONC grammar.
+
+`_scope`, `_binding` and `_identifier` are also empty, and they are worth naming together because the repository's shared `queries/locals.scm` called those three universal until this grammar arrived. They are not. JSON's generated `locals.scm` is now the section comments with nothing under them, which is the correct query for a language in which no name can refer to anything; the patterns are `only-if`-conditional at the source and every omission is reported in the generated file's header.'''
+
+negative_corpus = '''
+`test/negative/` is 188 files and is not hand-written. It is the `n_` half of nst/JSONTestSuite (commit `1ef36fa01286573e846ac449e8683f8833c5b26a`, 2024-11-22, MIT), which is 318 files under three prefixes — `y_` must be accepted, `n_` must be rejected, `i_` is implementation-defined and either answer conforms. No other language here has a negative corpus somebody else wrote and answered, and the difference in what can be claimed is large: every other `test/negative/` in this repository is a list of things its own author thought of.
+
+The grammar accepts 95 of 95 `y_` and rejects 188 of 188 `n_`. A perfect score is a claim worth being suspicious of, so here is what it rests on rather than an assertion that it was easy.
+
+One file was failing when the suite was first run — n_string_unescaped_tab, a string whose entire body is a literal tab — and it was failing for a reason no reading of the grammar would have surfaced. `extras` does not stop at a rule boundary, so the lexer was free to skip the tab as whitespace INSIDE the string and hand back a clean tree for an empty one. The fix is `token.immediate` on the closing quote, which is the single structural smell lint_policy.toml records.
+
+The other three token rules were written strict from the RFC rather than loosened and then caught, so the suite could not have found them, and an honest ledger should not pretend otherwise. What it can do instead is say what each is worth, which was measured by relaxing it and re-running all 188:
+
+- `extras` as `/\\s/` instead of JSON's four whitespace characters: **1** must-reject accepted (n_structure_whitespace_formfeed).
+- `string_content` as "anything but a quote or a backslash", dropping the U+0000-U+001F exclusion: **2** (n_string_unescaped_newline, n_string_unescaped_tab).
+- `string_content` without `token.immediate`: **1** (n_string_unescaped_newline), and this one is the interesting failure — the newline is booked as whitespace, so the file parses cleanly AND every surviving string quietly loses a character.
+- the closing quote without `token.immediate`: **1** (n_string_unescaped_tab), as above.
+
+Three of those four are silent mis-parses rather than rejections. The negative corpus catches them anyway, because a mis-parse of a file that should be rejected shows up as an acceptance — which is the one shape of silent mis-parse a must-reject corpus CAN see.
+
+The `y_` and `i_` files are in `test/jsontestsuite/` rather than `test/negative/`, because that directory is defined as everything-must-fail. `tests/jsontestsuite.rs` runs all three prefixes from `cargo test`, so the accept side is a gate too and not just a number in this file.'''
+
+implementation_defined = '''
+The 35 `i_` files are where the ORACLE decision becomes visible, and it is worth correcting the obvious guess: not one of them is about comments or trailing commas. They are number magnitude (10), string encoding and surrogate pairing (22), nesting depth (1) and a leading byte order mark (1). The dialect question lives in the `n_` files; this is a different axis entirely.
+
+The grammar accepts 22 and rejects 13. serde_json accepts 5 and rejects 30. They agree on 18 files and disagree on 17, and in every one of the 17 the grammar is the permissive party — there is no file this grammar rejects that the oracle accepts.
+
+That is not seventeen bugs. It is one fact seen seventeen times: JSON's implementation-defined zone is entirely SEMANTIC. RFC 8259 leaves number range to the implementation (§6), nesting depth to the implementation (§9), and unpaired surrogates to the implementation (§8.2), and all three are questions about a value rather than about a token stream. serde_json has an opinion because it builds a `Value` — `1e999` does not fit an f64, `\\uD800` alone is not a `char`, 500 nested arrays exceeds its recursion limit of 128. A parse table has no opinion available to it, and a grammar that claimed one would be claiming to evaluate JSON rather than parse it.
+
+The three classes, with the counts: ten numbers whose magnitude no float holds; ten `\\u` escapes that are half a surrogate pair or two halves in the wrong order; one 500-deep nesting. The seventeenth is not like the others and is called out separately below, because its cause is not in this grammar at all.
+
+All thirteen the grammar rejects are the same thing — text that is not well-formed UTF-8: overlong sequences, truncated sequences, a lone continuation byte, Latin-1, and UTF-16 with and without a BOM. It rejects them for a reason worth stating, because it is not a rule anyone wrote: tree-sitter decodes its input as UTF-8, and a byte sequence that does not decode cannot match `string_content`. So the encoding third of the `i_` set is settled by the runtime, and it lands on the same answer as the oracle on all thirteen.
+
+All 35 verdicts are pinned in `tests/jsontestsuite.rs`. An `i_` file has no right answer, so the assertion cannot be conformance; it can only be that the answer does not move without someone editing this file and saying why.'''
+
+fuzz_check = '''
+`treebank fuzz` — programs derived from grammar.json and judged by serde_json. 5,000 derivations at seed 1: 4,026 accepted by the grammar (974 discarded as unfaithful derivations, which costs yield and not correctness), 4,026 agreed with the oracle, **0 widenings**, at **24 of 24 grammar alternatives — 100% coverage**.
+
+The number is complete and it is also the least impressive complete number in this repository, which is worth saying plainly rather than letting 100% stand unqualified. Zig reaches 99.6% of a space with thousands of alternatives in it; JSON has twenty-four, so exhausting them is a few seconds of work and proves correspondingly less.
+
+What it does prove is bounded in a specific way. A derivation-based fuzzer builds programs out of the grammar's own alternations, so it emits a well-formed `number`, a well-formed `escape_sequence` and a well-formed `string_content` BY CONSTRUCTION — it can never produce `.2e-3`, `\\uZZZZ` or an unescaped tab, because no path through the grammar spells one. So this check covers the STRUCTURE completely and the TOKEN LAYER not at all, and JSON is a language that is almost entirely token layer. The 188 must-reject files are what covers the other half: 51 of them are named `n_number_*` and 29 `n_string_*`, so 80 are a single malformed token and nothing else. Neither check is redundant with the other and neither is sufficient alone.'''
+
+mutation_check = '''
+`treebank mutate` — corpus files edited byte-wise, and every mutant the grammar ACCEPTS put to the oracle. 1,609 valid files x 20 mutants at seed 1: 30,110 mutants, 25,396 rejected by the grammar, 4,714 accepted and every one of the 4,714 confirmed valid by serde_json. **0 widenings, 0 clusters.**
+
+This is the check that reaches what the fuzzer cannot. A mutation edits real bytes rather than walking the grammar, so it does delete a closing quote, corrupt a `\\u` escape and put a digit where a colon was — the token layer, which is where a JSON grammar's widenings would actually live. 30,110 mutants without one is the strongest accepts-invalid evidence available for this grammar that was not written by somebody else.'''
+
+[corpus]
+source = 'the top 1,000 npm packages by download count (npm-high-impact 1.13.0, fetched 2026-08-30), opened for the `.json` files they ship'
+files = 1683
+packages = 1000
+ranking_note = '''
+**JSON has no ecosystem of its own, and every corpus for it is a parasite on somebody else's.** There is no registry of JSON documents, no download count for one and no version on one, because JSON is never the artifact — it is carried inside a package manifest, a locale table, a test fixture, a schema. So the corpus question for this language is not "which packages" but "whose packages do you open", and the ecosystem supports two answers the way bash and zig do.
+
+This number is from `npm`, the default: the most-downloaded packages on npm, which is the strongest popularity metric any corpus in this repository uses — real installs rather than stars, and no credentials needed to build it.
+
+The bias is severe and specific, and it is the most interesting number the fetch produced. **1,000 of the most-downloaded packages on npm contain 1,683 `.json` files between them, and 1,277 of those are `package.json`** — the manifest npm itself requires. Three quarters of this corpus is one generated filename. That is not a sampling accident: a published tarball is what an author chose to ship, and repository-level config is exactly what `files` and `.npmignore` strip out. The corpus is therefore structurally thin in precisely the place the dialect decision lives, and 90 `tsconfig.json` are all it has to say about it.
+
+`TREEBANK_JSON_CORPUS=github` selects the other: the repositories GitHub's own linguist classifies as majority-JSON — caniuse, mdn/browser-compat-data, OpenStreetMap's tag catalogues, JSON-schema collections, geodata — which is the population where JSON IS the artifact. It is a genuinely different distribution: enormous machine-generated documents, deep nesting, unicode-heavy text, and no package manifests at all. It needs the GitHub search API, and it ranks by stars with everything `lang::github` says about that metric applying unchanged.
+
+One number from that side is evidence rather than commentary: the search returns about **2,000 repositories in the whole of GitHub**. Every other language here has that many on its first page. A population that small is the same fact from the other end — almost nowhere is JSON the thing being written; it is the thing being written into.
+
+Both were built and both were swept; the github numbers are in `github_note` below. A pass rate over one source is not a pass rate over the other, and `rank` writes `db/source.json` so the manifest says which was built.'''
+blind_to = '''
+Repository-level configuration, which is where JSONC lives. npm publishes a tarball, not a checkout, so `.eslintrc.json`, `.vscode/settings.json`, `devcontainer.json` and most `.editorconfig`-adjacent JSON never enter. `tsconfig.json` gets in only because packages ship it for consumers, and 90 of them is the entire evidence base for the dialect question on this side.
+
+Hand-written JSON generally, in fact. Three quarters of the corpus was written by `npm init` or a release tool. What that over-represents is the shape of a manifest — shallow, short strings, no deep nesting, no large numbers — and what it under-represents is everything the `i_` files probe: documents deep enough to reach a recursion limit, numbers past the range of an f64, `\\u` escapes that are half a surrogate pair. The `github` source was built to cover exactly that, and covering it is what it did: 56,345 files of geodata, compatibility tables and game asset packs, in which none of those shapes occurred either. Two corpora and 58,028 files later, the honest summary is that the `i_` classes are rare in the wild rather than that this corpus missed them.
+
+The other direction is worth naming too, because it is unusual for this repository: nothing here was filtered for being generated. Lockfiles, compiled locale tables and minified JSON are all admitted. A corpus curated down to JSON a person typed would be a corpus of what this grammar finds pleasant, and minified JSON — unlike minified JavaScript — inlines nobody else's code, so it cannot attribute a failure to the wrong package.'''
+
+github_note = '''
+The second source was built and swept too, and its numbers are here rather than in a block of their own because a ledger carries one bound sweep and this is not it. `TREEBANK_JSON_CORPUS=github`, 397 of the top 400 repositories by stars (three tarballs failed to download or extract), **56,345 `.json` files — 52,958 passed, 3,387 failed, 93.99%, and 0 grammar gaps.** Every one of the 3,387 is noise: serde_json rejects all of them.
+
+What the failures are, classified by re-reading them: 2,867 with a block comment, 339 with a line comment, 27 with a trailing comma — so **3,233 of 3,387, or 95.5%, are JSONC** — plus 146 files that are not JSON in any dialect (Jekyll front matter and Liquid tags in a file named `.json`, a file with its own filename appended after the closing brace, `{"Comments"}` as a whole document), 4 empty files, 2 with a BOM and a second problem, 1 that is not valid UTF-8, and 1 with no value at the top.
+
+The JSONC population here is not `tsconfig.json`, and that is the finding worth recording because it cuts AGAINST the dialect decision rather than for it. The largest single group is Minecraft Bedrock add-on JSON: the authoring tools in that ecosystem emit a `/* ... */` credit banner at the top of every behaviour file, so thousands of files with a `.json` extension are JSONC and nobody involved calls them that. npm's 71 `tsconfig.json` made JSONC look like one filename's problem; 56,345 files say it is at least two ecosystems'. The decision stands on the argument in `dialect_note` — the six must-reject files, and an oracle that could not see the widening — and not on JSONC being rare, because on this corpus it is not.
+
+The accepts-invalid direction was run over the same 56,345 files, comparing the grammar and the oracle in both directions rather than only on failures. They disagree on **10 files, and all 10 are a leading UTF-8 BOM** — the first declared deviation below, which arrived as an `i_` fixture and now has field data behind it. There is no other file in 56,345 where the two part company.
+
+This source is not the bound one because npm is the default, needs no credentials, and has a committed lock that `treebank hydrate` reproduces exactly; a star-ranked GitHub corpus pinned to 397 HEAD shas is reproducible only while those repositories exist.'''
+
+[corpus.sweep]
+files = 1683
+passed = 1609
+failed = 74
+gap_files = 0
+noise_files = 74
+pass_rate = '95.60%'
+corpus_lock_sha256 = 'a183d77e9464f2202a940cbfe95efd64c92803a04a98b2a7def27331ef7439e6'
+grammar_sha256 = '57d6a29f40eb057c46a1e76530f71fb27aab432233c1052cd2f312b665e324ac'
+grammar_revision = '9be90f554815468474480154ee3dc1f899de135e'
+
+[[oracles]]
+family = 'json'
+tool = 'serde_json 1.0.151, in-process, `from_slice::<serde_json::Value>`'
+version = "pinned by this workspace's Cargo.lock"
+role = '''
+JSON's oracle problem is the opposite of every other language's here, and the ledger should say so plainly: zig has one reference parser because it has one compiler, and JSON has hundreds and no owner. "The reference implementation" is therefore not a fact to look up. It is a choice, and the only honest way to make a choice like that is to MEASURE the candidates against a suite somebody else answered.
+
+Over JSONTestSuite's determinate files — 95 must-accept, 188 must-reject:
+
+- serde_json 1.0.151 `from_slice::<Value>`: 95 accepted, **0** must-rejects accepted.
+- CPython 3 `json.loads`: 95 accepted, **3** must-rejects accepted — `NaN`, `Infinity`, `-Infinity`, which its own documentation calls an extension.
+- jq 1.7: 95 accepted, **22** must-rejects accepted. Twenty are number-literal widenings (`.2e-3`, `+1`, `-01`, `2.e3`, `0.e1`, `NaN`, `Inf`) and two are multi-value input (`[][]`, `{"a": true} "x"`).
+
+jq is disqualified exactly where it would hurt most. The number literal and the top level are the two places a JSON grammar is most likely to be too permissive, and jq is blind in both — as a stream processor it is an NDJSON parser by design. An oracle blind in those two places would excuse precisely the bugs this one exists to catch, and would have said nothing about the `extras`, `string_content` and closing-quote defects the negative corpus found. Python's `json` is a smaller version of the same failure.
+
+Being a LIBRARY rather than a binary is the second reason and it is not a convenience. Every other oracle in this crate hopes the right version of some tool is on PATH; this one is a lockfile entry, so it is pinned by construction and CI cannot drift onto another jq without a visible diff. It is the only oracle in the repository with that property.
+
+`from_slice` rather than `from_str` is deliberate. Several suite files are not valid UTF-8, and `from_str` would need them decoded before the oracle saw them — deciding the verdict outside the oracle. `from_slice` validates the encoding itself and rejects, which is the right answer, because RFC 8259 §8.1 requires UTF-8.
+
+`validate_syntax_only` returns `None`, and that is the interesting answer rather than a shrug. The hook exists for toolchains that can run their parser without the checks a compiler applies afterwards; for JSON there is nothing afterwards, because the parse IS the value construction. That is not a limitation of serde_json, it is where JSON's implementation-defined zone lives, and it is why the grammar and its oracle disagree on 17 of the 35 `i_` files with neither of them wrong.
+
+There is no second version family and no union: one RFC, one grammar, one oracle. `validate_current` therefore falls through to `validate`, which is correct rather than unfinished.
+
+The oracle was also run in the direction the sweep cannot see. The sweep adjudicates only files the grammar FAILED, so a file the grammar accepts and the oracle rejects is invisible to it — and for this grammar that set is not empty in principle, since a number past f64 range, a half surrogate pair and nesting deeper than 128 are all accepted here and refused there. Run in both directions over both corpora: on npm's 1,683 files serde_json rejects exactly the 74 the grammar rejects and no others, and on the github corpus's 56,345 the two part company on 10, every one of them a leading UTF-8 BOM. That is the whole of the disagreement over 58,028 files.'''
+
+[[deviations]]
+what = '''
+A leading UTF-8 byte order mark is accepted, and this grammar did not decide that. tree-sitter's input layer strips a BOM before the lexer runs, which is checkable rather than assumed: the same three bytes anywhere but the start of the file are an `UNEXPECTED 65279`. RFC 8259 §8.1 says an implementation MAY ignore a leading BOM, so accepting it conforms and serde_json rejecting it conforms.
+
+It arrived as one suite fixture — `i_structure_UTF-8_BOM_empty_object` — and it is not a curiosity: it is the ONLY class in which this grammar and its oracle disagree over 58,028 files of real JSON, and it accounts for all 10 of those disagreements. Every one is a Windows-authored config file, mostly Minecraft add-on manifests. It is recorded because a reader looking for the rule that allows it will not find one in grammar.js, and because a future tree-sitter that stopped stripping BOMs would silently turn 10 passing files into failures with nothing in this crate having changed.'''
+
+[[deviations]]
+what = '''
+Numbers are not range-checked, `\\u` escapes are not paired, and nesting is not depth-limited. All three are accepts-more-than-the-oracle and all three are deliberate: RFC 8259 leaves each to the implementation (§6, §8.2, §9) and each is a property of the VALUE rather than of the text. Enforcing surrogate pairing is the only one a grammar could express at all — it would mean a rule admitting `\\uD800` only when followed by a low surrogate — and it is refused because a lone surrogate is legal in a conforming JSON text that a `WTF-8` consumer reads fine, and rejecting it would put this grammar on one side of a question the standard declines to answer.'''
+
+[[deviations]]
+what = '''
+Duplicate keys are accepted, with no node marking them. `{"a":1,"a":2}` parses as an object with two `pair` children and the tree keeps both, which is more than the oracle can say — serde_json's `Value` keeps the last and discards the first, as do CPython and jq. This is a deviation in the grammar's FAVOUR and it is recorded because it is the one measurable way the parse tree carries information the reference implementation destroys, which matters to anyone using the tree to lint or rewrite a document rather than to read a value out of it. RFC 8259 §4 calls the behaviour unpredictable and does not forbid the input.'''
+
+[[deviations]]
+what = '''
+ACCEPTS-INVALID IS ONE CLASS AND IT IS THE BOM ABOVE. The entry exists to record that this is a measured claim rather than an unexamined one, and to name what did the measuring, because a sweep cannot: a sweep adjudicates only the files the grammar FAILED, so a file the grammar accepts and the oracle rejects is invisible to it.
+
+Four independent checks look in that direction. 188 must-reject files written by someone with no knowledge of this grammar: 0 accepted. 30,110 corpus mutants: 0 widenings. 5,000 grammar derivations at complete alternative coverage: 0 widenings. And a whole-corpus cross-check of the grammar against the oracle in BOTH directions, over both corpora: on npm's 1,683 files they agree on every one (1,609 accepted by both, 74 rejected by both); on the github corpus's 56,345 they disagree on 10, and all 10 are a leading UTF-8 BOM.
+
+The shapes that could have shown up here and did not are worth naming so the absence is legible. Three of them are accepted by this grammar and refused by the oracle, as the `i_` results show: a number past the range of an f64 such as `1e999`, a `\\u` escape that is half a surrogate pair, and nesting deeper than serde_json's limit of 128. In 58,028 files of real JSON, not one occurs. (Duplicate keys are not in that list: both sides accept them, which is its own deviation below.) That is a statement about what JSON people actually write as much as about the grammar.'''

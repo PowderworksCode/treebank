@@ -1,0 +1,25 @@
+{
+  "vocabulary": "0.1.0",
+  "facets": {
+    "_clause": [
+      "pair"
+    ],
+    "_string": [
+      "string"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "document",
+      "reason": "the file boundary. A JSON text is exactly one value and this node is the wrapper that says so; the value inside it carries _expression"
+    },
+    {
+      "node": "string_content",
+      "reason": "a run of ordinary characters inside a string; the string around it is the _string and the _literal"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "a backslash escape inside a string"
+    }
+  ]
+}

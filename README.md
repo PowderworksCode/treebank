@@ -32,6 +32,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
 | `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf` and `.tfvars`, because Terraform is a dialect of HCL and adds a schema rather than syntax |
+| `crates/treebank-json` | strict RFC 8259 JSON in one grammar — the dialect argument for taking neither JSONC nor JSON5 is in its ledger |
 | `crates/treebank` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
@@ -202,6 +203,7 @@ reference toolchain exposes; absence is explicit rather than a silent no-op.
 | Zig | — | `zig fmt` | — |
 | YAML | yes | — | — |
 | HCL / Terraform | yes | `tofu fmt` | — |
+| JSON | — | — | — |
 
 YAML's two dashes are one fact stated twice: the language has no owning
 implementation, so there is no formatter and no printer to be the
@@ -225,6 +227,18 @@ language-owned formatter, and does not call a token-preserving formatter an
 AST printer. A stable Zig AST surface is the next span dependency; the Zig
 toolchain currently exposes formatting and validation but no supported tree
 dump carrying source extents.
+
+JSON's three dashes are a different kind of absence and the only row here
+that is empty by definition rather than by circumstance. JSON has no
+toolchain, because it has no owner: `jq .` and `json.dumps` are two
+third-party opinions about indentation and neither is the language's, so a
+`reformat` check against either would measure agreement with a vendor. The
+same argument closes the other two. A tree printer needs a reference AST to
+print from, and JSON's reference parsers do not build an AST — they build a
+`dict`, a `Value`, an `Object`, in which `{"a":1,"a":2}` and `{"a":2}` are
+the same thing and the syntax has already been discarded. Node spans have
+the same root cause: there is nothing to compare boundaries against. The
+absence is not waiting on a release.
 
 ## Adding a language
 
@@ -261,6 +275,11 @@ it:
 Steps 3, 4 and 5 are exhaustive `match`es, so the compiler asks for them;
 step 2 is what `treebank verify` checks; step 1 is the reason the language
 is being added at all.
+
+One chore is not on that list because it carries no decision, and is named
+here only because CI will fail on it after everything above has passed:
+`site/public/status.json` is a committed snapshot of the inventory, so run
+`bun run status` in `site/` once the registry knows the new language.
 
 ## Building
 

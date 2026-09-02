@@ -71,6 +71,13 @@ jobs:
           - language: javascript
             ledger: crates/treebank-typescript/ledger.toml
             sweep_args: --lang javascript --grammar crates/treebank-typescript
+          - language: json
+            ledger: crates/treebank-json/ledger.toml
+            # No interpreter, no PATH lookup and no install step: JSON's
+            # oracle is serde_json, compiled into the binary this job has
+            # already built. It is the only leg here whose oracle cannot be
+            # a different version than the one the ledger names.
+            sweep_args: --lang json --grammar crates/treebank-json
           - language: python
             ledger: crates/treebank-python/ledger.toml
             sweep_args: --lang python --grammar crates/treebank-python
