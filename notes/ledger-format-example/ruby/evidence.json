@@ -1,0 +1,21 @@
+{
+  "GENERATED": "Written by `treebank sweep`. Do not edit: the next sweep overwrites this file wholesale. The prose that explains these numbers is in ledger.md.",
+  "schema": 1,
+  "language": "ruby",
+  "sweeps": [
+    {
+      "corpus": "ruby",
+      "files": 6487,
+      "passed": 6480,
+      "failed": 7,
+      "gap_files": 7,
+      "config_files": 0,
+      "version_files": 0,
+      "noise_files": 0,
+      "pass_rate": "99.89%",
+      "corpus_lock_sha256": "8c5410ac76c97a92b04aed45a6c68f098beea530038cb71a480fa5f1fb9ca9da",
+      "grammar_sha256": "fd6cd1de095b06f0dd7f1bae966a7078408b2ca54ea299b4115715a30ce008b5",
+      "grammar_revision": "05ac8c9c6842958e1cea4a50757331ab7e16b66c"
+    }
+  ]
+}
