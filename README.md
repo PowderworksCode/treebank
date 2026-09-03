@@ -10,8 +10,10 @@ C++** (the C++ grammar extends the C one rather than copying it), **Zig**,
 `.tf` and `.tfvars` are written in).
 
 **[`notes/DESIGN.md`](notes/DESIGN.md) is the authoritative document** — the vocabulary,
-its two tiers and the measurements that forced them, the version-union
-grammar policy, the testing invariants, and the crate layout. Start there.
+its two tiers and the measurements that forced them, the version and dialect
+policy, the testing invariants, and the crate layout. Start there.
+**[`notes/dialects.md`](notes/dialects.md)** carries that policy's full
+argument: what earns a registry row, and what buys a second parse table.
 **[`notes/field_guide.md`](notes/field_guide.md)** is its companion for grammar
 authors: what to do and what not to do when writing a parser, each rule
 paid for by a measured incident, enforced mechanically by `treebank lint`.
@@ -31,7 +33,7 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-cpp` | C++98–C++23, extending the C grammar through tree-sitter's own inheritance |
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
-| `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf` and `.tfvars`, because Terraform is a dialect of HCL and adds a schema rather than syntax |
+| `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf`, `.tofu` and `.tfvars`, because Terraform and OpenTofu are dialects of HCL and add a schema rather than syntax |
 | `crates/treebank` | the vocabulary as code and data: the closed term lists, the `terms.json` manifest schema, the conformance checker behind `treebank terms`, and nominal query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |

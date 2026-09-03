@@ -213,14 +213,17 @@ impl Ecosystem for Hcl {
 
     /// The extensions this grammar's own `tree-sitter.json` claims.
     ///
-    /// `.tf.json` and `.tfvars.json` are deliberately absent: they are
-    /// HCL's JSON PROFILE, a different concrete syntax for the same
-    /// information model, and this grammar parses the native syntax. A JSON
-    /// file admitted here would be a gap in every sweep for a construct the
-    /// grammar never claimed.
+    /// `.tofu` is OpenTofu's own spelling of `.tf` and is the same syntax,
+    /// so it is here for the same reason `.tf` is.
+    ///
+    /// The `.json` forms of all of them — `.tf.json`, `.tfvars.json`,
+    /// `.tofu.json` — are deliberately absent: they are HCL's JSON PROFILE,
+    /// a different concrete syntax for the same information model, and this
+    /// grammar parses the native one. A JSON file admitted here would be a
+    /// gap in every sweep for a construct the grammar never claimed.
     fn classify(&self, rel: &Path) -> Option<Option<String>> {
         let ext = rel.extension()?.to_str()?;
-        matches!(ext, "hcl" | "tf" | "tfvars").then_some(None)
+        matches!(ext, "hcl" | "tf" | "tofu" | "tfvars").then_some(None)
     }
 
     /// A NUL means the file is not source. There is nothing else to filter:
