@@ -1,15 +1,15 @@
-//! Facet query expansion. Facet roles are not grammar rules, so a query
-//! like `(_callable name: (_name) @n)` cannot run against the parser as
-//! written; this rewrites every facet pattern into the concrete
+//! Nominal query expansion. A nominal term is not a grammar rule, so a
+//! query like `(_callable name: (_name) @n)` cannot run against the parser
+//! as written; this rewrites every nominal pattern into the concrete
 //! alternation the manifest defines:
 //!
 //!   (_callable)                ->  [(function_definition) (lambda)]
 //!   (_callable name: (x) @n)   ->  [(function_definition name: (x) @n)
 //!                                   (lambda name: (x) @n)]
 //!
-//! Table-tier supertypes pass through untouched — they are real node types
-//! and tree-sitter matches them natively. String literals and `;` comments
-//! are copied verbatim, never rewritten inside.
+//! Structural terms pass through untouched — they are real supertypes and
+//! tree-sitter matches them natively. String literals and `;` comments are
+//! copied verbatim, never rewritten inside.
 
 use std::collections::BTreeMap;
 
@@ -18,7 +18,7 @@ use anyhow::{bail, Result};
 /// The field constraints at DEPTH 0 of a pattern body: each is the field
 /// name plus the node type names its value pattern demands (empty means
 /// presence is enough -- an anonymous or wildcard value). Only depth-0
-/// fields bind to the facet member itself; `#`-predicates and strings are
+/// fields bind to the nominal member itself; `#`-predicates and strings are
 /// skipped, and `(#match? ...)` opens a paren so it is already depth 1.
 fn top_level_field_constraints(body: &str) -> Vec<(String, Vec<String>)> {
     let mut out = Vec::new();
@@ -48,7 +48,7 @@ fn top_level_field_constraints(body: &str) -> Vec<(String, Vec<String>)> {
                         i += 1;
                     }
                     // The value pattern: `(name ...)` or an alternation
-                    // `[(a ...) (b ...)]` (a facet already expanded).
+                    // `[(a ...) (b ...)]` (a nominal term already expanded).
                     let mut names = Vec::new();
                     let mut j = i;
                     let openers: &[u8] = if bytes.get(j) == Some(&b'[') {
@@ -111,8 +111,8 @@ fn top_level_field_constraints(body: &str) -> Vec<(String, Vec<String>)> {
     out
 }
 
-pub fn expand(query: &str, facets: &BTreeMap<String, Vec<String>>) -> Result<String> {
-    expand_with_types(query, facets, None)
+pub fn expand(query: &str, nominal: &BTreeMap<String, Vec<String>>) -> Result<String> {
+    expand_with_types(query, nominal, None)
 }
 
 /// Like [`expand`], but a member is DROPPED from the alternation when a
@@ -125,7 +125,7 @@ pub fn expand(query: &str, facets: &BTreeMap<String, Vec<String>>) -> Result<Str
 /// error, not an empty alternation.
 pub fn expand_with_types(
     query: &str,
-    facets: &BTreeMap<String, Vec<String>>,
+    nominal: &BTreeMap<String, Vec<String>>,
     node_types: Option<&crate::node_types::NodeTypes>,
 ) -> Result<String> {
     let mut out = String::with_capacity(query.len());
@@ -150,12 +150,12 @@ pub fn expand_with_types(
                         .find(|c: char| !(c.is_alphanumeric() || c == '_'))
                         .unwrap_or(query.len() - name_start);
                 let name = &query[name_start..name_end];
-                if let Some(members) = facets.get(name) {
+                if let Some(members) = nominal.get(name) {
                     if members.is_empty() {
-                        bail!("facet `{name}` has no members");
+                        bail!("nominal term `{name}` has no members");
                     }
                     let close = matching_paren(query, i)?;
-                    let body = expand_with_types(&query[name_end..close], facets, node_types)?;
+                    let body = expand_with_types(&query[name_end..close], nominal, node_types)?;
                     let needed = top_level_field_constraints(&body);
                     let compatible = |m: &str| -> bool {
                         let Some(nt) = node_types else { return true };
@@ -186,7 +186,7 @@ pub fn expand_with_types(
                     let kept: Vec<&String> = members.iter().filter(|m| compatible(m)).collect();
                     if kept.is_empty() {
                         bail!(
-                            "facet `{name}`: no member satisfies the field constraint(s) {needed:?}"
+                            "nominal term `{name}`: no member satisfies the field constraint(s) {needed:?}"
                         );
                     }
                     out.push('[');

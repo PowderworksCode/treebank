@@ -9,13 +9,13 @@
  * legacy style (`as` replaced them), and the corpus measures their
  * incidence at approximately zero. So JSX is in, `<T>x` casts are a
  * ledgered known-gap, and the dialect split waits until a corpus proves it
- * necessary. 21 of 22 table-tier terms thread — everything but `_clause`.
+ * necessary. 21 of 22 structural terms thread — everything but `_clause`.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 const PREC = {
   sequence: -2,
@@ -65,16 +65,16 @@ module.exports = grammar({
     $._type_member_end,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
-    // `_declaration` is demoted to the facet tier here; the method-form
+    // `_declaration` is demoted to nominal here; the method-form
     // refactor made typescript PARTITION it -- a class method is a
     // declaration reached only through `_member`, a function statement
     // only through `_statement`, and one alternation reachable from both
     // is exactly what let `foo() {}` parse as a top-level definition.
     // Same §3.1.1 decision java made for fields and locals. See
-    // roles.json; the rosetta gate caught the split within a day.
+    // terms.json; the rosetta gate caught the split within a day.
     '_pattern',
     '_type',
     '_name',
@@ -92,8 +92,8 @@ module.exports = grammar({
     '_invocation',
     '_access',
     '_attribute',
-    // `_modifier` is demoted to the facet tier here; typescript partitions
-    // it. See roles.json and notes/DESIGN.md 3.1.1.
+    // `_modifier` is demoted to nominal here; typescript partitions
+    // it. See terms.json and notes/DESIGN.md 3.1.1.
     ...tb.assertDemotable([]),
     '_interpolation',
   ]).map((name) => $[name]),
@@ -378,7 +378,7 @@ module.exports = grammar({
     // and even `static var x` and `readonly var x`, but `override var x` is
     // `'override' modifier cannot appear on a variable declaration`. Naming
     // the set here is what partitions `_modifier` in this grammar, and is
-    // why it is a facet rather than a supertype.
+    // why it is nominal rather than structural.
     variable_declaration: $ => seq(
       repeat(choice(
         $.accessibility_modifier,

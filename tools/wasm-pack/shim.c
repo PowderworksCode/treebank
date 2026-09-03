@@ -53,11 +53,11 @@
 const TSLanguage *TREEBANK_LANGUAGE_FN(void);
 
 /* Generated into embedded.c by tools/wasm-pack/build.sh from ledger.json,
- * roles.json and node-types.json. */
+ * terms.json and node-types.json. */
 extern const unsigned char treebank_provenance_raw[];
 extern const unsigned treebank_provenance_len;
-extern const unsigned char treebank_roles_raw[];
-extern const unsigned treebank_roles_len;
+extern const unsigned char treebank_terms_raw[];
+extern const unsigned treebank_terms_len;
 extern const unsigned char treebank_node_types_raw[];
 extern const unsigned treebank_node_types_len;
 
@@ -75,14 +75,21 @@ const char *EXPORT(tb_language_name)(void) { return ts_language_name(TREEBANK_LA
 const char *EXPORT(tb_provenance)(void) { return (const char *)treebank_provenance_raw; }
 unsigned EXPORT(tb_provenance_len)(void) { return treebank_provenance_len; }
 
-/* The facet manifest (roles.json). Table-tier roles are real supertypes and
- * queryable from the parser itself; facets are NOT in the parse table, so a
- * consumer without this cannot expand `(_callable)` at all. It ships inside
- * the module for the same reason provenance does. */
-const char *EXPORT(tb_roles)(void) { return (const char *)treebank_roles_raw; }
-unsigned EXPORT(tb_roles_len)(void) { return treebank_roles_len; }
+/* The nominal manifest (terms.json). A STRUCTURAL term is a real supertype
+ * and queryable from the parser itself; a NOMINAL one is NOT in the parse
+ * table, so a consumer without this cannot expand `(_callable)` at all. It
+ * ships inside the module for the same reason provenance does.
+ *
+ * `tb_roles` is the same blob under the export name this had before the
+ * vocabulary rename. Kept for one cycle because packs are content-addressed
+ * and consumers pin them: a host built against the old name keeps working,
+ * and treebank's own loader prefers `tb_terms` and falls back. */
+const char *EXPORT(tb_terms)(void) { return (const char *)treebank_terms_raw; }
+unsigned EXPORT(tb_terms_len)(void) { return treebank_terms_len; }
+const char *EXPORT(tb_roles)(void) { return (const char *)treebank_terms_raw; }
+unsigned EXPORT(tb_roles_len)(void) { return treebank_terms_len; }
 
-/* The node manifest (node-types.json), which is where TABLE-tier membership
+/* The node manifest (node-types.json), which is where STRUCTURAL membership
  * lives: that `while_statement` derives from `_loop`, and `_loop` from
  * `_statement`, is recorded here and nowhere else a pack consumer can reach.
  *
@@ -93,7 +100,7 @@ unsigned EXPORT(tb_roles_len)(void) { return treebank_roles_len; }
  * the vocabulary, which is the whole point of a treebank grammar, the one
  * thing a pack could not answer for itself.
  *
- * It ships inside for the same reason provenance and roles do: the file next
+ * It ships inside for the same reason provenance and terms do: the file next
  * to the binary is the thing that goes missing. */
 const char *EXPORT(tb_node_types)(void) { return (const char *)treebank_node_types_raw; }
 unsigned EXPORT(tb_node_types_len)(void) { return treebank_node_types_len; }
@@ -189,8 +196,8 @@ char *EXPORT(tb_node_sexp)(const TSNode *n) { return ts_node_string(*n); }
  * This is what the shared vocabulary is for. `(_declaration) @d` runs against
  * any treebank grammar and finds that language's declarations, because the
  * role is a real supertype threaded through the productions rather than a
- * naming convention. Facet-tier roles are expanded into an alternation before
- * they get here, against the manifest in tb_roles.
+ * naming convention. Nominal terms are expanded into an alternation before
+ * they get here, against the manifest in tb_terms.
  *
  * Captures are pulled one at a time. tree-sitter reports a match as an array
  * of TSQueryCapture structs, and marshalling that across the boundary would

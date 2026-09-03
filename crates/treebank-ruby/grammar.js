@@ -13,13 +13,13 @@
  * scanner, next to the string machinery (every delimited literal, and
  * heredocs, whose bodies begin after the line their operator is on).
  *
- * Omissions and the reasons for them are in ledger.toml's roles_note.
+ * Omissions and the reasons for them are in ledger.toml's vocabulary_note.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 // Ruby's hard keywords (parse.y's reserved words, the lowercase ones).
 // Shared between the reserved-word declaration and the suffixed-name
@@ -128,7 +128,7 @@ module.exports = grammar({
     $._error_sentinel,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
     '_declaration',
@@ -267,11 +267,11 @@ module.exports = grammar({
     ),
 
     // Statement modifiers. These are NOT threaded through `_branch`/`_loop`,
-    // and the reason is the same one python's roles.json records for its
+    // and the reason is the same one python's terms.json records for its
     // match shapes: a supertype's members enter every position that
     // references it, `_branch` is reachable from argument position (where
     // `x = if c then a end` is legal), and a modifier there — `foo(1 if c)`
-    // — is a SyntaxError from CRuby. Roles are per-grammar-position facts.
+    // — is a SyntaxError from CRuby. A structural term is a per-position fact.
     if_modifier: $ => prec.left(PREC.modifier, seq(
       field('body', $._statement),
       'if',
@@ -603,7 +603,7 @@ module.exports = grammar({
       $.yield_expression,
     ),
 
-    // `_name` is the table-tier role for a name IN a naming position; the
+    // `_name` is the structural term for a name IN a naming position; the
     // occurrences here are uses of names as values, which is fact 4's
     // occurrence semantics doing the work.
     _name: $ => choice(

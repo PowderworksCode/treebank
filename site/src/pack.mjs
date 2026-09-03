@@ -90,16 +90,16 @@ export class Pack {
     return this.json(this.e.tb_provenance(), this.e.tb_provenance_len());
   }
 
-  get roles() {
-    return this.json(this.e.tb_roles(), this.e.tb_roles_len());
+  get terms() {
+    return this.json(this.e.tb_terms(), this.e.tb_terms_len());
   }
 
   get language() {
     return this.cstr(this.e.tb_language_name());
   }
 
-  // node-types.json, which ships inside the module beside roles. Parsed on
-  // first use and kept: it is 40-70 KB, and only a facet query with a field
+  // node-types.json, which ships inside the module beside terms. Parsed on
+  // first use and kept: it is 40-70 KB, and only a nominal query with a field
   // constraint ever reads it, so parsing it on load would cost more than the
   // load. `null` on a pack built before the export existed -- expansion then
   // happens unfiltered, which is what the crate does in the same case.

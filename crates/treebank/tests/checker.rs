@@ -1,22 +1,22 @@
 use std::collections::BTreeMap;
 
-use treebank::check::{check, dead_roles};
+use treebank::check::{check, dead_terms};
 use treebank::expand::{expand, expand_with_types};
 use treebank::node_types::NodeTypes;
-use treebank::roles::RolesManifest;
+use treebank::terms::TermsManifest;
 use treebank::vocabulary;
 
 fn good_nt() -> NodeTypes {
     NodeTypes::parse(include_str!("fixtures/good-node-types.json")).unwrap()
 }
 
-fn good_roles() -> RolesManifest {
-    RolesManifest::parse(include_str!("fixtures/good-roles.json")).unwrap()
+fn good_terms() -> TermsManifest {
+    TermsManifest::parse(include_str!("fixtures/good-terms.json")).unwrap()
 }
 
 #[test]
 fn the_good_fixture_is_conformant() {
-    let findings = check(&good_nt(), &good_roles(), vocabulary());
+    let findings = check(&good_nt(), &good_terms(), vocabulary());
     assert!(findings.is_empty(), "unexpected findings: {findings:#?}");
 }
 
@@ -29,10 +29,10 @@ fn invented_supertype_is_a_finding() {
     nt.supertypes
         .insert("_composite".into(), vec!["number".into()]);
     nt.named.insert("_composite".into());
-    let f = check(&nt, &good_roles(), vocabulary());
+    let f = check(&nt, &good_terms(), vocabulary());
     assert!(
         f.iter()
-            .any(|m| m.contains("`_composite`") && m.contains("not a table-tier")),
+            .any(|m| m.contains("`_composite`") && m.contains("not a structural")),
         "{f:#?}"
     );
 }
@@ -41,7 +41,7 @@ fn invented_supertype_is_a_finding() {
 fn uncovered_node_is_a_finding() {
     let mut nt = good_nt();
     nt.named.insert("mystery_node".into());
-    let f = check(&nt, &good_roles(), vocabulary());
+    let f = check(&nt, &good_terms(), vocabulary());
     assert!(
         f.iter()
             .any(|m| m.contains("`mystery_node`") && m.contains("outside the vocabulary")),
@@ -50,14 +50,14 @@ fn uncovered_node_is_a_finding() {
 }
 
 #[test]
-fn facet_naming_nonexistent_node_is_a_finding() {
-    let mut roles = good_roles();
-    roles
-        .facets
+fn nominal_term_naming_nonexistent_node_is_a_finding() {
+    let mut terms = good_terms();
+    terms
+        .nominal
         .get_mut("_callable")
         .unwrap()
         .push("ghost".into());
-    let f = check(&good_nt(), &roles, vocabulary());
+    let f = check(&good_nt(), &terms, vocabulary());
     assert!(
         f.iter()
             .any(|m| m.contains("`ghost`") && m.contains("not a named node")),
@@ -66,33 +66,33 @@ fn facet_naming_nonexistent_node_is_a_finding() {
 }
 
 #[test]
-fn unknown_facet_key_is_a_finding() {
-    let mut roles = good_roles();
-    roles.facets.insert("_slop".into(), vec!["lambda".into()]);
-    let f = check(&good_nt(), &roles, vocabulary());
+fn unknown_nominal_key_is_a_finding() {
+    let mut terms = good_terms();
+    terms.nominal.insert("_slop".into(), vec!["lambda".into()]);
+    let f = check(&good_nt(), &terms, vocabulary());
     assert!(
         f.iter()
-            .any(|m| m.contains("`_slop`") && m.contains("neither a facet-tier")),
+            .any(|m| m.contains("`_slop`") && m.contains("neither a nominal")),
         "{f:#?}"
     );
 }
 
-// Tier demotion (§3.1.1): a table-tier term a grammar delivers as a facet
+// Demotion (§3.1.1): a structural term a grammar delivers nominally
 // instead. Each guard gets a mutation, because a demotion that is not
 // checked is indistinguishable from a supertype dropped by accident.
 
 /// `_parameter` demoted the way a real grammar does it: absent from the
-/// supertypes, present as a facet, declared with a reason.
-fn demoting_roles() -> RolesManifest {
-    let mut roles = good_roles();
-    roles.demoted.insert(
+/// supertypes, present as a nominal term, declared with a reason.
+fn demoting_terms() -> TermsManifest {
+    let mut terms = good_terms();
+    terms.demoted.insert(
         "_parameter".into(),
         "the language orders its parameter list".into(),
     );
-    roles
-        .facets
+    terms
+        .nominal
         .insert("_parameter".into(), vec!["parameter".into()]);
-    roles
+    terms
 }
 
 /// What tree-sitter actually generates once the grammar stops threading
@@ -109,7 +109,7 @@ fn nt_without_parameter_supertype() -> NodeTypes {
 fn a_declared_demotion_is_conformant() {
     let f = check(
         &nt_without_parameter_supertype(),
-        &demoting_roles(),
+        &demoting_terms(),
         vocabulary(),
     );
     assert!(f.is_empty(), "unexpected findings: {f:#?}");
@@ -117,9 +117,9 @@ fn a_declared_demotion_is_conformant() {
 
 #[test]
 fn demoting_a_term_the_vocabulary_pins_is_a_finding() {
-    let mut roles = good_roles();
-    roles.demoted.insert("_member".into(), "because".into());
-    let f = check(&good_nt(), &roles, vocabulary());
+    let mut terms = good_terms();
+    terms.demoted.insert("_member".into(), "because".into());
+    let f = check(&good_nt(), &terms, vocabulary());
     assert!(
         f.iter()
             .any(|m| m.contains("`_member`") && m.contains("does not allow")),
@@ -129,9 +129,9 @@ fn demoting_a_term_the_vocabulary_pins_is_a_finding() {
 
 #[test]
 fn demotion_without_a_reason_is_a_finding() {
-    let mut roles = demoting_roles();
-    roles.demoted.insert("_parameter".into(), "   ".into());
-    let f = check(&nt_without_parameter_supertype(), &roles, vocabulary());
+    let mut terms = demoting_terms();
+    terms.demoted.insert("_parameter".into(), "   ".into());
+    let f = check(&nt_without_parameter_supertype(), &terms, vocabulary());
     assert!(
         f.iter()
             .any(|m| m.contains("`_parameter`") && m.contains("no reason")),
@@ -140,25 +140,25 @@ fn demotion_without_a_reason_is_a_finding() {
 }
 
 #[test]
-fn a_term_in_both_tiers_is_a_finding() {
+fn a_term_delivered_both_ways_is_a_finding() {
     // The supertype is still declared, so the grammar would answer
     // `(_parameter)` two ways at once.
-    let f = check(&good_nt(), &demoting_roles(), vocabulary());
+    let f = check(&good_nt(), &demoting_terms(), vocabulary());
     assert!(
         f.iter()
-            .any(|m| m.contains("`_parameter`") && m.contains("exactly one tier")),
+            .any(|m| m.contains("`_parameter`") && m.contains("exactly one way")),
         "{f:#?}"
     );
 }
 
 #[test]
-fn demotion_without_facet_members_is_a_finding() {
-    let mut roles = demoting_roles();
-    roles.facets.remove("_parameter");
-    let f = check(&nt_without_parameter_supertype(), &roles, vocabulary());
+fn demotion_without_nominal_members_is_a_finding() {
+    let mut terms = demoting_terms();
+    terms.nominal.remove("_parameter");
+    let f = check(&nt_without_parameter_supertype(), &terms, vocabulary());
     assert!(
         f.iter()
-            .any(|m| m.contains("`_parameter`") && m.contains("no facet members")),
+            .any(|m| m.contains("`_parameter`") && m.contains("no nominal members")),
         "{f:#?}"
     );
 }
@@ -172,7 +172,7 @@ fn broken_containment_is_a_finding() {
         .get_mut("_expression")
         .unwrap()
         .retain(|s| s != "_literal");
-    let f = check(&nt, &good_roles(), vocabulary());
+    let f = check(&nt, &good_terms(), vocabulary());
     assert!(
         f.iter()
             .any(|m| m.contains("containment violated") && m.contains("`_literal`")),
@@ -182,13 +182,13 @@ fn broken_containment_is_a_finding() {
 
 #[test]
 fn stale_uncategorised_entry_is_a_finding() {
-    let mut roles = good_roles();
-    roles
-        .facets
+    let mut terms = good_terms();
+    terms
+        .nominal
         .get_mut("_callable")
         .unwrap()
         .push("comment".into());
-    let f = check(&good_nt(), &roles, vocabulary());
+    let f = check(&good_nt(), &terms, vocabulary());
     assert!(
         f.iter()
             .any(|m| m.contains("`comment`") && m.contains("stale")),
@@ -198,35 +198,35 @@ fn stale_uncategorised_entry_is_a_finding() {
 
 #[test]
 fn vocabulary_version_mismatch_is_a_finding() {
-    let mut roles = good_roles();
-    roles.vocabulary = "0.0.9".into();
-    let f = check(&good_nt(), &roles, vocabulary());
+    let mut terms = good_terms();
+    terms.vocabulary = "0.0.9".into();
+    let f = check(&good_nt(), &terms, vocabulary());
     assert!(f.iter().any(|m| m.contains("0.0.9")), "{f:#?}");
 }
 
 #[test]
-fn dead_roles_names_the_silent_ones() {
+fn dead_terms_names_the_silent_ones() {
     let counts: BTreeMap<String, u64> =
         [("_loop".to_string(), 12u64), ("_branch".to_string(), 0u64)].into();
-    let dead = dead_roles(["_loop", "_branch", "_jump"].into_iter(), &counts);
+    let dead = dead_terms(["_loop", "_branch", "_jump"].into_iter(), &counts);
     assert_eq!(dead, vec!["_branch".to_string(), "_jump".to_string()]);
 }
 
-// --- facet expansion ---
+// --- nominal expansion ---
 
-fn facets() -> BTreeMap<String, Vec<String>> {
-    good_roles().facets.into_iter().collect()
+fn nominal() -> BTreeMap<String, Vec<String>> {
+    good_terms().nominal.into_iter().collect()
 }
 
 #[test]
-fn bare_facet_expands_to_alternation() {
-    let q = expand("(_callable) @fn", &facets()).unwrap();
+fn a_bare_nominal_term_expands_to_alternation() {
+    let q = expand("(_callable) @fn", &nominal()).unwrap();
     assert_eq!(q, "[(function_definition) (lambda)] @fn");
 }
 
 #[test]
-fn facet_body_is_copied_into_every_branch() {
-    let q = expand("(_callable name: (_name) @n)", &facets()).unwrap();
+fn a_nominal_body_is_copied_into_every_branch() {
+    let q = expand("(_callable name: (_name) @n)", &nominal()).unwrap();
     assert_eq!(
         q,
         "[(function_definition name: (_name) @n) (lambda name: (_name) @n)]"
@@ -244,29 +244,29 @@ fn facet_body_is_copied_into_every_branch() {
 #[test]
 fn a_wildcard_field_value_constrains_presence_only() {
     let types = node_types_for_wildcards();
-    let facets = facets();
+    let nominal = nominal();
 
     // `lambda` has no `name` and is dropped; `function_definition` has one and
     // survives, whatever type the wildcard stands for.
-    let q = expand_with_types("(_callable name: (_) @n)", &facets, Some(&types)).unwrap();
+    let q = expand_with_types("(_callable name: (_) @n)", &nominal, Some(&types)).unwrap();
     assert_eq!(q, "[(function_definition name: (_) @n)]");
 
     // A wildcard anywhere in an alternation makes the whole constraint
     // presence-only.
     let q = expand_with_types(
         "(_callable name: [(_) (identifier)])",
-        &facets,
+        &nominal,
         Some(&types),
     )
     .unwrap();
     assert_eq!(q, "[(function_definition name: [(_) (identifier)])]");
 
     // A bare `_` with no parens was already presence-only; it stays that way.
-    let q = expand_with_types("(_callable name: _)", &facets, Some(&types)).unwrap();
+    let q = expand_with_types("(_callable name: _)", &nominal, Some(&types)).unwrap();
     assert_eq!(q, "[(function_definition name: _)]");
 
     // And a real type name still filters on the type, not merely presence.
-    let q = expand_with_types("(_callable name: (identifier) @n)", &facets, Some(&types)).unwrap();
+    let q = expand_with_types("(_callable name: (identifier) @n)", &nominal, Some(&types)).unwrap();
     assert_eq!(q, "[(function_definition name: (identifier) @n)]");
 }
 
@@ -284,8 +284,8 @@ fn node_types_for_wildcards() -> NodeTypes {
 }
 
 #[test]
-fn nested_facets_expand_inside_out() {
-    let q = expand("(_scope (_callable) @inner)", &facets()).unwrap();
+fn nested_nominal_terms_expand_inside_out() {
+    let q = expand("(_scope (_callable) @inner)", &nominal()).unwrap();
     assert_eq!(
         q,
         "[(module [(function_definition) (lambda)] @inner) \
@@ -297,16 +297,16 @@ fn nested_facets_expand_inside_out() {
 #[test]
 fn table_supertypes_strings_and_comments_pass_through() {
     let src = "; find loops\n(_loop \"while\" @kw (_expression))";
-    assert_eq!(expand(src, &facets()).unwrap(), src);
+    assert_eq!(expand(src, &nominal()).unwrap(), src);
 }
 
 #[test]
-fn facet_name_inside_string_is_not_rewritten() {
+fn a_term_name_inside_a_string_is_not_rewritten() {
     let src = "((identifier) @x (#eq? @x \"(_callable)\"))";
-    assert_eq!(expand(src, &facets()).unwrap(), src);
+    assert_eq!(expand(src, &nominal()).unwrap(), src);
 }
 
 #[test]
 fn unbalanced_query_errors() {
-    assert!(expand("(_callable", &facets()).is_err());
+    assert!(expand("(_callable", &nominal()).is_err());
 }

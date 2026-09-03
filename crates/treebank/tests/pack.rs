@@ -82,18 +82,18 @@ fn reports_errors() {
 }
 
 #[test]
-fn expands_a_facet_query_against_the_packs_own_manifest() {
+fn expands_a_nominal_query_against_the_packs_own_manifest() {
     let Some(path) = a_pack() else { return };
     let pack = Pack::from_path(&path).expect("load");
-    let facets = &pack.roles().facets;
-    assert!(!facets.is_empty(), "a pack carries its facet manifest");
+    let nominal = &pack.terms().nominal;
+    assert!(!nominal.is_empty(), "a pack carries its nominal manifest");
 
-    let (term, members) = facets.iter().next().unwrap();
+    let (term, members) = nominal.iter().next().unwrap();
     let expanded = pack.expand_query(&format!("({term})")).expect("expand");
-    // The whole point: the facet name is replaced by this grammar's members.
+    // The whole point: the term name is replaced by this grammar's members.
     assert!(
         !expanded.contains(term),
-        "facet should be expanded away: {expanded}"
+        "the term should be expanded away: {expanded}"
     );
     assert!(
         expanded.contains(&members[0]),
@@ -158,8 +158,8 @@ fn one_query_runs_against_every_grammar() {
             "{lang}: a function"
         );
 
-        // A facet has to be expanded before it can run at all.
-        let callable = pack.query(&tree, "(_callable) @fn").expect("facet query");
+        // A nominal term has to be expanded before it can run at all.
+        let callable = pack.query(&tree, "(_callable) @fn").expect("nominal query");
         assert!(!callable.is_empty(), "{lang}: (_callable) found nothing");
         ran += 1;
     }
@@ -211,7 +211,7 @@ fn an_older_pack_still_works_without_queries() {
     let tree = pack.parse("def f(x):\n    return x\n").expect("parse");
     assert_eq!(tree.root().kind().unwrap(), "module");
     assert!(!tree.root().has_error().unwrap());
-    assert!(!pack.roles().facets.is_empty());
+    assert!(!pack.terms().nominal.is_empty());
 
     // And a query fails with something a reader can act on.
     let err = pack
@@ -230,14 +230,14 @@ fn hands_out_the_manifests_as_they_ship() {
     let Some(path) = a_pack() else { return };
     let pack = Pack::from_path(&path).expect("load");
 
-    // roles_json is the document roles() parsed, for a consumer that has its
+    // terms_json is the document terms() parsed, for a consumer that has its
     // own representation of the vocabulary.
-    let roles: serde_json::Value =
-        serde_json::from_str(pack.roles_json()).expect("roles_json is json");
-    let facets = roles["facets"].as_object().expect("facets");
-    assert_eq!(facets.len(), pack.roles().facets.len());
+    let terms: serde_json::Value =
+        serde_json::from_str(pack.terms_json()).expect("terms_json is json");
+    let nominal = terms["nominal"].as_object().expect("nominal");
+    assert_eq!(nominal.len(), pack.terms().nominal.len());
 
-    // And the node manifest, which is where table-tier membership lives.
+    // And the node manifest, which is where structural membership lives.
     let raw = pack
         .node_types_json()
         .expect("an ABI 2 pack carries node types");

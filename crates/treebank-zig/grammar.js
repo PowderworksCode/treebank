@@ -28,13 +28,13 @@
  * operators and below the initializer — so every type position here takes
  * `_type_operand` and the precedences on it are what enforce the stop.
  *
- * Omissions and the reasons for them are in ledger.toml's roles_note.
+ * Omissions and the reasons for them are in ledger.toml's vocabulary_note.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 // Zig's own precedence table (language reference, "Precedence"), lowest
 // binding first. `x{…}` sits BELOW the prefix operators there, and `a!b`
@@ -77,14 +77,14 @@ module.exports = grammar({
   // parse table repeats, so a regular token expresses it exactly.
   externals: _ => [],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
     '_declaration',
     '_type',
     '_name',
     '_literal',
-    // `_parameter` is demoted to the facet tier here; see roles.json. Zig
+    // `_parameter` is demoted to nominal here; see terms.json. Zig
     // puts the C-variadic `...` last and nowhere else, and one alternation
     // repeated by commas cannot say that.
     ...tb.assertDemotable([]),
@@ -99,10 +99,10 @@ module.exports = grammar({
     '_assignment',
     '_invocation',
     '_access',
-    // `_modifier` is demoted to the facet tier here, for rust's reason:
+    // `_modifier` is demoted to nominal here, for rust's reason:
     // Zig orders its modifiers (`pub` before `export`/`extern` before
     // `threadlocal`) and one alternation across all of them accepts
-    // `threadlocal pub extern const x`. See roles.json.
+    // `threadlocal pub extern const x`. See terms.json.
     ...tb.assertDemotable([]),
   ]).map((name) => $[name]),
 
@@ -340,7 +340,7 @@ module.exports = grammar({
     calling_convention: $ => seq('callconv', '(', $._expression, ')'),
 
     // ── parameters ───────────────────────────────────────────────────
-    // `...` is only ever last, which is why `_parameter` is a facet here
+    // `...` is only ever last, which is why `_parameter` is nominal here
     // and not a supertype: one alternation repeated by commas would accept
     // `fn (…, a: u32)`, and extern C declarations are exactly where that
     // would go unnoticed.
@@ -1120,7 +1120,7 @@ module.exports = grammar({
     undefined: _ => 'undefined',
 
     // ── comments ─────────────────────────────────────────────────────
-    // Three kinds, and the vocabulary's `_comment` facet is exactly why
+    // Three kinds, and the vocabulary's nominal `_comment` is exactly why
     // that is worth spelling out: a consumer that hand-maintains "what is
     // a comment here" gets rust's two wrong and Zig's three wrong.
     // `////` is an ordinary comment in Zig, not a doc comment, which is

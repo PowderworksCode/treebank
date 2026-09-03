@@ -7,8 +7,8 @@ versions = '''
 GNU bash 5.x, which is the union that matters: `${x@Q}`, `[[ … =~ … ]]`, `((` arithmetic, process substitution, `;&` and `;;&` case terminators, and the `<<-` heredoc. POSIX sh is a subset and parses; zsh, ksh and fish are different languages and are not targeted.'''
 generate_cli = '0.26.12'
 vocabulary = '0.1.0'
-roles_note = '''
-13 of 22 table-tier terms are threaded, the fewest of any grammar here, and the shortfall is a fact about shell rather than about the grammar. There is no `_declaration`, `_type`, `_member`, `_modifier`, `_attribute`, `_parameter` or `_pattern` because shell has none of those things: a script declares nothing, types nothing and takes no parameters but `$1`. `_name` is deliberately not threaded either — a command name, a function name and a loop variable are all just WORDS, and `variable_name` exists only inside an expansion where nothing else can be. Threading `_name` through the word positions would put `variable_name` back into the lexer's choice at a command's head, which is exactly where it must not be.'''
+vocabulary_note = '''
+13 of 22 structural terms are threaded, the fewest of any grammar here, and the shortfall is a fact about shell rather than about the grammar. There is no `_declaration`, `_type`, `_member`, `_modifier`, `_attribute`, `_parameter` or `_pattern` because shell has none of those things: a script declares nothing, types nothing and takes no parameters but `$1`. `_name` is deliberately not threaded either — a command name, a function name and a loop variable are all just WORDS, and `variable_name` exists only inside an expansion where nothing else can be. Threading `_name` through the word positions would put `variable_name` back into the lexer's choice at a command's head, which is exactly where it must not be.'''
 
 [corpus]
 source = 'top-600 GitHub repositories by stars with `language:Shell` (fetched 2026-08-19), tarball at the pinned commit'

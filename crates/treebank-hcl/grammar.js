@@ -55,7 +55,7 @@
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 // HCL's own precedence table (hclsyntax/spec.md, "Operations"), lowest
 // binding first. Levels 1-6 are the spec's; the conditional sits below
@@ -131,7 +131,7 @@ module.exports = grammar({
     $._error_sentinel,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_expression',
     '_declaration',
     '_name',
@@ -235,7 +235,7 @@ module.exports = grammar({
     // scanner could close. So the term goes where it buys the most: over
     // real Terraform the for-EXPRESSION is the construct a `(_loop)` query
     // is asking about, by a wide margin over the template directive, and
-    // the directives are recorded in roles.json's `uncategorised` with
+    // the directives are recorded in terms.json's `uncategorised` with
     // this as the reason.
     _control_flow: $ => choice($._branch, $._loop),
     _branch: $ => choice($.conditional),
@@ -536,7 +536,7 @@ module.exports = grammar({
     // A quoted template is not a `_literal`, and the reason is the term's
     // own per-RULE test (DESIGN.md §3.2): this rule can carry an
     // interpolation, so no instance of it qualifies, exactly as python's
-    // `string` cannot. `_string` is the facet that answers "find every
+    // `string` cannot. `_string` is the nominal term that answers "find every
     // string" over both.
     // The delimiters are NODES rather than hidden tokens, and that is not
     // decoration. They have to be external -- the scanner's mode stack

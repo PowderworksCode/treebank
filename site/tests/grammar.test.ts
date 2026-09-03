@@ -18,7 +18,7 @@ import {
   Grammar,
   groupsOf,
   precedences,
-  roleIndex,
+  termIndex,
   toEbnf,
   toRr,
 } from "../src/grammar.mjs";
@@ -67,7 +67,7 @@ describe("every grammar assembles a page", () => {
   for (const [name, where] of bundles()) {
     test(`${name}`, () => {
       const g = new Grammar(JSON.parse(readFileSync(where, "utf8")));
-      const { table } = roleIndex(g);
+      const { structural: table } = termIndex(g);
       const groups = groupsOf(g, table);
 
       // Every rule appears exactly once across the groups: the index rail and

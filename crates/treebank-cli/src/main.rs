@@ -328,15 +328,16 @@ enum Cmd {
         grammar: PathBuf,
     },
     /// Check a grammar's vocabulary conformance (notes/DESIGN.md §3.3): declared
-    /// supertypes from the closed table tier, every named node covered or
+    /// supertypes from the closed structural list, every named node covered or
     /// deliberately uncategorised, required containments, and a valid
-    /// roles.json facet manifest
-    Roles {
-        /// Grammar crate root: reads src/node-types.json and roles.json
+    /// terms.json nominal manifest
+    #[command(alias = "roles")]
+    Terms {
+        /// Grammar crate root: reads src/node-types.json and terms.json
         grammar: PathBuf,
     },
     /// Generate each grammar's query files from queries/*.scm, expanding
-    /// facets into that grammar's own node types
+    /// nominal terms into that grammar's own node types
     Queries {
         /// Where the vocabulary-level sources live [default: queries]
         #[arg(long, default_value = "queries")]
@@ -430,24 +431,24 @@ fn oracle_cmd(lang: LangName, srcroot: &std::path::Path) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// `treebank roles`: the vocabulary-conformance gate, one grammar crate at
+/// `treebank terms`: the vocabulary-conformance gate, one grammar crate at
 /// a time. Prints every finding rather than the first, and exits non-zero
 /// on any — an empty report is conformance.
-pub fn roles_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
+pub fn terms_check(grammar_dir: &std::path::Path) -> anyhow::Result<String> {
     let vocab = treebank::vocabulary();
     let nt = treebank::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
-    let roles = treebank::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
-    let mut findings = treebank::check::check(&nt, &roles, vocab);
+    let terms = treebank::terms::TermsManifest::load(&grammar_dir.join("terms.json"))?;
+    let mut findings = treebank::check::check(&nt, &terms, vocab);
     findings.extend(ledger_vocabulary_finding(grammar_dir, &vocab.version));
     if !findings.is_empty() {
         anyhow::bail!("{}", findings.join("; "));
     }
     Ok(format!(
-        "{} supertypes, {} facet(s), {} named node(s), {} uncategorised (vocabulary {})",
+        "{} structural, {} nominal, {} named node(s), {} uncategorised (vocabulary {})",
         nt.supertypes.len(),
-        roles.facets.len(),
+        terms.nominal.len(),
         nt.named.len() - nt.supertypes.len(),
-        roles.uncategorised.len(),
+        terms.uncategorised.len(),
         vocab.version,
     ))
 }
@@ -466,39 +467,39 @@ fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> O
         .then(|| format!("ledger.toml states vocabulary {stated} but treebank carries {expected}"))
 }
 
-fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
+fn terms_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
     let vocab = treebank::vocabulary();
     let nt = treebank::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
-    let roles = treebank::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
-    let mut findings = treebank::check::check(&nt, &roles, vocab);
+    let terms = treebank::terms::TermsManifest::load(&grammar_dir.join("terms.json"))?;
+    let mut findings = treebank::check::check(&nt, &terms, vocab);
     findings.extend(ledger_vocabulary_finding(grammar_dir, &vocab.version));
     for f in &findings {
-        eprintln!("roles: {f}");
+        eprintln!("terms: {f}");
     }
     if !findings.is_empty() {
         anyhow::bail!("{} vocabulary conformance finding(s)", findings.len());
     }
     println!(
-        "roles OK: {} supertypes, {} facet(s), {} named node(s), {} uncategorised (vocabulary {})",
+        "terms OK: {} structural, {} nominal, {} named node(s), {} uncategorised (vocabulary {})",
         nt.supertypes.len(),
-        roles.facets.len(),
+        terms.nominal.len(),
         nt.named.len() - nt.supertypes.len(),
-        roles.uncategorised.len(),
+        terms.uncategorised.len(),
         vocab.version,
     );
     Ok(())
 }
 
 #[cfg(test)]
-mod roles_tests {
-    use super::roles_check;
+mod terms_tests {
+    use super::terms_check;
     use std::path::Path;
 
     #[test]
-    fn programmatic_roles_check_includes_the_ledger_gate() {
+    fn programmatic_terms_check_includes_the_ledger_gate() {
         let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../treebank-python");
         let dir = std::env::temp_dir().join(format!(
-            "treebank-roles-ledger-{}-{}",
+            "treebank-terms-ledger-{}-{}",
             std::process::id(),
             std::thread::current().name().unwrap_or("test")
         ));
@@ -509,10 +510,10 @@ mod roles_tests {
             dir.join("src/node-types.json"),
         )
         .unwrap();
-        std::fs::copy(source.join("roles.json"), dir.join("roles.json")).unwrap();
+        std::fs::copy(source.join("terms.json"), dir.join("terms.json")).unwrap();
         std::fs::write(dir.join("ledger.toml"), "vocabulary = \"0.0.0\"\n").unwrap();
 
-        let error = roles_check(&dir).unwrap_err().to_string();
+        let error = terms_check(&dir).unwrap_err().to_string();
         assert!(
             error.contains("ledger.toml states vocabulary 0.0.0"),
             "unexpected error: {error}"
@@ -734,7 +735,7 @@ fn main() -> anyhow::Result<()> {
             !no_write_ledger,
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
-        Cmd::Roles { grammar } => roles_cmd(&grammar),
+        Cmd::Terms { grammar } => terms_cmd(&grammar),
         Cmd::Queries {
             source,
             crates,

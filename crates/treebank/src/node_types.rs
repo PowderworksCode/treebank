@@ -32,7 +32,7 @@ pub struct NodeTypes {
     pub named: BTreeSet<String>,
     /// Supertype name -> direct named subtypes.
     pub supertypes: BTreeMap<String, Vec<String>>,
-    /// Node type -> field name -> the types that field may hold. Facet
+    /// Node type -> field name -> the types that field may hold. Nominal
     /// expansion uses this to drop members a field-constrained pattern
     /// cannot match: `(_declaration body: (_body))` must not conjure a
     /// `body` onto `import_alias`, nor keep `class_definition` whose body

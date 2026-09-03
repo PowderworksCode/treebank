@@ -43,28 +43,28 @@ class Pack:
         return json.loads(self.mem.read(self.store, ptr, ptr + n))
 
     @property
-    def roles(self):
-        """The facet manifest, straight out of the module.
+    def terms(self):
+        """The nominal manifest, straight out of the module.
 
-        Table-tier roles (_declaration, _loop, _invocation, ...) are real
-        supertypes: query them directly, the parser knows them. Facets
+        Structural terms (_declaration, _loop, _invocation, ...) are real
+        supertypes: query them directly, the parser knows them. Nominal ones
         (_callable, _binding, _scope, _clause) cross-cut derivations and
         cannot be supertypes, so they are expanded against this manifest
         before the query runs. Without it a consumer cannot write
         (_callable) at all -- which is why it ships INSIDE the pack.
         """
-        ptr = self._call("tb_roles")
-        n = self._call("tb_roles_len")
+        ptr = self._call("tb_terms")
+        n = self._call("tb_terms_len")
         return json.loads(self.mem.read(self.store, ptr, ptr + n))
 
-    def expand_facets(self, query):
-        """Rewrite facet patterns into the concrete alternation they mean.
+    def expand_nominal(self, query):
+        """Rewrite nominal patterns into the concrete alternation they mean.
 
         `(_callable)` -> `[(function_definition) (lambda)]`. Mirrors
         treebank_core::expand; string literals and ; comments are left
-        alone so a facet name inside them is never rewritten.
+        alone so a term name inside them is never rewritten.
         """
-        facets = self.roles.get("facets", {})
+        nominal = self.terms.get("nominal", {})
         out, i = [], 0
         while i < len(query):
             ch = query[i]
@@ -84,7 +84,7 @@ class Pack:
                 while j < len(query) and (query[j].isalnum() or query[j] == "_"):
                     j += 1
                 name = query[i + 1 : j]
-                members = facets.get(name)
+                members = nominal.get(name)
                 if members:
                     depth, k = 0, i
                     while k < len(query):
@@ -95,7 +95,7 @@ class Pack:
                             if depth == 0:
                                 break
                         k += 1
-                    body = self.expand_facets(query[j:k])
+                    body = self.expand_nominal(query[j:k])
                     out.append("[" + " ".join(f"({m}{body})" for m in members) + "]")
                     i = k + 1
                 else:
@@ -183,8 +183,8 @@ def main():
     # honestly measure, so treat this as opaque and print what is there.
     for name, sw in (p.get("sweeps") or {}).items():
         print(f"  {name}: {sw.get('pass_rate', '?')} of {sw['files']} files, {sw['gap_files']} gap files")
-    facets = " ".join(f"{k}({len(v)})" for k, v in pack.roles.get("facets", {}).items())
-    print(f"  facets: {facets}")
+    nominal = " ".join(f"{k}({len(v)})" for k, v in pack.terms.get("nominal", {}).items())
+    print(f"  nominal: {nominal}")
     for f in files:
         src = open(f, "rb").read()
         tree = pack.parse(src)

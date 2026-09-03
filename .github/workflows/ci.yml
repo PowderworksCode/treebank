@@ -34,7 +34,7 @@ jobs:
           cat "$RUNNER_TEMP/treebank-status.md" >> "$GITHUB_STEP_SUMMARY"
 
       # Every grammar's queries/*.scm is generated from queries/ at the root,
-      # with facets expanded into that grammar's own node types. This fails on
+      # with nominal terms expanded into that grammar's own node types. This fails on
       # a file edited in place, and on a source that expands into a pattern the
       # grammar cannot compile -- which is how a role threaded in eight
       # grammars and forgotten in the ninth shows up.
@@ -325,9 +325,9 @@ jobs:
           --dir crates/treebank-${{ matrix.grammar }}/test/negative
 
       # I4 — vocabulary conformance: closed term lists, total node
-      # coverage, containments, and a roles.json whose members all exist.
+      # coverage, containments, and a terms.json whose members all exist.
       - name: vocabulary conformance
-        run: ./target/debug/treebank roles crates/treebank-${{ matrix.grammar }}
+        run: ./target/debug/treebank terms crates/treebank-${{ matrix.grammar }}
 
       # The notes/field_guide.md smell detector: declared-conflict growth, early
       # commits between parallel tiers, same-text token splits, unreserved

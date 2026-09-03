@@ -8,8 +8,9 @@
 //! on this site diverged over HTML escaping and was only caught by a
 //! differential, so this one ships with the differential from the start.
 //!
-//! Every grammar's real facets, crossed with a corpus of queries chosen for
-//! the places a rewriter goes wrong: strings that contain facet names,
+//! Every grammar's real nominal terms, crossed with a corpus of queries
+//! chosen for the places a rewriter goes wrong: strings that contain term
+//! names,
 //! comments, nesting, unicode, and inputs that must fail.
 //!
 //! Skipped when node is absent, which is the same bargain the pack tests
@@ -45,8 +46,8 @@ fn have_node() -> bool {
         .unwrap_or(false)
 }
 
-/// Every grammar in the repository: the facets it declares, and the node
-/// manifest the filtering reads.
+/// Every grammar in the repository: the nominal terms it declares, and the
+/// node manifest the filtering reads.
 fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>, Option<String>)> {
     let mut out = Vec::new();
     let crates = root().join("crates");
@@ -56,14 +57,14 @@ fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>, Option<String>)> {
     let mut dirs: Vec<_> = entries.filter_map(|e| e.ok()).map(|e| e.path()).collect();
     dirs.sort();
     for dir in dirs {
-        let manifest = dir.join("roles.json");
+        let manifest = dir.join("terms.json");
         if !manifest.is_file() {
             continue;
         }
         let Ok(text) = std::fs::read_to_string(&manifest) else {
             continue;
         };
-        let Ok(roles) = serde_json::from_str::<treebank::roles::RolesManifest>(&text) else {
+        let Ok(terms) = serde_json::from_str::<treebank::terms::TermsManifest>(&text) else {
             continue;
         };
         let name = dir
@@ -72,73 +73,73 @@ fn grammars() -> Vec<(String, BTreeMap<String, Vec<String>>, Option<String>)> {
             .to_string_lossy()
             .replace("treebank-", "");
         let node_types = std::fs::read_to_string(dir.join("src/node-types.json")).ok();
-        out.push((name, roles.facets, node_types));
+        out.push((name, terms.nominal, node_types));
     }
     out
 }
 
-/// `{facet}` is replaced with a facet this grammar really has, so the corpus
+/// `{term}` is replaced with a nominal term this grammar really has, so the corpus
 /// exercises each grammar's own vocabulary rather than a made-up one.
 const CORPUS: &[&str] = &[
     // The ordinary shapes.
-    "({facet})",
-    "({facet}) @hit",
-    "({facet} name: (identifier) @n)",
-    "({facet}) ({facet})",
-    // Nesting: a facet inside a facet must resolve inside out.
-    "({facet} body: ({facet}))",
-    "(x ({facet}) (y ({facet})))",
-    // A facet name inside a string is text, not a pattern.
-    "\"({facet})\"",
-    "(x \"({facet})\" ({facet}))",
-    "(x \"escaped \\\" quote ({facet})\" ({facet}))",
+    "({term})",
+    "({term}) @hit",
+    "({term} name: (identifier) @n)",
+    "({term}) ({term})",
+    // Nesting: a nominal term inside one must resolve inside out.
+    "({term} body: ({term}))",
+    "(x ({term}) (y ({term})))",
+    // A term name inside a string is text, not a pattern.
+    "\"({term})\"",
+    "(x \"({term})\" ({term}))",
+    "(x \"escaped \\\" quote ({term})\" ({term}))",
     // Comments run to end of line and are copied verbatim.
-    "; ({facet})\n({facet})",
-    "({facet}) ; trailing ({facet})",
-    "(x ; ) not a close\n  ({facet}))",
-    // Things that are not facets are left alone.
+    "; ({term})\n({term})",
+    "({term}) ; trailing ({term})",
+    "(x ; ) not a close\n  ({term}))",
+    // Things that are not nominal terms are left alone.
     "(_declaration)",
     "(identifier) @id",
     "[(a) (b)] @alt",
-    "(x (#match? @a \"({facet})\"))",
+    "(x (#match? @a \"({term})\"))",
     // Field constraints, which is what member filtering turns on. A member
     // that cannot take the field must be dropped, and dropping all of them is
     // an error rather than an empty alternation.
-    "({facet} body: (block))",
-    "({facet} name: (_) @n)",
-    "({facet} name: [(identifier) (attribute)])",
-    "({facet} name: [(_) (identifier)])",
-    "({facet} name: (_) body: (_))",
-    "({facet} name: (identifier) body: (block))",
-    "({facet} nonexistent_field: (a))",
+    "({term} body: (block))",
+    "({term} name: (_) @n)",
+    "({term} name: [(identifier) (attribute)])",
+    "({term} name: [(_) (identifier)])",
+    "({term} name: (_) body: (_))",
+    "({term} name: (identifier) body: (block))",
+    "({term} nonexistent_field: (a))",
     // A field whose value names no node type at all, so the constraint is
     // "present" rather than "of these types". A mutant that treated an empty
     // constraint as unsatisfiable survived the corpus without these.
-    "({facet} name: _)",
-    "({facet} name: \"literal\")",
-    "({facet} name: _ body: (block))",
-    "({facet} body: _)",
-    "({facet} name: (nonexistent_type))",
-    "(x ({facet} name: (identifier)))",
-    "({facet} body: ({facet}))",
-    "({facet} (#eq? @a \"name: (x)\"))",
-    "({facet} name: (identifier) @n (#match? @n \"^_\"))",
+    "({term} name: _)",
+    "({term} name: \"literal\")",
+    "({term} name: _ body: (block))",
+    "({term} body: _)",
+    "({term} name: (nonexistent_type))",
+    "(x ({term} name: (identifier)))",
+    "({term} body: ({term}))",
+    "({term} (#eq? @a \"name: (x)\"))",
+    "({term} name: (identifier) @n (#match? @n \"^_\"))",
     // Anchors, wildcards, negation, quantifiers.
-    "({facet} . (a) (b))",
-    "(_ ({facet}))",
-    "({facet} !name)",
-    "({facet} (a)? (b)*)",
+    "({term} . (a) (b))",
+    "(_ ({term}))",
+    "({term} !name)",
+    "({term} (a)? (b)*)",
     // Whitespace and layout are preserved as-is.
-    "(  {facet}  )",
-    "({facet}\n  name: (a)\n)",
+    "(  {term}  )",
+    "({term}\n  name: (a)\n)",
     // Unicode, where Rust chars and JS code units disagree if anyone is sloppy.
-    "\"héllo ({facet})\" ({facet})",
-    "; héllo\n({facet})",
-    "(x \"日本語\" ({facet}))",
+    "\"héllo ({term})\" ({term})",
+    "; héllo\n({term})",
+    "(x \"日本語\" ({term}))",
     // Must fail, and must fail on both sides.
-    "({facet}",
+    "({term}",
     "(x \"unterminated",
-    "({facet}))",
+    "({term}))",
     // Degenerate but legal.
     "",
     "()",
@@ -149,7 +150,7 @@ const CORPUS: &[&str] = &[
 
 #[derive(serde::Serialize)]
 struct Grammar<'a> {
-    facets: &'a BTreeMap<String, Vec<String>>,
+    nominal: &'a BTreeMap<String, Vec<String>>,
     node_types: Option<&'a str>,
 }
 
@@ -192,7 +193,7 @@ fn the_browsers_expander_agrees_with_this_one() {
     let grammars = grammars();
     assert!(
         !grammars.is_empty(),
-        "no roles.json found; the corpus would be vacuous"
+        "no terms.json found; the corpus would be vacuous"
     );
     assert!(
         grammars.iter().any(|(_, _, nt)| nt.is_some()),
@@ -202,8 +203,8 @@ fn the_browsers_expander_agrees_with_this_one() {
     // Build every case first, so node is started once.
     let mut cases: Vec<Case> = Vec::new();
     let mut labels: Vec<(String, String, bool)> = Vec::new();
-    for (index, (grammar, facets, node_types)) in grammars.iter().enumerate() {
-        let Some(facet) = facets.keys().next() else {
+    for (index, (grammar, nominal, node_types)) in grammars.iter().enumerate() {
+        let Some(term) = nominal.keys().next() else {
             continue;
         };
         // Both modes: without node-types (what `expand` does) and with them
@@ -215,7 +216,7 @@ fn the_browsers_expander_agrees_with_this_one() {
         };
         for &filtered in modes {
             for template in CORPUS {
-                let query = template.replace("{facet}", facet);
+                let query = template.replace("{term}", term);
                 labels.push((grammar.clone(), query.clone(), filtered));
                 cases.push(Case {
                     grammar: index,
@@ -223,9 +224,9 @@ fn the_browsers_expander_agrees_with_this_one() {
                     filtered,
                 });
             }
-            // Every facet on its own, with a field constraint, so a grammar
+            // Every nominal term on its own, with a field constraint, so a grammar
             // with an odd member list is covered rather than only its first.
-            for name in facets.keys() {
+            for name in nominal.keys() {
                 for query in [format!("({name})"), format!("({name} name: (a) @n)")] {
                     labels.push((grammar.clone(), query.clone(), filtered));
                     cases.push(Case {
@@ -241,8 +242,8 @@ fn the_browsers_expander_agrees_with_this_one() {
     let payload = Payload {
         grammars: grammars
             .iter()
-            .map(|(_, facets, nt)| Grammar {
-                facets,
+            .map(|(_, nominal, nt)| Grammar {
+                nominal,
                 node_types: nt.as_deref(),
             })
             .collect(),
@@ -302,13 +303,13 @@ fn the_browsers_expander_agrees_with_this_one() {
         if *filtered {
             filtered_cases += 1;
         }
-        let facets = &grammars[case.grammar].1;
+        let nominal = &grammars[case.grammar].1;
         let types = if *filtered {
             parsed[case.grammar].as_ref()
         } else {
             None
         };
-        let mine = treebank::expand::expand_with_types(&case.query, facets, types);
+        let mine = treebank::expand::expand_with_types(&case.query, nominal, types);
         let theirs = &answers[i];
         let mode = if *filtered { "filtered" } else { "plain" };
         match (&mine, theirs.ok) {

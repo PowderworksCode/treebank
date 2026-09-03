@@ -118,8 +118,8 @@ anonymous, and named-only traversal skips exactly what you are looking for.
 ## Queries that work across languages
 
 Every grammar carries the same vocabulary, so one query can run against
-several. Some roles are real supertypes and queryable directly; others are
-*facets*, which are lists that must be expanded first. The sources differ,
+several. Some terms are *structural* — real supertypes, queryable directly;
+others are *nominal*, lists that must be expanded first. The sources differ,
 because they must; the query does not:
 
 ```rust
@@ -145,7 +145,7 @@ typescript  function_definition, class_definition
 ```
 
 `_declaration` is a supertype, matched by derivation rather than by node name.
-`_callable`, `_binding`, `_scope` and `_clause` are facets — lists that
+`_callable`, `_binding`, `_scope` and `_clause` are nominal — lists that
 cross-cut derivations — and `query` expands them against the manifest the pack
 carries before running, so nothing has to be shipped beside the parser.
 Either way you write the same query.
@@ -158,7 +158,7 @@ branch. The pack carries `node-types.json`, so this needs nothing beside the
 parser either.
 
 `expand_query` returns the rewritten query without running it, for a caller
-with its own query engine. [The vocabulary](/concepts/two-tiers/) explains why
+with its own query engine. [The vocabulary](/concepts/terms/) explains why
 there are two kinds.
 
 ## Features

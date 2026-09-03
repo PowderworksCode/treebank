@@ -202,16 +202,16 @@ Rung 1 needs one new artifact: `narrowing.json`, per family crate, keyed
 by row. Each entry is a list of tree-sitter query patterns naming
 **out-of-row occurrences** — for `python3`: `(print_statement)`,
 `(exec_statement)`, the backtick repr, the old octal literal, the
-`except E, e:` clause shape. The pack ships it beside `roles.json` and
-expands it the way it already expands facets; `Pack::fetch("python3")`
+`except E, e:` clause shape. The pack ships it beside `terms.json` and
+expands it the way it already expands nominal terms; `Pack::fetch("python3")`
 resolves to the shared parser plus the manifest, and a narrowed parse is
 parse-then-scan: the tree comes back with its out-of-row occurrences, or
 the call refuses the file, at the consumer's option. Names are stable from day
 one — a row that later earns rung 2 keeps its name and quietly stops
 needing its manifest.
 
-The checker (`treebank roles` grows three rules, or a sibling
-`treebank narrowing` command) holds it to the standard `roles.json` set:
+The checker (`treebank terms` grows three rules, or a sibling
+`treebank narrowing` command) holds it to the standard `terms.json` set:
 
 1. Every pattern compiles against the row's grammar — a pattern naming a
    node the table cannot produce is dead text, refused.
@@ -364,7 +364,7 @@ sentence from the HCL ledger, transposed.
 Debian floor and cap lesson, `NOT NULL` needing lexical precedence
 before match length, the stranded-`ON` join fix, the quadratic-splitter
 diagnosis method ("ask which process was actually busy"), and 15/22
-table-tier terms threaded with `_modifier` demoted — the vocabulary work
+structural terms threaded with `_modifier` demoted — the vocabulary work
 transfers to `common/` nearly whole. The union grammar itself is quarry,
 not foundation.
 
@@ -437,8 +437,8 @@ note's refusal rung, argued once and cited thereafter.
   parser names, not crate suffixes; one wasm pack per row; the pack
   manifest keys stay flat names.
 - **Manifests:** `narrowing.json` per family crate, shipped in the pack
-  beside `roles.json`; checker rules of §4 in `treebank roles` or a
-  sibling command; expansion in `treebank` next to facet expansion.
+  beside `terms.json`; checker rules of §4 in `treebank terms` or a
+  sibling command; expansion in `treebank` next to nominal expansion.
 - **Ledgers:** per-row sweep blocks and locks — the
   `[corpus.javascript_sweep]` + `corpus-locks/javascript.json` precedent,
   applied everywhere a row lands. `version_policy.toml` stays per row.

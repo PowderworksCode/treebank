@@ -56,7 +56,7 @@ that mentions none of your code is usually one of these:
 
 The per-grammar query files are derived from the two files at
 `queries/highlights.scm` and `queries/locals.scm` in the repository root —
-those are the source, written against facet terms like `(_callable)`, and
+those are the source, written against nominal terms like `(_callable)`, and
 each generated copy says so in its header. Editing a generated copy in
 place fails `treebank queries --check` and is overwritten on the next
 write.
@@ -68,7 +68,7 @@ cargo run -p treebank-cli -- verify crates/treebank-<lang>
 ```
 
 which runs registration, reproducible generation, the corpus tests, the
-negative corpus, `roles`, `lint` and `rosetta` in one pass. CI's
+negative corpus, `terms`, `lint` and `rosetta` in one pass. CI's
 `grammars` matrix runs the same set a step at a time, and adds
 `treebank shape` for the grammars that have `test/shape` fixtures — c,
 cpp, java, python, ruby, rust and typescript, but not bash or zig.

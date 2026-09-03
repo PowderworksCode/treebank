@@ -19,7 +19,7 @@ include = [
   "src/*.c",
   "src/*.json",
   "src/tree_sitter/*.h",
-  "roles.json",
+  "terms.json",
   "ledger.toml",
 ]
 

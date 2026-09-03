@@ -1,7 +1,7 @@
 //! `treebank status` — one inventory of configuration, evidence and live state.
 //!
 //! The repository already has authoritative sources for each individual fact:
-//! the language registry, tree-sitter manifests, roles, ledgers, fixtures,
+//! the language registry, tree-sitter manifests, terms, ledgers, fixtures,
 //! known-deviation declarations and workflows. What it lacked was the join.
 //! This module deliberately reads those sources rather than introducing a
 //! second configuration file.
@@ -61,7 +61,7 @@ pub struct GrammarStatus {
     pub vocabulary: Option<String>,
     pub manifest: ManifestStatus,
     pub capabilities: CapabilitiesStatus,
-    pub roles: RolesStatus,
+    pub terms: TermsStatus,
     pub evidence: EvidenceStatus,
     pub tests: TestStatus,
     pub known_deviations: KnownDeviationStatus,
@@ -93,9 +93,9 @@ pub struct CapabilitiesStatus {
 }
 
 #[derive(Debug, Default, Serialize)]
-pub struct RolesStatus {
-    pub supertypes: usize,
-    pub facets: usize,
+pub struct TermsStatus {
+    pub structural: usize,
+    pub nominal: usize,
     pub named_nodes: usize,
     pub uncategorised: usize,
 }
@@ -324,7 +324,7 @@ pub fn collect(root: &Path) -> Result<Report> {
         for required in [
             "grammar.js",
             "tree-sitter.json",
-            "roles.json",
+            "terms.json",
             "ledger.toml",
             "src/grammar.json",
             "src/node-types.json",
@@ -377,7 +377,7 @@ pub fn collect(root: &Path) -> Result<Report> {
         }
 
         let manifest = read_manifest(&dir.join("tree-sitter.json"), &languages, &mut errors);
-        let roles = read_roles(&dir, &mut errors);
+        let terms = read_terms(&dir, &mut errors);
         let grammar_sha256 = match crate::grammar::source_sha256(&dir) {
             Ok(sha256) => sha256,
             Err(error) => {
@@ -438,7 +438,7 @@ pub fn collect(root: &Path) -> Result<Report> {
             vocabulary,
             manifest,
             capabilities,
-            roles,
+            terms,
             evidence,
             tests,
             known_deviations: KnownDeviationStatus {
@@ -819,29 +819,29 @@ fn read_manifest(path: &Path, languages: &[LangName], errors: &mut Vec<String>) 
     ManifestStatus { scope, file_types }
 }
 
-fn read_roles(dir: &Path, errors: &mut Vec<String>) -> RolesStatus {
-    let roles = match treebank::roles::RolesManifest::load(&dir.join("roles.json")) {
-        Ok(roles) => roles,
+fn read_terms(dir: &Path, errors: &mut Vec<String>) -> TermsStatus {
+    let terms = match treebank::terms::TermsManifest::load(&dir.join("terms.json")) {
+        Ok(terms) => terms,
         Err(error) => {
             errors.push(format!("{}: {error:#}", dir.display()));
-            return RolesStatus::default();
+            return TermsStatus::default();
         }
     };
     let nodes = match treebank::node_types::NodeTypes::load(&dir.join("src/node-types.json")) {
         Ok(nodes) => nodes,
         Err(error) => {
             errors.push(format!("{}: {error:#}", dir.display()));
-            return RolesStatus::default();
+            return TermsStatus::default();
         }
     };
-    if let Err(error) = crate::roles_check(dir) {
-        errors.push(format!("{}: roles: {error:#}", dir.display()));
+    if let Err(error) = crate::terms_check(dir) {
+        errors.push(format!("{}: terms: {error:#}", dir.display()));
     }
-    RolesStatus {
-        supertypes: nodes.supertypes.len(),
-        facets: roles.facets.len(),
+    TermsStatus {
+        structural: nodes.supertypes.len(),
+        nominal: terms.nominal.len(),
         named_nodes: nodes.named.len().saturating_sub(nodes.supertypes.len()),
-        uncategorised: roles.uncategorised.len(),
+        uncategorised: terms.uncategorised.len(),
     }
 }
 

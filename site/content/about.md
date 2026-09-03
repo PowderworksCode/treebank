@@ -21,7 +21,7 @@ for all nine. A grammar's page shows its pass rate, what it gets wrong, and
 what it declares about itself.
 
 **The grammars share a vocabulary.** A query for `(_declaration)` finds
-declarations in Rust and in Java, because the same roles are threaded through
+declarations in Rust and in Java, because the same terms are threaded through
 every grammar and checked by the same gate.
 
 **Every grammar ships the same way.** One WebAssembly file, no dependencies,

@@ -34,16 +34,16 @@ paid for by a measured incident, enforced mechanically by `treebank lint`.
 | `crates/treebank-zig` | Zig 0.11 through 0.16 in one grammar |
 | `crates/treebank-yaml` | YAML 1.1 and 1.2 in one grammar, structure decided in the scanner because it is decided by columns |
 | `crates/treebank-hcl` | HCL2 native syntax in one grammar — `.hcl`, `.tf`, `.tofu` and `.tfvars`, because Terraform and OpenTofu are dialects of HCL and add a schema rather than syntax |
-| `crates/treebank` | the vocabulary as code and data: the closed term lists, the `roles.json` facet schema, the conformance checker behind `treebank roles`, and facet query expansion |
+| `crates/treebank` | the vocabulary as code and data: the closed term lists, the `terms.json` manifest schema, the conformance checker behind `treebank terms`, and nominal query expansion |
 | `crates/treebank-lang` | the canonical language names every other crate agrees on |
 | `crates/treebank-corpus` | corpus acquisition: rank an ecosystem's packages, fetch, extract, write the manifest sweeps consume — self-contained so it can move out of this repo |
 | `crates/treebank-oracle` | reference-parser oracles behind one trait, carrying their own oracle programs |
-| `crates/treebank-cli` | `treebank` — `status` · `rank` · `fetch` · `hydrate` · `sweep` · `negative` · `roles` · `rosetta` · `oracle` |
+| `crates/treebank-cli` | `treebank` — `status` · `rank` · `fetch` · `hydrate` · `sweep` · `negative` · `terms` · `rosetta` · `oracle` |
 | `crates/treebank-preprocessing` | dead-branch elimination for C-family preprocessors: `__cplusplus` undefined for C and `201703L` for C++, which is what makes the `extern "C" {`-split-across-`#ifdef` class legible as something other than a grammar bug |
-| `test/rosetta` | the same program in every participating language, with the role counts all four must produce |
+| `test/rosetta` | the same program in every participating language, with the term counts all four must produce |
 
-Each grammar crate ships its `roles.json` and `ledger.toml` inside the
-published package, so a consumer gets the facet membership and the
+Each grammar crate ships its `terms.json` and `ledger.toml` inside the
+published package, so a consumer gets the nominal membership and the
 evidence — versions covered, pinned oracles, corpus numbers, known gaps,
 declared deviations — without fetching anything.
 
@@ -80,7 +80,7 @@ let mut parser = tree_sitter::Parser::new();
 parser.set_language(&treebank_python::LANGUAGE.into())?;
 ```
 
-Table-tier roles are queryable straight from the parser, because they are
+Structural terms are queryable straight from the parser, because they are
 real supertypes in the parse table:
 
 ```scheme
@@ -89,8 +89,8 @@ real supertypes in the parse table:
 (function_definition name: (_name) @name)
 ```
 
-Facet-tier roles (`_callable`, `_binding`, `_scope`, `_clause`) cross-cut
-derivations, so they cannot be supertypes; they ship as `ROLES` and are
+Nominal terms (`_callable`, `_binding`, `_scope`, `_clause`) cross-cut
+derivations, so they cannot be supertypes; they ship as `TERMS` and are
 expanded before the query runs.
 
 ## What is checked, on every change
@@ -99,7 +99,7 @@ expanded before the query runs.
 
 `treebank status` joins the repository's existing sources of truth rather
 than introducing another configuration file: the language registry,
-`tree-sitter.json`, `roles.json`, every `ledger.toml`, fixture and known-deviation
+`tree-sitter.json`, `terms.json`, every `ledger.toml`, fixture and known-deviation
 declarations, corpus locks and canary workflows.
 
 ```sh
@@ -131,8 +131,8 @@ Run them all for one grammar with `treebank verify crates/treebank-<lang>`.
 | reproducible generation | committed `src/` drifting from `grammar.js` at the pinned CLI |
 | corpus tests | tree *shape* regressions, not just accept/reject |
 | negative corpus | accepts-invalid-code — the direction optimizing a pass rate drifts toward, and the one no corpus of real source can reveal |
-| `treebank roles` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
-| `treebank rosetta` | a role threaded in one grammar and forgotten in another (supertype matching is derivation-based, so a missed thread is otherwise silent) |
+| `treebank terms` | vocabulary conformance: closed lists, total node coverage, containments, manifest validity |
+| `treebank rosetta` | a term threaded in one grammar and forgotten in another (structural matching is derivation-based, so a missed thread is otherwise silent) |
 | `treebank lint` | the notes/field_guide.md smells: conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner/externals drift — ratcheted per grammar by `lint_policy.toml` |
 | wasm build | a grammar that cannot cross to wasm — caught here, not in a consumer's browser |
 
@@ -238,7 +238,7 @@ fuzzer and the shape checker. What is left is the work with a decision in
 it:
 
 1. **Write the grammar.** `crates/treebank-<lang>/` — `grammar.js`,
-   `tree-sitter.json`, `roles.json`, `ledger.toml`, `build.rs`, the Rust
+   `tree-sitter.json`, `terms.json`, `ledger.toml`, `build.rs`, the Rust
    bindings, and `test/corpus` + `test/negative`. `lint_policy.toml` and
    `shape_policy.toml` are optional and arrive later: the first ratchets
    the notes/field_guide.md smells once the grammar has settled, the second

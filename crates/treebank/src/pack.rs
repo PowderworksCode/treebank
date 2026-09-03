@@ -21,9 +21,9 @@
 //! ```
 //!
 //! The module answers for itself: [`Pack::provenance`] says which grammar and
-//! what the last sweep measured, and [`Pack::roles`] returns the facet
-//! manifest that [`crate::expand`] needs, so a facet query can be expanded
-//! without shipping the grammar's `roles.json` alongside the parser.
+//! what the last sweep measured, and [`Pack::terms`] returns the nominal
+//! manifest that [`crate::expand`] needs, so a nominal query can be expanded
+//! without shipping the grammar's `terms.json` alongside the parser.
 
 use std::collections::BTreeMap;
 use std::path::Path;
@@ -54,12 +54,14 @@ pub struct Provenance {
     pub sweeps: serde_json::Value,
 }
 
-/// The facet manifest a pack carries, which is what a facet query is expanded
-/// against.
+/// The nominal manifest a pack carries, which is what a nominal query is
+/// expanded against.
 #[derive(Debug, Clone, Deserialize)]
-pub struct PackRoles {
-    #[serde(default)]
-    pub facets: BTreeMap<String, Vec<String>>,
+pub struct PackTerms {
+    /// `facets` is accepted as an alias so a pack published before the
+    /// rename still loads; see notes/vocabulary-naming.md §5.
+    #[serde(default, alias = "facets")]
+    pub nominal: BTreeMap<String, Vec<String>>,
 }
 
 const NAMED: u32 = 1;
@@ -73,12 +75,12 @@ pub struct Pack {
     memory: Memory,
     f: Abi,
     provenance: Provenance,
-    roles: PackRoles,
-    roles_raw: String,
+    terms: PackTerms,
+    terms_raw: String,
     /// node-types.json as it ships inside the module. Held as bytes and
     /// parsed on demand: it is 40-70 KB, and parsing it on every load would
-    /// cost more than the warm load itself, for something only a facet query
-    /// with a field constraint ever reads.
+    /// cost more than the warm load itself, for something only a nominal
+    /// query with a field constraint ever reads.
     node_types_raw: Option<String>,
     node_types: std::cell::OnceCell<Option<crate::node_types::NodeTypes>>,
 }
@@ -152,10 +154,17 @@ impl Pack {
         let f = Abi::bind(&instance, &mut store)?;
 
         let provenance = read_json(&mut store, &memory, &instance, "tb_provenance")?;
-        let roles_raw = read_string(&mut store, &memory, &instance, "tb_roles")?;
-        let roles = serde_json::from_str(&roles_raw).context("parsing tb_roles")?;
+        // `tb_terms` since the vocabulary rename; `tb_roles` is the same
+        // document under the old export name, and packs carrying it are
+        // still on the CDN because packs are content-addressed and are
+        // never rebuilt in place.
+        let terms_raw = match read_string(&mut store, &memory, &instance, "tb_terms") {
+            Ok(raw) => raw,
+            Err(_) => read_string(&mut store, &memory, &instance, "tb_roles")?,
+        };
+        let terms = serde_json::from_str(&terms_raw).context("parsing tb_terms")?;
         // Optional: a pack built before this export exists still parses and
-        // still expands facets, just without the filtering.
+        // still expands nominal terms, just without the filtering.
         let node_types_raw = read_string(&mut store, &memory, &instance, "tb_node_types").ok();
 
         Ok(Self {
@@ -163,8 +172,8 @@ impl Pack {
             memory,
             f,
             provenance,
-            roles,
-            roles_raw,
+            terms,
+            terms_raw,
             node_types_raw,
             node_types: std::cell::OnceCell::new(),
         })
@@ -175,19 +184,19 @@ impl Pack {
         &self.provenance
     }
 
-    /// The facet manifest, for [`crate::expand`].
-    pub fn roles(&self) -> &PackRoles {
-        &self.roles
+    /// The nominal manifest, for [`crate::expand`].
+    pub fn terms(&self) -> &PackTerms {
+        &self.terms
     }
 
-    /// The facet manifest as it ships inside the module.
+    /// The nominal manifest as it ships inside the module.
     ///
-    /// [`Pack::roles`] is the same document parsed. This is for a consumer
+    /// [`Pack::terms`] is the same document parsed. This is for a consumer
     /// that has its own representation of the vocabulary and would otherwise
     /// have to convert out of ours and back — which is how two consumers come
     /// to disagree about what a `_callable` is.
-    pub fn roles_json(&self) -> &str {
-        &self.roles_raw
+    pub fn terms_json(&self) -> &str {
+        &self.terms_raw
     }
 
     /// The node manifest as it ships inside the module, for the same reason.
@@ -217,13 +226,13 @@ impl Pack {
         &self.provenance.language
     }
 
-    /// Expand a facet query against this pack's manifest.
+    /// Expand a nominal query against this pack's manifest.
     ///
     /// `(_callable)` becomes `[(function_definition) (lambda)]`, which is what
-    /// makes a query portable across grammars: the facet is the same word
+    /// makes a query portable across grammars: the term is the same word
     /// everywhere and its members are whatever this grammar calls them.
     pub fn expand_query(&self, query: &str) -> Result<String> {
-        crate::expand::expand_with_types(query, &self.roles.facets, self.node_types())
+        crate::expand::expand_with_types(query, &self.terms.nominal, self.node_types())
     }
 
     /// Parse source text.
@@ -455,8 +464,8 @@ pub struct Capture {
 impl Pack {
     /// Run a query and collect its captures.
     ///
-    /// The query is expanded against this pack's facet manifest first, so a
-    /// role written once runs against every grammar:
+    /// The query is expanded against this pack's nominal manifest first, so a
+    /// term written once runs against every grammar:
     ///
     /// ```no_run
     /// # use treebank::Pack;
@@ -468,8 +477,8 @@ impl Pack {
     /// # Ok::<(), anyhow::Error>(())
     /// ```
     ///
-    /// `(_declaration)` is a supertype and queryable directly; `(_callable)`
-    /// is a facet and is rewritten into this grammar's members on the way in.
+    /// `(_declaration)` is structural and queryable directly; `(_callable)`
+    /// is nominal and is rewritten into this grammar's members on the way in.
     /// Either way the caller writes the same query for every language.
     pub fn query(&self, tree: &Tree<'_>, query: &str) -> Result<Vec<Capture>> {
         let expanded = self.expand_query(query)?;
@@ -478,7 +487,7 @@ impl Pack {
     }
 
     /// Run a query rooted at one node, taking the query exactly as given.
-    /// [`Pack::query`] is this plus facet expansion.
+    /// [`Pack::query`] is this plus nominal expansion.
     pub fn query_node(&self, node: &Node<'_>, expanded: &str) -> Result<Vec<Capture>> {
         let q = self.f.query.as_ref().ok_or_else(|| {
             anyhow!(
@@ -579,7 +588,7 @@ impl Pack {
 /// TSQueryError, which the C header numbers rather than names. The numbering
 /// is the header's and nothing else: an earlier version of this function
 /// invented a `predicate` variant at 5, which pushed every later value along
-/// and made a structure error -- the one a facet query hits most -- report a
+/// and made a structure error -- the one a nominal query hits most -- report a
 /// predicate the query did not contain.
 fn query_error(kind: u32) -> &'static str {
     match kind {
@@ -589,7 +598,7 @@ fn query_error(kind: u32) -> &'static str {
         4 => "the query captures something that cannot be captured",
         // TSQueryErrorStructure: the pattern's shape cannot occur. Usually a
         // field asked of a node type that does not declare it, which is what
-        // an expanded facet produces when one member lacks the field.
+        // an expanded nominal term produces when one member lacks the field.
         5 => {
             "the query asks for a shape this grammar cannot produce, \
               usually a field on a node type that does not have it"

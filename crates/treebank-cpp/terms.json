@@ -1,57 +1,96 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
-    "_parameter": "C orders the parameter position in the grammar itself: `...` is only ever last, and `void` alone is only ever the whole list, so one alternation repeated by commas necessarily accepts `f(..., int x)`. Both members are concrete node types occurring nowhere else, so facet membership selects exactly the nodes the supertype would have."
+    "_parameter": "C orders the parameter position in the grammar itself: `...` is only ever last, and `void` alone is only ever the whole list, so one alternation repeated by commas necessarily accepts `f(..., int x)`. Both members are concrete node types occurring nowhere else, so nominal membership selects exactly the nodes the structural supertype would have."
   },
-  "facets": {
+  "nominal": {
     "_binding": [
+      "alias_declaration",
       "declaration",
       "enumerator",
       "field_declaration",
+      "field_initializer",
       "function_definition",
       "init_declarator",
       "labeled_statement",
+      "lambda_capture",
+      "namespace_alias_definition",
+      "namespace_definition",
+      "optional_parameter_declaration",
       "parameter_declaration",
       "preproc_def",
       "preproc_function_def",
+      "structured_binding_declarator",
+      "template_template_parameter_declaration",
       "trailing_label",
-      "type_definition"
+      "type_definition",
+      "type_parameter_declaration",
+      "using_declaration",
+      "variadic_parameter_declaration",
+      "variadic_type_parameter_declaration"
     ],
     "_callable": [
       "function_declarator",
       "function_definition",
+      "lambda_expression",
+      "operator_name",
       "preproc_function_def"
     ],
     "_clause": [
       "asm_operand",
+      "base_class_clause",
       "bitfield_clause",
       "case_clause",
+      "catch_clause",
       "default_clause",
+      "default_method_clause",
       "else_clause",
+      "field_initializer_list",
       "generic_association",
+      "noexcept_specifier",
       "preproc_elif",
       "preproc_elifdef",
-      "preproc_else"
+      "preproc_else",
+      "requires_clause",
+      "throw_specifier",
+      "trailing_return_type"
     ],
     "_comment": [
       "comment"
     ],
     "_identifier": [
+      "destructor_name",
       "identifier",
+      "nested_namespace_specifier",
+      "operator_name",
+      "qualified_identifier",
       "type_identifier"
     ],
     "_parameter": [
+      "optional_parameter_declaration",
       "parameter_declaration",
-      "variadic_parameter"
+      "template_template_parameter_declaration",
+      "type_parameter_declaration",
+      "variadic_parameter",
+      "variadic_parameter_declaration",
+      "variadic_type_parameter_declaration"
     ],
     "_scope": [
+      "catch_clause",
+      "class_specifier",
       "compound_statement",
+      "declaration_list",
+      "field_declaration_list",
       "for_statement",
       "function_definition",
+      "lambda_expression",
+      "namespace_definition",
+      "requirement_seq",
       "translation_unit"
     ],
     "_string": [
       "concatenated_string",
+      "raw_string_literal",
       "string_literal",
       "system_lib_string"
     ]
@@ -72,6 +111,14 @@
     {
       "node": "abstract_pointer_declarator",
       "reason": "the same, for the `*`"
+    },
+    {
+      "node": "abstract_reference_declarator",
+      "reason": "the declarator spine of a reference type with no name in it — the `&` of `void f(int&)`"
+    },
+    {
+      "node": "access_specifier",
+      "reason": "`public`, `private`, `protected` as a bare keyword: in a base clause it says how a base is inherited, and with a colon it forms an `access_label`. It is deliberately not a `_modifier` — admitting it as one made `class W { public int x; };`, a `public:` with the colon left out, parse as a field with a modifier"
     },
     {
       "node": "argument_list",
@@ -98,6 +145,10 @@
       "reason": "a declarator carrying a GNU attribute; the attribute is the `_attribute` and the declarator is inside it"
     },
     {
+      "node": "cast_kind",
+      "reason": "which named cast this is — `static_cast`, `dynamic_cast`, `const_cast`, `reinterpret_cast`. It is a field of the cast rather than a construct of its own, and collapsing the four into one node is exactly what this exists to avoid"
+    },
+    {
       "node": "comma_expression",
       "reason": "the comma operator. Not a member of `_expression`, and C's own grammar draws the same line — it splits `expression` from `assignment-expression` because a comma inside an argument list separates arguments. Admitting it into `_expression` would make `f(a, b)` ambiguous with `f((a, b))` at every call in the corpus"
     },
@@ -118,16 +169,8 @@
       "reason": "`__extension__`, which suppresses a pedantic diagnostic. It alters no meaning, so it is not a `_modifier`, and it annotates nothing, so it is not an `_attribute`"
     },
     {
-      "node": "field_declaration_list",
-      "reason": "the braced member list of a struct or union. Deliberately not `_body`: rust and typescript both keep `_body` to the EXECUTABLE body of a definition, and this list's contents are answered for by `_member`"
-    },
-    {
       "node": "field_designator",
       "reason": "the `.field` of a designated initializer"
-    },
-    {
-      "node": "identifier_list",
-      "reason": "the K&R parameter-name list, `f(a, b)` before the declarations that type them — names in a list, not parameters yet"
     },
     {
       "node": "initializer_list",
@@ -136,6 +179,14 @@
     {
       "node": "initializer_pair",
       "reason": "`.field = v` — a designator and a value. It binds a POSITION, not a name, so it is not a `_binding`"
+    },
+    {
+      "node": "lambda_capture_specifier",
+      "reason": "the `[…]` that opens a lambda. It is what makes a lambda recognisable at its first character, which is the only reason `[` in expression position is tractable at all"
+    },
+    {
+      "node": "lambda_default_capture",
+      "reason": "the `=` or `&` that opens a capture list and says what the unlisted names do"
     },
     {
       "node": "macro_attribute",
@@ -182,8 +233,32 @@
       "reason": "a function-like macro's parameter list, which is not a `_parameter` position of the language — the names it binds are text, not values"
     },
     {
+      "node": "ref_qualifier",
+      "reason": "the `&` or `&&` after a member function's parameters, which says which value category the object must have"
+    },
+    {
+      "node": "reference_declarator",
+      "reason": "the declarator spine of a reference: what a name is wrapped in to say it is `T&` or `T&&`. Same status as C's pointer declarator, which declares nothing on its own"
+    },
+    {
       "node": "subscript_designator",
       "reason": "the `[3]` or `[0 ... 7]` of one"
+    },
+    {
+      "node": "template_argument_list",
+      "reason": "the `<int, 4>` of an instantiation. Its elements are types and expressions rather than `_argument`s: a template argument is an argument to the COMPILER, not to a callable"
+    },
+    {
+      "node": "template_parameter_list",
+      "reason": "the `<typename T>` of a template. Its elements are `_parameter`s and are listed there; the list itself is the bracket around them"
+    },
+    {
+      "node": "type_descriptor",
+      "reason": "a type plus an abstract declarator, in the positions where a type is an OPERAND: a cast, `sizeof`, a template argument, an alias declaration. Not a member of `_type`, which is threaded over the type specifiers — and C++'s own grammar agrees, giving `type-id` a nonterminal of its own. In C it is covered through `_argument`; C++ does not admit a bare type where an argument goes, so here it needs an entry"
+    },
+    {
+      "node": "unexpanded_macro",
+      "reason": "a macro in a namespace head or body — `namespace std _GLIBCXX_VISIBILITY(default) { … }`, `_GLIBCXX_BEGIN_NAMESPACE_VERSION`. It is the hole the preprocessor would have filled: not a declaration, not a statement, not a directive. Reachable from those two positions only, and the ledger says why"
     }
   ]
 }

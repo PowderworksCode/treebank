@@ -26,13 +26,13 @@
  * distribution's C is written in, and every one of them is in the table.
  *
  * `_pattern` and `_interpolation` are not threaded — C has neither.
- * `_parameter` is demoted to the facet tier; see roles.json for why.
+ * `_parameter` is demoted to nominal; see terms.json for why.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 // C's own precedence ladder, from the standard's grammar. Nothing here is
 // invented: the numbers are the order of the productions in C11 6.5.
@@ -76,7 +76,7 @@ module.exports = grammar({
     $.comment,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
     '_declaration',
@@ -96,12 +96,12 @@ module.exports = grammar({
     '_assignment',
     '_invocation',
     '_access',
-    // `_parameter` is demoted to the facet tier here. A C parameter list is
+    // `_parameter` is demoted to nominal here. A C parameter list is
     // ordered by the grammar itself — `...` is only ever last, and `void`
     // alone is only ever the whole list — so one alternation repeated by
     // commas necessarily accepts `f(..., int x)`. Both members are concrete
-    // node types occurring nowhere else, so the facet selects exactly the
-    // nodes the supertype would have (notes/DESIGN.md §3.1.1). See roles.json.
+    // node types occurring nowhere else, so nominal membership selects exactly the
+    // nodes the supertype would have (notes/DESIGN.md §3.1.1). See terms.json.
     ...tb.assertDemotable([]),
   ]).map((name) => $[name]),
 
@@ -445,7 +445,7 @@ module.exports = grammar({
     // attributes on either side of exactly one type. C really does allow
     // `const static unsigned int` in any order, so one unordered repetition
     // is the correct rule and not a shortcut — which is why `_modifier`
-    // stays in the TABLE tier here where rust had to demote it.
+    // stays STRUCTURAL here where rust had to demote it.
     _declaration_specifiers: $ => seq(
       repeat(choice($._declaration_modifiers, $.macro_modifier)),
       field('type', $._type),

@@ -1,6 +1,6 @@
 {
   "vocabulary": "0.1.0",
-  "facets": {
+  "nominal": {
     "_callable": ["function_definition", "lambda"],
     "_scope": ["module", "function_definition", "lambda"]
   },

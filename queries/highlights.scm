@@ -7,11 +7,11 @@
 ;
 ; Two kinds of term appear:
 ;
-;   - A SUPERTYPE is a real rule threaded through the productions, so
-;     tree-sitter matches it natively by derivation.
-;   - A FACET is a list in the grammar's roles.json. It cannot be a rule, so
-;     it is expanded into an alternation of that grammar's own members when
-;     the per-grammar file is generated.
+;   - A STRUCTURAL term is a real supertype threaded through the productions,
+;     so tree-sitter matches it natively by derivation.
+;   - A NOMINAL term is a list of node types in the grammar's terms.json. It
+;     cannot be a rule, so it is expanded into an alternation of that
+;     grammar's own members when the per-grammar file is generated.
 ;
 ; This file is the source. The files under crates/treebank-<lang>/queries/
 ; are GENERATED from it by `treebank queries --write` and checked by

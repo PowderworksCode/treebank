@@ -11,8 +11,8 @@ generate_cli = '0.26.12'
 vocabulary = '0.1.0'
 parser_note = '''
 `src/parser.c` is 20 MB, the largest in this repository by a factor of two over typescript's 11 MB, and it is worth saying why rather than letting a reader assume the grammar is careless. Zig's expression grammar is a four-deep chain of categories -- `_expression`, `_type_operand`, `_init_type`, `_suffix_expression` -- that exists because a type IS an expression here and the `{` of an initializer has to be told apart from the `{` of a body at every one of those positions. The precedences that separate them force the generator to keep states distinct that a language with a separate type grammar would merge. It costs generate time (40 s in CI against 2 s for the other grammars) and nothing at parse time; the sweep runs 17,168 files through it in under a minute.'''
-roles_note = '''
-19 of 22 table-tier terms are threaded, and the three that are not are facts about Zig.
+vocabulary_note = '''
+19 of 22 structural terms are threaded, and the three that are not are facts about Zig.
 
 `_pattern` has no member. Zig has no pattern syntax: a `switch` prong holds VALUES and ranges (`.red`, `1...5`), not patterns, and a capture `|x|` binds names with no structure to destructure. Destructuring assignment is the nearest thing and is an assignment, not a pattern language.
 
@@ -20,7 +20,7 @@ roles_note = '''
 
 `_interpolation` has no member. Zig strings do not interpolate; `std.fmt` reads its `{}` at run time from an ordinary string, which is not syntax.
 
-`_parameter` and `_modifier` are DEMOTED to the facet tier rather than omitted; the reasons are in roles.json and are the same shape as rust's.
+`_parameter` and `_modifier` are DEMOTED to nominal rather than omitted; the reasons are in terms.json and are the same shape as rust's.
 
 Three threadings are worth stating because a reader would otherwise assume the opposite.
 

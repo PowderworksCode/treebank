@@ -16,7 +16,7 @@ import {
   Grammar,
   groupsOf,
   precedences,
-  roleIndex,
+  termIndex,
   toEbnf,
   toRr,
 } from "./grammar.mjs";
@@ -60,33 +60,33 @@ function stats(g, precs) {
     .join("")}</div>`;
 }
 
-function vocabulary(g, table, facet) {
+function vocabulary(g, structural, nominal) {
   const parts = [];
   for (const [title, group, cls] of [
-    ["Supertypes", table, "sup"],
-    ["Facets", facet, "fac"],
+    ["Structural", structural, "sup"],
+    ["Nominal", nominal, "fac"],
   ]) {
-    const roles = Object.keys(group).sort();
-    if (!roles.length) continue;
+    const terms = Object.keys(group).sort();
+    if (!terms.length) continue;
     parts.push(`<h3 class="vh">${title}</h3><dl class="vocab">`);
-    for (const role of roles) {
-      const links = group[role]
+    for (const term of terms) {
+      const links = group[term]
         .map((m) =>
           m in g.rules
             ? `<a href="#r-${E(m)}">${E(m)}</a>`
             : `<span class="dead">${E(m)}</span>`,
         )
         .join("");
-      parts.push(`<dt class="${cls}">${E(role)}</dt><dd>${links}</dd>`);
+      parts.push(`<dt class="${cls}">${E(term)}</dt><dd>${links}</dd>`);
     }
     parts.push("</dl>");
   }
   if (!parts.length) return "";
   return `<h2 id="vocabulary">Vocabulary</h2>
-<p>The roles a query may name. A <b>supertype</b> is threaded through the
-productions, so <code>(_expression)</code> matches where the parse went through
-it. A <b>facet</b> is a list of node types in <code>roles.json</code>, expanded
-when the query loads.</p>${parts.join("")}`;
+<p>The terms a query may name. A <b>structural</b> term is threaded through the
+productions as a real supertype, so <code>(_expression)</code> matches where the
+parse went through it. A <b>nominal</b> term is a list of node types in
+<code>terms.json</code>, expanded when the query loads.</p>${parts.join("")}`;
 }
 
 function precedenceTable(precs) {
@@ -220,7 +220,7 @@ function wire(root, g) {
 
 export function render(root, bundle, status) {
   const g = new Grammar(bundle);
-  const { table, facet } = roleIndex(g);
+  const { structural, nominal } = termIndex(g);
   const precs = precedences(g);
   const groups = groupsOf(g, table);
 
@@ -253,7 +253,7 @@ export function render(root, bundle, status) {
 <div class="idx-scroll">${rail}</div></nav>
 <div class="grammar-main">
 ${status ? grammarStatus(status.grammars?.[g.name], g.name) : ""}
-${vocabulary(g, table, facet)}
+${vocabulary(g, structural, nominal)}
 ${precedenceTable(precs)}
 <h2 id="productions">Productions</h2>
 <div class="key"><span><i class="k-term"></i>literal text</span>

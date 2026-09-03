@@ -1,13 +1,13 @@
 //! The rosetta gate (notes/DESIGN.md §5.4): the same program, written in every
-//! owned language, must yield the same role counts.
+//! owned language, must yield the same term counts.
 //!
 //! This is the executable form of the promise that the shared vocabulary
 //! means the same thing everywhere. It is the only check that catches a
-//! role threaded in one grammar and forgotten in another — supertype
+//! term threaded in one grammar and forgotten in another — structural
 //! matching is derivation-based, so a missed thread produces no error,
 //! just silence.
 //!
-//! Facet queries are expanded through the grammar's own `roles.json`
+//! Nominal queries are expanded through the grammar's own `terms.json`
 //! before running, so `(_callable)` is testable here exactly as a
 //! consumer would use it through treebank.
 
@@ -78,8 +78,8 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
             }
             let grammar_dir = crates_dir.join(lang.grammar_crate());
             let (language, _) = crate::grammar::load(&grammar_dir)?;
-            let roles = treebank::roles::RolesManifest::load(&grammar_dir.join("roles.json"))?;
-            let facets: BTreeMap<String, Vec<String>> = roles.facets.into_iter().collect();
+            let terms = treebank::terms::TermsManifest::load(&grammar_dir.join("terms.json"))?;
+            let nominal: BTreeMap<String, Vec<String>> = terms.nominal.into_iter().collect();
             let node_types =
                 treebank::node_types::NodeTypes::load(&grammar_dir.join("src/node-types.json"))?;
 
@@ -98,7 +98,7 @@ fn run_inner(dir: &Path, crates_dir: &Path, quiet: bool) -> Result<()> {
 
             for (query_src, want) in &expected.queries {
                 let expanded =
-                    treebank::expand::expand_with_types(query_src, &facets, Some(&node_types))?;
+                    treebank::expand::expand_with_types(query_src, &nominal, Some(&node_types))?;
                 let query = tree_sitter::Query::new(&language, &expanded)
                     .with_context(|| format!("{name}/{lang}: bad query `{query_src}`"))?;
                 let mut cursor = tree_sitter::QueryCursor::new();

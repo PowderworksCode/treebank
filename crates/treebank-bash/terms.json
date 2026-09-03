@@ -1,6 +1,6 @@
 {
   "vocabulary": "0.1.0",
-  "facets": {
+  "nominal": {
     "_binding": [
       "c_style_for_statement",
       "declaration_command",
