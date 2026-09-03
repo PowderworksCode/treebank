@@ -23,6 +23,13 @@ pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 /// The grammar's facet manifest (`roles.json`).
 pub const ROLES: &str = include_str!("../../roles.json");
 
+/// The family's narrowing manifest (`narrowing.json`): for each row that
+/// shares this parse table, the constructs that row does not claim
+/// (notes/DESIGN.md §4.2). `python3` narrows away the py2 statement forms;
+/// `python2` narrows what it can and declares the residue it cannot, which
+/// is the priced case for giving it a table of its own.
+pub const NARROWING: &str = include_str!("../../narrowing.json");
+
 /// The grammar's evidence file (`ledger.toml`): versions covered, pinned
 /// oracles, corpus and sweep numbers, known gaps and declared deviations.
 ///

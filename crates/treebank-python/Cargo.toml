@@ -20,6 +20,7 @@ include = [
   "src/*.json",
   "src/tree_sitter/*.h",
   "roles.json",
+  "narrowing.json",
   "ledger.toml",
 ]
 
