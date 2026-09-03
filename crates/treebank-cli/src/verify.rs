@@ -80,6 +80,21 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
         }
     }
 
+    // 4a. Narrowing, for a family crate that carries rung-1 rows over this
+    //     grammar's table. Silent for the crates that carry none, because
+    //     most languages present exactly one row.
+    match crate::narrow::check(grammar_dir) {
+        Ok(summary) => {
+            if !summary.starts_with("no narrowing.json") {
+                println!("  narrowing     {summary}");
+            }
+        }
+        Err(e) => {
+            println!("  narrowing     FAIL: {e}");
+            failed.push("narrowing");
+        }
+    }
+
     // 4b. The notes/field_guide.md smell detector, enforced where the grammar
     //     has written its lint_policy.toml ratchets, advisory otherwise.
     match crate::lint::run(grammar_dir) {

@@ -29,6 +29,7 @@ pub mod check;
 pub mod expand;
 #[cfg(feature = "fetch-bytes")]
 pub mod fetch;
+pub mod narrowing;
 pub mod node_types;
 #[cfg(feature = "pack")]
 pub mod pack;

@@ -5,6 +5,7 @@ mod incremental;
 mod kinds;
 mod lint;
 mod mutate;
+mod narrow;
 mod queries;
 mod recovery;
 mod reformat;
@@ -335,6 +336,22 @@ enum Cmd {
         /// Grammar crate root: reads src/node-types.json and roles.json
         grammar: PathBuf,
     },
+    /// Check a family crate's narrowing.json, or scan files for one row's
+    /// out-of-row occurrences (notes/DESIGN.md §4.2). A rung-1 row shares
+    /// its family's parse table and accepts less than that table does; this
+    /// is what makes the difference checkable rather than asserted
+    Narrow {
+        /// Family crate root: reads narrowing.json and the grammar
+        grammar: PathBuf,
+        /// Row to scan for, e.g. `python3`. Omit to check the manifest
+        /// instead: every pattern compiles, and every pattern matches the
+        /// fixture it names
+        #[arg(long)]
+        row: Option<String>,
+        /// Files to scan. Exits non-zero when any carries an out-of-row
+        /// occurrence, which is the refusing half of a narrowed parse
+        files: Vec<PathBuf>,
+    },
     /// Generate each grammar's query files from queries/*.scm, expanding
     /// facets into that grammar's own node types
     Queries {
@@ -464,6 +481,38 @@ fn ledger_vocabulary_finding(grammar_dir: &std::path::Path, expected: &str) -> O
     let stated = v.get("vocabulary")?.as_str()?;
     (stated != expected)
         .then(|| format!("ledger.toml states vocabulary {stated} but treebank carries {expected}"))
+}
+
+fn narrow_cmd(
+    grammar_dir: &std::path::Path,
+    row: Option<&str>,
+    files: &[PathBuf],
+) -> anyhow::Result<()> {
+    let Some(row) = row else {
+        println!("narrowing OK: {}", narrow::check(grammar_dir)?);
+        return Ok(());
+    };
+    if files.is_empty() {
+        anyhow::bail!("--row {row} needs files to scan");
+    }
+    let found = narrow::scan(grammar_dir, row, files)?;
+    for (path, occ) in &found {
+        println!("{}:{occ}", path.display());
+    }
+    if found.is_empty() {
+        println!(
+            "{} file(s) are within the {row} row",
+            files.len()
+        );
+        return Ok(());
+    }
+    // The refusing half of a narrowed parse. What this does NOT say is that
+    // these files are python2: an occurrence outside a row is a fact about
+    // the occurrence, and the file's row is the oracle's question (§4.3).
+    anyhow::bail!(
+        "{} out-of-row occurrence(s) for {row}",
+        found.len()
+    )
 }
 
 fn roles_cmd(grammar_dir: &std::path::Path) -> anyhow::Result<()> {
@@ -735,6 +784,7 @@ fn main() -> anyhow::Result<()> {
         ),
         Cmd::Lint { grammar } => lint::run(&grammar),
         Cmd::Roles { grammar } => roles_cmd(&grammar),
+        Cmd::Narrow { grammar, row, files } => narrow_cmd(&grammar, row.as_deref(), &files),
         Cmd::Queries {
             source,
             crates,

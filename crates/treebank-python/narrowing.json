@@ -1,0 +1,92 @@
+{
+  "vocabulary": "0.1.0",
+  "grammar": "python",
+  "rows": {
+    "python3": {
+      "covers": "Python 3.x. The union table's readings are already this row's, because notes/DESIGN.md 4.2 gives the latest version the reading wherever two collide -- which is why this row narrows completely and python2 below does not.",
+      "out_of_row": [
+        {
+          "construct": "py2 print statement",
+          "pattern": "(print_statement) @m",
+          "valid_in": "2.7",
+          "fixture": "test/narrowing/python3/print-statement.py"
+        },
+        {
+          "construct": "py2 exec statement",
+          "pattern": "(exec_statement) @m",
+          "valid_in": "2.7",
+          "fixture": "test/narrowing/python3/exec-statement.py"
+        },
+        {
+          "construct": "py2 backtick repr",
+          "pattern": "(repr_expression) @m",
+          "valid_in": "2.7",
+          "fixture": "test/narrowing/python3/backticks.py"
+        },
+        {
+          "construct": "py2 except clause with a comma before the alias",
+          "pattern": "(except_clause \",\") @m",
+          "valid_in": "2.7",
+          "fixture": "test/narrowing/python3/except-comma.py"
+        },
+        {
+          "construct": "py2 octal literal written with a bare leading zero",
+          "pattern": "((integer) @m (#match? @m \"^0[0-7_]*[1-7][0-7_]*$\"))",
+          "valid_in": "2.7",
+          "fixture": "test/narrowing/python3/octal-literal.py"
+        },
+        {
+          "construct": "py2 long integer suffix",
+          "pattern": "((integer) @m (#match? @m \"[lL]$\"))",
+          "valid_in": "2.7",
+          "fixture": "test/narrowing/python3/long-suffix.py"
+        }
+      ],
+      "residue": []
+    },
+    "python2": {
+      "covers": "Python 2.7. This row is narrowable only in part, and the residue below is the reason -- it is the priced case for giving python2 a parse table of its own rather than a manifest over this one.",
+      "out_of_row": [
+        {
+          "construct": "f-string interpolation",
+          "pattern": "(interpolation) @m",
+          "valid_in": "3.6 and later",
+          "since": "3.6",
+          "fixture": "test/narrowing/python2/fstring.py"
+        },
+        {
+          "construct": "assignment expression, the walrus",
+          "pattern": "(named_expression) @m",
+          "valid_in": "3.8 and later",
+          "since": "3.8",
+          "fixture": "test/narrowing/python2/walrus.py"
+        },
+        {
+          "construct": "nonlocal statement",
+          "pattern": "(nonlocal_statement) @m",
+          "valid_in": "3.0 and later",
+          "since": "3.0",
+          "fixture": "test/narrowing/python2/nonlocal.py"
+        }
+      ],
+      "residue": [
+        {
+          "construct": "print (x)",
+          "why": "The shared table reads it as a call, which is py3's reading and the one 4.2 awards when two versions collide. A py2 consumer needs the print STATEMENT, and no manifest supplies a reading -- narrowing runs after the parse."
+        },
+        {
+          "construct": "print >> f, x",
+          "why": "Read as a tuple whose head is a right shift, again py3's reading. print_statement carries prec.dynamic(-1) so the expression wins; the python ledger records this as a deviation."
+        },
+        {
+          "construct": "True = 5",
+          "why": "Does not parse at all. True/False/None are hard keywords in this table because py3 made them so, and a manifest cannot hand back a parse the table refused."
+        },
+        {
+          "construct": "(True, False) = (1, 0)",
+          "why": "Same cause as True = 5, and it is a real corpus file: the python ledger carries it as an undeclared gap found in pycrypto."
+        }
+      ]
+    }
+  }
+}
