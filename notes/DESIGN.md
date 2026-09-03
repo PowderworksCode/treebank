@@ -4,7 +4,7 @@ Treebank is a set of tree-sitter grammars written from scratch and owned
 outright — no upstream grammar repos, no forks, no vendored trees anywhere in
 the system. **Initial languages: Python, Rust, TypeScript.**
 
-Three ideas define it:
+Four ideas define it:
 
 1. **A shared node vocabulary, enforced in the parse table.** Every treebank
    grammar carries the same set of supertypes — `_declaration`, `_loop`,
@@ -20,6 +20,12 @@ Three ideas define it:
    of real published code, every failure is adjudicated by the language's
    reference parser, and every claim of correctness is a number over a named
    corpus — never an assertion.
+4. **Everything a file can say about itself, and nothing more.** Beyond the
+   parse, treebank answers what a grammar alone can answer about one file:
+   which definitions it holds, what names they bind, which reference resolves
+   to which binding, and what identity those carry across commits (§9). A
+   toolchain may check any of it and is never required to produce it. Anything
+   needing a package graph or a type checker belongs to a layer above.
 
 The grammars ship as Rust crates and as wasm, from one repository.
 
@@ -1183,6 +1189,27 @@ test/rosetta/                 # parallel programs + expected-roles files
    could be an impossible pattern under 0.26, which is how the
    supertype-field rule in `treebank-rust/ledger.toml` came to light.
 
+7. **Symbols are SCIP, with every symbol local.** The descriptor grammar is
+   adopted rather than invented, and `local <id>` makes a locals-only index a
+   valid index — so treebank emits identity without waiting on a package
+   graph, and the layer above promotes rather than reformats (§9.3). The
+   alternative, a treebank-specific symbol spelling, was rejected because it
+   forfeits rust-analyzer's index as a free oracle.
+8. **Fields join the closed vocabulary** (§9.4.2). Node names are already
+   shared by decision 4; leaving fields unchecked means a traversal can read
+   `name:` and silently return nothing on a grammar that spells it `pattern:`.
+   Where syntax genuinely differs the answer is two fields with a documented
+   relationship, never one field that lies.
+9. **Resolution is lexical only, and says so in three columns.** Scope and
+   binding tables ship per grammar and one resolver consumes them (§9.6).
+   `a.b` is refused rather than guessed, and the ledger separates *resolved*,
+   *refused by design* and *unknown* — only the third is a defect.
+10. **A second coverage number, on the analysis denominator** (§9.5). The
+    editor-query coverage table answers a different question with a wider
+    tolerance; a highlighter that misses a node leaves it uncoloured, while a
+    resolver that misses a binding construct is wrong about every reference to
+    it.
+
 ## 8. Order of work
 
 `treebank` (vocabulary + checker + expansion) → **Python** → **Rust** →
@@ -1306,3 +1333,307 @@ Three things generalise from that, and none of them is about C:
    after a lost brace. §5.12's table and the C ledger both record it. A
    grammar that only ever measures what it accepts will trade this away
    without noticing.
+
+## 9. What a file can say about itself
+
+Sections 1–8 describe grammars and how they are validated. This section
+describes what treebank is being widened to do with them: to answer, from a
+grammar and one file, the questions a consumer would otherwise reach for a
+toolchain to answer — which definitions a file contains, what names they bind,
+which reference resolves to which binding, and what identity all of that has
+across commits.
+
+The boundary is worth stating once and not relitigating. Work that needs only
+a grammar is treebank's; work that needs a real toolchain — a package graph, a
+type checker, anything that reads a manifest — belongs to propbank, and
+per-language facts that neither a grammar nor a toolchain yields belong to
+langbank. Everything below stays on the near side of that line.
+
+### 9.1 The invariant: toolchains on the bench, never in the box
+
+§4 already validates every grammar against the language's own reference
+parser, and §5 turns that into numbers. The same arrangement governs
+everything in this section: **a toolchain may be used to check what treebank
+produces and may never be required to produce it.** What ships is still one
+wasm file per language with no dependencies, and a consumer with neither
+`python` nor `rustc` installed gets the same answers as one with both.
+
+That is the only placement rule needed. If answering a question at run time
+requires a second file, a manifest, or a compiler, the question is not
+treebank's — however syntactic it looks.
+
+### 9.2 Identity, and the failure that motivates it
+
+A traversal over `_scope` and `_callable` yields a scope chain for every
+definition, and the same traversal works across grammars. Measured with the
+published 0.3.0 packs, one 40-line walk over Python and TypeScript:
+
+```
+python      ["helper", "main"]
+typescript  ["helper", "main"]
+```
+
+The same walk over the Python file after a refactor that moves `helper` into
+a class:
+
+```
+before  ["helper", "main"]
+after   ["Util", "Util::helper", "main"]
+```
+
+That is the problem in one line. `helper` and `Util::helper` are the same
+function; the chain says they are two. Anything keyed on the chain — a stored
+baseline, a diff between two commits, a join between a fact derived here and
+an observation made elsewhere — reads a move as a deletion plus an addition.
+An identity that carries the file path fails the same way on a rename.
+
+A chain is the right raw material and not the whole answer. What is missing is
+a canonical spelling with a documented rule for what survives a move, and that
+is a vocabulary question rather than a traversal question.
+
+### 9.3 The output format is SCIP, and it is not invented here
+
+SCIP's symbol grammar is:
+
+```
+<symbol>     ::= <scheme> ' ' <package> ' ' (<descriptor>)+ | 'local ' <local-id>
+<descriptor> ::= <namespace> | <type> | <term> | <method> | <parameter> | …
+<namespace>  ::= <name> '/'      <type>   ::= <name> '#'
+<term>       ::= <name> '.'      <method> ::= <name> '(' (<disambiguator>)? ').'
+```
+
+The second alternative is what makes it usable here. `local <id>` is a
+first-class symbol, so **an index in which every symbol is local is a valid
+index**. Package-qualified symbols need a `<package>`, which needs a manifest,
+which is propbank's — and treebank does not have to wait for it or invent a
+placeholder for it.
+
+The layering rule to preserve: each layer emits a valid index, and later
+layers **promote** symbols rather than reformat them. Treebank's index carries
+definitions, intra-file references, and every symbol local. Propbank's is the
+same index with locals promoted where a package can be named. Two consequences
+worth having: a consumer can stop at treebank and still hold something usable,
+and the difference between the two indexes is a number — how many locals were
+promoted — measurable the same way as everything else in this document.
+
+Adopting the grammar rather than inventing one also buys an oracle. rust-
+analyzer emits SCIP and is maintained by the Rust project; its index over the
+same source is a check on treebank's Rust identities that costs nothing to
+run. That is the §4 arrangement again, applied to symbols instead of parses.
+
+### 9.4 Vocabulary additions
+
+Four terms are wanted. The list in §3.2 is closed, so each is a vocabulary
+change applying to every language at once, and each is stated here in the form
+§3.2 requires: what the term means syntactically, and what it refuses to mean.
+
+#### 9.4.1 Binding kind
+
+`_binding` says a node introduces a name. It does not say what kind of thing
+the name denotes, and the SCIP descriptor suffix depends on exactly that: `/`
+for a namespace, `#` for a type, `.` for a term, `().` for a method.
+
+§1 rules out `_class`, `_function` and `_variable` as semantic
+classifications, and rightly — they do not survive contact with eleven
+languages. The distinction wanted here is narrower and stays syntactic: not
+*is this a Method* but *which descriptor suffix does the name this construct
+binds take*. That is decided once per node type, by the construct rather than
+by the occurrence, so it belongs as a field on each `_binding` member in
+`roles.json` rather than as four new facets. Python's `_binding` has 23
+members today; this adds one field to each.
+
+Where a construct genuinely binds more than one kind, the honest answer is to
+record both and let the consumer refuse rather than pick.
+
+#### 9.4.2 The field vocabulary — measured
+
+§7 decision 4 commits to shared concrete names and fields across grammars,
+diverging only where syntax genuinely differs. Node names hold up under that.
+Fields are close and unchecked, and the gap is silent.
+
+Parsed with the published 0.3.0 packs, the same program in each language:
+
+```
+python      (function_definition name: … parameters: (parameters
+              (parameter name: (identifier))) body: (block …))
+typescript  (function_definition name: … parameters: (parameters
+              (parameter pattern: (identifier) type: …)) body: (block …))
+
+python      (assignment left: (identifier) right: (call_expression …))
+typescript  (variable_declaration (variable_declarator
+              name: (identifier) value: (call_expression …)))
+```
+
+Every node name matches. `parameter` carries `name:` in Python and `pattern:`
+in TypeScript; Python's `assignment` uses `left:`/`right:` where TypeScript's
+`variable_declarator` uses `name:`/`value:`. A traversal that reads `name:`
+works on Python and returns nothing on TypeScript — no error, no warning,
+which is the failure mode §2 fact 1 exists to prevent for supertypes and which
+fields have no equivalent protection against.
+
+`field_map.json` does not cover this. It maps one grammar's fields onto its
+oracle's labelled edges — a conformance artifact, per grammar — and its own
+`unlabelled_note` already names half the problem: "an unnamed edge is one a
+consumer cannot query by role." A *differently* named edge is the other half,
+and it is worse, because an absent field announces itself and a wrong one does
+not.
+
+So fields need what the terms got: a closed list in `vocabulary.json`, a
+per-grammar declaration, and a rule in `treebank roles` that every declared
+field exists in `node-types.json` and every vocabulary field a grammar can
+express is spelled the same way.
+
+One case will not unify by renaming. A TypeScript parameter can be a
+destructuring pattern where a Python parameter is a name, so `pattern:` and
+`name:` are two claims and not one — the same judgment §3.1.1 made for
+`_parameter` across tiers, and the same resolution: two fields with a
+documented relationship beats one field that lies.
+
+#### 9.4.3 `_discarded`
+
+An expression whose value goes nowhere. Measured on the 0.3.0 packs with one
+pattern carrying no language-specific node name, against CPython's own
+bytecode as the oracle:
+
+```
+(expression_statement (call_expression) @discarded)
+
+treebank, python       helper(3)  ·  print(total)  ·  xs.append(1)
+CPython CALL + POP_TOP the same three, same lines
+treebank, typescript   helper(3)  ·  console.log(total)  ·  xs.push(1)
+```
+
+Exact where it applies. It applies by tree shape rather than by role, which is
+what makes it the wrong mechanism: it works because Python and TypeScript both
+wrap the call in `expression_statement`, and in an expression-oriented
+language a discarded value need not be a statement at all — Rust's
+block-trailing expression is the case that breaks it. A shape match that holds
+in two grammars and fails in a third is precisely what the vocabulary exists
+to replace.
+
+`_discarded` threads where the parse can carry it and lists as a facet where
+it cannot, per §3.1.1.
+
+#### 9.4.4 Parameter binding mode
+
+Whether a callee can write through a parameter: `&mut` in Rust, every object
+reference in Python and TypeScript, `const` and by-value in C++. Syntax
+answers part of this and types answer the rest, so the term has to say which
+part it answers — the refusal `_literal` already makes by quantifying over the
+rule rather than the instance. A grammar that cannot decide from syntax
+declares the term absent rather than guessing.
+
+### 9.5 Coverage, on the denominator that decides this
+
+The published table measures the generated editor query file against every
+named node: 61.6% for bash, 46.9% for Python, 37.0% for C. That is the right
+number for the question it answers — how much of a file a highlight query
+colours — and the wrong one for this section.
+
+Analysis has a different denominator and a much narrower tolerance. The
+question is what share of **callable, parameter, invocation, binding, access,
+loop, jump and branch sites** the vocabulary covers, and the difference in
+tolerance is the point: a highlighter that misses a node leaves it
+uncoloured, while a resolver that misses one binding construct returns a wrong
+answer for every reference to it. Degradation is graceful in one case and
+silent in the other.
+
+The ledger gains a second coverage table over those roles, on the same
+corpora. It is cheap — the corpora and the sweep exist — and until it exists
+there is no evidence that the vocabulary can carry §9.6.
+
+### 9.6 Scope tables, and resolution
+
+Resolution is three passes: `_scope` nodes build the scope tree, `_binding`
+nodes place names into scopes, and every `_identifier` that is not a binding's
+own name walks the chain outward. The traversal is shared and language-
+agnostic. What diverges is where a binding lands and when it becomes visible,
+and that is data:
+
+```json
+"parameter":        { "into": "own-body", "visible": "whole", "rebind": "new",   "ns": "value" },
+"assignment":       { "into": "function", "visible": "whole", "rebind": "write", "ns": "value" },
+"for_statement":    { "into": "function", "visible": "after", "rebind": "write", "ns": "value" },
+"global_statement": { "into": "module",                       "rebind": "alias" }
+```
+
+- `into` — which enclosing scope receives the name. Python has no block scope,
+  so an assignment targets the nearest *function*; Rust's `let` targets the
+  block; parameters land in the callable's own body.
+- `visible` — from the top of the scope (Rust items, JS `function`
+  declarations) or from the binding position onward (Rust `let`,
+  JS `let`/`const`).
+- `rebind` — whether re-binding makes a new symbol (Rust shadowing) or writes
+  to the existing one (Python assignment). This is SCIP's `WriteAccess` role.
+- `ns` — Rust's `struct Foo` and `fn Foo` coexist, so resolution keys on name
+  and namespace together.
+
+Around 25 rows per grammar, next to `roles.json`, checked the same way. One
+key will not always be a node type: JavaScript's `variable_declaration` needs
+different rules depending on whether its keyword child is `var` or `let`, so
+the table admits a node type plus a discriminating child.
+
+The oracles are per language and already exist. CPython's `symtable` is its
+own scope analysis, exposed: over a nested example it reports the
+comprehension as its own scope, `c` free through two levels, `nonlocal`
+resolved, and `total` global. TypeScript's checker and rust-analyzer's index
+answer the same question for the other two. This is §4's arrangement pointed
+at scopes instead of parses.
+
+What resolution refuses is as important as what it does. `a.b` is not scope
+resolution — `b` depends on the type of `a` — and treebank does not attempt
+it. Import targets bind the local name and leave the target unresolved,
+marked as an import. So the ledger records three columns per grammar:
+**resolved**, **refused by design**, and **unknown**. Only the third is a
+defect, and a tool that distinguishes them is doing something the established
+indexers largely do not.
+
+### 9.7 Analysis query packs
+
+`treebank queries` already writes one source file of patterns in the shared
+vocabulary out to every grammar's own node names, regenerates under
+`--check`, and compiles each result against its grammar so an impossible
+pattern fails at build time rather than matching nothing at run time. That
+machine is not specific to highlighting.
+
+An analysis query pack is the same source-and-expand pipeline with capture
+names that identify facts rather than highlight groups — `@callable`,
+`@call`, `@binding`, `@access` — shipped in the grammar crate and hashed with
+it. Consumers stop reimplementing the same traversal once per language, and
+the pack's digest becomes part of the provenance of anything derived through
+it, which a hand-written traversal in a consumer's own source cannot offer.
+
+### 9.8 What stays out
+
+Types. Inference. Member resolution. Cross-file anything. Control-flow
+*semantics* — treebank publishes `_branch`, `_loop` and `_jump` as syntax and
+does not say what a jump means, because unwinding, early return and `?`
+differ in ways no vocabulary reconciles.
+
+The line is §9.1's and it does not move: a question needing a second file, a
+manifest or a compiler at run time is not treebank's, and answering it here
+would trade the one property that makes a grammar pack worth fetching.
+
+## 10. API changes the expansion requires
+
+Five, found by writing a consumer against 0.3.0 rather than by reading the
+crate:
+
+1. **A capture carries no node.** `Capture` is `{name, kind, range, pattern}`,
+   so a consumer cannot walk from a match into the tree and has to run a
+   second, independent traversal to reach anything a pattern did not capture.
+   A capture that yields a `Node`, or a `query_nodes` beside `query`, removes
+   that pass.
+2. **No `child_by_field_name`.** Reaching a field means looping over
+   `child_count` and `field_name_for_child`. Every consumer will write that
+   loop, and §9.4.2 makes fields load-bearing enough that it should not be
+   theirs to write.
+3. **`Node` is not exported.** `lib.rs` re-exports `Pack` alone, so the type
+   cannot be named in a helper's signature and recursive traversals have to be
+   restructured around an explicit stack.
+4. **Positions are byte ranges only.** SCIP occurrences need line and column,
+   and so does every report a person reads.
+5. **`kind()` allocates.** It returns `Result<String>` — acceptable per node
+   on a small file, expensive once a traversal crosses a repository. An
+   interned identifier or a borrowed `&str` pays for itself at the first
+   corpus sweep.
