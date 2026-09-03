@@ -120,67 +120,129 @@ load-bearing.
 **One noun, two adjectives.**
 
 > The vocabulary has 29 **terms**. Each grammar delivers a term one of two
-> ways: as a **supertype** — a real rule in its parse table — or as a **list**
-> — a set of node types in `terms.json`, substituted into the query before it
-> runs. Which way is a fact about the grammar, not about the term. Moving a
-> term from the first to the second is a **demotion**, and it is forced rather
-> than chosen: a supertype there would widen the grammar.
+> ways. A **structural** term is a real supertype in its parse table:
+> membership is decided by structure — the parse went through it *here*. A
+> **nominal** term is a list of node types in `terms.json`, substituted into
+> the query before it runs: membership is decided by name — the node's type is
+> on the list. Which way is a fact about the grammar, not about the term.
+> Moving a term from structural to nominal is a **demotion**, and it is forced
+> rather than chosen: a supertype there would widen the grammar.
 
 | today | proposed |
 |---|---|
 | role, vocabulary term | **term** |
-| table tier, table-tier role | **supertype term** — "delivered as a supertype" |
-| facet, facet tier, facet-tier role | **list term** — "delivered as a list" |
+| table tier, table-tier role | **structural term** |
+| facet, facet tier, facet-tier role | **nominal term** |
+| occurrence-level / type-level membership | **structural / nominal membership** |
 | demotion | **demotion** (unchanged) |
 | `roles.json` | `terms.json` |
-| `"facets": {…}` | `"lists": {…}` |
-| `vocabulary.json` `"table"` / `"facets"` | `"supertype"` / `"list"` |
+| `"facets": {…}` | `"nominal": {…}` |
+| `vocabulary.json` `"table"` / `"facets"` | `"structural"` / `"nominal"` |
 | `either_tier` | `demotable` |
-| `TABLE_TIER` / `FACET_TIER` (js) | `SUPERTYPE_TERMS` / `LIST_TERMS` |
-| `assertTableTerms` | `assertSupertypeTerms` |
+| `TABLE_TIER` / `FACET_TIER` (js) | `STRUCTURAL_TERMS` / `NOMINAL_TERMS` |
+| `assertTableTerms` | `assertStructuralTerms` |
+| `RolesManifest` | `TermsManifest` |
 | `ROLES` const, `tb_roles` export | `TERMS`, `tb_terms` |
+| `Pack::roles()`, `PackRoles` | `Pack::terms()`, `PackTerms` |
 | `treebank roles` | `treebank terms` |
 | `roles_note` (ledger) | `vocabulary_note` |
 | `[[oracles]].role` | **unchanged** — the one correct use of the word here |
 
-One-line gloss, for the docs: *supertype membership is structural — the
-derivation went through it. List membership is nominal — the node's name is on
-a list.*
+Note that **`supertype` survives, and is doing the right job**. It stops being
+a tier name and goes back to being what it is in tree-sitter: the mechanism a
+structural term is delivered by. "A structural term is a real supertype" is a
+sentence; "the table tier" was not.
 
 ### Why it beats the current pair
 
-1. **It cannot produce the owner's misreading.** "Supertype terms and list
-   terms" are visibly two kinds of one thing. "Roles and facets" are two nouns.
-2. **Both names sit on one axis** — how the grammar delivers the term — and
-   both are literally true, checkable statements about the artifact. No
-   metaphor.
-3. **It removes a synonym rather than adding one.** The code already calls this
+1. **It cannot produce the misreading.** "Structural terms and nominal terms"
+   are visibly two kinds of one thing. "Roles and facets" are two nouns.
+2. **Both names sit on one axis** — how membership is decided — and each is
+   derivable from the word itself. Structure put it there, or its name is on a
+   list. No metaphor, and nothing to memorise.
+3. **The repository already draws this distinction and already has a name for
+   it.** `roles.rs` ("Facets are type-level: a node type is `_callable`
+   wherever it occurs"), `lib.rs`, `python/grammar.js` and `notes/DESIGN.md`
+   §3.1 and §3.1.1 all reason in *occurrence-level* versus *type-level*. This
+   is not a new distinction: it is the existing one, spelled in one word each
+   instead of two hyphenated ones, and **promoted from the explanation to the
+   name**. That the repository needed a second private vocabulary to explain
+   its public one is the clearest evidence the public one was wrong.
+4. **It removes a synonym rather than adding one.** The code already calls this
    object a `Term`; "role" was the third word for it.
-4. **It fixes the filename.** `terms.json`, holding `lists`, `demoted` and
-   `uncategorised`, is what the file is: this grammar's statement about the
-   vocabulary's terms.
-5. **It frees "role"** for `oracles[].role`, and stops colliding with semantic
-   roles.
+5. **It fixes the filename.** `terms.json`, holding `nominal`, `demoted` and
+   `uncategorised`, is what the file is.
 6. **The existing prose improves.** All nine demotion reasons end with the same
    clause. Today: *"so facet membership selects exactly the nodes the supertype
-   would have"* — a metaphor measured against a mechanism. After: *"so list
-   membership selects exactly the nodes the supertype would have."* That is a
-   plain sentence a reader can check.
+   would have"* — a metaphor measured against a mechanism. After: *"so nominal
+   membership selects exactly the nodes the structural supertype would have."*
+   And DESIGN.md §3.1.1's soundness condition reads *"structural and nominal
+   membership agree exactly when every member is a concrete node type occurring
+   nowhere else"*, which is the whole demotion rule in one line.
+
+### Two honest caveats
+
+**The justification is the plain-English reading, not the type-theory one.** In
+type theory, nominal typing means membership by declaration and structural
+typing means membership by shape — and by that reading both tiers are nominal,
+since a grammar declares its supertypes as surely as a manifest lists its node
+types. The pair earns its place here on the ordinary meanings of the words: by
+*structure*, meaning where the node sits in the parse; by *name*, meaning what
+the node type is called. That is a feature rather than a compromise — it means
+a grammar author who has never read a type-systems paper can still derive the
+distinction from the words, which is the whole point.
+
+**"Nominal" carries a faint pejorative — "in name only" — and that is
+correct.** A nominal term enforces nothing; the manifest asserts membership and
+the parse table has no opinion. The site already argues this is the property a
+consumer must not be allowed to forget: *"a role that looks enforced and is not
+is worse than a list that is honest about being one."* The overtone does that
+work for free.
+
+**Dilution, not collision.** "Structural" appears about twenty times in the
+repository as an ordinary adjective — "structurally blind to accepts-invalid",
+"structural debt" in every `lint_policy.toml`, "the fix direction stays
+structural, NOT weights". None is a competing technical term, but after this
+lands "a structural term" is jargon sitting next to "structurally blind" which
+is not. "Nominal" is cleaner: two uses, both meaning a nominal-versus-real
+version union, in the zig and yaml ledgers.
 
 ## 4. Candidates rejected
+
+**`supertype` / `subtype`.** Rejected on hard evidence: `subtypes` is already a
+key in every generated `node-types.json`, where it means *the concrete members
+of a supertype* — `_access` carries `subtypes: [member_expression,
+subscript_expression]` — and `crates/treebank/src/node_types.rs` reads it (19
+such entries in rust alone). Worse, it inverts the containment. `_callable`
+stands to `function_definition` in exactly the relation `_access` stands to
+`member_expression`: its members *are* subtypes, and `_callable` is the
+would-be supertype, the one the parse table could not hold. Naming the tier for
+the wrong end of its own relation would make the demotion reasons unreadable.
+
+**`supertype` / `list`.** The first version of this document proposed it.
+Rejected as lopsided: one word carries the entire mechanism and the other
+carries almost nothing, so the pair does not read as a pair — which is the
+defect it was meant to fix.
+
+**`parser-side` / `query-side`.** Genuinely good, and the only pair you can
+re-derive with no memory at all: it names where the term is resolved and
+therefore answers the practical question directly ("can I use this from raw
+tree-sitter?"). Rejected in favour of the chosen pair, which names *why* rather
+than *where* — a term is query-side **because** its membership is nominal, and
+naming the cause makes the demotion reasons write themselves.
+
+**`supertype` / `roster`.** A roster is precisely an explicit list of named
+members, so the word is accurate and memorable. Rejected for the same lopsidedness
+as `list`, and for being a coinage where `nominal` is a borrowing.
 
 **Keep `role`/`facet` and document them better.** Rejected — see §6. They are
 documented six times over; the six do not agree on the words.
 
-**Rename `role`→`term`, keep `facet`.** Rejected. The metaphor-versus-mechanism
-mismatch (§2.1) is the actual defect, and this leaves it in place.
-
-**`virtual supertype` / `pseudo-supertype` / `soft supertype`.** The most
-tempting: it carries the tier relationship perfectly and needs no new noun.
-Rejected on the repository's own argument — *"a role that looks enforced and is
-not is worse than a list that is honest about being one"*
-(`site/content/concepts/two-tiers.md`). Naming it a supertype of any kind hides
-that it enforces nothing, which is the one property a consumer must know.
+**`virtual supertype` / `pseudo-supertype` / `soft supertype`.** Tempting: it
+carries the tier relationship perfectly and needs no new noun. Rejected on the
+repository's own argument — *"a role that looks enforced and is not is worse
+than a list that is honest about being one"*. Naming it a supertype of any kind
+hides that it enforces nothing, which is the one property a consumer must know.
 
 **`alias` / `macro` / `shorthand`.** Instantly clear, and true of the
 mechanism. Rejected: an alias implies exact two-way substitutability, and this
@@ -191,10 +253,11 @@ It also says nothing about *why* the thing is not a supertype.
 which imply a derived thing computed from a base. Backwards — the list is
 primary, hand-maintained data, and the supertype is what could not be built.
 
-**`nominal` / `structural`.** The most precise pair available; it names the
-membership rule exactly. Rejected as the headline for being philosophy jargon
-in a repository read by grammar authors. Kept as the one-line gloss above,
-where its precision earns its keep.
+**`occurrence-level` / `type-level`.** The repository's own pair, and the
+literal meaning of the chosen one. Rejected as the tier names for length: they
+are two hyphenated compounds that do not survive being used forty times in a
+paragraph, which is presumably why they stayed in the explanations and never
+became the names.
 
 **`aspect`.** Same metaphor family as facet, same failure.
 
@@ -209,7 +272,7 @@ parser derived, which is wrong for supertypes; `concept` is vaguer than
 `facet`.
 
 **`table tier` / `list tier`.** Keeps "tier", a fourth word that adds nothing
-and implies a ranking. The ranking happens to be real — the table tier is
+and implies a ranking. The ranking happens to be real — the structural tier is
 stronger — but that belongs in a sentence, not in every noun phrase.
 
 **Renaming the terms themselves** (`_callable`, `_binding`, …). Out of scope
@@ -274,13 +337,159 @@ Four PRs, one concern each, in this order. Nothing before PR 1 is approved.
    `queries/*.scm` headers, module docs. No identifier moves. Cheapest to
    review, and it is where the confusion actually reaches a reader. If the
    owner wants to stop after this one, the naming problem is 80% solved.
-2. **The vocabulary crate** — `vocabulary.json` keys, `supertypes.js`
-   constants, `check.rs`, with serde aliases so nothing downstream moves yet.
+2. **The vocabulary crate** — `vocabulary.json`'s `table`/`facets` →
+   `structural`/`nominal`, `either_tier` → `demotable`, the `supertypes.js`
+   constants, `check.rs`. Serde aliases throughout so nothing downstream moves
+   yet.
 3. **The manifests** — `roles.json` → `terms.json` in 11 crates, `facets` →
-   `lists`, `ROLES` → `TERMS`, the pack export and the site's reader.
+   `nominal`, `RolesManifest` → `TermsManifest`, `ROLES` → `TERMS`, the pack
+   export and the site's reader.
 4. **The CLI and ledgers** — `treebank roles` → `treebank terms` with `roles`
    kept as a hidden alias; `roles_note` → `vocabulary_note` in 11 ledgers.
 
 Gates on each: `cargo build --workspace`, `cargo test --workspace`,
 `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
 `treebank verify`.
+
+## 8. Appendix: how it reads in situ
+
+Every "before" below is the current text, verbatim. Nothing has been applied.
+
+### A demotion reason — `crates/treebank-zig/roles.json`
+
+Before:
+
+> Zig orders its modifiers rather than pooling them: `pub` precedes a
+> declaration, `export`/`extern` follow it, `threadlocal` sits between that and
+> `var`, `comptime`/`noalias` belong to a parameter, and
+> `const`/`volatile`/`allowzero` to a pointer. One alternation across all of
+> them accepts `threadlocal pub extern const x` and every other permutation of
+> a list the language fixes. Each member is a concrete node type occurring
+> nowhere but a modifier slot, **so facet membership selects exactly the nodes
+> the supertype would have.**
+
+After — only the last clause moves, in all nine demotion reasons:
+
+> …Each member is a concrete node type occurring nowhere but a modifier slot,
+> **so nominal membership selects exactly the nodes the structural supertype
+> would have.**
+
+### The soundness condition — `notes/DESIGN.md` §3.1.1
+
+Before:
+
+> **Why this is one meaning and not two.** Occurrence-level and type-level
+> membership agree exactly when every member of the term is a concrete node
+> type that occurs nowhere else.
+
+After:
+
+> **Why this is one meaning and not two.** Structural and nominal membership
+> agree exactly when every member of the term is a concrete node type that
+> occurs nowhere else.
+
+That sentence is the demotion rule, and it now uses the tier names rather than
+a second private vocabulary invented to explain them.
+
+### The site page — `site/content/concepts/two-tiers.md`
+
+Before:
+
+> The vocabulary comes in two kinds, and the split is decided by what
+> Tree-sitter can enforce rather than by what would read nicely.
+>
+> **Supertypes** are threaded through the productions and enforced when the
+> parser is generated. A query for `(_expression)` matches where the parse
+> actually went through it — matching is by derivation, not by node type. …
+>
+> **Facets** are lists of node types in `roles.json`, expanded into a concrete
+> alternation when a query loads. A facet cannot say anything about position,
+> because it does not exist in the parse table.
+>
+> Where a term can be threaded it is a supertype. Where it cannot, it is a
+> facet, because a role that looks enforced and is not is worse than a list
+> that is honest about being one.
+
+After:
+
+> Every term is one of two kinds, and which one is decided by what Tree-sitter
+> can enforce rather than by what would read nicely.
+>
+> **Structural** terms are threaded through the productions as real supertypes
+> and enforced when the parser is generated. A query for `(_expression)`
+> matches where the parse actually went through it — membership is decided by
+> structure, not by node type. That lets a structural term say something a list
+> cannot: that *this position in this production* is an expression.
+>
+> **Nominal** terms are lists of node types in `terms.json`, expanded into a
+> concrete alternation when a query loads. Membership is decided by name: a
+> `function_definition` is `_callable` wherever it occurs. A nominal term
+> cannot say anything about position, because it does not exist in the parse
+> table.
+>
+> Where a term can be threaded it is structural. Where it cannot, it is
+> nominal, because a term that looks enforced and is not is worse than a list
+> that is honest about being one.
+
+The page's file name goes with it: `two-tiers.md` → `terms.md`, and its
+description — currently "Supertypes and facets, and why there are two kinds" —
+becomes "Structural and nominal terms, and why there are two kinds".
+
+### The README
+
+Before:
+
+> Table-tier roles are queryable straight from the parser, because they are
+> real supertypes in the parse table…
+>
+> Facet-tier roles (`_callable`, `_binding`, `_scope`, `_clause`) cross-cut
+> derivations, so they cannot be supertypes; they ship as `ROLES` and are
+> expanded before the query runs.
+
+After:
+
+> Structural terms are queryable straight from the parser, because they are
+> real supertypes in the parse table…
+>
+> Nominal terms (`_callable`, `_binding`, `_scope`, `_clause`) cross-cut
+> derivations, so they cannot be supertypes; they ship as `TERMS` and are
+> expanded before the query runs.
+
+### The manifest — `crates/treebank-zig/terms.json`
+
+```json
+{
+  "vocabulary": "0.1.0",
+  "demoted": {
+    "_modifier": "Zig orders its modifiers rather than pooling them: … so nominal membership selects exactly the nodes the structural supertype would have.",
+    "_parameter": "The C-variadic `...` is only ever the last parameter … so nominal membership selects the same nodes."
+  },
+  "nominal": {
+    "_callable": ["function_declaration", "function_type", "test_declaration"],
+    "_scope": ["block", "container_declaration", "function_declaration", "source_file", "test_declaration"]
+  },
+  "uncategorised": [ … ]
+}
+```
+
+### The checker's output
+
+Before:
+
+```
+roles OK: 17 supertypes, 9 facet(s), 98 named node(s), 11 uncategorised (vocabulary 0.1.0)
+```
+
+After:
+
+```
+terms OK: 17 structural, 9 nominal, 98 named node(s), 11 uncategorised (vocabulary 0.1.0)
+```
+
+### The grammar viewer's headings — `site/src/grammar-viewer.mjs`
+
+`Supertypes` / `Facets` become `Structural` / `Nominal`, over a sentence that
+now states the rule instead of naming two mechanisms: *"A structural term is
+threaded through the productions, so `(_expression)` matches where the parse
+went through it. A nominal term is a list of node types in `terms.json`,
+expanded when the query loads."*
