@@ -2,7 +2,7 @@
 //
 // Input is `src/grammar.json` -- the NORMALIZED grammar tree-sitter itself
 // consumes, not grammar.js -- plus `src/node-types.json` for what is public
-// and `roles.json` for treebank's vocabulary. grammar.json is already an
+// and `terms.json` for treebank's vocabulary. grammar.json is already an
 // EBNF syntax tree: SEQ, CHOICE, REPEAT, SYMBOL, STRING, PATTERN, PREC,
 // FIELD, ALIAS. Rendering it is a fold, not a parse.
 //
@@ -41,7 +41,7 @@ export class Grammar {
   constructor(bundle) {
     this.g = bundle.grammar;
     this.nt = bundle.nodeTypes;
-    this.roles = bundle.roles ?? {};
+    this.terms = bundle.terms ?? {};
     this.rules = this.g.rules;
     this.name = this.g.name;
     this.supertypes = new Set(this.g.supertypes ?? []);
@@ -241,21 +241,22 @@ export function precedences(g) {
   return found;
 }
 
-// Which rules answer which vocabulary term. Supertypes come from
-// node-types.json -- they are real rules in the parse table. Facets come
-// from roles.json and are expanded into an alternation at query load.
-export function roleIndex(g) {
-  const table = {};
+// Which rules answer which vocabulary term. Structural terms come from
+// node-types.json -- they are real supertypes in the parse table. Nominal
+// terms come from terms.json and are expanded into an alternation at query
+// load.
+export function termIndex(g) {
+  const structural = {};
   for (const n of g.nt) {
     if (n.subtypes?.length) {
-      table[n.type] = n.subtypes.map((s) => s.type).sort();
+      structural[n.type] = n.subtypes.map((s) => s.type).sort();
     }
   }
-  const facet = {};
-  for (const [k, v] of Object.entries(g.roles.facets ?? {})) {
-    facet[k] = [...v].sort();
+  const nominal = {};
+  for (const [k, v] of Object.entries(g.terms.nominal ?? {})) {
+    nominal[k] = [...v].sort();
   }
-  return { table, facet };
+  return { structural, nominal };
 }
 
 // Section order: rules grouped under the supertype they answer, then the

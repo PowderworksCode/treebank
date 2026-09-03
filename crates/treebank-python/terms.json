@@ -1,9 +1,9 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
-    "_parameter": "Python's parameter list is ordered by the grammar itself -- `def f(a=1, b)` and `def f(**kw, a)` are SyntaxErrors from CPython's parser -- so the six parameter node types cannot share one supertype derivation. All six are concrete types occurring nowhere but a parameter list, so facet membership selects the same nodes."
+    "_parameter": "Python's parameter list is ordered by the grammar itself -- `def f(a=1, b)` and `def f(**kw, a)` are SyntaxErrors from CPython's parser -- so the six parameter node types cannot share one supertype derivation. All six are concrete types occurring nowhere but a parameter list, so nominal membership selects the same nodes the structural supertype would have."
   },
-  "facets": {
+  "nominal": {
     "_binding": [
       "as_pattern",
       "assignment",
@@ -84,7 +84,7 @@
     },
     {
       "node": "dictionary_pattern",
-      "reason": "a mapping pattern's braces; its pairs carry the roles"
+      "reason": "a mapping pattern's braces; its pairs carry the terms"
     },
     {
       "node": "dictionary_pattern_pair",
@@ -104,7 +104,7 @@
     },
     {
       "node": "or_pattern",
-      "reason": "top-of-pattern alternation in a case; deliberately NOT under _pattern because PEP 634 allows `|` only at the top level of a pattern, and threading it would accept nested bare alternations everywhere (the same argument rust's roles.json records)"
+      "reason": "top-of-pattern alternation in a case; deliberately NOT under _pattern because PEP 634 allows `|` only at the top level of a pattern, and threading it would accept nested bare alternations everywhere (the same argument rust's terms.json records)"
     },
     {
       "node": "pair",
@@ -144,7 +144,7 @@
     },
     {
       "node": "type_parameters",
-      "reason": "the PEP 695 type-parameter-list container; its elements are type_parameter (a _binding facet member)"
+      "reason": "the PEP 695 type-parameter-list container; its elements are type_parameter (a _binding nominal member)"
     },
     {
       "node": "wildcard_import",

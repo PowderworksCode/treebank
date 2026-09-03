@@ -72,11 +72,11 @@ pub fn run(grammar_dir: &Path, crates_dir: &Path, rosetta_dir: &Path) -> Result<
     }
 
     // 4. Vocabulary conformance.
-    match crate::roles_check(grammar_dir) {
-        Ok(summary) => println!("  roles         {summary}"),
+    match crate::terms_check(grammar_dir) {
+        Ok(summary) => println!("  terms         {summary}"),
         Err(e) => {
-            println!("  roles         FAIL: {e}");
-            failed.push("roles");
+            println!("  terms         FAIL: {e}");
+            failed.push("terms");
         }
     }
 

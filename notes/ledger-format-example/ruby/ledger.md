@@ -74,9 +74,9 @@ Ruby 3.x, plus the older spellings that cost nothing to keep (hash rockets, `for
 
 ## Vocabulary
 
-18 of 22 table-tier terms are threaded. `_type` is omitted because ruby has no type syntax; `_modifier` and `_attribute` because ruby has neither keyword modifiers nor annotations — visibility (`private`) and macros (`attr_reader`) are ordinary method calls and parse as the calls they are. `_control_flow` is omitted for python's reason with ruby's evidence: branches and loops are values here (`x = if c then 1 end`), but jumps are not (`x = break` is "void value expression", a SyntaxError from CRuby's parser), so an umbrella containing `_jump` would either accept those or violate the vocabulary's containment rule. `_branch`, `_loop` and `_jump` thread individually.
+18 of 22 structural terms are threaded. `_type` is omitted because ruby has no type syntax; `_modifier` and `_attribute` because ruby has neither keyword modifiers nor annotations — visibility (`private`) and macros (`attr_reader`) are ordinary method calls and parse as the calls they are. `_control_flow` is omitted for python's reason with ruby's evidence: branches and loops are values here (`x = if c then 1 end`), but jumps are not (`x = break` is "void value expression", a SyntaxError from CRuby's parser), so an umbrella containing `_jump` would either accept those or violate the vocabulary's containment rule. `_branch`, `_loop` and `_jump` thread individually.
 
-Statement modifiers (`x if y`, `retry while flaky`) are NOT under `_branch`/`_loop`, and the reason is the same one python's roles.json records for its match shapes: a supertype's members enter every position that references it, `_branch` is reachable from argument position (`x = if c then a end` is legal), and a modifier there — `foo(1 if c)` — is a SyntaxError. The modifier nodes are their own statement-tier types instead.
+Statement modifiers (`x if y`, `retry while flaky`) are NOT under `_branch`/`_loop`, and the reason is the same one python's terms.json records for its match shapes: a supertype's members enter every position that references it, `_branch` is reachable from argument position (`x = if c then a end` is legal), and a modifier there — `foo(1 if c)` — is a SyntaxError. The modifier nodes are their own statement-tier types instead.
 
 ## Corpus
 
@@ -147,7 +147,7 @@ Places the grammar accepts more than CRuby does, taken deliberately.
 
 ### The parameter list accepts orderings CRuby rejects {#parameter-ordering}
 
-`def f(&b, a)` is accepted. The ordering chain python's `parameterRules` spells out is the known fix, and until then `_parameter` stays honestly in the table tier.
+`def f(&b, a)` is accepted. The ordering chain python's `parameterRules` spells out is the known fix, and until then `_parameter` stays honestly structural.
 
 ### A paren'd argument list accepts a command with a `do`-block {#command-do-in-argument-list}
 

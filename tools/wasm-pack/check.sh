@@ -79,12 +79,15 @@ ledger = tomllib.load(open(f"crates/treebank-{lang}/ledger.toml", "rb"))
 for field in ("language", "vocabulary", "generate_cli"):
     assert prov[field] == ledger[field], f"{lang}: provenance {field} {prov[field]!r} != ledger {ledger[field]!r}"
 
-# The facet manifest must be the repo's, exactly — a pack whose roles drift
-# from roles.json would expand (_callable) to the wrong thing.
-roles = blob(e["tb_roles"](store), e["tb_roles_len"](store))
-assert roles == json.load(open(f"crates/treebank-{lang}/roles.json")), f"{lang}: roles.json does not match the pack"
+# The nominal manifest must be the repo's, exactly — a pack whose terms drift
+# from terms.json would expand (_callable) to the wrong thing.
+terms = blob(e["tb_terms"](store), e["tb_terms_len"](store))
+assert terms == json.load(open(f"crates/treebank-{lang}/terms.json")), f"{lang}: terms.json does not match the pack"
+# The pre-rename export names are kept for one cycle and must carry the same
+# document, or a consumer pinned to the old ABI silently gets something else.
+assert blob(e["tb_roles"](store), e["tb_roles_len"](store)) == terms, f"{lang}: tb_roles disagrees with tb_terms"
 
-# The node manifest likewise, and this one fails quieter: table-tier
+# The node manifest likewise, and this one fails quieter: structural
 # membership drifting from node-types.json makes (_loop) match the wrong
 # nodes, so a consumer sees a rule stop firing rather than an error.
 node_types = blob(e["tb_node_types"](store), e["tb_node_types_len"](store))
@@ -103,7 +106,7 @@ p = e["tb_alloc"](store, len(src)); mem.write(store, src, p)
 tree = e["tb_parse"](store, p, len(src)); e["tb_free"](store, p)
 node = e["tb_node_new"](store); e["tb_tree_root"](store, tree, node)
 assert not (e["tb_node_flags"](store, node) & 4), f"{lang}: pack failed to parse {fixture}"
-print(f"  {lang}: loads, names itself {got_name}, provenance, roles and node types match, parses {fixture}")
+print(f"  {lang}: loads, names itself {got_name}, provenance, terms and node types match, parses {fixture}")
 PY
 done
 echo "wasm-check: OK"

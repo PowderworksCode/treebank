@@ -45,7 +45,7 @@ const maybeJson = async (where) => readJson(where).catch(() => null);
 // `precedences` and more that the page never asks about; node-types.json
 // carries per-node `fields` and `children` the vocabulary index does not
 // use. Shipping them would roughly double the bytes for nothing.
-function prune(grammar, nodeTypes, roles) {
+function prune(grammar, nodeTypes, terms) {
   return {
     grammar: {
       name: grammar.name,
@@ -64,7 +64,7 @@ function prune(grammar, nodeTypes, roles) {
           ? { subtypes: n.subtypes.map((s) => ({ type: s.type })) }
           : {}),
       })),
-    roles: roles?.facets ? { facets: roles.facets } : {},
+    terms: terms?.nominal ? { nominal: terms.nominal } : {},
   };
 }
 
@@ -129,9 +129,9 @@ async function main() {
   for (const { name, dir } of grammars) {
     const grammar = await readJson(path.join(dir, "src", "grammar.json"));
     const nodeTypes = await readJson(path.join(dir, "src", "node-types.json"));
-    const roles = await maybeJson(path.join(dir, "roles.json"));
+    const terms = await maybeJson(path.join(dir, "terms.json"));
 
-    const bundle = prune(grammar, nodeTypes, roles);
+    const bundle = prune(grammar, nodeTypes, terms);
     const json = JSON.stringify(bundle);
     await writeFile(path.join(dataDir, `${name}.json`), json);
     const productions = Object.keys(bundle.grammar.rules).length;

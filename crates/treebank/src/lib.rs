@@ -1,28 +1,28 @@
 //! The treebank vocabulary (notes/DESIGN.md §3), as code.
 //!
-//! Two tiers with different physics, dictated by what tree-sitter's
-//! supertype mechanism can express:
+//! Every term is delivered one of two ways, and which one is dictated by
+//! what tree-sitter's supertype mechanism can express:
 //!
-//! - **Table tier** — real supertype rules threaded through a grammar's
-//!   productions. Occurrence-level semantics, enforced at generate time,
-//!   natively queryable.
-//! - **Facet tier** — roles that cross-cut derivations and therefore cannot
-//!   be supertypes. Shipped as a `roles.json` manifest per grammar crate
-//!   (type-level membership) and expanded into concrete alternations at
-//!   query-load time by [`expand`].
+//! - **Structural** — a real supertype rule threaded through a grammar's
+//!   productions. Membership is decided by structure: the parse went
+//!   through it *here*. Enforced at generate time, natively queryable.
+//! - **Nominal** — a term that cross-cuts derivations and therefore cannot
+//!   be a supertype. Shipped as a `terms.json` manifest per grammar crate,
+//!   where membership is decided by name, and expanded into concrete
+//!   alternations at query-load time by [`expand`].
 //!
-//! A term's tier is a property of the *grammar*, not of the vocabulary:
-//! terms listed in `either_tier` may be delivered by either mechanism, and
-//! each grammar picks. The table tier is stronger and is the default; a
-//! grammar demotes a term to a facet only when its language partitions the
-//! position (Python orders parameters, so `_parameter` cannot be one
-//! alternation without the grammar accepting `def f(a=1, b)`). Demotion is
-//! sound precisely when every member of the term is a concrete node type
-//! that occurs nowhere else, since then type-level and occurrence-level
-//! membership select the same nodes; see notes/DESIGN.md §3.4.
+//! Which way is a property of the *grammar*, not of the vocabulary: terms
+//! listed in `demotable` may be delivered either way, and each grammar
+//! picks. Structural is stronger and is the default; a grammar demotes a
+//! term to nominal only when its language partitions the position (Python
+//! orders parameters, so `_parameter` cannot be one alternation without the
+//! grammar accepting `def f(a=1, b)`). Demotion is sound precisely when
+//! every member of the term is a concrete node type that occurs nowhere
+//! else, since then structural and nominal membership select the same
+//! nodes; see notes/DESIGN.md §3.4.
 //!
 //! The vocabulary itself lives in `vocabulary/vocabulary.json`, embedded
-//! here and re-exported to JavaScript by `vocabulary/supertypes.js`, so the
+//! here and re-exported to JavaScript by `vocabulary/terms.js`, so the
 //! grammars and this crate can never disagree about what the vocabulary is.
 
 pub mod check;
@@ -32,7 +32,7 @@ pub mod fetch;
 pub mod node_types;
 #[cfg(feature = "pack")]
 pub mod pack;
-pub mod roles;
+pub mod terms;
 
 #[cfg(feature = "pack")]
 pub use pack::Pack;
@@ -56,7 +56,7 @@ pub struct Term {
 /// NOT bumped per change while the vocabulary is still being worked out --
 /// a number climbing through 0.4 in a fortnight claims a stability nothing
 /// here has yet, and there is no external consumer to claim it to. What
-/// actually protects a stale `roles.json` is the structural checking in
+/// actually protects a stale `terms.json` is the structural checking in
 /// [`check`], not this string: a removed or renamed term fails rule 1 or
 /// rule 5, and a term that moved tier fails the demotion rules. Every
 /// breaking change is caught by what the manifest SAYS, not by what it
@@ -65,38 +65,38 @@ pub struct Term {
 #[derive(Debug, Deserialize)]
 pub struct Vocabulary {
     pub version: String,
-    pub table: Vec<Term>,
-    pub facets: Vec<Term>,
-    /// Table-tier terms a grammar may deliver as a facet instead, when its
+    pub structural: Vec<Term>,
+    pub nominal: Vec<Term>,
+    /// Structural terms a grammar may deliver nominally instead, when its
     /// language partitions the position. Demotion must be declared and
-    /// justified in the grammar's `roles.json` (`demoted`).
+    /// justified in the grammar's `terms.json` (`demoted`).
     #[serde(default)]
-    pub either_tier: Vec<String>,
+    pub demotable: Vec<String>,
     /// Required containments, as (inner, outer): every grammar that
     /// declares both must nest inner inside outer.
     pub containments: Vec<(String, String)>,
 }
 
 impl Vocabulary {
-    pub fn table_terms(&self) -> impl Iterator<Item = &str> {
-        self.table.iter().map(|t| t.name.as_str())
+    pub fn structural_terms(&self) -> impl Iterator<Item = &str> {
+        self.structural.iter().map(|t| t.name.as_str())
     }
 
-    pub fn facet_terms(&self) -> impl Iterator<Item = &str> {
-        self.facets.iter().map(|t| t.name.as_str())
+    pub fn nominal_terms(&self) -> impl Iterator<Item = &str> {
+        self.nominal.iter().map(|t| t.name.as_str())
     }
 
-    pub fn is_table_term(&self, name: &str) -> bool {
-        self.table.iter().any(|t| t.name == name)
+    pub fn is_structural_term(&self, name: &str) -> bool {
+        self.structural.iter().any(|t| t.name == name)
     }
 
-    pub fn is_facet_term(&self, name: &str) -> bool {
-        self.facets.iter().any(|t| t.name == name)
+    pub fn is_nominal_term(&self, name: &str) -> bool {
+        self.nominal.iter().any(|t| t.name == name)
     }
 
-    /// Whether a grammar may choose this term's tier for itself.
-    pub fn is_either_tier(&self, name: &str) -> bool {
-        self.either_tier.iter().any(|t| t == name)
+    /// Whether a grammar may choose for itself how to deliver this term.
+    pub fn is_demotable(&self, name: &str) -> bool {
+        self.demotable.iter().any(|t| t == name)
     }
 }
 
@@ -119,27 +119,34 @@ mod tests {
     fn embedded_vocabulary_parses_and_is_closed_and_underscored() {
         let v = vocabulary();
         assert_eq!(v.version, "0.1.0");
-        assert_eq!(v.table.len(), 22);
-        assert_eq!(v.facets.len(), 7);
-        for t in v.table.iter().chain(v.facets.iter()) {
+        assert_eq!(v.structural.len(), 22);
+        assert_eq!(v.nominal.len(), 7);
+        for t in v.structural.iter().chain(v.nominal.iter()) {
             assert!(t.name.starts_with('_'), "{} must be underscored", t.name);
             assert!(!t.definition.is_empty());
         }
-        // No name appears in both tiers.
-        for f in &v.facets {
-            assert!(!v.is_table_term(&f.name), "{} is in both tiers", f.name);
+        // No name is both structural and nominal.
+        for f in &v.nominal {
+            assert!(
+                !v.is_structural_term(&f.name),
+                "{} is both structural and nominal",
+                f.name
+            );
         }
-        // Demotable terms are table-tier terms a grammar may deliver as a
-        // facet instead (§3.1.1). They must not be pre-declared facets,
-        // and each must be a real table term.
-        for name in &v.either_tier {
-            assert!(v.is_table_term(name), "{name} is not a table term");
-            assert!(!v.is_facet_term(name), "{name} is already a facet term");
+        // Demotable terms are structural terms a grammar may deliver
+        // nominally instead (§3.1.1). They must not be pre-declared
+        // nominal, and each must be a real structural term.
+        for name in &v.demotable {
+            assert!(
+                v.is_structural_term(name),
+                "{name} is not a structural term"
+            );
+            assert!(!v.is_nominal_term(name), "{name} is already a nominal term");
         }
-        // Containments reference table-tier terms only.
+        // Containments reference structural terms only.
         for (inner, outer) in &v.containments {
-            assert!(v.is_table_term(inner), "{inner} not a table term");
-            assert!(v.is_table_term(outer), "{outer} not a table term");
+            assert!(v.is_structural_term(inner), "{inner} not a structural term");
+            assert!(v.is_structural_term(outer), "{outer} not a structural term");
         }
     }
 }

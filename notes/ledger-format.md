@@ -20,7 +20,7 @@ Eleven files, 201 KB. Measured:
 | Markdown prose inside TOML strings | **89%** (179 KB) |
 | everything else — keys, numbers, hashes | 11% |
 
-Of the prose, 70% is free-standing essays (`versions`, `roles_note`,
+Of the prose, 70% is free-standing essays (`versions`, `vocabulary_note`,
 `ranking_note`, `blind_to`, `*_check`, `sweep_history`) and 30% is a note
 attached to one of 93 declared records (`known_gaps`, `known_widenings`,
 `deviations`, `oracles`).
@@ -224,7 +224,7 @@ use.
 Three rules, and they are the whole format:
 
 1. **Frontmatter carries only what a machine reads.** Typed, `deny_unknown_fields`,
-   deserialized into a real struct exactly as `RolesManifest` already is. Ruby's
+   deserialized into a real struct exactly as `TermsManifest` already is. Ruby's
    `[deviations]`-versus-`[[deviations]]` becomes a build failure instead of an
    empty list. `checks` is a named list, so §2.2's guessing-from-key-presence
    goes away.

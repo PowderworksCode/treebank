@@ -17,7 +17,7 @@
 crates/treebank-*/src/parser.c          linguist-generated=true -diff merge=binary
 
 # grammar.json and node-types.json stay diffable: a node appearing or vanishing
-# from node-types.json is exactly what the roles gate (notes/DESIGN.md §5, I4) is
+# from node-types.json is exactly what the terms gate (notes/DESIGN.md §5, I4) is
 # about, and reading that change is part of reviewing a grammar edit. Marking
 # them generated only collapses them behind a click and keeps them out of the
 # repo's language stats.

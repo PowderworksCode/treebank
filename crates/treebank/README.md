@@ -111,7 +111,7 @@ typescript  function_definition, class_definition
 
 `_declaration` is a **supertype** — a real rule threaded through the
 productions, so the match is by derivation rather than by node name.
-`_callable`, `_binding`, `_scope` and `_clause` are **facets**: lists that
+`_callable`, `_binding`, `_scope` and `_clause` are **nominal**: lists that
 cross-cut derivations and cannot be supertypes, so `query` expands them
 against the manifest each pack carries before running. Where the pattern
 constrains a field, members that cannot take it are dropped — `(_callable
@@ -172,7 +172,7 @@ treebank = { version = "0.3", default-features = false }
 
 ## Also in here
 
-`expand` for facet queries, `roles` and `node_types` for the vocabulary, and
+`expand` for nominal queries, `terms` and `node_types` for the vocabulary, and
 `check` — the conformance checker every Treebank grammar is held to.
 
 MIT licensed. Part of [Powderworks](https://powderworks.dev).

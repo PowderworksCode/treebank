@@ -1,6 +1,6 @@
 {
   "vocabulary": "0.1.0",
-  "facets": {
+  "nominal": {
     "_binding": [
       "as_pattern",
       "assignment",
@@ -73,7 +73,7 @@
     },
     {
       "node": "array_pattern",
-      "reason": "a case/in array shape; deliberately NOT under _pattern because ruby's destructuring targets and its match shapes admit different member sets, the same measured reason python's roles.json records"
+      "reason": "a case/in array shape; deliberately NOT under _pattern because ruby's destructuring targets and its match shapes admit different member sets, the same measured reason python's terms.json records"
     },
     {
       "node": "block_parameters",

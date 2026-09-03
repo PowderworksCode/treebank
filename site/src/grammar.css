@@ -343,13 +343,13 @@ ul.pg-errlist li { display: flex; gap: .5rem; align-items: baseline; padding: .1
 .pg-q:focus { outline: 2px solid var(--g-accent); outline-offset: -1px; }
 .pg-q:disabled { opacity: .55; cursor: not-allowed; }
 .pg-qhint { margin-top: .4rem; font-size: .78rem; line-height: 1.6; }
-/* Facet names are buttons because the useful thing to do with one is try it. */
-.pg-facet {
+/* Term names are buttons because the useful thing to do with one is try it. */
+.pg-term {
   font-size: .76rem; padding: .05rem .35rem; cursor: pointer;
   color: var(--g-accent); background: var(--g-accent-bg);
   border: 1px solid var(--g-hair); border-radius: 3px;
 }
-.pg-facet:hover { text-decoration: underline; }
+.pg-term:hover { text-decoration: underline; }
 .pg-qout { margin-top: .6rem; font-size: .84rem; }
 .pg-expansion summary { cursor: pointer; font-size: .78rem; }
 .pg-expanded {

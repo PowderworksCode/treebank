@@ -1,5 +1,5 @@
 {
-  "note": "comments and strings, which vocabulary 0.3.0 added. `(_comment)` is a table-tier supertype over `extras` — that works, and it is what lets a consumer stop hand-maintaining a per-language comment-kind list (rust has two kinds where python and typescript have one). `(_string)` is a facet because python's `string` rule carries f-strings and so satisfies no per-rule literal test, which is exactly why `(_literal)` is NOT comparable for strings and this term is.",
+  "note": "comments and strings, which vocabulary 0.3.0 added. `(_comment)` is a structural supertype over `extras` — that works, and it is what lets a consumer stop hand-maintaining a per-language comment-kind list (rust has two kinds where python and typescript have one). `(_string)` is nominal because python's `string` rule carries f-strings and so satisfies no per-rule literal test, which is exactly why `(_literal)` is NOT comparable for strings and this term is.",
   "omitted": "`(_interpolation)` is not asserted here: rust has no string interpolation at all (format! arguments are macro token soup and are deliberately not this), so the term is omitted from its grammar and the query is an error there rather than a zero. A rosetta case can only assert what the languages share.",
   "queries": {
     "(_comment) @c": 2,

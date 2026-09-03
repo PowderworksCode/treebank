@@ -1,10 +1,10 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
-    "_modifier": "Zig orders its modifiers rather than pooling them: `pub` precedes a declaration, `export`/`extern` follow it, `threadlocal` sits between that and `var`, `comptime`/`noalias` belong to a parameter, and `const`/`volatile`/`allowzero` to a pointer. One alternation across all of them accepts `threadlocal pub extern const x` and every other permutation of a list the language fixes. Each member is a concrete node type occurring nowhere but a modifier slot, so facet membership selects exactly the nodes the supertype would have.",
-    "_parameter": "The C-variadic `...` is only ever the last parameter, which one alternation repeated by commas cannot say — it would accept `extern fn printf(fmt: [*:0]const u8, ..., n: c_int)`, and extern C declarations are precisely where that would go unnoticed. Both members are concrete node types occurring nowhere but a parameter list, so facet membership selects the same nodes."
+    "_modifier": "Zig orders its modifiers rather than pooling them: `pub` precedes a declaration, `export`/`extern` follow it, `threadlocal` sits between that and `var`, `comptime`/`noalias` belong to a parameter, and `const`/`volatile`/`allowzero` to a pointer. One alternation across all of them accepts `threadlocal pub extern const x` and every other permutation of a list the language fixes. Each member is a concrete node type occurring nowhere but a modifier slot, so nominal membership selects exactly the nodes the structural supertype would have.",
+    "_parameter": "The C-variadic `...` is only ever the last parameter, which one alternation repeated by commas cannot say — it would accept `extern fn printf(fmt: [*:0]const u8, ..., n: c_int)`, and extern C declarations are precisely where that would go unnoticed. Both members are concrete node types occurring nowhere but a parameter list, so nominal membership selects the same nodes the structural supertype would have."
   },
-  "facets": {
+  "nominal": {
     "_binding": [
       "container_field",
       "function_declaration",

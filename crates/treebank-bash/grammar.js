@@ -9,13 +9,13 @@
  * (expansions, substitutions, arithmetic), while the bulk of a script is
  * `_statement` and `_invocation`.
  *
- * Omissions and the reasons for them are in ledger.toml's roles_note.
+ * Omissions and the reasons for them are in ledger.toml's vocabulary_note.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 const PREC = {
   list: 1,        // ; & && ||
@@ -55,7 +55,7 @@ module.exports = grammar({
     $._error_sentinel,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
     // `_name` is NOT threaded. Shell has no name category distinct from

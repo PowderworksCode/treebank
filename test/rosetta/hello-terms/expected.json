@@ -1,0 +1,15 @@
+{
+  "note": "the same program in every participating language must yield these counts. Asserts the terms the four languages genuinely SHARE: (_callable) is here because it is nominal, so it only works through terms.json expansion and proves that path. (_clause) is deliberately absent \u2014 clause membership is language-specific by nature (python comprehensions have for/if clauses, typescript imports have an import_clause, rust models else inside if_expression rather than as an else_clause node), which is exactly why it is delivered nominally. A rosetta case can only assert what the languages share.",
+  "queries": {
+    "(_declaration) @d": 3,
+    "(_directive) @dir": 1,
+    "(_loop) @l": 2,
+    "(_jump) @j": 2,
+    "(_invocation) @i": 1,
+    "(_member) @m": 1,
+    "(_access) @a": 1,
+    "(_parameter) @p": 3,
+    "(function_definition name: (_name) @n)": 2,
+    "(_callable) @fn": 2
+  }
+}

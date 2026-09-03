@@ -9,8 +9,8 @@ C++98 through C++23 in one grammar, in the GNU dialect, EXTENDING treebank-c thr
 The inheritance is not a convenience. C++ genuinely IS C's declarator grammar with more on top, and the alternative — a second copy of the declaration specifiers, the four declarator shapes, the whole preprocessor and every GNU extension — is a copy that drifts. A fix to the way `int (*f[3])(void)` parses has to land in both languages or in neither.'''
 generate_cli = '0.26.12'
 vocabulary = '0.1.0'
-roles_note = '''
-20 of 22 table-tier terms are threaded, one more than C, and the extra one is `_pattern`: C++17's structured binding — `for (const auto& [key, value] : m)` — is the FIRST destructuring position in the C family, and it is exactly what the term is for. `_interpolation` still has no member, because a C++ string cannot embed an expression at any version. `_parameter` is demoted to the facet tier, inherited from C and for C's reason; see `demoted` in roles.json.
+vocabulary_note = '''
+20 of 22 structural terms are threaded, one more than C, and the extra one is `_pattern`: C++17's structured binding — `for (const auto& [key, value] : m)` — is the FIRST destructuring position in the C family, and it is exactly what the term is for. `_interpolation` still has no member, because a C++ string cannot embed an expression at any version. `_parameter` is demoted to nominal, inherited from C and for C's reason; see `demoted` in terms.json.
 
 Two placements are worth stating. `throw_expression` is NOT a `_jump`, for the structural reason C's `?:` is not a `_branch`: `_jump` nests inside `_control_flow` inside `_statement`, and a `throw` admitted there would make `throw x` parse with no semicolon. C++'s own grammar agrees — a throw-expression is an assignment-expression, which is why `f(cond ? a : throw e)` is legal. And `access_specifier` is not a `_modifier`: `public` says how a base is inherited, not what a declaration means, and admitting it as a modifier made `class W { public int x; };` — a `public:` with the colon left out — parse as a field with a modifier.'''
 

@@ -1,4 +1,4 @@
-//! The vocabulary-conformance checker (`treebank roles`, notes/DESIGN.md §3.3).
+//! The vocabulary-conformance checker (`treebank terms`, notes/DESIGN.md §3.3).
 //!
 //! Everything here returns findings rather than failing fast, so one run
 //! reports every violation. An empty findings list is conformance.
@@ -6,40 +6,40 @@
 use std::collections::BTreeSet;
 
 use crate::node_types::NodeTypes;
-use crate::roles::RolesManifest;
+use crate::terms::TermsManifest;
 use crate::Vocabulary;
 
-pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<String> {
+pub fn check(nt: &NodeTypes, terms: &TermsManifest, vocab: &Vocabulary) -> Vec<String> {
     let mut findings = Vec::new();
 
     // Rule 0: the manifest was written against this vocabulary.
-    if roles.vocabulary != vocab.version {
+    if terms.vocabulary != vocab.version {
         findings.push(format!(
-            "roles.json targets vocabulary {} but treebank carries {}",
-            roles.vocabulary, vocab.version
+            "terms.json targets vocabulary {} but treebank carries {}",
+            terms.vocabulary, vocab.version
         ));
     }
 
-    // Rule 1: declared supertypes ⊆ the closed table tier.
+    // Rule 1: declared supertypes ⊆ the closed structural list.
     for name in nt.supertypes.keys() {
-        if !vocab.is_table_term(name) {
+        if !vocab.is_structural_term(name) {
             findings.push(format!(
-                "supertype `{name}` is not a table-tier vocabulary term"
+                "supertype `{name}` is not a structural vocabulary term"
             ));
         }
     }
 
-    // Rule 1b: tier demotion is declared, justified, and exclusive. A
-    // table-tier term this grammar cannot express as one alternation may
-    // be delivered as a facet instead, but only if the vocabulary marks it
-    // `either_tier`, only with a reason, and never in both tiers at once —
-    // otherwise dropping a supertype by accident is indistinguishable from
-    // demoting one on purpose.
-    for (term, reason) in &roles.demoted {
-        if !vocab.is_either_tier(term) {
+    // Rule 1b: demotion is declared, justified, and exclusive. A structural
+    // term this grammar cannot express as one alternation may be delivered
+    // nominally instead, but only if the vocabulary marks it `demotable`,
+    // only with a reason, and never both ways at once — otherwise dropping
+    // a supertype by accident is indistinguishable from demoting one on
+    // purpose.
+    for (term, reason) in &terms.demoted {
+        if !vocab.is_demotable(term) {
             findings.push(format!(
-                "`{term}` is demoted to the facet tier, but the vocabulary does not \
-                 allow that term's tier to vary by grammar"
+                "`{term}` is demoted to nominal, but the vocabulary does not allow \
+                 that term's delivery to vary by grammar"
             ));
         }
         if reason.trim().is_empty() {
@@ -47,54 +47,55 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
         }
         if nt.supertypes.contains_key(term) {
             findings.push(format!(
-                "`{term}` is demoted but is also declared as a supertype; a term \
-                 lives in exactly one tier per grammar"
+                "`{term}` is demoted but is also declared as a supertype; a term is \
+                 delivered exactly one way per grammar"
             ));
         }
-        if !roles.facets.contains_key(term) {
+        if !terms.nominal.contains_key(term) {
             findings.push(format!(
-                "`{term}` is demoted to the facet tier but has no facet members"
+                "`{term}` is demoted to nominal but has no nominal members"
             ));
         }
     }
 
     // Rule 5 (checked before coverage so bad keys don't grant coverage):
-    // facet keys ⊆ the closed facet tier, members non-empty and existing.
-    for (facet, members) in &roles.facets {
-        if !vocab.is_facet_term(facet) && !roles.demoted.contains_key(facet) {
+    // nominal keys ⊆ the closed nominal list, members non-empty and existing.
+    for (name, members) in &terms.nominal {
+        if !vocab.is_nominal_term(name) && !terms.demoted.contains_key(name) {
             findings.push(format!(
-                "facet `{facet}` is neither a facet-tier vocabulary term nor a \
-                 declared demotion"
+                "`{name}` is neither a nominal vocabulary term nor a declared demotion"
             ));
         }
         if members.is_empty() {
-            findings.push(format!("facet `{facet}` has no members; omit it instead"));
+            findings.push(format!(
+                "nominal term `{name}` has no members; omit it instead"
+            ));
         }
         for m in members {
-            // Rule 3: every node named in roles.json exists in the grammar.
+            // Rule 3: every node named in terms.json exists in the grammar.
             if !nt.named.contains(m) {
                 findings.push(format!(
-                    "facet `{facet}` names `{m}`, which is not a named node of this grammar"
+                    "nominal term `{name}` names `{m}`, which is not a named node of this grammar"
                 ));
             }
         }
     }
 
-    // Rule 2: every named node is covered by a table role, or in a facet,
-    // or deliberately uncategorised — nothing is silently outside.
-    let table_covered: BTreeSet<String> = nt
+    // Rule 2: every named node is covered structurally, or nominally, or
+    // deliberately uncategorised — nothing is silently outside.
+    let structural_covered: BTreeSet<String> = nt
         .supertypes
         .keys()
-        .filter(|s| vocab.is_table_term(s))
+        .filter(|s| vocab.is_structural_term(s))
         .flat_map(|s| nt.closure(s))
         .collect();
-    let facet_covered: BTreeSet<&str> = roles
-        .facets
+    let nominal_covered: BTreeSet<&str> = terms
+        .nominal
         .iter()
-        .filter(|(f, _)| vocab.is_facet_term(f) || roles.demoted.contains_key(*f))
+        .filter(|(n, _)| vocab.is_nominal_term(n) || terms.demoted.contains_key(*n))
         .flat_map(|(_, ms)| ms.iter().map(String::as_str))
         .collect();
-    let uncategorised: BTreeSet<&str> = roles
+    let uncategorised: BTreeSet<&str> = terms
         .uncategorised
         .iter()
         .map(|u| u.node.as_str())
@@ -102,9 +103,9 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
 
     for node in &nt.named {
         if nt.supertypes.contains_key(node) {
-            continue; // roles themselves are not subject to coverage
+            continue; // the terms themselves are not subject to coverage
         }
-        let covered = table_covered.contains(node) || facet_covered.contains(node.as_str());
+        let covered = structural_covered.contains(node) || nominal_covered.contains(node.as_str());
         if !covered && !uncategorised.contains(node.as_str()) {
             findings.push(format!(
                 "named node `{node}` is outside the vocabulary and not ledgered as uncategorised"
@@ -116,7 +117,7 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
             ));
         }
     }
-    for u in &roles.uncategorised {
+    for u in &terms.uncategorised {
         if !nt.named.contains(&u.node) {
             findings.push(format!(
                 "uncategorised entry `{}` is not a named node of this grammar",
@@ -149,13 +150,13 @@ pub fn check(nt: &NodeTypes, roles: &RolesManifest, vocab: &Vocabulary) -> Vec<S
     findings
 }
 
-/// Role liveness (notes/DESIGN.md §3.3 rule 5): given per-role occurrence counts
-/// from a corpus sweep, the roles that never fired. Because supertype
-/// matching is derivation-based, a role the grammar author forgot to
-/// thread at some position fails silently — zero matches over a large
-/// corpus is how it gets caught. The sweep supplies the counts; this just
-/// names the dead roles.
-pub fn dead_roles<'a>(
+/// Term liveness (notes/DESIGN.md §3.3 rule 5): given per-term occurrence
+/// counts from a corpus sweep, the terms that never fired. Because
+/// structural matching is derivation-based, a term the grammar author
+/// forgot to thread at some position fails silently — zero matches over a
+/// large corpus is how it gets caught. The sweep supplies the counts; this
+/// just names the dead terms.
+pub fn dead_terms<'a>(
     declared: impl Iterator<Item = &'a str>,
     counts: &std::collections::BTreeMap<String, u64>,
 ) -> Vec<String> {

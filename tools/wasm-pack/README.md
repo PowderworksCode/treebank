@@ -25,8 +25,8 @@ see `examples/parse.py` and `examples/parse.mjs`, which are complete.
 | export | why it is *inside* rather than beside |
 |---|---|
 | `tb_provenance()` | what this pack is and how it was measured. A `.wasm` copied out of a release, vendored into a repo and rediscovered two years later still answers "which grammar, which vocabulary, which CLI, what were the sweep numbers" from its own bytes. The file next to the binary is the thing that goes missing. |
-| `tb_roles()` | the facet manifest. Facets (`_callable`, `_binding`, `_scope`, `_clause`) cross-cut derivations, cannot be supertypes, and must be expanded against this manifest. Without it a consumer **cannot write `(_callable)` at all**. |
-| `tb_node_types()` | the node manifest, carrying table-tier membership: that `while_statement` derives from `_loop` and `_loop` from `_statement`. Supertypes are visible to a tree-sitter **query**, and this ABI exposes node walking rather than a query engine — so a host walking the tree sees `while_statement` and has no other way to learn it is a `_loop`. Without it a pack cannot answer for the vocabulary that is the point of a treebank grammar. |
+| `tb_terms()` | the nominal manifest. A nominal term (`_callable`, `_binding`, `_scope`, `_clause`) cross-cuts derivations, cannot be a supertype, and must be expanded against this manifest. Without it a consumer **cannot write `(_callable)` at all**. `tb_roles()` is the same blob under the pre-rename export name, kept for one cycle. |
+| `tb_node_types()` | the node manifest, carrying structural membership: that `while_statement` derives from `_loop` and `_loop` from `_statement`. Supertypes are visible to a tree-sitter **query**, and this ABI exposes node walking rather than a query engine — so a host walking the tree sees `while_statement` and has no other way to learn it is a `_loop`. Without it a pack cannot answer for the vocabulary that is the point of a treebank grammar. |
 
 Provenance is a **source hash**, not an upstream sha and a patch series:
 treebank owns its grammars, so there is no upstream to point at.

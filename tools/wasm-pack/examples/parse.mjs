@@ -23,20 +23,20 @@ class Pack {
     const n = this.e.tb_strlen(ptr);
     return new TextDecoder().decode(this.mem().subarray(ptr, ptr + n));
   }
-  // The facet manifest, straight out of the module. Table-tier roles are
-  // real supertypes and queryable from the parser; facets cross-cut
+  // The nominal manifest, straight out of the module. Structural terms are
+  // real supertypes and queryable from the parser; nominal ones cross-cut
   // derivations, cannot be supertypes, and are expanded against this
   // before a query runs — which is why it ships INSIDE the pack.
-  get roles() {
-    const p = this.e.tb_roles();
-    const n = this.e.tb_roles_len();
+  get terms() {
+    const p = this.e.tb_terms();
+    const n = this.e.tb_terms_len();
     return JSON.parse(new TextDecoder().decode(this.mem().subarray(p, p + n)));
   }
 
   // `(_callable)` -> `[(function_definition) (lambda)]`. Mirrors
   // treebank_core::expand; strings and ; comments are left alone.
-  expandFacets(query) {
-    const facets = this.roles.facets ?? {};
+  expandNominal(query) {
+    const nominal = this.terms.nominal ?? {};
     let out = '', i = 0;
     while (i < query.length) {
       const ch = query[i];
@@ -50,14 +50,14 @@ class Pack {
       } else if (ch === '(') {
         let j = i + 1;
         while (j < query.length && /[A-Za-z0-9_]/.test(query[j])) j++;
-        const members = facets[query.slice(i + 1, j)];
+        const members = nominal[query.slice(i + 1, j)];
         if (members?.length) {
           let depth = 0, k = i;
           for (; k < query.length; k++) {
             if (query[k] === '(') depth++;
             else if (query[k] === ')' && --depth === 0) break;
           }
-          const body = this.expandFacets(query.slice(j, k));
+          const body = this.expandNominal(query.slice(j, k));
           out += '[' + members.map((m) => `(${m}${body})`).join(' ') + ']';
           i = k + 1;
         } else { out += '('; i++; }
@@ -121,9 +121,9 @@ console.log(`  grammar.js ${p.sources['grammar.js'].slice(0, 12)}`);
 for (const [name, sw] of Object.entries(p.sweeps ?? {})) {
   console.log(`  ${name}: ${sw.pass_rate ?? '?'} of ${sw.files} files, ${sw.gap_files} gap files`);
 }
-const facets = Object.entries(pack.roles.facets ?? {})
+const nominal = Object.entries(pack.terms.nominal ?? {})
   .map(([k, v]) => `${k}(${v.length})`).join(' ');
-console.log(`  facets: ${facets}`);
+console.log(`  nominal: ${nominal}`);
 for (const f of files) {
   const tree = pack.parse(readFileSync(f));
   const root = pack.root(tree);

@@ -1,12 +1,12 @@
 //! treebank-ruby — the treebank Ruby grammar.
 //!
-//! Beyond the usual tree-sitter crate surface this exposes [`ROLES`], the
-//! grammar's `roles.json`: the facet-tier membership (`_callable`,
-//! `_binding`, `_scope`, `_clause`, …) that cannot live in the parse
-//! table, plus the nodes deliberately outside the vocabulary and why. It
-//! travels inside the published crate so a consumer never has to fetch it
-//! separately — the table-tier roles are already queryable from the
-//! parser itself.
+//! Beyond the usual tree-sitter crate surface this exposes [`TERMS`], the
+//! grammar's `terms.json`: the vocabulary terms this grammar delivers
+//! NOMINALLY (`_callable`, `_binding`, `_scope`, `_clause`, …), as a list
+//! of node types rather than as a supertype in the parse table, plus the
+//! nodes deliberately outside the vocabulary and why. It travels inside the
+//! published crate so a consumer never has to fetch it separately — the
+//! structural terms are already queryable from the parser itself.
 
 use tree_sitter_language::LanguageFn;
 
@@ -20,8 +20,8 @@ pub const LANGUAGE: LanguageFn = unsafe { LanguageFn::from_raw(tree_sitter_ruby)
 /// The generated `node-types.json`, describing every node and field.
 pub const NODE_TYPES: &str = include_str!("../../src/node-types.json");
 
-/// The grammar's facet manifest (`roles.json`).
-pub const ROLES: &str = include_str!("../../roles.json");
+/// The grammar's nominal manifest (`terms.json`).
+pub const TERMS: &str = include_str!("../../terms.json");
 
 /// The grammar's evidence file (`ledger.toml`): versions covered, pinned
 /// oracles, corpus and sweep numbers, known gaps and declared deviations.
@@ -44,8 +44,11 @@ mod tests {
 
     #[test]
     fn ships_its_manifests() {
-        let roles: serde_json::Value = serde_json::from_str(super::ROLES).unwrap();
-        assert!(roles["facets"].is_object(), "roles.json carries facets");
+        let terms: serde_json::Value = serde_json::from_str(super::TERMS).unwrap();
+        assert!(
+            terms["nominal"].is_object(),
+            "terms.json carries its nominal terms"
+        );
         let ledger: toml::Value = toml::from_str(super::LEDGER).unwrap();
         assert_eq!(ledger["language"].as_str(), Some("ruby"));
     }

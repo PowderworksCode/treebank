@@ -11,6 +11,31 @@ Only the Rust API is versioned.
 
 ## [Unreleased]
 
+### Changed
+
+- **The vocabulary's two kinds of term are now `structural` and `nominal`,
+  not `table tier` and `facet`.** A structural term is a real supertype in the
+  parse table, where membership is decided by structure — the parse went
+  through it *here*. A nominal term is a list of node types, where membership
+  is decided by name. This renames nothing about the terms themselves:
+  `(_callable)` is still `(_callable)`, every membership is unchanged, and no
+  parse table moves. The vocabulary version deliberately does not bump, for
+  the reason notes/DESIGN.md §3.2.1 gives — the closed term list did not
+  change, only the words describing it. See notes/vocabulary-naming.md.
+- Renames on this crate's surface, all mechanical: `roles` module →
+  `terms`, `RolesManifest` → `TermsManifest` with its `facets` field →
+  `nominal` (`facets` kept as a serde alias), `Pack::roles` → `Pack::terms`,
+  `Pack::roles_json` → `Pack::terms_json`, `PackRoles` → `PackTerms`,
+  `check::dead_roles` → `dead_terms`, and `Vocabulary`'s `table`/`facets`/
+  `either_tier` → `structural`/`nominal`/`demotable`.
+- Each grammar crate's `roles.json` is now `terms.json`, and its `ROLES`
+  const is `TERMS`. A wasm pack exports `tb_terms`/`tb_terms_len`; the old
+  `tb_roles`/`tb_roles_len` still export the same document, so a host built
+  against the previous ABI keeps working, and `Pack::load` prefers the new
+  name and falls back to the old. Packs already published are unaffected —
+  they are content-addressed and are never rebuilt in place.
+- `treebank roles` is now `treebank terms`, with `roles` kept as an alias.
+
 ## [0.3.0] - 2026-08-30
 
 ### Changed

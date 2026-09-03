@@ -2,7 +2,7 @@
 //!
 //! Every check here is a mechanical form of a defect that shipped, or
 //! nearly shipped, in a treebank grammar. A grammar can pass every
-//! behavioural gate — sweep, negative corpus, roles, rosetta — while
+//! behavioural gate — sweep, negative corpus, terms, rosetta — while
 //! accumulating exactly these debts, because each one fails on the file
 //! that arrives NEXT month: the conflict that finally overlaps a
 //! precedence, the unreserved keyword a stray `end` finally exercises,

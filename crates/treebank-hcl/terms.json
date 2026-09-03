@@ -1,7 +1,7 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {},
-  "facets": {
+  "nominal": {
     "_binding": [
       "attribute",
       "block"

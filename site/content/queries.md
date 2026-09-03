@@ -10,7 +10,7 @@ drift — because nothing holds them together beyond the care of whoever last
 touched one.
 
 Treebank has something that does hold them together. A supertype is threaded
-through the productions and a facet is declared in `roles.json`, so
+through the productions and a nominal term is declared in `terms.json`, so
 `(_callable)` means the same thing in every grammar. That makes it possible to
 write the file once:
 
@@ -32,9 +32,10 @@ bash, C, C++, Java, Python, Ruby, Rust, TypeScript and Zig.
 
 ## Generated, not copied
 
-An editor cannot load that file. A facet is not a rule in the parse table, so
+An editor cannot load that file. A nominal term is not a rule in the parse
+table, so
 tree-sitter has nothing to match `(_callable)` against. The file above is the
-**source**; what ships with each grammar is derived from it, with facets
+**source**; what ships with each grammar is derived from it, with nominal terms
 expanded into that grammar's own members:
 
 ```scm

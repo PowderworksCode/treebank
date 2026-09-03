@@ -7,8 +7,8 @@ versions = '''
 Java 8 through 21 in one grammar: lambdas and method references (8), modules (9), `var` (10), switch expressions and arrow rules (14), text blocks (15), `instanceof` patterns (16), records and sealed types (17), record patterns and pattern switches (21). The contextual keywords -- `record`, `sealed`, `permits`, `yield`, `when` -- are soft, so code predating each one keeps parsing.'''
 generate_cli = '0.26.12'
 vocabulary = '0.1.0'
-roles_note = '''
-19 of 22 table-tier terms are threaded. `_declaration` is demoted to the facet tier because java partitions it -- see `demoted` in roles.json. `_interpolation` has no member: java has no string interpolation at any version. `_directive` covers package and import declarations, which is why `program` routes through it rather than naming the two rules.'''
+vocabulary_note = '''
+19 of 22 structural terms are threaded. `_declaration` is demoted to nominal because java partitions it -- see `demoted` in terms.json. `_interpolation` has no member: java has no string interpolation at any version. `_directive` covers package and import declarations, which is why `program` routes through it rather than naming the two rules.'''
 
 [corpus]
 source = 'top-1000 maven artifacts by dependent_repos_count (ecosyste.ms over repo1.maven.org, fetched 2026-08-19), -sources.jar per artifact'
@@ -63,4 +63,4 @@ brackets.'''
 
 [[deviations]]
 what = '''
-`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to a facet is the alternative if it ever matters.'''
+`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to nominal is the alternative if it ever matters.'''

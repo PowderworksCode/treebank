@@ -39,7 +39,7 @@ universal semantic concept it represents. That is why there is no `_class`,
 classifications, they become impossible to define consistently across
 languages, and they belong in a layer built on top of the grammars rather
 than inside them. A `method_definition` node is a `_declaration`, a
-`_member`, and (as a facet) `_callable`; calling it a *Method* is the upper
+`_member`, and (nominally) `_callable`; calling it a *Method* is the upper
 layer's job.
 
 Cross-language queries are the acceptance test of the whole design:
@@ -68,12 +68,12 @@ re-confirmed on it after the pin moved there from 0.25.10:
 2. **Nested supertype partitions work.** Splitting a position into
    `_value → _composite | _scalar` generates cleanly, leaves the parse tree
    byte-identical, and `(_composite)`, `(_scalar)` and `(_value)` all match.
-   A derivation chain gives one occurrence several roles at once: a
+   A derivation chain gives one occurrence several terms at once: a
    `while_statement` reached via `_statement → _control_flow → _loop` answers
    all three queries.
 3. **Overlapping membership at one position is a hard error.** Two supertypes
    containing the same node, both reachable at the same position, is an
-   unresolved conflict: generate fails. Orthogonal roles cannot coexist in
+   unresolved conflict: generate fails. Orthogonal terms cannot coexist in
    the parse table at a single position.
 4. **Supertype queries are derivation-based, not type-based.** In a grammar
    where node `x` occurs once via supertype `_a` and once directly, `(_a)`
@@ -83,87 +83,91 @@ re-confirmed on it after the pin moved there from 0.25.10:
 Fact 4 is the quiet gift: `(_expression)` matches an `identifier` only where
 it is *used* as an expression, not where it is a function's name — role-of-
 this-occurrence, which is precisely what a syntactic-role vocabulary should
-mean. Facts 1 and 3 are the constraint: roles that cross-cut the derivation
+mean. Facts 1 and 3 are the constraint: terms that cross-cut the derivation
 (a `function_definition` is *callable* whether it occurs in statement
 position or class-body position) cannot be supertypes at all. So the
-vocabulary has two tiers with different physics.
+vocabulary delivers a term in one of two ways, with different physics.
 
 ## 3. The vocabulary
 
-### 3.1 Two tiers
+### 3.1 Two ways to deliver a term
 
-**Table tier** — real supertype rules threaded through the productions.
-Occurrence-level semantics, enforced at generate time: a grammar that puts a
-node somewhere its role forbids does not build. Natively queryable by any
-tree-sitter consumer with no treebank machinery at all.
+Every term is delivered one of two ways, and which one is decided by what the
+parse table can hold rather than by what would read nicely.
 
-**Facet tier** — roles that cross-cut derivations (§2, fact 3). Shipped as a
-`roles.json` manifest in each grammar crate: type-level membership,
+**Structural** — a real supertype rule threaded through the productions.
+Membership is decided by **structure**: the parse went through it *here*.
+Enforced at generate time — a grammar that puts a node somewhere its term
+forbids does not build — and natively queryable by any tree-sitter consumer
+with no treebank machinery at all.
+
+**Nominal** — a term that cross-cuts derivations (§2, fact 3), so no
+supertype can hold it. Membership is decided by **name**: the node's type is
+on a list. Shipped as a `terms.json` manifest in each grammar crate,
 maintained next to the grammar, validated in CI against the generated
-`node-types.json` (every listed node must exist; every facet must be from
-the closed list). `treebank` expands facet queries at load time —
+`node-types.json` (every listed node must exist; every key must be from the
+closed list). `treebank` expands a nominal query at load time —
 `(_callable)` becomes the concrete alternation `[(function_definition)
-(lambda) …]` — so the query surface is uniform across tiers. Type-level is
-the *correct* semantics for facets: a `function_definition` is callable
-wherever it occurs.
+(lambda) …]` — so the query surface is uniform either way. Membership by name
+is the *correct* semantics here: a `function_definition` is callable wherever
+it occurs.
 
-The facet tier is a compromise forced by the parse table's limits, kept
-honest by being closed, machine-checked, and shipped inside the same crate
-as the grammar — not a hand-maintained query pack.
+Delivering a term nominally is a compromise forced by the parse table's
+limits, kept honest by being closed, machine-checked, and shipped inside the
+same crate as the grammar — not a hand-maintained query pack.
 
-### 3.1.1 A term's tier is per-grammar
+### 3.1.1 How a term is delivered is per-grammar
 
-The tier is a property of the **grammar**, not of the term. A term the
-vocabulary marks `either_tier` may be delivered by either mechanism, and
-each grammar picks.
+It is a property of the **grammar**, not of the term. A term the vocabulary
+marks `demotable` may be delivered either way, and each grammar picks.
 
 The forcing case is `_parameter`. Python's parameter list is ordered by the
 grammar itself — `def f(a=1, b)` and `def f(**kw, a)` are SyntaxErrors out
 of CPython's own parser, not later semantic checks — and Rust's is too: a
 `self` receiver is only ever first, a C-variadic `...` only ever last. A
 supertype is one alternation repeated by commas, so a grammar that keeps
-`_parameter` in the table tier necessarily accepts all four of those. The
-ordering has to be spelled out as a chain of "what may still follow" rules,
-and once it is, the parameter node types no longer share a derivation and
-tree-sitter cannot collect them under a supertype. TypeScript does not
-partition the position, so it keeps `_parameter` as a real supertype.
+`_parameter` structural necessarily accepts all four of those. The ordering
+has to be spelled out as a chain of "what may still follow" rules, and once
+it is, the parameter node types no longer share a derivation and tree-sitter
+cannot collect them under a supertype. TypeScript does not partition the
+position, so it keeps `_parameter` as a real supertype.
 
-**Why this is one meaning and not two.** Occurrence-level and type-level
-membership agree exactly when every member of the term is a concrete node
-type that occurs nowhere else. Python's six (`parameter`,
+**Why this is one meaning and not two.** Structural and nominal membership
+agree exactly when every member of the term is a concrete node type that
+occurs nowhere else. Python's six (`parameter`,
 `star_parameter`, `double_star_parameter`, `keyword_separator`,
 `positional_separator`, `tuple_parameter`) and Rust's three (`parameter`,
-`self_parameter`, `variadic_parameter`) all satisfy that, so the facet
-selects precisely the nodes the supertype would have. That is also the
+`self_parameter`, `variadic_parameter`) all satisfy that, so nominal
+membership selects precisely the nodes the supertype would have. That is also the
 condition under which the demotion is *permitted* — so the choice is
 between two implementations of one meaning, never between two meanings.
 `_argument` fails the test in all three languages, because a positional
 argument is a bare `_expression` with no type of its own; it stays in the
-table tier until it has a node of its own.
+structural until it has a node of its own.
 
 **What it costs.** Native queryability stops being uniform: a consumer
 using the parser through raw tree-sitter, with none of treebank's crates,
 can write `(_parameter)` against TypeScript and not against Python. This
 fails *loudly* — a supertype a grammar does not declare is a `QueryError`
 at `Query::new`, not a silent zero-match — and everything going through
-`treebank`, which expands facets at load time, sees no difference at
+`treebank`, which expands nominal terms at load time, sees no difference at
 all. The rosetta suite asserts that directly: `(_parameter) @p` counts the
-same in all three languages with Python and Rust on the facet tier and
-TypeScript on the table tier.
+same in all three languages with Python and Rust delivering it nominally and
+TypeScript structurally.
 
-**The rule.** *Use the table tier wherever the language leaves the position
+**The rule.** *Stay structural wherever the language leaves the position
 unpartitioned; it is stronger and needs no treebank machinery. Demote to the
-facet tier only in the grammars that must partition it, and only when every
+nominal only in the grammars that must partition it, and only when every
 member of the term is a concrete node type occurring nowhere else.* The
 alternative — moving a term globally the first time any language partitions
-it — erodes the table tier to whatever no supported language ever
+it — erodes the structural list to whatever no supported language ever
 partitions, a race to the bottom set by the most constrained grammar in the
 set.
 
 Demotion is declared, not inferred: the grammar lists the term in
-`roles.json`'s `demoted` map with the reason its language forced it, and the
+`terms.json`'s `demoted` map with the reason its language forced it, and the
 checker rejects a demotion the vocabulary does not allow, one without a
-reason, one that is also a declared supertype, and one with no facet
+reason, one that is also a declared supertype, and one with no nominal
 members. Without that, dropping a supertype by accident would be
 indistinguishable from demoting one on purpose.
 
@@ -179,7 +183,7 @@ names never are. Supertypes are hidden nodes either way, and hidden names
 are fully queryable — the underscore just marks the shared layer apart from
 concrete nodes in every query that mixes them.
 
-**Structural core — table tier**
+**Structural core — delivered as supertypes**
 
 | term | definition | python | rust | typescript |
 |---|---|---|---|---|
@@ -193,13 +197,13 @@ concrete nodes in every query that mixes them.
 
 Two definitional notes. `_declaration` is one term: `fn f() {}`, `fn f();`
 and `declare function f(): void` are all declarations; the with-body /
-without-body distinction is not encoded (it can be added later as a facet,
+without-body distinction is not encoded (it can be added later as a nominal term,
 additively, without breaking a query). `_literal` quantifies over the rule,
 not the instance: Python's `string` rule can carry interpolation, so no
 Python string is a `_literal`, while Rust's `string_literal` cannot, so
 every one is.
 
-**Positional roles — table tier**
+**Positional terms — delivered as supertypes**
 
 | term | definition | examples |
 |---|---|---|
@@ -212,12 +216,12 @@ every one is.
 | `_directive` | affects the compilation unit or its environment rather than computing in it | `import_statement`, `import_from_statement` (py); `use_declaration`, `extern_crate_declaration` (rs); `import_statement`, `export_statement` (ts); shebangs, pragmas |
 | `_body` | the body position of a definition or control construct | `block` (py, rs); `statement_block`, arrow-function expression bodies (ts) |
 
-A rule the positional roles impose on the grammars: anything a query should
+A rule the positional terms impose on the grammars: anything a query should
 see must be a **named node**. `pub`, `mut`, `async`, `readonly` are named
 modifier nodes in treebank grammars, not anonymous tokens, because an
 anonymous token can never carry a role.
 
-**Operational roles — table tier**, nested inside `_statement` and/or
+**Operational terms — delivered as supertypes**, nested inside `_statement` and/or
 `_expression` as each language requires:
 
 | term | definition | notes |
@@ -235,7 +239,7 @@ nests inside `_expression`; where it is a statement (Python), inside
 `_statement`; TypeScript threads it wherever its syntax requires. `(_loop)`
 does not care — that is the point of the vocabulary.
 
-**Facets — manifest tier** (`roles.json`)
+**Nominal terms — the manifest** (`terms.json`)
 
 | term | definition | membership sketch |
 |---|---|---|
@@ -256,12 +260,12 @@ fn foo(x: i32) {
 only `fn foo` is a `_declaration`. Tooling gets to ask *find declarations*
 and *find everything that introduces a name* as two queries, not one.
 
-Three facets at launch. A term moves between tiers only with a vocabulary
+Three nominal terms at launch. A term moves between the two only with a vocabulary
 version bump.
 
 ### 3.2.1 On the vocabulary version
 
-`vocabulary.json` carries a `version`, and every `roles.json` declares the
+`vocabulary.json` carries a `version`, and every `terms.json` declares the
 one it targets. That string is an **identity, not a compatibility promise**,
 and it is deliberately not bumped per change while the vocabulary is still
 being worked out — a number climbing through 0.4 in a fortnight claims a
@@ -270,8 +274,9 @@ repository to claim it to.
 
 Nothing is lost by holding it still, because the version is not what
 protects a stale manifest. The structural rules in §3.3 are: a term removed
-or renamed fails rule 1 (supertypes ⊆ table tier) or rule 5 (facet keys ⊆
-facet tier); a term that moved tier fails the demotion rules; a node left
+or renamed fails rule 1 (supertypes ⊆ the structural list) or rule 5 (nominal
+keys ⊆ the nominal list); a term whose delivery moved fails the demotion
+rules; a node left
 uncovered fails rule 2. Every *breaking* vocabulary change is caught by what
 the manifest says, not by what it claims to target. Omitting a newly added
 term is caught by nothing, and should not be — a grammar may always omit
@@ -281,18 +286,18 @@ Start versioning for real when something outside this repository depends on
 the vocabulary. Until then the field exists to name the vocabulary, not to
 grade it.
 
-### 3.3 What the checker enforces (`treebank roles`, in CI)
+### 3.3 What the checker enforces (`treebank terms`, in CI)
 
-1. Declared supertypes ⊆ the closed table-tier list; `roles.json` keys ⊆ the
-   closed facet list, or a term this grammar declares as `demoted` (§3.1.1).
-   A demoted term must be `either_tier` in the vocabulary, must carry a
-   reason, must have facet members, and must **not** also be a declared
-   supertype — a term lives in exactly one tier per grammar.
+1. Declared supertypes ⊆ the closed structural list; `terms.json` keys ⊆ the
+   closed nominal list, or a term this grammar declares as `demoted` (§3.1.1).
+   A demoted term must be `demotable` in the vocabulary, must carry a reason,
+   must have nominal members, and must **not** also be a declared supertype —
+   a term is delivered exactly one way per grammar.
 2. Every named, non-`extras` node type is reachable through at least one
-   table role, **or** listed in a facet, **or** recorded in the ledger as
+   structural term, **or** listed nominally, **or** recorded in the ledger as
    uncategorised with a one-line reason. Nothing is silently outside the
    vocabulary.
-3. Every node named in `roles.json` exists in `node-types.json`.
+3. Every node named in `terms.json` exists in `node-types.json`.
 4. Declared containments hold (`_literal ⊆ _expression`; `_branch`, `_loop`,
    `_jump` ⊆ `_control_flow`).
 5. **Role liveness:** every declared role matches at least one occurrence
@@ -310,7 +315,7 @@ grade it.
   languages do (indentation and f-strings; raw strings; template literals
   and JSX text).
 - Every `grammar.js` imports the vocabulary from `treebank`'s
-  `vocabulary/supertypes.js`. The term list is shared *code*, not shared
+  `vocabulary/terms.js`. The term list is shared *code*, not shared
   convention: the import provides the closed list and helpers for the
   standard nestings; the grammar supplies the members.
 - **Shared concrete names and fields.** The same construct gets the same
@@ -722,14 +727,14 @@ runs, and every known failure is ledgered: CPython's grammar and tokenizer
 test corpora, rustc's parser test suite, the TypeScript compiler's
 conformance suite.
 
-**I4 — Vocabulary conformance.** `treebank roles` (§3.3): closed lists,
+**I4 — Vocabulary conformance.** `treebank terms` (§3.3): closed lists,
 total node coverage, containments, manifest validity, role liveness, and
 the rosetta suite.
 
 ### 5.4 The rosetta corpus
 
 A directory of small parallel programs — the same behaviour written in
-Python, Rust and TypeScript — each with an expected-roles file: assertions
+Python, Rust and TypeScript — each with an expected-terms file: assertions
 like *"exactly 2 `_loop`, 3 `_declaration`, 1 `_callable`, and
 `(function_definition name: (_name))` yields `f`, in all three languages."*
 This is the executable form of the promise that the vocabulary means the
@@ -969,38 +974,38 @@ for the same reason. What is left after those is where improvement lives.
 ```
 crates/
   treebank/              # the vocabulary, as code and as data:
-    vocabulary/supertypes.js  #   the closed term list grammars import
-    src/                      #   roles.json schema, facet query expansion,
-                              #   the `treebank roles` checker
+    vocabulary/terms.js       #   the closed term list grammars import
+    src/                      #   terms.json schema, nominal query expansion,
+                              #   the `treebank terms` checker
   treebank-python/
     grammar.js  src/scanner.c  src/ (generated, committed)
-    roles.json  ledger.toml
+    terms.json  ledger.toml
     test/corpus/  test/negative/  test/negative/<version>/
     bindings/                 # rust crate + wasm
   treebank-rust/              # same shape
   treebank-typescript/        # common/define-grammar.js + typescript/ + tsx/
-  treebank-cli/               # fetch · rank · sweep · oracle · roles ·
+  treebank-cli/               # fetch · rank · sweep · oracle · terms ·
                               # negative · ledger
 tools/consumer-test/          # downstream crate + wasm smoke tests
-test/rosetta/                 # parallel programs + expected-roles files
+test/rosetta/                 # parallel programs + expected-terms files
 ```
 
 - **treebank** is the single source of truth for the vocabulary: the JS
   module every grammar imports, the Rust library the CLI and consumers use,
-  and — compiled to wasm — the same facet expansion in the browser.
+  and — compiled to wasm — the same nominal expansion in the browser.
   Vocabulary versions are semver on this crate.
 - **Generated `src/` is committed** in each grammar crate; I1 keeps it
   honest. There is no build directory, no patch series, no vendored
   anything.
 - **wasm is a first-class artifact**: every grammar crate publishes
   `tree-sitter-<lang>.wasm` alongside the Rust crate, and `treebank`
-  ships a JS/wasm package that loads them and provides facet-aware queries.
-  `roles.json` travels inside both the crate and the npm package.
+  ships a JS/wasm package that loads them and expands nominal terms.
+  `terms.json` travels inside both the crate and the npm package.
 - **`ledger.toml`** is TOML rather than JSON because it is mostly prose. A
   paragraph explaining why a deviation exists is one escaped line in JSON
   and a readable block in TOML, and this is the file someone reads when
   deciding whether to trust the grammar. The machine-readable manifests
-  next to it — `roles.json`, `node_map.json`, `field_map.json` — stay JSON:
+  next to it — `terms.json`, `node_map.json`, `field_map.json` — stay JSON:
   they are lists of node names, where TOML buys nothing.
 - **`ledger.toml`** is each grammar's evidence file, machine-validated by
   `treebank ledger`: language, versions covered, one pinned oracle per
@@ -1011,15 +1016,15 @@ test/rosetta/                 # parallel programs + expected-roles files
 
 ## 7. Design decisions
 
-1. **Two tiers, because the parse table forces it.** Structural roles are
+1. **Two deliveries, because the parse table forces it.** Structural terms are
    supertypes (occurrence-level, generate-time-enforced); the three
-   cross-cutting facets ship as a checked manifest with query expansion in
+   cross-cutting terms ship nominally, as a checked manifest with query expansion in
    `treebank`. The alternative — restricting the vocabulary to only
-   what threads — was rejected to keep the facet queries; the other
+   what threads — was rejected to keep the nominal queries; the other
    alternative — everything in query files — was rejected because it is
    exactly the drifting query layer this design exists to kill.
 2. **One `_declaration`,** with or without body; `_binding` is a separate
-   facet. A `_signature` facet can be added later, additively.
+   nominal term. A `_signature` term can be added later, additively.
 3. **`treebank-typescript` covers JavaScript,** as two dialect parsers
    generated from one source.
 4. **Shared concrete names and fields across grammars,** diverging only
@@ -1055,7 +1060,7 @@ lines of `grammar.js` plus a 400–550-line scanner each, and the version
 union adds real size on top (py2 statement forms; Rust's edition-contextual
 keywords). The scanners are where the risk concentrates: indentation, raw
 strings, template literals, regex-vs-division and other ASI-adjacent token
-decisions, JSX text. One language at a time, with the sweep and the roles
+decisions, JSX text. One language at a time, with the sweep and the terms
 checker live from the first week, is what keeps that risk measured.
 
 ### 8.1 C and C++, and what the C++ parse table costs — measured

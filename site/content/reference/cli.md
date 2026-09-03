@@ -34,7 +34,7 @@ order: 10
 
 | command | what it does |
 | --- | --- |
-| `roles` | Vocabulary conformance: declared supertypes from the closed table tier, total node coverage, required containments, a valid `roles.json` |
+| `terms` | Vocabulary conformance: declared supertypes from the closed structural list, total node coverage, required containments, a valid `terms.json` |
 | `lint` | The structural smells the field guide names — declared-conflict growth, early commits between parallel tiers, same-text token splits, unreserved keywords, scanner drift, parse-table growth — against the grammar's `lint_policy.toml` where one exists, advisory where none does |
 | `negative` | Assert that every file in a directory *fails* to parse |
 | `rosetta` | The same program in every owned language must yield the same role counts |

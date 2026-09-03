@@ -2,14 +2,14 @@
  * treebank-java: a from-scratch grammar for Java 8 through 21, carrying the
  * treebank vocabulary (notes/DESIGN.md §3) in its parse table.
  *
- * Threaded table-tier roles: see `supertypes` below. Omissions and the
- * reasons for them are in ledger.toml's roles_note.
+ * Structural terms threaded here: see `supertypes` below. Omissions and the
+ * reasons for them are in ledger.toml's vocabulary_note.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 // Java's binary operator ladder, loosest to tightest. The numbers are the
 // language's own table read upward; nothing here is tuned.
@@ -41,14 +41,14 @@ module.exports = grammar({
 
   extras: $ => [$.line_comment, $.block_comment, /\s/],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
-    // `_declaration` is demoted to the facet tier here. Java partitions it:
+    // `_declaration` is demoted to nominal here. Java partitions it:
     // a field declaration and a local variable declaration are the same
     // syntax in different places, so one alternation reachable from both a
     // class body and a block makes every field ambiguous with every local.
-    // See roles.json and notes/DESIGN.md 3.1.1.
+    // See terms.json and notes/DESIGN.md 3.1.1.
     ...tb.assertDemotable([]),
     '_pattern',
     '_type',

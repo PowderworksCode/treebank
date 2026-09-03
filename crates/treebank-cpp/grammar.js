@@ -34,7 +34,7 @@
 // @ts-check
 
 const C = require('../treebank-c/grammar');
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 const PREC = {
   LAMBDA: -3,
@@ -70,7 +70,7 @@ module.exports = grammar(C, {
   ]),
 
   supertypes: ($, previous) => previous.concat(
-    tb.assertTableTerms(['_pattern']).map((name) => $[name]),
+    tb.assertStructuralTerms(['_pattern']).map((name) => $[name]),
   ),
 
   conflicts: ($, previous) => previous.concat([
@@ -885,7 +885,7 @@ module.exports = grammar(C, {
     // `_qualified_member_declarator` instead, where a `prec` decides it
     // outright. Offering `A::b` as a declarator as well as a type and an
     // expression made the parser carry the same three symbols in three
-    // roles through every position, which is where this table stopped
+    // positions through every context, which is where this table stopped
     // converging. `int A::x = 5;` — an out-of-line static member
     // definition — is the form that costs, and it is a ledgered gap.
     _declarator: ($, previous) => choice(

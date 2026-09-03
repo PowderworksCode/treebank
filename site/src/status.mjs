@@ -109,9 +109,9 @@ export function grammarStatus(g, name) {
     ["corpus cases", g.tests?.corpus_cases],
     ["negative files", g.tests?.negative_files],
     ["shape fixtures", g.tests?.shape_files],
-    ["supertypes", g.roles?.supertypes],
-    ["facets", g.roles?.facets],
-    ["uncategorised", g.roles?.uncategorised],
+    ["structural", g.terms?.structural],
+    ["nominal", g.terms?.nominal],
+    ["uncategorised", g.terms?.uncategorised],
   ];
 
   // What the grammar declares about itself. Each of these is a policy file

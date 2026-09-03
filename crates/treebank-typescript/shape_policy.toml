@@ -102,7 +102,7 @@ why = 'See `JsxAttributes <- jsx_self_closing_element`.'
 [[ignore]]
 signature = 'BinaryExpression <- sequence_expression'
 why = '''
-tsc models the comma operator as a left-associative BinaryExpression, so `a, b, c` nests; we model it as one flat `sequence_expression`. Different shape for the same operator, and ours is the one the vocabulary wants -- see the `sequence_expression` note in roles.json.'''
+tsc models the comma operator as a left-associative BinaryExpression, so `a, b, c` nests; we model it as one flat `sequence_expression`. Different shape for the same operator, and ours is the one the vocabulary wants -- see the `sequence_expression` note in terms.json.'''
 
 [[known_limits]]
 signature = 'ArrayType <- array_type / TypeParameter <- array_type'

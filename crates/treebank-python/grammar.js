@@ -3,16 +3,16 @@
  * every Python 3, carrying the treebank vocabulary (notes/DESIGN.md §3) in its
  * parse table.
  *
- * Threaded table-tier roles (18): _statement _expression _declaration
+ * Structural terms threaded here (18): _statement _expression _declaration
  * _pattern _name _literal _parameter _argument _member _clause? no — see
  * ledger. Actual list: see `supertypes` below; omissions and the reasons
- * for them are in ledger.toml's roles_note.
+ * for them are in ledger.toml's vocabulary_note.
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 const PREC = {
   walrus: 1,
@@ -54,16 +54,16 @@ module.exports = grammar({
     $._line_start,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
     '_declaration',
     '_pattern',
     '_name',
     '_literal',
-    // `_parameter` is demoted to the facet tier in this grammar: Python's
+    // `_parameter` is demoted to nominal in this grammar: Python's
     // parameter list is ordered, so the six parameter node types no longer
-    // share one derivation. See `parameterRules` below and roles.json.
+    // share one derivation. See `parameterRules` below and terms.json.
     ...tb.assertDemotable([]),
     '_argument',
     '_member',
@@ -1237,13 +1237,13 @@ module.exports = grammar({
  * and a separate section after `*`, where a parameter WITHOUT a default may
  * legally follow one with a default (`def f(*, a=1, b)` is valid Python).
  *
- * This is the reason `_parameter` is a facet rather than a supertype in
+ * This is the reason `_parameter` is nominal rather than structural in
  * this grammar: the six parameter node types no longer share a derivation,
  * so tree-sitter cannot collect them under one supertype. All six are
- * concrete types that occur nowhere but a parameter list, so type-level
- * facet membership selects exactly the nodes occurrence-level supertype
- * membership would have. `(_parameter)` through treebank is unchanged.
- * See roles.json's `demoted` and notes/DESIGN.md section 3.4.
+ * concrete types that occur nowhere but a parameter list, so nominal
+ * membership selects exactly the nodes structural membership would have.
+ * `(_parameter)` through treebank is unchanged.
+ * See terms.json's `demoted` and notes/DESIGN.md section 3.4.
  *
  * @param {string} prefix   rule-name prefix for this family of rules
  * @param {Object} p        the language-level pieces, which differ between

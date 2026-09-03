@@ -31,9 +31,9 @@
     "formatter": false,
     "printer": false
    },
-   "roles": {
-    "supertypes": 13,
-    "facets": 7,
+   "terms": {
+    "structural": 13,
+    "nominal": 7,
     "named_nodes": 52,
     "uncategorised": 8
    },
@@ -90,9 +90,9 @@
     "formatter": false,
     "printer": false
    },
-   "roles": {
-    "supertypes": 19,
-    "facets": 8,
+   "terms": {
+    "structural": 19,
+    "nominal": 8,
     "named_nodes": 117,
     "uncategorised": 32
    },
@@ -183,9 +183,9 @@
     "formatter": false,
     "printer": false
    },
-   "roles": {
-    "supertypes": 20,
-    "facets": 8,
+   "terms": {
+    "structural": 20,
+    "nominal": 8,
     "named_nodes": 176,
     "uncategorised": 41
    },
@@ -251,9 +251,9 @@
     "formatter": true,
     "printer": false
    },
-   "roles": {
-    "supertypes": 12,
-    "facets": 6,
+   "terms": {
+    "structural": 12,
+    "nominal": 6,
     "named_nodes": 44,
     "uncategorised": 11
    },
@@ -340,9 +340,9 @@
     "formatter": false,
     "printer": false
    },
-   "roles": {
-    "supertypes": 19,
-    "facets": 8,
+   "terms": {
+    "structural": 19,
+    "nominal": 8,
     "named_nodes": 122,
     "uncategorised": 15
    },
@@ -396,7 +396,7 @@
    "known_widenings": [],
    "deviations": [
     {
-     "summary": "`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to a facet is the alternative if it ever matters.",
+     "summary": "`super(x)` and `this(x)` parse wherever an expression may go, not only as a constructor's first statement. The rule is reached through `_invocation` like a method call and `expression_statement` supplies the terminator; giving it its own `;` instead cost 66,459 files, because the same rule then also sat in `_primary` and every constructor call wanted two semicolons. Accepting the wider position is the cheaper of the two, and demoting `_invocation` to nominal is the alternative if it ever matters.",
      "files": null
     }
    ]
@@ -413,9 +413,9 @@
     "formatter": true,
     "printer": true
    },
-   "roles": {
-    "supertypes": 18,
-    "facets": 8,
+   "terms": {
+    "structural": 18,
+    "nominal": 8,
     "named_nodes": 104,
     "uncategorised": 20
    },
@@ -571,9 +571,9 @@
     "formatter": false,
     "printer": false
    },
-   "roles": {
-    "supertypes": 18,
-    "facets": 7,
+   "terms": {
+    "structural": 18,
+    "nominal": 7,
     "named_nodes": 114,
     "uncategorised": 16
    },
@@ -630,9 +630,9 @@
     "formatter": true,
     "printer": true
    },
-   "roles": {
-    "supertypes": 19,
-    "facets": 9,
+   "terms": {
+    "structural": 19,
+    "nominal": 9,
     "named_nodes": 138,
     "uncategorised": 31
    },
@@ -765,9 +765,9 @@
     "formatter": true,
     "printer": true
    },
-   "roles": {
-    "supertypes": 20,
-    "facets": 9,
+   "terms": {
+    "structural": 20,
+    "nominal": 9,
     "named_nodes": 154,
     "uncategorised": 30
    },
@@ -845,7 +845,7 @@
      "files": null
     },
     {
-     "summary": "class methods are function_definition (python/rust precedent: same construct, same name), class members route through _declaration so a method answers (_declaration), (_member) and the _callable facet alike",
+     "summary": "class methods are function_definition (python/rust precedent: same construct, same name), class members route through _declaration so a method answers (_declaration), (_member) and the nominal `_callable` alike",
      "files": null
     },
     {
@@ -869,7 +869,7 @@
      "files": null
     },
     {
-     "summary": "`string` is a `_literal` here and is NOT one in python, and that asymmetry is correct rather than a drift: typescript's string is a single token that cannot interpolate, so it satisfies the vocabulary's per-rule test ('determined by its own text, for EVERY instance of the rule'), while python's `string` rule carries f-strings and so cannot. It was excluded here by oversight until vocabulary 0.3.0 measured it. The `_string` facet exists because of exactly this: `(_literal)` is not comparable across languages for strings, and `(_string)` is.",
+     "summary": "`string` is a `_literal` here and is NOT one in python, and that asymmetry is correct rather than a drift: typescript's string is a single token that cannot interpolate, so it satisfies the vocabulary's per-rule test ('determined by its own text, for EVERY instance of the rule'), while python's `string` rule carries f-strings and so cannot. It was excluded here by oversight until vocabulary 0.3.0 measured it. The nominal `_string` exists because of exactly this: `(_literal)` is not comparable across languages for strings, and `(_string)` is.",
      "files": null
     },
     {
@@ -926,9 +926,9 @@
     "formatter": false,
     "printer": false
    },
-   "roles": {
-    "supertypes": 5,
-    "facets": 6,
+   "terms": {
+    "structural": 5,
+    "nominal": 6,
     "named_nodes": 22,
     "uncategorised": 1
    },
@@ -1008,9 +1008,9 @@
     "formatter": true,
     "printer": false
    },
-   "roles": {
-    "supertypes": 17,
-    "facets": 9,
+   "terms": {
+    "structural": 17,
+    "nominal": 9,
     "named_nodes": 98,
     "uncategorised": 11
    },

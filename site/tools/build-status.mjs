@@ -86,7 +86,7 @@ async function main() {
       vocabulary: g.vocabulary ?? null,
       languages: (g.languages ?? []).map((l) => l.name),
       capabilities: g.capabilities ?? {},
-      roles: g.roles ?? {},
+      terms: g.terms ?? {},
       tests: g.tests ?? {},
       known_deviations: g.known_deviations ?? {},
       distribution: g.distribution ?? {},

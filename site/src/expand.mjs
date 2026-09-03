@@ -1,7 +1,8 @@
-// Facet query expansion, in the browser.
+// Nominal query expansion, in the browser.
 //
-// A facet is not a grammar rule, so `(_callable name: (_name) @n)` cannot run
-// against the parser as written. This rewrites every facet pattern into the
+// A nominal term is not a grammar rule, so `(_callable name: (_name) @n)`
+// cannot run against the parser as written. This rewrites every nominal pattern
+// into the
 // alternation the pack's own manifest defines:
 //
 //   (_callable)               ->  [(function_definition) (lambda)]
@@ -15,7 +16,7 @@
 // This is a PORT of crates/treebank/src/expand.rs, and the two must not
 // drift: a query that means one thing here and another in a consumer's build
 // is worse than a query that fails. crates/treebank/tests/expand_parity.rs
-// runs both over every grammar's facets and fails on any difference, so this
+// runs both over every grammar's nominal terms and fails on any difference, so this
 // file is checked against its original rather than trusted to match it.
 //
 // It mirrors `Pack::expand_query`, filtering included. A member is dropped
@@ -111,7 +112,7 @@ function closure(nt, supertype) {
 
 // The field constraints at DEPTH 0 of a pattern body: the field name plus the
 // node types its value pattern demands. An empty list means presence is
-// enough. Only depth-0 fields bind to the facet member itself; a `#`-predicate
+// enough. Only depth-0 fields bind to the nominal member itself; a `#`-predicate
 // opens a paren and so is already depth 1.
 function topLevelFieldConstraints(body) {
   const out = [];
@@ -135,7 +136,7 @@ function topLevelFieldConstraints(body) {
       const field = body.slice(start, i);
       i += 1;
       while (i < body.length && /\s/.test(body[i])) i += 1;
-      // The value pattern: `(name ...)`, or `[(a ...) (b ...)]` where a facet
+      // The value pattern: `(name ...)`, or `[(a ...) (b ...)]` where a term
       // has already been expanded in place.
       const names = [];
       let j = i;
@@ -173,11 +174,11 @@ function topLevelFieldConstraints(body) {
   return out;
 }
 
-// Rewrite `query` against `facets`, a plain object of name -> member list as
-// it appears in the pack's roles manifest. Member order is the manifest's and
+// Rewrite `query` against `nominal`, a plain object of name -> member list as
+// it appears in the pack's terms manifest. Member order is the manifest's and
 // is not sorted here: the expansion is compared byte for byte against the
 // Rust, which preserves it too.
-export function expandQuery(query, facets, nodeTypes = null) {
+export function expandQuery(query, nominal, nodeTypes = null) {
   let out = "";
   let i = 0;
   while (i < query.length) {
@@ -196,16 +197,16 @@ export function expandQuery(query, facets, nodeTypes = null) {
       NAME.lastIndex = nameStart;
       const name = (NAME.exec(query) ?? [""])[0];
       const nameEnd = nameStart + name.length;
-      const members = Object.hasOwn(facets, name) ? facets[name] : undefined;
+      const members = Object.hasOwn(nominal, name) ? nominal[name] : undefined;
       if (members) {
         if (members.length === 0)
-          throw new Error(`facet \`${name}\` has no members`);
+          throw new Error(`nominal term \`${name}\` has no members`);
         const close = matchingParen(query, i);
         // The body is everything between the name and the close paren, itself
-        // expanded first so a facet nested inside a facet resolves inside out.
+        // expanded first so a term nested inside one resolves inside out.
         const body = expandQuery(
           query.slice(nameEnd, close),
-          facets,
+          nominal,
           nodeTypes,
         );
 
@@ -235,7 +236,7 @@ export function expandQuery(query, facets, nodeTypes = null) {
         });
         if (kept.length === 0) {
           throw new Error(
-            `facet \`${name}\`: no member satisfies the field constraint(s) ` +
+            `nominal term \`${name}\`: no member satisfies the field constraint(s) ` +
               needed.map(([f, w]) => `${f}: [${w.join(", ")}]`).join(", "),
           );
         }
@@ -259,7 +260,7 @@ export function expandQuery(query, facets, nodeTypes = null) {
   return out;
 }
 
-// The facet names a query may use, for a hint under the box.
-export function facetNames(roles) {
-  return Object.keys(roles?.facets ?? {}).sort();
+// The nominal term names a query may use, for a hint under the box.
+export function nominalNames(terms) {
+  return Object.keys(terms?.nominal ?? {}).sort();
 }

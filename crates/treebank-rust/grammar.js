@@ -6,14 +6,14 @@
  * `_control_flow` (and `_branch`/`_loop`/`_jump`) nest inside `_expression`
  * rather than `_statement`, `_member` is threadable (impl and trait bodies
  * hold declarations), and `_modifier` gets its first members
- * (visibility_modifier, mutable_specifier). 21 of 22 table-tier terms
- * thread; only `_clause` cannot (see ledger roles_note).
+ * (visibility_modifier, mutable_specifier). 21 of 22 structural terms
+ * thread; only `_clause` cannot (see ledger vocabulary_note).
  */
 
 /// <reference types="tree-sitter-cli/dsl" />
 // @ts-check
 
-const tb = require('../treebank/vocabulary/supertypes.js');
+const tb = require('../treebank/vocabulary/terms.js');
 
 const PREC = {
   closure: -2,
@@ -81,7 +81,7 @@ module.exports = grammar({
     $.block_comment,
   ],
 
-  supertypes: $ => tb.assertTableTerms([
+  supertypes: $ => tb.assertStructuralTerms([
     '_statement',
     '_expression',
     '_declaration',
@@ -89,7 +89,7 @@ module.exports = grammar({
     '_type',
     '_name',
     '_literal',
-    // `_parameter` is demoted to the facet tier here; see roles.json.
+    // `_parameter` is demoted to nominal here; see terms.json.
     ...tb.assertDemotable([]),
     '_argument',
     '_member',
@@ -103,9 +103,9 @@ module.exports = grammar({
     '_invocation',
     '_access',
     '_attribute',
-    // `_modifier` is demoted to the facet tier here: rust never lets
+    // `_modifier` is demoted to nominal here: rust never lets
     // visibility and `mut` occupy the same slot, so one alternation across
-    // both is exactly the rule that accepted `mut use x;`. See roles.json.
+    // both is exactly the rule that accepted `mut use x;`. See terms.json.
     ...tb.assertDemotable([]),
   ]).map((name) => $[name]),
 
@@ -360,8 +360,8 @@ module.exports = grammar({
     // FIRST parameter, and the C-variadic `...` is only ever the last. One
     // `_parameter` alternation repeated by commas says neither, and accepts
     // `fn f(a: i32, self)`. So the list is spelled out as "what may still
-    // follow", which is also why `_parameter` is a facet rather than a
-    // supertype here -- see roles.json's `demoted` and notes/DESIGN.md 3.4.
+    // follow", which is also why `_parameter` is nominal rather than a
+    // supertype here -- see terms.json's `demoted` and notes/DESIGN.md 3.4.
     parameters: $ => seq('(', optional($._parameter_list), ')'),
 
     _parameter_list: $ => choice(

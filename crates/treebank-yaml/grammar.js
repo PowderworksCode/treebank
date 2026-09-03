@@ -28,7 +28,7 @@
 // (FIELD_GUIDE.md §3). Reading a key and reading a value are the same act
 // here; what differs is only what may follow.
 
-const { assertTableTerms } = require('../treebank/vocabulary/supertypes.js');
+const { assertStructuralTerms } = require('../treebank/vocabulary/terms.js');
 
 module.exports = grammar({
   name: 'yaml',
@@ -83,7 +83,7 @@ module.exports = grammar({
   // the reason is written out at `_implicit_key`.
   inline: $ => [$._implicit_key],
 
-  supertypes: $ => assertTableTerms([
+  supertypes: $ => assertStructuralTerms([
     '_expression',
     '_literal',
     '_name',

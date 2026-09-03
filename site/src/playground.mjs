@@ -48,8 +48,8 @@ const MAX_NODES = 4_000;
 // A capture list is one row each; a query like `(_) @x` matches everything.
 const MAX_CAPTURES = 500;
 
-// The box starts with a query that works, because a facet is easier to
-// understand from its expansion than from a description of one. `_callable`
+// The box starts with a query that works, because a nominal term is easier
+// to understand from its expansion than from a description of one. `_callable`
 // exists in every grammar, which is the point of the shared vocabulary.
 const DEFAULT_QUERY = "(_callable) @callable";
 
@@ -215,18 +215,18 @@ ${why}`;
       this.queryBox.value = DEFAULT_QUERY;
       this.queryShown = true;
     }
-    this.showFacets();
+    this.showNominal();
     this.parse();
   }
 
   showProvenance() {
     const p = this.pack.provenance;
-    const facets = Object.keys(this.pack.roles.facets ?? {});
+    const nominal = Object.keys(this.pack.terms.nominal ?? {});
     const bits = [
       `grammar <b>${E(p.grammar_name ?? p.language)}</b>`,
       `vocabulary ${E(p.vocabulary ?? "?")}`,
       `tree-sitter ${E(p.generate_cli ?? "?")}`,
-      facets.length ? `facets ${facets.map(E).join(" ")}` : null,
+      nominal.length ? `nominal ${nominal.map(E).join(" ")}` : null,
     ].filter(Boolean);
     // Read out of the module's own bytes, not from a caption beside it.
     // The permalink is the useful half: it names the exact parser, so a
@@ -303,11 +303,11 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`,
     }`;
   }
 
-  // The facets this grammar declares, named under the box: a query cannot be
-  // written against a vocabulary nobody has listed.
-  showFacets() {
+  // The nominal terms this grammar declares, named under the box: a query
+  // cannot be written against a vocabulary nobody has listed.
+  showNominal() {
     if (!this.pack) return;
-    const facets = Object.keys(this.pack.roles.facets ?? {}).sort();
+    const nominal = Object.keys(this.pack.terms.nominal ?? {}).sort();
     if (!this.pack.canQuery) {
       this.queryHint.innerHTML =
         `This pack is <b>pack_abi ${E(this.pack.provenance.pack_abi)}</b> and queries need 3. ` +
@@ -317,15 +317,15 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`,
     }
     this.queryBox.disabled = false;
     this.queryHint.innerHTML =
-      `Facets in ${E(this.name)}: ` +
-      facets
+      `Nominal terms in ${E(this.name)}: ` +
+      nominal
         .map(
-          (f) => `<button type="button" class="pg-facet mono">${E(f)}</button>`,
+          (f) => `<button type="button" class="pg-term mono">${E(f)}</button>`,
         )
         .join(" ") +
       ` — expanded here before the query runs, the same way ` +
       `<code>Pack::query</code> expands them.`;
-    for (const button of this.queryHint.querySelectorAll(".pg-facet")) {
+    for (const button of this.queryHint.querySelectorAll(".pg-term")) {
       button.addEventListener("click", () => {
         this.queryBox.value = `(${button.textContent}) @hit`;
         this.parse();
@@ -370,7 +370,7 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`,
       // impossible pattern. Same call the crate makes.
       expanded = expandQuery(
         source,
-        this.pack.roles.facets ?? {},
+        this.pack.terms.nominal ?? {},
         this.pack.nodeTypes,
       );
       query = this.compile(expanded);
@@ -378,7 +378,7 @@ ${e.type ? `<span class="dim mono">${E(e.type)}</span>` : ""}</li>`,
       this.dropQuery();
       // When expansion changed the query, the failure is usually about the
       // expansion rather than about what was typed -- so show it. An expanded
-      // facet fails as a whole when any one member cannot take a field the
+      // nominal term fails as a whole when any one member cannot take a field the
       // pattern asks for, and seeing the alternation is what makes that
       // legible instead of mysterious.
       const shown =

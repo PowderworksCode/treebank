@@ -1,10 +1,10 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
-    "_declaration": "TypeScript partitions it: a class method is a declaration only reachable through `_member` (the keyword-less method form must never be a statement -- `foo() {}` at top level parsed as a definition until it was split), while function/class/interface statements come through `_statement`. All members are concrete types occurring nowhere else, so facet membership selects the same nodes.",
-    "_modifier": "TypeScript partitions it: `override` is the one modifier a variable declaration may not carry (`'override' modifier cannot appear on a variable declaration`), while tsc's parser takes the rest. One alternation across all seven is exactly what accepted `override var x`. All seven members are concrete types occurring nowhere else, so facet membership selects the same nodes."
+    "_declaration": "TypeScript partitions it: a class method is a declaration only reachable through `_member` (the keyword-less method form must never be a statement -- `foo() {}` at top level parsed as a definition until it was split), while function/class/interface statements come through `_statement`. All members are concrete types occurring nowhere else, so nominal membership selects the same nodes the structural supertype would have.",
+    "_modifier": "TypeScript partitions it: `override` is the one modifier a variable declaration may not carry (`'override' modifier cannot appear on a variable declaration`), while tsc's parser takes the rest. One alternation across all seven is exactly what accepted `override var x`. All seven members are concrete types occurring nowhere else, so nominal membership selects the same nodes the structural supertype would have."
   },
-  "facets": {
+  "nominal": {
     "_binding": [
       "function_definition",
       "class_definition",
@@ -115,7 +115,7 @@
     },
     {
       "node": "enum_body",
-      "reason": "container node; its elements carry the role (enum_member, a _binding facet member)"
+      "reason": "container node; its elements carry the role (enum_member, a _binding nominal member)"
     },
     {
       "node": "escape_sequence",
@@ -159,7 +159,7 @@
     },
     {
       "node": "named_imports",
-      "reason": "container node; its elements carry the role (import_specifier, a _binding facet member)"
+      "reason": "container node; its elements carry the role (import_specifier, a _binding nominal member)"
     },
     {
       "node": "named_tuple_member",

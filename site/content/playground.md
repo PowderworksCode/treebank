@@ -24,8 +24,9 @@ a reimplementation for the web.
 ## Queries, and what expansion is for
 
 A **supertype** like `_declaration` is a real rule in the parse table, so
-tree-sitter matches it natively. A **facet** like `_callable` is a list in the
-grammar's `roles.json` — it cross-cuts derivations and cannot be a rule — so
+tree-sitter matches it natively. A **nominal** term like `_callable` is a list
+in the grammar's `terms.json` — it cross-cuts derivations and cannot be a
+rule — so
 it is rewritten into an alternation before the query runs:
 
 ```
@@ -34,7 +35,7 @@ it is rewritten into an alternation before the query runs:
 
 Expand the line above the results to see what your query became. The rewrite
 happens here in the browser, and the crate does exactly the same thing in
-`Pack::query`; a differential test runs both over every grammar's facets and
+`Pack::query`; a differential test runs both over every grammar's terms and
 fails on any difference, because a query that means two things is worse than
 one that fails.
 
@@ -65,8 +66,8 @@ any language with a WASI runtime. [Using a grammar](/integrate/) has both, and
 the module URLs.
 
 The module answers for itself: `tb_provenance()` returns which grammar, which
-vocabulary and what the last sweep measured, and `tb_roles()` returns the
-facet manifest a query needs. Both come out of the file, so a copy found on
+vocabulary and what the last sweep measured, and `tb_terms()` returns the
+nominal manifest a query needs. Both come out of the file, so a copy found on
 disk years from now still says what it is.
 
 Files are content-addressed. The link under the panes names the exact parser

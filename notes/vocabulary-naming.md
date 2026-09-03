@@ -1,6 +1,12 @@
 # The vocabulary's words: `role` and `facet`
 
-A recommendation, not a change. Nothing in this document has been applied.
+**Status: accepted and applied.** `structural`/`nominal` was the owner's
+choice from a shortlist; §4 records `supertype`/`subtype` and the rest with
+the reasons they lost. The rename landed as one PR rather than the four §7
+proposed — also the owner's call, and cheaper than §7 assumed once the scope
+turned out to be 872 lines rather than 19,000. The "today" and "before" text
+throughout describes the state this replaced, and is kept as the argument's
+evidence.
 
 > "Find a better name for facets and roles in treebank, those two don't make
 > sense to me and I can never remember them."
@@ -329,27 +335,44 @@ the genus, `oracles[].role`, the semantic-role meaning a reader brings, and the
 filename that promises the genus and delivers one species. If only one word
 moves, move `role`.
 
-## 7. How to land it
+## 7. How it landed
 
-Four PRs, one concern each, in this order. Nothing before PR 1 is approved.
+One PR, at the owner's direction. What moved:
 
-1. **Prose only** — `notes/DESIGN.md`, `README.md`, `site/content/`,
-   `queries/*.scm` headers, module docs. No identifier moves. Cheapest to
-   review, and it is where the confusion actually reaches a reader. If the
-   owner wants to stop after this one, the naming problem is 80% solved.
-2. **The vocabulary crate** — `vocabulary.json`'s `table`/`facets` →
-   `structural`/`nominal`, `either_tier` → `demotable`, the `supertypes.js`
-   constants, `check.rs`. Serde aliases throughout so nothing downstream moves
-   yet.
-3. **The manifests** — `roles.json` → `terms.json` in 11 crates, `facets` →
-   `nominal`, `RolesManifest` → `TermsManifest`, `ROLES` → `TERMS`, the pack
-   export and the site's reader.
-4. **The CLI and ledgers** — `treebank roles` → `treebank terms` with `roles`
-   kept as a hidden alias; `roles_note` → `vocabulary_note` in 11 ledgers.
+- **The vocabulary** — `vocabulary.json`'s `table`/`facets`/`either_tier` →
+  `structural`/`nominal`/`demotable`; `vocabulary/supertypes.js` →
+  `vocabulary/terms.js` with `STRUCTURAL_TERMS`, `NOMINAL_TERMS`, `DEMOTABLE`
+  and `assertStructuralTerms`.
+- **The crate** — `roles.rs` → `terms.rs`, `RolesManifest` → `TermsManifest`
+  (`facets` field → `nominal`, with `#[serde(alias = "facets")]`),
+  `Pack::roles`/`roles_json`/`PackRoles` → `terms`/`terms_json`/`PackTerms`,
+  `check::dead_roles` → `dead_terms`.
+- **The manifests** — `roles.json` → `terms.json` in 11 crates, key `facets`
+  → `nominal`, `ROLES` → `TERMS`.
+- **The pack ABI** — packs now export `tb_terms`/`tb_terms_len`, and keep
+  `tb_roles`/`tb_roles_len` returning the same document for one cycle.
+  `Pack::load` prefers the new name and falls back, so a pack already on the
+  CDN still loads; `check.sh` asserts the two exports agree.
+- **The CLI** — `treebank roles` → `treebank terms`, with `roles` kept as a
+  clap alias so no muscle memory or script breaks. Its summary line now reads
+  `terms OK: 17 structural, 9 nominal, …`.
+- **The ledgers** — `roles_note` → `vocabulary_note` in all 11, and the tier
+  words in their prose.
+- **Everything else** — `notes/DESIGN.md` §3 and §3.3, `README.md`,
+  `queries/highlights.scm`'s header and the 22 regenerated per-grammar files,
+  the site's vocabulary page (`two-tiers.md` → `terms.md`), the grammar viewer
+  and playground, `tools/wasm-pack`, the rosetta fixtures, and CI.
 
-Gates on each: `cargo build --workspace`, `cargo test --workspace`,
-`cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`,
-`treebank verify`.
+Gates run: `cargo build --workspace`, `cargo test --workspace`,
+`treebank verify` on all 11 grammars, `treebank terms` on all 11,
+`treebank status --check`, `treebank queries --check`, and the site's
+`bun test` / `typecheck` / `lint`.
+
+`cargo fmt --check` and `cargo clippy --all-targets -- -D warnings` each fail
+on exactly one file, `crates/treebank-oracle/tests/java_oracle_is_not_stale.rs`,
+which this branch does not touch and which fails identically on `main`. CI runs
+neither, which is how it got there. Left alone: folding an unrelated formatting
+and lint fix into a 136-file rename would make both harder to review.
 
 ## 8. Appendix: how it reads in situ
 

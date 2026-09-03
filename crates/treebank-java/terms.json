@@ -1,9 +1,9 @@
 {
   "vocabulary": "0.1.0",
   "demoted": {
-    "_declaration": "Java partitions it: a field declaration and a local variable declaration are the same syntax in different places, so one alternation reachable from both a class body and a block makes every field ambiguous with every local. All nine members are concrete types occurring nowhere else, so facet membership selects the same nodes."
+    "_declaration": "Java partitions it: a field declaration and a local variable declaration are the same syntax in different places, so one alternation reachable from both a class body and a block makes every field ambiguous with every local. All nine members are concrete types occurring nowhere else, so nominal membership selects the same nodes the structural supertype would have."
   },
-  "facets": {
+  "nominal": {
     "_binding": [
       "catch_parameter",
       "enum_constant",
@@ -106,7 +106,7 @@
     },
     {
       "node": "modifiers",
-      "reason": "the run of modifiers and annotations before a declaration; its elements carry the roles"
+      "reason": "the run of modifiers and annotations before a declaration; its elements carry the terms"
     },
     {
       "node": "module_directive",

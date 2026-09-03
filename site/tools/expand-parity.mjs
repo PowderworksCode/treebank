@@ -1,6 +1,6 @@
 // Differential driver for src/expand.mjs.
 //
-// Reads {grammars: [{name, facets, nodeTypes}], cases: [{grammar, query,
+// Reads {grammars: [{name, nominal, nodeTypes}], cases: [{grammar, query,
 // filtered}]} on stdin and writes a JSON array of {ok: true, value} |
 // {ok: false, error}. Driven by crates/treebank/tests/expand_parity.rs, which
 // runs the same cases through the Rust and fails on any difference.
@@ -21,7 +21,7 @@ const input = await new Promise((resolve, reject) => {
 
 const { grammars, cases } = JSON.parse(input);
 const prepared = grammars.map((g) => ({
-  facets: g.facets,
+  nominal: g.nominal,
   nodeTypes: g.nodeTypes ? parseNodeTypes(g.nodeTypes) : null,
 }));
 
@@ -30,7 +30,7 @@ const out = cases.map(({ grammar, query, filtered }) => {
   try {
     return {
       ok: true,
-      value: expandQuery(query, g.facets, filtered ? g.nodeTypes : null),
+      value: expandQuery(query, g.nominal, filtered ? g.nodeTypes : null),
     };
   } catch (e) {
     return { ok: false, error: String(e.message ?? e) };
