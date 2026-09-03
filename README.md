@@ -10,8 +10,10 @@ C++** (the C++ grammar extends the C one rather than copying it), **Zig**,
 `.tf` and `.tfvars` are written in).
 
 **[`notes/DESIGN.md`](notes/DESIGN.md) is the authoritative document** — the vocabulary,
-its two tiers and the measurements that forced them, the version-union
-grammar policy, the testing invariants, and the crate layout. Start there.
+its two tiers and the measurements that forced them, the version and dialect
+policy, the testing invariants, and the crate layout. Start there.
+**[`notes/dialects.md`](notes/dialects.md)** carries that policy's full
+argument: what earns a registry row, and what buys a second parse table.
 **[`notes/field_guide.md`](notes/field_guide.md)** is its companion for grammar
 authors: what to do and what not to do when writing a parser, each rule
 paid for by a measured incident, enforced mechanically by `treebank lint`.
