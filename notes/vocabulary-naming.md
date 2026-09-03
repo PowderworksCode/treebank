@@ -203,7 +203,7 @@ correct.** A nominal term enforces nothing; the manifest asserts membership and
 the parse table has no opinion. The site already argues this is the property a
 consumer must not be allowed to forget: *"a role that looks enforced and is not
 is worse than a list that is honest about being one."* The overtone does that
-work for free.
+work at no cost.
 
 **Dilution, not collision.** "Structural" appears about twenty times in the
 repository as an ordinary adjective — "structurally blind to accepts-invalid",

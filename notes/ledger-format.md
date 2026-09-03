@@ -172,7 +172,7 @@ What this buys, in order of importance:
   closes by construction, and c's and cpp's `[corpus.gaps]` numbers stop being
   transcription.
 - **Both arithmetic identities become enforceable** in `treebank status --check`.
-- The existing freshness mechanism is kept unchanged and is the better half of
+- The existing freshness mechanism is kept unchanged, and is the stronger part of
   the current design: the block already carries `corpus_lock_sha256`,
   `grammar_sha256` and `grammar_revision`, so staleness is *computed* from the
   inputs rather than detected by regenerating. That is stronger than
