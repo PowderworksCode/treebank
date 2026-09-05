@@ -5,26 +5,30 @@ module.exports = grammar({
   name: "rustish",
   word: $ => $.id,
   extras: $ => [/[ \t\n\r]/, $.comment],
-  supertypes: $ => [$._stmt, $._exp],
-  conflicts: $ => [[$._stmt, $._exp]],
-  reserved: { global: $ => ["fn", "i64", "let"] },
+  supertypes: $ => [$._statement, $._expression, $._declaration, $._type, $._body, $._parameter, $._name, $._literal, $._assignment, $._invocation, $._branch, $._loop, $._jump, $._control_flow],
+  conflicts: $ => [[$._statement, $._expression]],
+  reserved: { global: $ => ["else", "fn", "i64", "if", "let", "mut", "return", "while"] },
   rules: {
-    program: $ => repeat($.fn),
+    program: $ => repeat($._declaration),
 
     fn: $ => seq(
       "fn",
-      field("name", $.id),
+      field("name", $._name),
       "(",
       field("parameters", optional(seq(
-        $.param,
+        $._parameter,
         repeat(seq(
           ",",
-          $.param
+          $._parameter
         ))
       ))),
       ")",
-      field("ret", optional($.ret)),
-      field("body", $.block)
+      field("ret", optional($._type)),
+      field("body", $._body)
+    ),
+
+    _declaration: $ => choice(
+      $.fn
     ),
 
     ret: $ => seq(
@@ -32,25 +36,94 @@ module.exports = grammar({
       "i64"
     ),
 
+    _type: $ => choice(
+      $.ret
+    ),
+
     param: $ => seq(
-      field("name", $.id),
+      field("name", $._name),
       ":",
       "i64"
     ),
 
+    _parameter: $ => choice(
+      $.param
+    ),
+
     block: $ => seq(
       "{",
-      repeat($._stmt),
-      field("tail", optional($._exp)),
+      repeat($._statement),
+      field("tail", optional($._expression)),
       "}"
+    ),
+
+    _body: $ => choice(
+      $.block
     ),
 
     let: $ => seq(
       "let",
-      field("pattern", $.id),
+      field("pattern", $._name),
       "=",
-      field("value", $._exp),
+      field("value", $._expression),
       ";"
+    ),
+
+    let_mut: $ => seq(
+      "let",
+      "mut",
+      field("pattern", $._name),
+      "=",
+      field("value", $._expression),
+      ";"
+    ),
+
+    assign: $ => seq(
+      field("target", $._name),
+      "=",
+      field("value", $._expression),
+      ";"
+    ),
+
+    _assignment: $ => choice(
+      $.assign
+    ),
+
+    if: $ => seq(
+      "if",
+      field("condition", $._expression),
+      field("consequence", $._body),
+      field("alternative", optional($.else_clause))
+    ),
+
+    _branch: $ => choice(
+      $.if
+    ),
+
+    while: $ => seq(
+      "while",
+      field("condition", $._expression),
+      field("body", $._body)
+    ),
+
+    _loop: $ => choice(
+      $.while
+    ),
+
+    return: $ => seq(
+      "return",
+      field("value", $._expression),
+      ";"
+    ),
+
+    _jump: $ => choice(
+      $.return
+    ),
+
+    _control_flow: $ => choice(
+      $._branch,
+      $._loop,
+      $._jump
     ),
 
     print: $ => seq(
@@ -61,81 +134,108 @@ module.exports = grammar({
       "}",
       "\"",
       ",",
-      field("value", $._exp),
+      field("value", $._expression),
       ")",
       ";"
     ),
 
     expr: $ => seq(
-      $._exp,
+      $._expression,
       ";"
     ),
 
-    _stmt: $ => choice(
+    _statement: $ => choice(
       $.let,
+      $.let_mut,
+      $._assignment,
+      $._control_flow,
       $.print,
       $.expr,
-      $.fn,
-      $.block
+      $._declaration,
+      $._body
+    ),
+
+    else_clause: $ => seq(
+      "else",
+      field("body", $._body)
     ),
 
     exp_int: $ => $.int,
 
-    call: $ => prec(4, seq(
-      field("function", $._exp),
+    _literal: $ => choice(
+      $.exp_int
+    ),
+
+    call: $ => prec(5, seq(
+      field("function", $._expression),
       "(",
       field("arguments", optional(seq(
-        $._exp,
+        $._expression,
         repeat(seq(
           ",",
-          $._exp
+          $._expression
         ))
       ))),
       ")"
     )),
 
-    neg: $ => prec(3, seq(
+    _invocation: $ => choice(
+      $.call
+    ),
+
+    neg: $ => prec(4, seq(
       "-",
-      field("operand", $._exp)
+      field("operand", $._expression)
     )),
 
-    mul: $ => prec.left(2, seq(
-      field("left", $._exp),
+    mul: $ => prec.left(3, seq(
+      field("left", $._expression),
       "*",
-      field("right", $._exp)
+      field("right", $._expression)
     )),
 
-    add: $ => prec.left(1, seq(
-      field("left", $._exp),
+    add: $ => prec.left(2, seq(
+      field("left", $._expression),
       "+",
-      field("right", $._exp)
+      field("right", $._expression)
     )),
 
-    sub: $ => prec.left(1, seq(
-      field("left", $._exp),
+    sub: $ => prec.left(2, seq(
+      field("left", $._expression),
       "-",
-      field("right", $._exp)
+      field("right", $._expression)
+    )),
+
+    lt: $ => prec.left(1, seq(
+      field("left", $._expression),
+      "<",
+      field("right", $._expression)
     )),
 
     exp_bracket: $ => seq(
       "(",
-      $._exp,
+      $._expression,
       ")"
     ),
 
-    _exp: $ => choice(
-      $.id,
-      $.exp_int,
-      $.block,
-      $.call,
+    _expression: $ => choice(
+      $._name,
+      $._literal,
+      $._body,
+      $._invocation,
       $.neg,
       $.mul,
       $.add,
       $.sub,
+      $.lt,
       $.exp_bracket
     ),
 
     id: $ => /[a-zA-Z_](?:[a-zA-Z0-9_])*/,
+
+    _name: $ => choice(
+      $.id
+    ),
 
     int: $ => /(?:[0-9])+/,
 

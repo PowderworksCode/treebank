@@ -15,6 +15,10 @@ tree-sitter generate grammar.json
 cp grammar.json src/grammar.json
 tree-sitter test
 
+# The vocabulary: the lowered roles.json and the generated node-types.json
+# under the same checker `treebank roles` runs over every shipped grammar.
+(cd "$ROOT" && cargo run -q -p treebank-sdf3 --example roles -- "$HERE")
+
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 cp grammar.js tree-sitter.json "$tmp/"

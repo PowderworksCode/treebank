@@ -53,3 +53,5 @@ crates/treebank-sdf3/spike/*/queries/locals.scm linguist-generated=true
 crates/treebank-sdf3/spike/*/bindings-findings.md linguist-generated=true
 crates/treebank-sdf3/spike/*/bindings-results.md linguist-generated=true
 crates/treebank-sdf3/spike/*/resolve-results.md linguist-generated=true
+crates/treebank-sdf3/spike/*/roles.json linguist-generated=true
+crates/treebank-sdf3/spike/rosetta/rosetta-results.md linguist-generated=true

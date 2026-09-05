@@ -51,7 +51,7 @@ fn cppish_imports_cish_and_lowers_to_the_committed_output() {
 #[test]
 fn prefer_becomes_a_dynamic_weight_and_the_conflict_is_declared() {
     let module = treebank_sdf3::load_module(&spike().join("cppish.sdf3")).unwrap();
-    let g = treebank_sdf3::lower(&module).unwrap().grammar;
+    let g = treebank_sdf3::lower_all(&module).unwrap().lowered.grammar;
     let t = &g["rules"]["template_id"];
     assert_eq!(t["type"], "PREC_DYNAMIC");
     assert_eq!(t["value"], 1);

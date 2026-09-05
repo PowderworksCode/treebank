@@ -97,6 +97,23 @@ context-free priorities
   > {left: Exp.Add Exp.Sub}
   > {non-assoc: Exp.Lt}
 
+vocabulary
+  _statement    = Stmt
+  _expression   = Exp
+  _declaration  = Stmt.Def
+  _body         = Block
+  _parameter    = Param
+  _name         = ID
+  _literal      = Exp.Int
+  _directive    = Stmt.Global
+  _assignment   = Stmt.Assign
+  _invocation   = Exp.Call
+  _branch       = Stmt.If
+  _loop         = Stmt.While
+  _jump         = Stmt.Return
+  _control_flow = _branch _loop _jump
+  _clause       = Else
+
 template options
   ID = keyword {reject}
   keyword -/- [a-zA-Z0-9\_]

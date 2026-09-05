@@ -4,13 +4,14 @@
 - where no `_newline` can end a statement the scanner is not consulted and a line break is layout, so inside brackets a line may continue at any column: Python's implicit line joining, which the offside rule rejects
 - Exp.Lt is non-assoc; tree-sitter has no non-associativity, lowered to PREC_LEFT so `a == b == c` parses where SDF3 rejects it
 
-## DEVIATION -- the tree differs in shape from SDF3's AST (3)
+## DEVIATION -- the tree differs in shape from SDF3's AST (4)
 
 - the outermost aligned list is aligned at column 0, as in CPython, where SDF3 aligns it at its first line's column: a file indented throughout parses its second line as a continuation of its first
 - a tab is one column, as tree-sitter's lexer counts; CPython uses tab stops of eight
 - bracket production of Exp became the named node `exp_bracket`; SDF3's AST has no node for brackets, but a hidden supertype member may have only one visible child and `( Exp )` has three
+- 1 named node(s) outside the vocabulary, ledgered as uncategorised: [int]
 
-## EXTENSION -- a treebank addition outside SDF3 was used (26)
+## EXTENSION -- a treebank addition outside SDF3 was used (27)
 
 - Stmt.Assign: placeholder label `target` became a field (not SDF3)
 - Stmt.Assign: placeholder label `value` became a field (not SDF3)
@@ -38,6 +39,7 @@
 - Exp.Sub: placeholder label `right` became a field (not SDF3)
 - Exp.Lt: placeholder label `left` became a field (not SDF3)
 - Exp.Lt: placeholder label `right` became a field (not SDF3)
+- `vocabulary` section (not SDF3): 15 terms of treebank's vocabulary 0.1.0 bound to this module's sorts and constructors
 
 ## ABSORBED -- nothing emitted, tree-sitter gets the effect another way (4)
 
@@ -46,7 +48,7 @@
 - lexical restriction on INT: longest-match tokenisation gives the same effect
 - context-free restriction on LAYOUT?: extras are skipped greedily
 
-## MAPPED -- lowered exactly (30)
+## MAPPED -- lowered exactly (46)
 
 - Program.Program: `align-list 1`: every Stmt in the list starts a line at the list's column, so each production of Stmt ends with `_newline` unless an indented block already ends it
 - Stmt.Assign: `offside 1 2 3`: a line break followed by a deeper line continues the statement and one at the open column ends it; the scanner decides by the next line's column
@@ -78,4 +80,20 @@
 - LAYOUT production became the named extra `comment` /#(?:[^\n\r])*/
 - `ID = keyword {reject}` became `word: id` plus reserved.global = [def, else, global, if, pass, print, return, while]
 - `tokenize: "():,"`: the reader split template literal runs at these characters, so each is its own token
+- `_statement` is the sort Stmt: its supertype `_stmt` is named `_statement`
+- `_expression` is the sort Exp: its supertype `_exp` is named `_expression`
+- `_declaration` threaded as a supertype over [def]; every reference to a member now goes through it, and the tree is unchanged
+- `_body` threaded as a supertype over [block]; every reference to a member now goes through it, and the tree is unchanged
+- `_parameter` threaded as a supertype over [param]; every reference to a member now goes through it, and the tree is unchanged
+- `_name` threaded as a supertype over [id]; every reference to a member now goes through it, and the tree is unchanged
+- `_literal` threaded as a supertype over [exp_int]; every reference to a member now goes through it, and the tree is unchanged
+- `_directive` threaded as a supertype over [global]; every reference to a member now goes through it, and the tree is unchanged
+- `_assignment` threaded as a supertype over [assign]; every reference to a member now goes through it, and the tree is unchanged
+- `_invocation` threaded as a supertype over [call]; every reference to a member now goes through it, and the tree is unchanged
+- `_branch` threaded as a supertype over [if]; every reference to a member now goes through it, and the tree is unchanged
+- `_loop` threaded as a supertype over [while]; every reference to a member now goes through it, and the tree is unchanged
+- `_jump` threaded as a supertype over [return]; every reference to a member now goes through it, and the tree is unchanged
+- `_clause` is a facet: [else_clause] listed in roles.json
+- `_control_flow` threaded as a supertype over [_branch, _loop, _jump]; every reference to a member now goes through it, and the tree is unchanged
+- roles.json: 14 of 22 table-tier terms are supertypes, 5 facet(s), 24 named node(s), 1 uncategorised (vocabulary 0.1.0)
 

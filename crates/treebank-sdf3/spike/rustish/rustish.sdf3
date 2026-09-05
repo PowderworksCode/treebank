@@ -18,7 +18,7 @@ context-free start-symbols
   Program
 
 sorts
-  Program Item Ret Param Block Stmt Exp
+  Program Item Ret Param Block Stmt Else Exp
 
 lexical sorts
   ID INT
@@ -47,11 +47,18 @@ context-free syntax
 
   Block.Block = <{ <Stmt*> <tail:Exp?> }> {scope(block)}
 
-  Stmt.Let   = <let <pattern:ID> = <value:Exp>;> {binds(pattern -> enclosing after)}
+  Stmt.Let    = <let <pattern:ID> = <value:Exp>;>     {binds(pattern -> enclosing after)}
+  Stmt.LetMut = <let mut <pattern:ID> = <value:Exp>;> {binds(pattern -> enclosing after)}
+  Stmt.Assign = <<target:ID> = <value:Exp>;>
+  Stmt.If     = <if <condition:Exp> <consequence:Block> <alternative:Else?>>
+  Stmt.While  = <while <condition:Exp> <body:Block>>
+  Stmt.Return = <return <value:Exp>;>
   Stmt.Print = <println!("{}", <value:Exp>);>
   Stmt.Expr  = <<Exp>;>
-  Stmt       = Item
-  Stmt       = Block
+  Stmt        = Item
+  Stmt        = Block
+
+  Else.ElseClause = <else <body:Block>>
 
   Exp          = ID {refers(1)}
   Exp.Int      = INT
@@ -61,6 +68,7 @@ context-free syntax
   Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
   Exp.Add      = <<left:Exp> + <right:Exp>> {left}
   Exp.Sub      = <<left:Exp> - <right:Exp>> {left}
+  Exp.Lt       = [[left:Exp] < [right:Exp]] {non-assoc}
   Exp          = <(<Exp>)> {bracket}
 
 context-free priorities
@@ -68,6 +76,24 @@ context-free priorities
   > {Exp.Neg}
   > {left: Exp.Mul}
   > {left: Exp.Add Exp.Sub}
+  > {non-assoc: Exp.Lt}
+
+vocabulary
+  _statement    = Stmt
+  _expression   = Exp
+  _declaration  = Item
+  _type         = Ret
+  _body         = Block
+  _parameter    = Param
+  _name         = ID
+  _literal      = Exp.Int
+  _assignment   = Stmt.Assign
+  _invocation   = Exp.Call
+  _branch       = Stmt.If
+  _loop         = Stmt.While
+  _jump         = Stmt.Return
+  _control_flow = _branch _loop _jump
+  _clause       = Else
 
 template options
   ID = keyword {reject}

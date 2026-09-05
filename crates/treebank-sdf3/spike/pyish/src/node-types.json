@@ -1,26 +1,94 @@
 [
   {
-    "type": "_exp",
+    "type": "_assignment",
     "named": true,
     "subtypes": [
+      {
+        "type": "assign",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_body",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "block",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_branch",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "if",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_control_flow",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "_branch",
+        "named": true
+      },
+      {
+        "type": "_jump",
+        "named": true
+      },
+      {
+        "type": "_loop",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_declaration",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "def",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_directive",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "global",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_expression",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "_invocation",
+        "named": true
+      },
+      {
+        "type": "_literal",
+        "named": true
+      },
+      {
+        "type": "_name",
+        "named": true
+      },
       {
         "type": "add",
         "named": true
       },
       {
-        "type": "call",
-        "named": true
-      },
-      {
         "type": "exp_bracket",
-        "named": true
-      },
-      {
-        "type": "exp_int",
-        "named": true
-      },
-      {
-        "type": "id",
         "named": true
       },
       {
@@ -42,27 +110,87 @@
     ]
   },
   {
-    "type": "_stmt",
+    "type": "_invocation",
     "named": true,
     "subtypes": [
       {
-        "type": "assign",
+        "type": "call",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_jump",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "return",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_literal",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "exp_int",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_loop",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "while",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_name",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "id",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_parameter",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "param",
+        "named": true
+      }
+    ]
+  },
+  {
+    "type": "_statement",
+    "named": true,
+    "subtypes": [
+      {
+        "type": "_assignment",
         "named": true
       },
       {
-        "type": "def",
+        "type": "_control_flow",
+        "named": true
+      },
+      {
+        "type": "_declaration",
+        "named": true
+      },
+      {
+        "type": "_directive",
         "named": true
       },
       {
         "type": "expr",
-        "named": true
-      },
-      {
-        "type": "global",
-        "named": true
-      },
-      {
-        "type": "if",
         "named": true
       },
       {
@@ -71,14 +199,6 @@
       },
       {
         "type": "print",
-        "named": true
-      },
-      {
-        "type": "return",
-        "named": true
-      },
-      {
-        "type": "while",
         "named": true
       }
     ]
@@ -92,7 +212,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -102,7 +222,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -118,7 +238,7 @@
         "required": true,
         "types": [
           {
-            "type": "id",
+            "type": "_name",
             "named": true
           }
         ]
@@ -128,7 +248,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -144,7 +264,7 @@
       "required": true,
       "types": [
         {
-          "type": "_stmt",
+          "type": "_statement",
           "named": true
         }
       ]
@@ -163,7 +283,7 @@
             "named": false
           },
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -173,7 +293,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -189,7 +309,7 @@
         "required": true,
         "types": [
           {
-            "type": "block",
+            "type": "_body",
             "named": true
           }
         ]
@@ -199,7 +319,7 @@
         "required": true,
         "types": [
           {
-            "type": "id",
+            "type": "_name",
             "named": true
           }
         ]
@@ -213,7 +333,7 @@
             "named": false
           },
           {
-            "type": "param",
+            "type": "_parameter",
             "named": true
           }
         ]
@@ -229,7 +349,7 @@
         "required": true,
         "types": [
           {
-            "type": "block",
+            "type": "_body",
             "named": true
           }
         ]
@@ -245,7 +365,7 @@
       "required": true,
       "types": [
         {
-          "type": "_exp",
+          "type": "_expression",
           "named": true
         }
       ]
@@ -275,7 +395,7 @@
       "required": true,
       "types": [
         {
-          "type": "_exp",
+          "type": "_expression",
           "named": true
         }
       ]
@@ -294,7 +414,7 @@
             "named": false
           },
           {
-            "type": "id",
+            "type": "_name",
             "named": true
           }
         ]
@@ -320,7 +440,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -330,7 +450,7 @@
         "required": true,
         "types": [
           {
-            "type": "block",
+            "type": "_body",
             "named": true
           }
         ]
@@ -346,7 +466,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -356,7 +476,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -372,7 +492,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -382,7 +502,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -398,7 +518,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -414,7 +534,7 @@
         "required": true,
         "types": [
           {
-            "type": "id",
+            "type": "_name",
             "named": true
           }
         ]
@@ -435,7 +555,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -452,7 +572,7 @@
       "required": false,
       "types": [
         {
-          "type": "_stmt",
+          "type": "_statement",
           "named": true
         }
       ]
@@ -467,7 +587,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -483,7 +603,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -493,7 +613,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]
@@ -509,7 +629,7 @@
         "required": true,
         "types": [
           {
-            "type": "block",
+            "type": "_body",
             "named": true
           }
         ]
@@ -519,7 +639,7 @@
         "required": true,
         "types": [
           {
-            "type": "_exp",
+            "type": "_expression",
             "named": true
           }
         ]

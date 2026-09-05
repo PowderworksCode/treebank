@@ -15,7 +15,7 @@ fn same(name: &str, produced: &str) {
 #[test]
 fn jsish_reads_and_lowers_to_the_committed_output() {
     let module = treebank_sdf3::load_module(&spike().join("jsish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let mut grammar = lowered.grammar.clone();
     let mut findings = lowered.findings.clone();
     let conflicts = treebank_sdf3::read_conflicts(&spike().join("tree-sitter.conflicts.json"))
@@ -35,7 +35,7 @@ fn jsish_reads_and_lowers_to_the_committed_output() {
 #[test]
 fn var_binds_in_the_function_and_let_in_the_block() {
     let module = treebank_sdf3::load_module(&spike().join("jsish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let b = treebank_sdf3::bindings::emit(&module, &lowered.names).unwrap().unwrap();
     let defs = b.json["definitions"].as_array().unwrap();
     let scope = |node: &str| {

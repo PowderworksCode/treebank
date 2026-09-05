@@ -22,7 +22,8 @@ fn main() -> anyhow::Result<()> {
         .ok_or_else(|| anyhow::anyhow!("usage: lower <module.sdf3> [--generate]"))?
         .into();
     let module = treebank_sdf3::load_module(&path)?;
-    let lowered = treebank_sdf3::lower(&module)?;
+    let everything = treebank_sdf3::lower_all(&module)?;
+    let lowered = everything.lowered;
     let dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
     let sidecar = dir.join("tree-sitter.conflicts.json");
 
@@ -97,8 +98,14 @@ fn main() -> anyhow::Result<()> {
         dir.join("antlr-findings.md"),
         treebank_sdf3::report(&antlr.findings),
     )?;
+    if let Some(v) = &everything.vocab {
+        std::fs::write(
+            dir.join("roles.json"),
+            serde_json::to_string_pretty(&v.roles)? + "\n",
+        )?;
+    }
     // Bindings, when the module declares any: data plus the query view.
-    if let Some(b) = treebank_sdf3::bindings::emit(&module, &lowered.names)? {
+    if let Some(b) = everything.bindings {
         std::fs::write(
             dir.join("bindings.json"),
             serde_json::to_string_pretty(&b.json)? + "\n",

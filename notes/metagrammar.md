@@ -1056,3 +1056,97 @@ binding several names) and imports (a binding whose definition is in
 another file), and §12 should carry those two instead of the one it
 carried.
 
+## 20. The seventh spike: the shared vocabulary, as a lowering
+
+You asked how the shared concepts were doing, and the measured answer was:
+well per grammar, thinly across grammars, and untouched by the
+meta-grammar. Every shipped grammar threads 12 to 20 of the 22 table-tier
+terms and ledgers every node outside them, but the only check that the
+terms *mean the same thing everywhere* is three rosetta programs in four
+languages with 19 assertions, and the six spike modules named their sorts
+`_stmt` and `_exp`, private to each. §6 said the tier is a lowering
+decision. This spike makes it one.
+
+**The surface is a `vocabulary` section**, a treebank extension on the
+SDF3 module, binding terms to sorts, constructors, tokens or other terms:
+
+```
+vocabulary
+  _statement    = Stmt
+  _expression   = Exp
+  _declaration  = Stmt.Def
+  _body         = Block
+  _parameter    = Param
+  _name         = ID
+  _literal      = Exp.Int
+  _branch       = Stmt.If
+  _loop         = Stmt.While
+  _jump         = Stmt.Return
+  _control_flow = _branch _loop _jump
+  _clause       = Else
+```
+
+**The lowering decides the tier per term**, which is what §3.1.1 of
+DESIGN.md says a grammar must do and today does by hand. A term bound to
+one whole sort *renames* that sort's supertype, so `_statement` is `Stmt`'s
+own derivation. A term bound to anything narrower *threads* a new
+supertype: its members become the alternation and every reference to a
+member is routed through it, so `_branch` sits inside `_statement` exactly
+where `if` stood, `_control_flow` nests `_branch`, `_loop` and `_jump` as
+the vocabulary's containments require, and `_body` wraps `block` in every
+field that held it. The tree is unchanged throughout, since supertypes are
+hidden, which the unchanged corpora confirm. A facet term goes to
+`roles.json` as type-level membership, and three facets need no
+declaration at all: `_scope` and `_binding` come from §18's binding
+attributes, `_callable` from a binding of kind `function`, `_comment` from
+LAYOUT. And a table term whose member another threaded term already
+claims, with neither nesting the other, would give that node two
+derivations: the lowering *demotes* it to a facet with the reason written
+out where the vocabulary marks the term `either_tier`, and refuses it
+where it does not. That is `_parameter`'s story in python and rust,
+computed instead of narrated.
+
+**The checks are the repository's own.** `examples/roles.rs` runs
+`treebank::check::check`, the code behind `treebank roles` in CI, over
+each spike's generated `node-types.json` and lowered `roles.json`; the
+`treebank` library builds without its engine, so the spikes are held to
+the very code the shipped grammars are. And `tools/rosetta_check.py` is
+the rosetta gate over the spike languages: three cases, the same program
+in pyish, rustish and jsish, facet queries expanded through each module's
+own manifest as treebank expands them at load time.
+
+| spike | table-tier terms as supertypes | facets | uncategorised | checker |
+|---|---|---|---|---|
+| pyish | 14 of 22 | 5 | 1 (`int`, a piece of `exp_int`) | passes |
+| rustish | 14 of 22 | 5 | 1 | passes |
+| jsish | 13 of 22 | 5 | 1 | passes |
+
+**Rosetta: 20 of 20 role queries yield the same count in all three
+languages** — declarations, parameters, loops, jumps, invocations,
+callables, control flow, clauses, literals, names, comments, bindings, and
+the field pattern `(_declaration body: (_body))` whose parent and child
+are both supertypes. The gate paid for itself on the first run. The first
+draft of rustish and jsish bound `let` into `_declaration`; Python's
+`prefix = name` is not one; the counts differed, and the shipped grammars
+turned out to agree with Python (treebank-rust's `_declaration` holds
+functions, structs, traits, consts and statics, and not
+`let_declaration`), so the modules were corrected and `let` is a
+`_statement` and a `_binding`, as `x = 1` is. What the three still do not
+share is `_assignment`, which Python's line carries and the other two do
+not, and that stays a vocabulary question the gate can now ask in three
+lines of SDF3 instead of three grammars.
+
+Two things the run says about the vocabulary itself. The uncategorised
+token in every spike is the same shape the shipped grammars ledger by the
+dozen — a piece of a node that carries the role — and the lowering writes
+that reason itself. And the term counts, 13 and 14 of 22, are what a
+language this small can thread; the remaining eight (`_pattern`,
+`_member`, `_modifier`, `_attribute`, `_directive` in two of them,
+`_access`, `_interpolation`, `_type` in two) name constructs the modules
+do not have, which is the vocabulary's own rule about omission.
+
+What this changes in the design is §6's claim, now a mechanism: the sorts
+*are* the table tier, the facets are mostly derived, and the one decision
+a grammar author makes by hand today, which tier a term lives in, is the
+lowering's to make and to explain.
+

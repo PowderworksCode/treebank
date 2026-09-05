@@ -20,6 +20,7 @@ pub mod ast;
 pub mod lower;
 pub mod parse;
 pub mod scanner;
+pub mod vocab;
 
 pub use lower::{
     apply_conflicts, conflicts_suggested, lower, read_conflicts, to_grammar_js, Finding, Kind,
@@ -93,3 +94,62 @@ pub fn report(findings: &[Finding]) -> String {
     }
     out
 }
+
+/// Everything the module lowers to, in the order the pieces need: the
+/// grammar, the bindings (which name nodes), then the vocabulary (which
+/// renames and threads supertypes, and takes the facets bindings derived).
+pub struct Everything {
+    pub lowered: lower::Lowered,
+    pub bindings: Option<bindings::Emitted>,
+    pub vocab: Option<vocab::Emitted>,
+}
+
+pub fn lower_all(module: &ast::Module) -> anyhow::Result<Everything> {
+    let mut lowered = lower(module)?;
+    let bindings = bindings::emit(module, &lowered.names)?;
+    let mut derived: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        Default::default();
+    if let Some(b) = &bindings {
+        for (facet, members) in b.json["facets"].as_object().into_iter().flatten() {
+            let set: std::collections::BTreeSet<String> = members
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect();
+            derived.insert(facet.clone(), set);
+        }
+        // A binding of kind `function` is the node that defines a callable.
+        for d in b.json["definitions"].as_array().into_iter().flatten() {
+            if d["kind"].as_str() == Some("function") {
+                if let Some(n) = d["node"].as_str() {
+                    derived.entry("_callable".into()).or_default().insert(n.to_string());
+                }
+            }
+        }
+    }
+    // LAYOUT productions that became named extras are comments.
+    if let Some(extras) = lowered.grammar["extras"].as_array() {
+        for e in extras {
+            if let Some(n) = e["name"].as_str() {
+                derived.entry("_comment".into()).or_default().insert(n.to_string());
+            }
+        }
+    }
+    // Only a module that binds terms gets a manifest: derived facets alone
+    // would ledger every node of mini as uncategorised, which says nothing.
+    let vocab = if module.vocabulary().next().is_some() {
+        vocab::apply(module, &mut lowered.grammar, &mut lowered.names, &derived)?
+    } else {
+        None
+    };
+    if let Some(v) = &vocab {
+        lowered.findings.extend(v.findings.iter().cloned());
+    }
+    Ok(Everything {
+        lowered,
+        bindings,
+        vocab,
+    })
+}
+

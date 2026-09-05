@@ -26,6 +26,9 @@ pub enum Section {
     ContextFreeRestrictions(Vec<Restriction>),
     ContextFreePriorities(Vec<PriorityChain>),
     TemplateOptions(Vec<TemplateOption>),
+    /// treebank extension: `vocabulary` binds the shared vocabulary's terms
+    /// to this module's sorts and constructors.
+    Vocabulary(Vec<VocabTerm>),
 }
 
 /// `Sort.Constructor = rhs {attrs}`, or `Sort = rhs {attrs}` for an
@@ -312,7 +315,24 @@ pub enum TemplateOption {
     Tokenize(String),
 }
 
+/// `_statement = Stmt`, `_branch = Stmt.If Stmt.Match`, `_control_flow =
+/// _branch _loop _jump`: a vocabulary term and what of this module it
+/// names. A member is a sort (every production of it), a `Sort.Cons`
+/// constructor, a lexical sort, or another term.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VocabTerm {
+    pub term: String,
+    pub members: Vec<String>,
+}
+
 impl Module {
+    pub fn vocabulary(&self) -> impl Iterator<Item = &VocabTerm> {
+        self.sections.iter().flat_map(|s| match s {
+            Section::Vocabulary(v) => v.iter(),
+            _ => [].iter(),
+        })
+    }
+
     pub fn productions(&self, lexical: bool) -> impl Iterator<Item = &Production> {
         self.sections.iter().flat_map(move |s| match s {
             Section::LexicalSyntax(p) if lexical => p.iter(),

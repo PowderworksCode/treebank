@@ -5,40 +5,52 @@ module.exports = grammar({
   name: "pyish",
   word: $ => $.id,
   extras: $ => [/[ \t\n\r]/, $.comment],
-  supertypes: $ => [$._stmt, $._exp],
+  supertypes: $ => [$._statement, $._expression, $._declaration, $._body, $._parameter, $._name, $._literal, $._directive, $._assignment, $._invocation, $._branch, $._loop, $._jump, $._control_flow],
   externals: $ => [$._newline, $._indent, $._dedent, $._error_sentinel],
   reserved: { global: $ => ["def", "else", "global", "if", "pass", "print", "return", "while"] },
   rules: {
-    program: $ => repeat($._stmt),
+    program: $ => repeat($._statement),
 
     assign: $ => seq(
-      field("target", $.id),
+      field("target", $._name),
       "=",
-      field("value", $._exp),
+      field("value", $._expression),
       $._newline
     ),
 
+    _assignment: $ => choice(
+      $.assign
+    ),
+
     expr: $ => seq(
-      $._exp,
+      $._expression,
       $._newline
     ),
 
     return: $ => seq(
       "return",
-      field("value", $._exp),
+      field("value", $._expression),
       $._newline
+    ),
+
+    _jump: $ => choice(
+      $.return
     ),
 
     global: $ => seq(
       "global",
       field("names", seq(
-        $.id,
+        $._name,
         repeat(seq(
           ",",
-          $.id
+          $._name
         ))
       )),
       $._newline
+    ),
+
+    _directive: $ => choice(
+      $.global
     ),
 
     pass: $ => seq(
@@ -49,126 +61,158 @@ module.exports = grammar({
     print: $ => seq(
       "print",
       "(",
-      field("value", $._exp),
+      field("value", $._expression),
       ")",
       $._newline
     ),
 
     if: $ => seq(
       "if",
-      field("condition", $._exp),
+      field("condition", $._expression),
       ":",
       $._indent,
-      field("consequence", $.block),
+      field("consequence", $._body),
       $._dedent,
       field("alternative", optional($.else_clause))
     ),
 
+    _branch: $ => choice(
+      $.if
+    ),
+
     while: $ => seq(
       "while",
-      field("condition", $._exp),
+      field("condition", $._expression),
       ":",
       $._indent,
-      field("body", $.block),
+      field("body", $._body),
       $._dedent
+    ),
+
+    _loop: $ => choice(
+      $.while
+    ),
+
+    _control_flow: $ => choice(
+      $._branch,
+      $._loop,
+      $._jump
     ),
 
     def: $ => seq(
       "def",
-      field("name", $.id),
+      field("name", $._name),
       "(",
       field("parameters", optional(seq(
-        $.param,
+        $._parameter,
         repeat(seq(
           ",",
-          $.param
+          $._parameter
         ))
       ))),
       ")",
       ":",
       $._indent,
-      field("body", $.block),
+      field("body", $._body),
       $._dedent
     ),
 
-    _stmt: $ => choice(
-      $.assign,
+    _declaration: $ => choice(
+      $.def
+    ),
+
+    _statement: $ => choice(
+      $._assignment,
       $.expr,
-      $.return,
-      $.global,
+      $._control_flow,
+      $._directive,
       $.pass,
       $.print,
-      $.if,
-      $.while,
-      $.def
+      $._declaration
     ),
 
     else_clause: $ => seq(
       "else",
       ":",
       $._indent,
-      field("body", $.block),
+      field("body", $._body),
       $._dedent
     ),
 
-    block: $ => repeat1($._stmt),
+    block: $ => repeat1($._statement),
 
-    param: $ => field("name", $.id),
+    _body: $ => choice(
+      $.block
+    ),
+
+    param: $ => field("name", $._name),
+
+    _parameter: $ => choice(
+      $.param
+    ),
 
     exp_int: $ => $.int,
 
+    _literal: $ => choice(
+      $.exp_int
+    ),
+
     call: $ => prec(5, seq(
-      field("function", $._exp),
+      field("function", $._expression),
       "(",
       field("arguments", optional(seq(
-        $._exp,
+        $._expression,
         repeat(seq(
           ",",
-          $._exp
+          $._expression
         ))
       ))),
       ")"
     )),
 
+    _invocation: $ => choice(
+      $.call
+    ),
+
     neg: $ => prec(4, seq(
       "-",
-      field("operand", $._exp)
+      field("operand", $._expression)
     )),
 
     mul: $ => prec.left(3, seq(
-      field("left", $._exp),
+      field("left", $._expression),
       "*",
-      field("right", $._exp)
+      field("right", $._expression)
     )),
 
     add: $ => prec.left(2, seq(
-      field("left", $._exp),
+      field("left", $._expression),
       "+",
-      field("right", $._exp)
+      field("right", $._expression)
     )),
 
     sub: $ => prec.left(2, seq(
-      field("left", $._exp),
+      field("left", $._expression),
       "-",
-      field("right", $._exp)
+      field("right", $._expression)
     )),
 
     lt: $ => prec.left(1, seq(
-      field("left", $._exp),
+      field("left", $._expression),
       "<",
-      field("right", $._exp)
+      field("right", $._expression)
     )),
 
     exp_bracket: $ => seq(
       "(",
-      $._exp,
+      $._expression,
       ")"
     ),
 
-    _exp: $ => choice(
-      $.id,
-      $.exp_int,
-      $.call,
+    _expression: $ => choice(
+      $._name,
+      $._literal,
+      $._invocation,
       $.neg,
       $.mul,
       $.add,
@@ -178,6 +222,10 @@ module.exports = grammar({
     ),
 
     id: $ => /[a-zA-Z_](?:[a-zA-Z0-9_])*/,
+
+    _name: $ => choice(
+      $.id
+    ),
 
     int: $ => /(?:[0-9])+/,
 

@@ -13,7 +13,7 @@ fn rubyish_reads_and_lowers_to_the_committed_output() {
     let text = std::fs::read_to_string(spike().join("rubyish.sdf3")).unwrap();
     let module = treebank_sdf3::parse_module(&text).unwrap();
     assert_eq!(module.name, "rubyish");
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
 
     let produced = serde_json::to_string_pretty(&lowered.grammar).unwrap() + "\n";
     let committed = std::fs::read_to_string(spike().join("grammar.json")).unwrap();
@@ -43,7 +43,7 @@ fn rubyish_reads_and_lowers_to_the_committed_output() {
 fn the_constrained_spellings_are_split_and_the_rest_are_not() {
     let text = std::fs::read_to_string(spike().join("rubyish.sdf3")).unwrap();
     let module = treebank_sdf3::parse_module(&text).unwrap();
-    let g = treebank_sdf3::lower(&module).unwrap().grammar;
+    let g = treebank_sdf3::lower_all(&module).unwrap().lowered.grammar;
     let externals: Vec<&str> = g["externals"]
         .as_array()
         .unwrap()

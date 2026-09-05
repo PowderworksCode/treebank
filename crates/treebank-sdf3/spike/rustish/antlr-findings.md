@@ -1,3 +1,7 @@
+## WIDENING -- tree-sitter accepts more than SDF3 here (1)
+
+- Exp.Lt is non-assoc; ANTLR has no non-associativity, lowered as left-associative
+
 ## DEVIATION -- the tree differs in shape from SDF3's AST (5)
 
 - injection into Stmt is a context node in ANTLR's tree (`inj_stmt_1`); the driver elides it when printing

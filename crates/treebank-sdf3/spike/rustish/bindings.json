@@ -44,6 +44,15 @@
       "kind": "var",
       "effect": "after",
       "from": "Stmt.Let"
+    },
+    {
+      "node": "let_mut",
+      "field": "pattern",
+      "name": "id",
+      "scope": "enclosing",
+      "kind": "var",
+      "effect": "after",
+      "from": "Stmt.LetMut"
     }
   ],
   "references": [
@@ -61,6 +70,7 @@
     "_binding": [
       "fn",
       "let",
+      "let_mut",
       "param"
     ]
   }

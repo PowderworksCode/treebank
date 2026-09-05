@@ -67,18 +67,18 @@ def on_newline(self):
 }
 
 program
-    : stmt* EOF
+    : statement* EOF
     ;
 
-stmt
-    :     target=ID '=' value=exp H_NEWLINE  # assign
-    |     exp H_NEWLINE  # expr
-    |     'return' value=exp H_NEWLINE  # return
+statement
+    :     target=ID '=' value=expression H_NEWLINE  # assign
+    |     expression H_NEWLINE  # expr
+    |     'return' value=expression H_NEWLINE  # return
     |     'global' names+=ID (',' names+=ID)* H_NEWLINE  # global
     |     'pass' H_NEWLINE  # pass
-    |     'print' '(' value=exp ')' H_NEWLINE  # print
-    |     'if' condition=exp ':' H_INDENT consequence=block H_DEDENT (alternative=else_clause)?  # if
-    |     'while' condition=exp ':' H_INDENT body=block H_DEDENT  # while
+    |     'print' '(' value=expression ')' H_NEWLINE  # print
+    |     'if' condition=expression ':' H_INDENT consequence=block H_DEDENT (alternative=else_clause)?  # if
+    |     'while' condition=expression ':' H_INDENT body=block H_DEDENT  # while
     |     'def' name=ID '(' (parameters+=param (',' parameters+=param)*)? ')' ':' H_INDENT body=block H_DEDENT  # def
     ;
 
@@ -87,23 +87,23 @@ else_clause
     ;
 
 block
-    : stmt+
+    : statement+
     ;
 
 param
     : name=ID
     ;
 
-exp
-    :     function=exp '(' (arguments+=exp (',' arguments+=exp)*)? ')'  # call
-    |     '-' operand=exp  # neg
-    |     left=exp '*' right=exp  # mul
-    |     left=exp '+' right=exp  # add
-    |     left=exp '-' right=exp  # sub
-    |     left=exp '<' right=exp  # lt
+expression
+    :     function=expression '(' (arguments+=expression (',' arguments+=expression)*)? ')'  # call
+    |     '-' operand=expression  # neg
+    |     left=expression '*' right=expression  # mul
+    |     left=expression '+' right=expression  # add
+    |     left=expression '-' right=expression  # sub
+    |     left=expression '<' right=expression  # lt
     |     ID  # inj_exp_1
     |     INT  # exp_int
-    |     '(' exp ')'  # exp_bracket
+    |     '(' expression ')'  # exp_bracket
     ;
 
 H_NEWLINE : ( '\r'? '\n' | '\r' ) [ \t]* { self.on_newline() } ;

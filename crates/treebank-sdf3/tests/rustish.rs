@@ -15,7 +15,7 @@ fn same(name: &str, produced: &str) {
 #[test]
 fn rustish_reads_and_lowers_to_the_committed_output() {
     let module = treebank_sdf3::load_module(&spike().join("rustish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let mut grammar = lowered.grammar.clone();
     let mut findings = lowered.findings.clone();
     let conflicts = treebank_sdf3::read_conflicts(&spike().join("tree-sitter.conflicts.json"))
@@ -35,7 +35,7 @@ fn rustish_reads_and_lowers_to_the_committed_output() {
 #[test]
 fn a_let_binds_after_its_node_and_a_fn_item_binds_the_whole_scope() {
     let module = treebank_sdf3::load_module(&spike().join("rustish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let b = treebank_sdf3::bindings::emit(&module, &lowered.names).unwrap().unwrap();
     let defs = b.json["definitions"].as_array().unwrap();
     let effect = |node: &str| {

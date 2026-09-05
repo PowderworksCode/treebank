@@ -156,6 +156,7 @@ const SECTION_WORDS: &[&str] = &[
     "restrictions",
     "start-symbols",
     "options",
+    "vocabulary",
 ];
 
 fn sort_name(i: &mut In) -> R<String> {
@@ -686,6 +687,40 @@ fn sec_template_options(i: &mut In) -> R<Section> {
         .parse_next(i)
 }
 
+/// treebank extension: `vocabulary` followed by `_term = member..` lines.
+fn sec_vocabulary(i: &mut In) -> R<Section> {
+    preceded(kw("vocabulary"), repeat(0.., vocab_term))
+        .map(Section::Vocabulary)
+        .parse_next(i)
+}
+
+fn vocab_term(i: &mut In) -> R<VocabTerm> {
+    let term = lex(vocab_name.verify(|s: &String| s.starts_with('_'))).parse_next(i)?;
+    sym("=").parse_next(i)?;
+    let members: Vec<String> = repeat(1.., lex(vocab_member)).parse_next(i)?;
+    Ok(VocabTerm { term, members })
+}
+
+fn vocab_name(i: &mut In) -> R<String> {
+    take_while(1.., |c: char| c.is_ascii_alphanumeric() || c == '_')
+        .map(str::to_string)
+        .verify(|s: &String| !SECTION_WORDS.contains(&s.as_str()))
+        .parse_next(i)
+}
+
+/// `Stmt`, `Stmt.If`, `ID`, or `_branch` -- but never the next line's
+/// `_term =`, which is told apart by the `=` that follows it.
+fn vocab_member(i: &mut In) -> R<String> {
+    (
+        take_while(1.., |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+            .map(str::to_string)
+            .verify(|s: &String| !SECTION_WORDS.contains(&s.as_str())),
+        winnow::combinator::not((ws, '=')),
+    )
+        .map(|(m, _)| m)
+        .parse_next(i)
+}
+
 fn no_section(i: &mut In) -> R<Section> {
     fail.context(StrContext::Label("section")).parse_next(i)
 }
@@ -706,6 +741,7 @@ fn section(i: &mut In) -> R<Section> {
             sec_lex_restrictions,
             sec_sorts,
             sec_template_options,
+            sec_vocabulary,
         )),
         no_section,
     ))

@@ -20,7 +20,7 @@ fn mini_reads_and_lowers_to_the_committed_grammar() {
     );
     assert_eq!(module.productions(true).count(), 4, "lexical productions");
 
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let produced = serde_json::to_string_pretty(&lowered.grammar).unwrap() + "\n";
     let committed = std::fs::read_to_string(spike().join("grammar.json")).unwrap();
     assert_eq!(
@@ -41,7 +41,7 @@ fn the_lowering_says_what_it_cannot_keep() {
     use treebank_sdf3::Kind;
     let text = std::fs::read_to_string(spike().join("mini.sdf3")).unwrap();
     let module = treebank_sdf3::parse_module(&text).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let count = |k: Kind| lowered.findings.iter().filter(|f| f.kind == k).count();
     assert_eq!(count(Kind::Unsupported), 0);
     // The two non-assoc operators, and nothing else, widen.
@@ -56,7 +56,7 @@ fn the_lowering_says_what_it_cannot_keep() {
 fn sorts_become_supertypes_and_keywords_become_reserved() {
     let text = std::fs::read_to_string(spike().join("mini.sdf3")).unwrap();
     let module = treebank_sdf3::parse_module(&text).unwrap();
-    let g = treebank_sdf3::lower(&module).unwrap().grammar;
+    let g = treebank_sdf3::lower_all(&module).unwrap().lowered.grammar;
     assert_eq!(g["supertypes"], serde_json::json!(["_stmt", "_exp"]));
     assert_eq!(g["word"], "id");
     let reserved: Vec<&str> = g["reserved"]["global"]

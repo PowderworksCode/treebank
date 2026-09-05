@@ -13,5 +13,7 @@
 
 (let pattern: (id) @local.definition.var)
 
+(let_mut pattern: (id) @local.definition.var)
+
 ; --- what mentions a name
 (id) @local.reference

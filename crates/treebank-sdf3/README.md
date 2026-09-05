@@ -40,6 +40,7 @@ crates/treebank-sdf3/spike/cppish/verify.sh   # also asks generate for the carry
 crates/treebank-sdf3/spike/pyish/verify.sh    # regenerates the indent-stack scanner; checks bindings against symtable and python3
 crates/treebank-sdf3/spike/rustish/verify.sh  # checks bindings against rustc
 crates/treebank-sdf3/spike/jsish/verify.sh    # checks bindings against node
+python3 crates/treebank-sdf3/tools/rosetta_check.py crates/treebank-sdf3/spike/rosetta   # the rosetta gate over the spike languages
 ```
 
 ## What it found
@@ -193,6 +194,50 @@ JavaScript programs (`var` hoisting through a block, `let` per block, two
 temporal-dead-zone errors, a hoisted function, `var` over a parameter)
 and two Python programs (an `UnboundLocalError`, `global`) all print, or
 fail, as the toolchain does: twelve of twelve.
+
+## The shared vocabulary, from the module
+
+treebank's grammars share a closed vocabulary (`notes/DESIGN.md` §3): 22
+table-tier terms that are real supertypes (`_statement`, `_branch`,
+`_body`, …) and 7 facets shipped as `roles.json`, checked by `treebank
+roles` in CI and by the rosetta suite across languages. A `vocabulary`
+section, a treebank extension, binds terms to a module's sorts and
+constructors:
+
+```
+vocabulary
+  _statement    = Stmt
+  _branch       = Stmt.If
+  _control_flow = _branch _loop _jump
+  _body         = Block
+  _clause       = Else
+```
+
+`src/vocab.rs` decides the tier per term, as §3.1.1 says a grammar must. A
+term bound to a whole sort **renames** that sort's supertype; a term bound
+to constructors, single-constructor sorts, tokens or other terms
+**threads** a new supertype through every reference to a member, so
+`_branch` nests inside `_statement` where `if` stood and `_body` wraps
+`block` in every field that held it, with the tree unchanged; a facet goes
+to `roles.json`, and three facets are derived from what the module already
+says (`_scope` and `_binding` from the binding attributes, `_callable`
+from a function binding, `_comment` from LAYOUT); a term that would give a
+node two derivations is **demoted** with the reason written for it, where
+the vocabulary allows, and refused where it does not. Every node left
+uncovered is ledgered as uncategorised with a reason that says which
+covered node it is a piece of.
+
+Three checks, none of them written for the spikes. `examples/roles.rs`
+runs `treebank::check::check`, the code behind `treebank roles`, over each
+spike's generated `node-types.json` and lowered `roles.json`: pyish and
+rustish carry 14 of the 22 table-tier terms as supertypes, jsish 13, each
+with five facets and one uncategorised token. `tools/rosetta_check.py` is
+the rosetta gate over the spike languages: three cases under
+`spike/rosetta/` with the same program in pyish, rustish and jsish, and
+20 of 20 role queries yield the same count in all three. The gate earned
+its keep on the first run: the modules had put `let` in `_declaration`,
+Python's `prefix = name` is not one, and the shipped grammars agree with
+Python, so the modules were corrected.
 
 ## The second backend: ANTLR
 

@@ -10,5 +10,8 @@ description = "A reader for SDF3 syntax definitions and a lowering to tree-sitte
 
 [dependencies]
 anyhow = "1"
+# The vocabulary, the roles manifest and its checker: the spikes are held to
+# the same code the shipped grammars are. No engine, so no wasmer.
+treebank = { path = "../treebank", default-features = false }
 serde_json = { version = "1", features = ["preserve_order"] }
 winnow = "1"

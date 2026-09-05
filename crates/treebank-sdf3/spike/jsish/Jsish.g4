@@ -2,38 +2,44 @@
 grammar Jsish;
 
 program
-    : stmt* EOF
+    : statement* EOF
     ;
 
-stmt
+statement
     :     'function' name=ID '(' (parameters+=param (',' parameters+=param)*)? ')' body=block  # function
-    |     'var' name=ID '=' value=exp ';'  # var
-    |     'let' name=ID '=' value=exp ';'  # let
-    |     target=ID '=' value=exp ';'  # assign
-    |     'console.log' '(' value=exp ')' ';'  # print
-    |     'return' value=exp ';'  # return
-    |     'if' '(' condition=exp ')' consequence=block  # if
-    |     exp ';'  # expr
+    |     'var' name=ID '=' value=expression ';'  # var
+    |     'let' name=ID '=' value=expression ';'  # let
+    |     target=ID '=' value=expression ';'  # assign
+    |     'console.log' '(' value=expression ')' ';'  # print
+    |     'return' value=expression ';'  # return
+    |     'if' '(' condition=expression ')' consequence=block (alternative=else_clause)?  # if
+    |     'while' '(' condition=expression ')' body=block  # while
+    |     expression ';'  # expr
     |     block  # inj_stmt_1
     ;
 
 block
-    : '{' stmt* '}'
+    : '{' statement* '}'
+    ;
+
+else_clause
+    : 'else' body=block
     ;
 
 param
     : name=ID
     ;
 
-exp
-    :     function=exp '(' (arguments+=exp (',' arguments+=exp)*)? ')'  # call
-    |     '-' operand=exp  # neg
-    |     left=exp '*' right=exp  # mul
-    |     left=exp '+' right=exp  # add
-    |     left=exp '-' right=exp  # sub
+expression
+    :     function=expression '(' (arguments+=expression (',' arguments+=expression)*)? ')'  # call
+    |     '-' operand=expression  # neg
+    |     left=expression '*' right=expression  # mul
+    |     left=expression '+' right=expression  # add
+    |     left=expression '-' right=expression  # sub
+    |     left=expression '<' right=expression  # lt
     |     ID  # inj_exp_2
     |     INT  # exp_int
-    |     '(' exp ')'  # exp_bracket
+    |     '(' expression ')'  # exp_bracket
     ;
 
 ID : [a-zA-Z_$] ([a-zA-Z0-9_$])* ;

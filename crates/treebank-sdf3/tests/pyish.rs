@@ -12,7 +12,7 @@ fn spike() -> &'static Path {
 fn pyish_reads_and_lowers_to_the_committed_output() {
     let module = treebank_sdf3::load_module(&spike().join("pyish.sdf3")).unwrap();
     assert_eq!(module.name, "pyish");
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
 
     let produced = serde_json::to_string_pretty(&lowered.grammar).unwrap() + "\n";
     let committed = std::fs::read_to_string(spike().join("grammar.json")).unwrap();
@@ -49,7 +49,7 @@ fn pyish_reads_and_lowers_to_the_committed_output() {
 #[test]
 fn the_binding_attributes_lower_to_the_committed_data_and_query() {
     let module = treebank_sdf3::load_module(&spike().join("pyish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let b = treebank_sdf3::bindings::emit(&module, &lowered.names)
         .unwrap()
         .expect("pyish declares bindings");
@@ -79,7 +79,7 @@ fn the_binding_attributes_lower_to_the_committed_data_and_query() {
 #[test]
 fn the_declarative_constraints_become_three_externals_and_a_stack() {
     let module = treebank_sdf3::load_module(&spike().join("pyish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     let g = &lowered.grammar;
     let externals: Vec<&str> = g["externals"]
         .as_array()
@@ -108,7 +108,7 @@ fn the_declarative_constraints_become_three_externals_and_a_stack() {
 #[test]
 fn a_sort_with_one_constructor_is_named_for_the_constructor() {
     let module = treebank_sdf3::load_module(&spike().join("pyish.sdf3")).unwrap();
-    let lowered = treebank_sdf3::lower(&module).unwrap();
+    let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
     assert!(lowered.grammar["rules"].get("else_clause").is_some());
     assert!(lowered.grammar["rules"].get("else").is_none());
 }
