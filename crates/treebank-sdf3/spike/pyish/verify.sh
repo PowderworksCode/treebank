@@ -28,3 +28,4 @@ captures=$(tree-sitter query queries/locals.scm bindings/nested.py 2>/dev/null |
 echo "queries/locals.scm: $captures captures on bindings/nested.py"
 [ "$captures" -gt 0 ]
 python3 "$HERE/../../tools/bindings_check.py" "$HERE"
+python3 "$HERE/../../tools/resolve_check.py" "$HERE"

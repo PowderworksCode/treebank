@@ -1,0 +1,74 @@
+; Expectations written from jsish.sdf3. The bindings are checked by
+; execution (tools/resolve_check.py); this corpus holds the tree shape.
+================================================================================
+var and let are different statements; a block is a statement
+================================================================================
+
+var x = 1;
+{
+  let x = 2;
+  x = x + 1;
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (var
+    name: (id)
+    value: (exp_int (int)))
+  (block
+    (let
+      name: (id)
+      value: (exp_int (int)))
+    (assign
+      target: (id)
+      value: (add
+        left: (id)
+        right: (exp_int (int))))))
+
+================================================================================
+a function declaration with parameters, a return, a call, a print
+================================================================================
+
+function add(a, b) {
+  return a + b;
+}
+console.log(add(1, 2));
+
+--------------------------------------------------------------------------------
+
+(program
+  (function
+    name: (id)
+    parameters: (param name: (id))
+    parameters: (param name: (id))
+    body: (block
+      (return
+        value: (add
+          left: (id)
+          right: (id)))))
+  (print
+    value: (call
+      function: (id)
+      arguments: (exp_int (int))
+      arguments: (exp_int (int)))))
+
+================================================================================
+if with a block; a comment is an extra
+================================================================================
+
+// hoisting
+if (1) {
+  var y = 2;
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (comment)
+  (if
+    condition: (exp_int (int))
+    consequence: (block
+      (var
+        name: (id)
+        value: (exp_int (int))))))

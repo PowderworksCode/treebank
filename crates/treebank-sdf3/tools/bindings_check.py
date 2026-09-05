@@ -35,7 +35,7 @@ class Node:
             yield from c.walk()
 
 
-TOKEN = re.compile(r"(?:(\w+): )?\((\w+) \[(\d+), (\d+)\] - \[(\d+), (\d+)\]|(\))")
+TOKEN = re.compile(r"(?:(\w+): )?\((\w+)(?: \"[^\"]*\")? \[(\d+), (\d+)\] - \[(\d+), (\d+)\]|(\))")
 
 
 def parse_tree(text):

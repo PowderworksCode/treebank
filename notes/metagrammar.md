@@ -972,3 +972,87 @@ tree-sitter's own highlighter ignores. Both are places where the JSON is
 the truth and the query is a view — the split §7's `recognizer` row was
 arguing for, now with a concrete consumer on each side.
 
+## 19. The sixth spike: when a binding takes effect
+
+§18 left one thing open: Python binds a name for its whole scope, so
+nothing in the bindings model said *when* a binding takes effect, and
+Rust and JavaScript needed it to. Two more modules settle how much the
+model has to grow. The answer is two words.
+
+`crates/treebank-sdf3/spike/rustish/rustish.sdf3` is the corner of Rust
+where a binding is a point in time: `let x = x + 1;` reads the previous
+`x` and shadows it from the next statement on; a block is a scope and an
+expression; a `fn` item is visible throughout the block that holds it,
+before its line. `spike/jsish/jsish.sdf3` is the corner of JavaScript
+where two keywords bind differently: `var` in the enclosing *function*
+whatever block it sits in, visible as `undefined` before its line; `let`
+in its block, an error before its line; a function declaration throughout
+its scope. The attributes:
+
+```
+Stmt.Let      = <let <pattern:ID> = <value:Exp>;>   {binds(pattern -> enclosing after)}     -- rustish
+Item.Fn       = <fn <name:ID>(..) <ret:Ret?> <body:Block>>
+                                                     {scope(function), binds(name -> enclosing as function)}
+Stmt.Var      = <var <name:ID> = <value:Exp>;>      {binds(name -> function)}               -- jsish
+Stmt.Let      = <let <name:ID> = <value:Exp>;>      {binds(name -> enclosing)}
+```
+
+The model gains an **effect** per binding — `whole`, the default, visible
+throughout the scope, with several whole bindings of one name in one
+scope being one slot; or `after`, from the end of the binding node
+onward, each a new slot — and a target named by **scope kind**, of which
+§18's `module` was already the first instance. The resolution rule,
+stated in `bindings.json`'s note, is one sentence: a reference resolves to
+the slot of its name with the latest start at or before it, in the
+nearest scope that has one, outward. A whole slot starts at its scope's
+start; an after slot at its node's end. That is all: Python, Rust and
+JavaScript are the same rule with different effects and targets.
+
+**The oracle is the toolchain.** `tools/resolve_check.py` resolves every
+name from `bindings.json` alone, then evaluates the program with an
+interpreter that knows integers, arithmetic, calls and prints and
+*nothing about scope* — every scoping decision comes from the data — and
+compares what it printed, or that it failed, with what rustc's compiled
+binary, node or python3 prints for the same file. **Twelve of twelve
+programs agree**:
+
+| language | programs | what they exercise |
+|---|---|---|
+| Rust (rustc 1.94) | 5 | a shadowing chain across a block (`1 11 22 11`), a `fn` item called before its line, a parameter shadowed twice, blocks as expressions, an initializer reading the previous binding |
+| JavaScript (node 22) | 5 | `var` hoisting through an `if` block (`undefined 2 3 2`), `let` per block, two temporal-dead-zone errors, a hoisted function closing over a parameter, `var` over a parameter |
+| Python (3) | 2 | `UnboundLocalError` on a use before assignment, `global` |
+
+The two error cases are the sharpest: JavaScript's `let y = y + 1;` inside
+a block is a ReferenceError, Python's `print(x); x = 2` in a function is
+an UnboundLocalError, and both fall out of the same model — a whole-scope
+slot exists for `y` in the block, the reference resolves to it, and the
+slot has no value yet. Rust's version of the same line resolves to the
+outer `y` and runs, because the slot is `after`. The interpreter's one
+language-shaped fact is that a `var` slot holds `undefined` before its
+line where a `let` slot holds nothing; that is a runtime fact about
+values, not a scoping fact, and it stays out of the data.
+
+One thing the tree-sitter locals query dialect can now be measured
+against: its engine resolves a reference to the nearest *preceding*
+definition in scope, which is exactly `after` and not `whole`. So the
+finding on every whole-scope binding says the engine will resolve a
+use-before-definition outward where the data resolves it inward — Rust's
+`let` is the case the engine gets right by construction, Python's names
+and JavaScript's `var` are the cases it does not. The data is the truth;
+the query is a view; the view's gap is named.
+
+Small things the spike shook out: a block as a statement needs no
+semicolon in Rust, which is a real LR conflict between statement and
+expression that `--generate` discovered and pinned as `[_stmt, _exp]`;
+and the `grammar.js` printer did not escape a quote inside a string token
+until `println!("{}", ..)` made it. Both backends take the new modules as
+they are: three of three tree-sitter corpus cases on each, two of three
+under ANTLR with the comment on the hidden channel as the only miss.
+
+What remains open is narrower than before. Order-sensitive *scopes* are
+handled; order-sensitive *values* (an interpreter's concern) are not the
+grammar's. What the model still does not say is destructuring (a pattern
+binding several names) and imports (a binding whose definition is in
+another file), and §12 should carry those two instead of the one it
+carried.
+

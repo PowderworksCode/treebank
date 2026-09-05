@@ -176,15 +176,30 @@ pub struct Binding {
     pub target: BindTarget,
     /// `var`, `function`, `parameter`: treebank's locals vocabulary.
     pub kind: Option<String>,
+    /// When the binding takes effect within its scope.
+    pub effect: BindEffect,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BindTarget {
     /// The nearest scope node that is a proper ancestor of the binding
     /// node -- for a scope node's own name, the scope around it.
     Enclosing,
-    /// The outermost scope, past every enclosing one.
-    Module,
+    /// The nearest enclosing scope of this kind: `module`, `function`.
+    Kind(String),
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum BindEffect {
+    /// The whole scope, before and after the binding: Python's names, a
+    /// JavaScript `var`, `let` or function declaration, a Rust `fn` item.
+    /// Several whole-scope bindings of one name in one scope are one slot.
+    #[default]
+    Whole,
+    /// From the end of the binding node onward: a Rust `let`, whose
+    /// initializer sees the previous binding and which shadows it after.
+    /// Each is a new slot.
+    After,
 }
 
 /// One constraint of a `{layout(...)}` attribute. SDF3 has two forms: the

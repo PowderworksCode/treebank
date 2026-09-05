@@ -56,6 +56,7 @@ context-free syntax
   Stmt.Return = <return <value:Exp>>          {layout(offside 1 2)}
   Stmt.Global = <global <names:{ID ","}+>>  {binds(names -> module)}
   Stmt.Pass   = <pass>
+  Stmt.Print  = <print(<value:Exp>)>
   Stmt.If     = <
     if <condition:Exp>:
       <consequence:Block>

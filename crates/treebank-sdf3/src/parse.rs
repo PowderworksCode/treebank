@@ -413,20 +413,31 @@ fn layout_pos(i: &mut In) -> R<LayoutPos> {
     Ok(LayoutPos { symbol, end, axis })
 }
 
-/// `target -> enclosing`, `names -> module as var`.
+/// `target -> enclosing`, `names -> module as var`, `pattern -> enclosing after`.
 fn binding(i: &mut In) -> R<Binding> {
     let label = lex(ident).parse_next(i)?;
     sym("->").parse_next(i)?;
-    let target = lex(alt((
-        "enclosing".value(BindTarget::Enclosing),
-        "module".value(BindTarget::Module),
-    )))
-    .parse_next(i)?;
+    let target = lex(ident)
+        .map(|t: String| {
+            if t == "enclosing" {
+                BindTarget::Enclosing
+            } else {
+                BindTarget::Kind(t)
+            }
+        })
+        .parse_next(i)?;
     let kind: Option<String> = opt(preceded(kw("as"), lex(ident))).parse_next(i)?;
+    let effect = opt(lex(alt((
+        "after".value(BindEffect::After),
+        "whole".value(BindEffect::Whole),
+    ))))
+    .parse_next(i)?
+    .unwrap_or_default();
     Ok(Binding {
         label,
         target,
         kind,
+        effect,
     })
 }
 

@@ -1,6 +1,6 @@
 ## WIDENING -- tree-sitter accepts more than SDF3 here (3)
 
-- the scanner applies the offside rule to every element of an aligned list, since it ends an element at a line break by the next line's column alone; [Stmt.Global, Stmt.Pass] declare no `offside` and get it anyway
+- the scanner applies the offside rule to every element of an aligned list, since it ends an element at a line break by the next line's column alone; [Stmt.Global, Stmt.Pass, Stmt.Print] declare no `offside` and get it anyway
 - where no `_newline` can end a statement the scanner is not consulted and a line break is layout, so inside brackets a line may continue at any column: Python's implicit line joining, which the offside rule rejects
 - Exp.Lt is non-assoc; tree-sitter has no non-associativity, lowered to PREC_LEFT so `a == b == c` parses where SDF3 rejects it
 
@@ -10,12 +10,13 @@
 - a tab is one column, as tree-sitter's lexer counts; CPython uses tab stops of eight
 - bracket production of Exp became the named node `exp_bracket`; SDF3's AST has no node for brackets, but a hidden supertype member may have only one visible child and `( Exp )` has three
 
-## EXTENSION -- a treebank addition outside SDF3 was used (25)
+## EXTENSION -- a treebank addition outside SDF3 was used (26)
 
 - Stmt.Assign: placeholder label `target` became a field (not SDF3)
 - Stmt.Assign: placeholder label `value` became a field (not SDF3)
 - Stmt.Return: placeholder label `value` became a field (not SDF3)
 - Stmt.Global: placeholder label `names` became a field (not SDF3)
+- Stmt.Print: placeholder label `value` became a field (not SDF3)
 - Stmt.If: placeholder label `condition` became a field (not SDF3)
 - Stmt.If: placeholder label `consequence` became a field (not SDF3)
 - Stmt.If: placeholder label `alternative` became a field (not SDF3)
@@ -75,6 +76,6 @@
 - lexical sort INT became the token `int` /(?:[0-9])+/
 - LAYOUT class became an extras pattern /[ \t\n\r]/
 - LAYOUT production became the named extra `comment` /#(?:[^\n\r])*/
-- `ID = keyword {reject}` became `word: id` plus reserved.global = [def, else, global, if, pass, return, while]
+- `ID = keyword {reject}` became `word: id` plus reserved.global = [def, else, global, if, pass, print, return, while]
 - `tokenize: "():,"`: the reader split template literal runs at these characters, so each is its own token
 

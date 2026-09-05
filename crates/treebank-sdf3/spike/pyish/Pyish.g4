@@ -76,6 +76,7 @@ stmt
     |     'return' value=exp H_NEWLINE  # return
     |     'global' names+=ID (',' names+=ID)* H_NEWLINE  # global
     |     'pass' H_NEWLINE  # pass
+    |     'print' '(' value=exp ')' H_NEWLINE  # print
     |     'if' condition=exp ':' H_INDENT consequence=block H_DEDENT (alternative=else_clause)?  # if
     |     'while' condition=exp ':' H_INDENT body=block H_DEDENT  # while
     |     'def' name=ID '(' (parameters+=param (',' parameters+=param)*)? ')' ':' H_INDENT body=block H_DEDENT  # def

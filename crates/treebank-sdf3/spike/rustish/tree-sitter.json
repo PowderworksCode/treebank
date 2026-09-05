@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "rustish",
+      "camelcase": "Rustish",
+      "scope": "source.rustish",
+      "file-types": ["rustish"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike; not a shipped grammar"
+  }
+}

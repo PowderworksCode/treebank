@@ -1039,7 +1039,7 @@ pub fn to_grammar_js(grammar: &Value) -> String {
         let pad = "  ".repeat(indent);
         let ty = v["type"].as_str().unwrap_or("");
         match ty {
-            "STRING" => format!("{:?}", v["value"].as_str().unwrap_or("")).replace("\\\"", "\""),
+            "STRING" => format!("{:?}", v["value"].as_str().unwrap_or("")),
             "PATTERN" => format!("/{}/", v["value"].as_str().unwrap_or("")),
             "SYMBOL" => format!("$.{}", v["name"].as_str().unwrap_or("")),
             "BLANK" => "blank()".into(),

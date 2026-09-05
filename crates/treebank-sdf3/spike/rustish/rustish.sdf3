@@ -1,0 +1,75 @@
+// rustish: the corner of Rust where a binding is a point in time.
+//
+// `let x = x + 1;` reads the previous `x` and shadows it from the next
+// statement on; a block is a scope and an expression; a `fn` item is
+// visible throughout the block that holds it, before its declaration.
+// Python's bindings hold for a whole scope, so the bindings model of
+// pyish had no need to say *when* a binding takes effect. Rust needs it,
+// and this module says it with one word: `binds(pattern -> enclosing
+// after)`. Everything else is the same three attributes.
+//
+// The programs under programs/ are valid Rust; tools/resolve_check.py
+// resolves and evaluates them from bindings.json and compares with what
+// rustc's binary prints.
+
+module rustish
+
+context-free start-symbols
+  Program
+
+sorts
+  Program Item Ret Param Block Stmt Exp
+
+lexical sorts
+  ID INT
+
+lexical syntax
+  ID     = [a-zA-Z\_] [a-zA-Z0-9\_]*
+  INT    = [0-9]+
+  LAYOUT = [\ \t\n\r]
+  LAYOUT = "//" ~[\n\r]*
+
+lexical restrictions
+  ID  -/- [a-zA-Z0-9\_]
+  INT -/- [0-9]
+
+context-free restrictions
+  LAYOUT? -/- [\ \t\n\r]
+  LAYOUT? -/- [\/].[\/]
+
+context-free syntax
+  Program.Program = <<Item*>> {scope(module)}
+
+  Item.Fn = <fn <name:ID>(<parameters:{Param ","}*>) <ret:Ret?> <body:Block>>
+            {scope(function), binds(name -> enclosing as function)}
+  Ret.Ret = <-\> i64>
+  Param.Param = <<name:ID>: i64> {binds(name -> enclosing as parameter)}
+
+  Block.Block = <{ <Stmt*> <tail:Exp?> }> {scope(block)}
+
+  Stmt.Let   = <let <pattern:ID> = <value:Exp>;> {binds(pattern -> enclosing after)}
+  Stmt.Print = <println!("{}", <value:Exp>);>
+  Stmt.Expr  = <<Exp>;>
+  Stmt       = Item
+  Stmt       = Block
+
+  Exp          = ID {refers(1)}
+  Exp.Int      = INT
+  Exp          = Block
+  Exp.Call     = <<function:Exp>(<arguments:{Exp ","}*>)>
+  Exp.Neg      = <-<operand:Exp>>
+  Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
+  Exp.Add      = <<left:Exp> + <right:Exp>> {left}
+  Exp.Sub      = <<left:Exp> - <right:Exp>> {left}
+  Exp          = <(<Exp>)> {bracket}
+
+context-free priorities
+  {Exp.Call}
+  > {Exp.Neg}
+  > {left: Exp.Mul}
+  > {left: Exp.Add Exp.Sub}
+
+template options
+  ID = keyword {reject}
+  keyword -/- [a-zA-Z0-9\_]
+  tokenize: "(),;:{}"

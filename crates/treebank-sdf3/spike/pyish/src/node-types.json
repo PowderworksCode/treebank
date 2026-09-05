@@ -70,6 +70,10 @@
         "named": true
       },
       {
+        "type": "print",
+        "named": true
+      },
+      {
         "type": "return",
         "named": true
       },
@@ -423,6 +427,22 @@
     "fields": {}
   },
   {
+    "type": "print",
+    "named": true,
+    "fields": {
+      "value": {
+        "multiple": false,
+        "required": true,
+        "types": [
+          {
+            "type": "_exp",
+            "named": true
+          }
+        ]
+      }
+    }
+  },
+  {
     "type": "program",
     "named": true,
     "root": true,
@@ -573,6 +593,10 @@
   },
   {
     "type": "pass",
+    "named": false
+  },
+  {
+    "type": "print",
     "named": false
   },
   {

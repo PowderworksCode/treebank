@@ -73,7 +73,7 @@ fn the_binding_attributes_lower_to_the_committed_data_and_query() {
     // Only the def name gets the parent-scope property; the module-directed
     // binding is a deviation the query cannot express.
     assert_eq!(b.locals.matches("#set!").count(), 1);
-    assert!(b.findings.iter().any(|f| f.what.contains("cannot name the module scope")));
+    assert!(b.findings.iter().any(|f| f.what.contains("cannot name a scope by kind")));
 }
 
 #[test]

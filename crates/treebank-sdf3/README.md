@@ -37,7 +37,9 @@ cargo test -p treebank-sdf3
 crates/treebank-sdf3/spike/mini/verify.sh
 crates/treebank-sdf3/spike/rubyish/verify.sh
 crates/treebank-sdf3/spike/cppish/verify.sh   # also asks generate for the carry's conflicts
-crates/treebank-sdf3/spike/pyish/verify.sh    # regenerates the indent-stack scanner; checks bindings against symtable
+crates/treebank-sdf3/spike/pyish/verify.sh    # regenerates the indent-stack scanner; checks bindings against symtable and python3
+crates/treebank-sdf3/spike/rustish/verify.sh  # checks bindings against rustc
+crates/treebank-sdf3/spike/jsish/verify.sh    # checks bindings against node
 ```
 
 ## What it found
@@ -164,6 +166,33 @@ the data says, and compares the per-scope classification (parameter,
 local, free, global) with CPython's `symtable`. Six programs — module
 names, `global`, a closure's free variable, shadowing, a forward
 reference, control flow — and six agree, name for name.
+
+## When a binding takes effect: Rust and JavaScript
+
+Python binds a name for its whole scope, so pyish never had to say *when*
+a binding takes effect. Rust's `let x = x + 1;` reads the previous `x` and
+shadows it from the next statement on; JavaScript's `var` binds in the
+enclosing function whatever block it sits in, while `let` binds in its
+block. `spike/rustish/` and `spike/jsish/` add exactly two words to the
+model: a binding's **effect**, `whole` (the default: visible throughout
+the scope, and several such bindings of one name in one scope are one
+slot) or `after` (from the end of the binding node onward, each a new
+slot), and a target named by **scope kind**, `binds(name -> function)`.
+The resolution rule in `bindings.json` is one sentence: a reference
+resolves to the slot of its name with the latest start at or before it,
+in the nearest scope that has one, outward.
+
+The oracle is the real toolchain. `tools/resolve_check.py` resolves every
+name from `bindings.json` alone, evaluates the program with an
+interpreter that knows integers, arithmetic, calls and prints and nothing
+about scope, and compares what it printed with what rustc's binary, node
+or python3 prints for the same file. Five Rust programs (shadowing chains,
+a `fn` item called before its line, a parameter shadowed twice, blocks as
+expressions, an initializer reading the previous binding), five
+JavaScript programs (`var` hoisting through a block, `let` per block, two
+temporal-dead-zone errors, a hoisted function, `var` over a parameter)
+and two Python programs (an `UnboundLocalError`, `global`) all print, or
+fail, as the toolchain does: twelve of twelve.
 
 ## The second backend: ANTLR
 

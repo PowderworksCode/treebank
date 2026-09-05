@@ -7,7 +7,7 @@ module.exports = grammar({
   extras: $ => [/[ \t\n\r]/, $.comment],
   supertypes: $ => [$._stmt, $._exp],
   externals: $ => [$._newline, $._indent, $._dedent, $._error_sentinel],
-  reserved: { global: $ => ["def", "else", "global", "if", "pass", "return", "while"] },
+  reserved: { global: $ => ["def", "else", "global", "if", "pass", "print", "return", "while"] },
   rules: {
     program: $ => repeat($._stmt),
 
@@ -43,6 +43,14 @@ module.exports = grammar({
 
     pass: $ => seq(
       "pass",
+      $._newline
+    ),
+
+    print: $ => seq(
+      "print",
+      "(",
+      field("value", $._exp),
+      ")",
       $._newline
     ),
 
@@ -89,6 +97,7 @@ module.exports = grammar({
       $.return,
       $.global,
       $.pass,
+      $.print,
       $.if,
       $.while,
       $.def

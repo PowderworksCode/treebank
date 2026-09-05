@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "jsish",
+      "camelcase": "Jsish",
+      "scope": "source.jsish",
+      "file-types": ["jsish"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike; not a shipped grammar"
+  }
+}
