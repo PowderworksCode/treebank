@@ -1110,7 +1110,7 @@ computed instead of narrated.
 `treebank::check::check`, the code behind `treebank roles` in CI, over
 each spike's generated `node-types.json` and lowered `roles.json`; the
 `treebank` library builds without its engine, so the spikes are held to
-the very code the shipped grammars are. And `tools/rosetta_check.py` is
+the same code the shipped grammars are. And `tools/rosetta_check.py` is
 the rosetta gate over the spike languages: three cases, the same program
 in pyish, rustish and jsish, facet queries expanded through each module's
 own manifest as treebank expands them at load time.
