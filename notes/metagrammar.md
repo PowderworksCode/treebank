@@ -718,7 +718,7 @@ b;` is the comparison; `a < b > c > d;` is three comparisons, because the
 template reading dies when the statement keeps going; `vector<vector<int>>
 v;` parses with `>>` a single token in the grammar, because tree-sitter's
 lexer offers only the tokens the state accepts and after a type argument
-`>>` is not one of them — the C++11 rule, for free. cish's own statements
+`>>` is not one of them — the C++11 rule, at no cost to the grammar. cish's own statements
 arrive through the import, and its `int` cannot be a name in cppish.
 
 **§3's post-condition ran, and it is the reason to trust the rest.** The
