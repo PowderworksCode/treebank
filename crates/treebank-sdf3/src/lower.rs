@@ -93,6 +93,15 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     for p in module.productions(true) {
         cx.lexical.entry(p.sort.clone()).or_default().push(p);
     }
+    if !module.imports.is_empty() {
+        cx.findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "imports [{}] merged additively by the loader: an imported sort gains this module's productions, nothing is overridden -- where tree-sitter's `extends` would flatten and override",
+                module.imports.join(", ")
+            ),
+        });
+    }
     let (plan, mut plan_findings) = crate::scanner::plan(module)?;
     cx.findings.append(&mut plan_findings);
     cx.plan = plan;
@@ -728,6 +737,82 @@ fn regex_escape(s: &str) -> String {
     out
 }
 
+/// The declared conflict set a `carry` needs, pinned beside the module as
+/// backend data: tree-sitter's generate is what discovers them (see the
+/// `--generate` loop in `examples/lower.rs`), and the file is what makes the
+/// lowering reproducible without running it.
+pub fn read_conflicts(path: &std::path::Path) -> Result<Option<Vec<Vec<String>>>> {
+    if !path.exists() {
+        return Ok(None);
+    }
+    let text = std::fs::read_to_string(path)?;
+    let v: Value = serde_json::from_str(&text)?;
+    let sets = v["conflicts"]
+        .as_array()
+        .ok_or_else(|| anyhow!("{}: no `conflicts` array", path.display()))?;
+    let mut out = Vec::new();
+    for set in sets {
+        let names: Vec<String> = set
+            .as_array()
+            .ok_or_else(|| {
+                anyhow!(
+                    "{}: a conflict must be an array of rule names",
+                    path.display()
+                )
+            })?
+            .iter()
+            .filter_map(|n| n.as_str().map(str::to_string))
+            .collect();
+        out.push(names);
+    }
+    Ok(Some(out))
+}
+
+/// Declare the pinned conflicts in the grammar, and say so: each is a carry.
+pub fn apply_conflicts(grammar: &mut Value, conflicts: &[Vec<String>]) -> Vec<Finding> {
+    grammar["conflicts"] = json!(conflicts);
+    conflicts
+        .iter()
+        .map(|set| {
+            let supertype = set.iter().any(|n| n.starts_with('_'));
+            Finding {
+                kind: Kind::Mapped,
+                what: format!(
+                    "declared conflict [{}]: a carry, named by tree-sitter generate and pinned in tree-sitter.conflicts.json{}",
+                    set.join(", "),
+                    if supertype {
+                        "; it names a supertype, the early-commit shape notes/field_guide.md §2 budgets for"
+                    } else {
+                        ""
+                    }
+                ),
+            }
+        })
+        .collect()
+}
+
+/// tree-sitter's generate names the rules an unresolved conflict is between
+/// ("Add a conflict for these rules: `a`, `b`"). Pull every such set out of
+/// its stderr.
+pub fn conflicts_suggested(stderr: &str) -> Vec<Vec<String>> {
+    let mut out = Vec::new();
+    for line in stderr.lines() {
+        let Some(rest) = line.split("Add a conflict for these rules:").nth(1) else {
+            continue;
+        };
+        let names: Vec<String> = rest
+            .split('`')
+            .skip(1)
+            .step_by(2)
+            .map(str::to_string)
+            .collect();
+        if !names.is_empty() && !out.contains(&names) {
+            out.push(names);
+        }
+    }
+    out
+}
+
 pub fn snake(name: &str) -> String {
     let mut out = String::new();
     let chars: Vec<char> = name.chars().collect();
@@ -968,6 +1053,23 @@ pub fn to_grammar_js(grammar: &Value) -> String {
                 .map(|x| format!("$.{}", x["name"].as_str().unwrap_or("")))
                 .collect();
             out.push_str(&format!("  externals: $ => [{}],\n", e.join(", ")));
+        }
+    }
+    if let Some(conf) = grammar["conflicts"].as_array() {
+        if !conf.is_empty() {
+            let sets: Vec<String> = conf
+                .iter()
+                .map(|c| {
+                    let names: Vec<String> = c
+                        .as_array()
+                        .into_iter()
+                        .flatten()
+                        .map(|n| format!("$.{}", n.as_str().unwrap_or("")))
+                        .collect();
+                    format!("[{}]", names.join(", "))
+                })
+                .collect();
+            out.push_str(&format!("  conflicts: $ => [{}],\n", sets.join(", ")));
         }
     }
     if let Some(words) = grammar["reserved"]["global"].as_array() {

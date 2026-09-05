@@ -35,6 +35,8 @@ cargo test -p treebank-sdf3
 
 # generate the parser and hold it to the expectations (needs tree-sitter 0.26.12)
 crates/treebank-sdf3/spike/mini/verify.sh
+crates/treebank-sdf3/spike/rubyish/verify.sh
+crates/treebank-sdf3/spike/cppish/verify.sh   # also asks generate for the carry's conflicts
 ```
 
 ## What it found
@@ -74,11 +76,40 @@ derived from the grammar instead of written.
 Twelve expectations written from Ruby's semantics; twelve hold, with zero
 conflicts. `verify.sh` there regenerates grammar and scanner together.
 
+## The third language: the ambiguity C++ keeps
+
+`spike/cppish/` is the `carry` intent. `a < b > c;` is either the expression
+`(a < b) > c` or a declaration of `c` with type `a<b>`, and nothing short of
+a symbol table decides it. SDF3 parses both and `{prefer}` on the template
+reading picks it when both survive the statement. treebank-cpp carries the
+same ambiguity as declared conflicts and cut template arguments in
+*expression* position to keep its table converging; this module keeps them
+in type position only, as that grammar does.
+
+Two things are new in the lowering. `cppish.sdf3` **imports** `cish.sdf3`
+rather than copying it — SDF3 composition is additive, so `Type` gains one
+production and every other rule is cish's; the loader (`load_module`)
+merges sections, and a finding says so. And `{prefer}` lowers to dynamic
+precedence, which tree-sitter only consults inside a **declared conflict**
+— which the lowering cannot compute. So `--generate` asks `tree-sitter
+generate`, declares the conflict it names, and pins the set in
+`tree-sitter.conflicts.json` beside the module: the carry's backend data,
+reproducible without the CLI, diffable when generate's view moves.
+
+Eight expectations from C++'s semantics; eight hold. One declared conflict,
+`[template_id, _exp]` — it names a supertype, the early-commit shape the
+field guide budgets for. `verify.sh` there also runs the post-condition
+`notes/metagrammar.md` §3 asks for: `a < b > c;` must actually fork
+(`version_count` peaks at 2) and `x = a < b > c;` must not (it stays at 1,
+because after `=` no declaration is possible). `vector<vector<int>> v;`
+parses with `>>` a single token in the grammar, because tree-sitter's lexer
+only offers the tokens the state accepts.
+
 ## What it is not
 
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's
 root, because a `grammar.js` under `crates/treebank-*/` is the repository's
 definition of a shipped grammar (`tools/wasm-pack/list-grammars.sh`,
 `treebank status`, the site build). The generated parser lives under
-`spike/mini/` and `spike/rubyish/`, and nothing gates on them but their
-`verify.sh` scripts.
+`spike/mini/`, `spike/rubyish/` and `spike/cppish/`, and nothing gates on
+them but their `verify.sh` scripts.

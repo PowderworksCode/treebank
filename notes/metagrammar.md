@@ -674,3 +674,73 @@ is a limit of this generator, not of the formalism.
 Not tested, still: `carry` (C++'s `<`), layout-sensitive *structure*
 (python's indent stack, yaml's columns) as opposed to layout-sensitive
 *tokens*, and stateful scanning. The next two languages are those.
+
+## 15. The third spike: carry, and composition
+
+Two of the three things §14 left untested were one language: `carry`, and
+extending a grammar without flattening it. `spike/cppish` is C plus the
+one thing that makes C++ hard to parse. `a < b > c;` is either the
+expression `(a < b) > c` or a declaration of `c` with type `a<b>`, and
+nothing short of a symbol table decides it. treebank-cpp's ledger records
+the same choice this spike makes: it carries the ambiguity in *type*
+position as declared conflicts, and cut template arguments in *expression*
+position (`f<int>(x)`) because that form "puts `a < b` and `a<b>` in
+competition at every comparison in the language."
+
+**In SDF3 it is one production and one attribute.** `Type.TemplateId =
+<<ID>\<<{Type ","}+>\>> {prefer}` — added to a sort that `cish.sdf3`
+defines, in a module that `imports cish` rather than copying it. SDF3
+composition is additive: a sort gains productions from every module that
+declares any, nothing is overridden. That is the answer to §2's 385 KB C++
+`grammar.json` at the *source* level; the generated artifact is still flat,
+as it has to be.
+
+**In tree-sitter it is dynamic precedence plus a declared conflict, and
+only one of those can be lowered from the grammar.** `{prefer}` became
+`PREC_DYNAMIC(+1)` on `template_id`, exactly as in §14 — but in §14 the
+weight was inert because the scanner split had made the readings different
+tokens. Here they are the same tokens, the LR table has a genuine
+shift/reduce conflict, and tree-sitter consults the weight only inside a
+conflict the grammar *declares*. Which conflict is not derivable without
+constructing the table. So the lowering asks the thing that constructs it:
+`--generate` runs `tree-sitter generate`, reads the conflict it names
+("Add a conflict for these rules: `template_id`, `_exp`"), declares it, and
+tries again until generate is satisfied. The set it settles on is pinned in
+`tree-sitter.conflicts.json` beside the module — **the carry's backend
+data**: the lowering is reproducible from it without the CLI, `cargo test`
+holds the committed grammar to it, and a diff in it means generate's view
+of the ambiguity moved, which is worth a review. That is a declared-and-
+total sidecar in the sense of §4, for a fact that belongs to one backend.
+
+**Result: 8 of 8 expectations hold.** One declared conflict, 19 rules, 32
+symbols, 45 states. `a < b > c;` and `a<b> c;` are the declaration; `a <
+b;` is the comparison; `a < b > c > d;` is three comparisons, because the
+template reading dies when the statement keeps going; `vector<vector<int>>
+v;` parses with `>>` a single token in the grammar, because tree-sitter's
+lexer offers only the tokens the state accepts and after a type argument
+`>>` is not one of them — the C++11 rule, for free. cish's own statements
+arrive through the import, and its `int` cannot be a name in cppish.
+
+**§3's post-condition ran, and it is the reason to trust the rest.** The
+note said a lowering is not complete until it checks itself: every `carry`
+must actually fork, and a declared conflict that never forks is dead text
+(field guide §3). `verify.sh` parses `a < b > c;` with `--debug=normal` and
+`version_count` peaks at 2 for eleven steps before the weight settles it;
+it parses `x = a < b > c;` and `version_count` never leaves 1, because
+after `=` no declaration is possible and validity decides before any fork.
+Both are asserted, not observed.
+
+The conflict names a supertype, `_exp`. That is the "early commit between
+parallel tiers" shape `treebank lint` budgets per grammar and the field
+guide §2 warns about, and it is not an accident of this lowering: `id` is
+a member of both `_exp` and `_type` at statement start, which is the
+ambiguity. A meta-grammar lint would flag it the same way, and the budget
+would be one.
+
+What the three spikes have now covered of §3's table: `precedence` and
+`prefer` (mini), `lexical` for layout facts as a generated scanner
+(rubyish), `carry` as a generate-discovered, pinned, post-condition-checked
+conflict (cppish), and composition by import. Still untested:
+layout-sensitive *structure* (python's indent stack, yaml's columns) and
+stateful scanning (heredocs, interpolation) — the two places the scanner
+escape hatch is expected to survive, and now the only two.

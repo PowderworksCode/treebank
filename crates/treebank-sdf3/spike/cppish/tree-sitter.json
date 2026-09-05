@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "cppish",
+      "camelcase": "Cppish",
+      "scope": "source.cppish",
+      "file-types": ["cppish"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike, carry half; not a shipped grammar"
+  }
+}

@@ -19,8 +19,43 @@ pub mod lower;
 pub mod parse;
 pub mod scanner;
 
-pub use lower::{lower, to_grammar_js, Finding, Kind, Lowered};
+pub use lower::{
+    apply_conflicts, conflicts_suggested, lower, read_conflicts, to_grammar_js, Finding, Kind,
+    Lowered,
+};
 pub use parse::parse_module;
+
+use std::collections::BTreeSet;
+use std::path::{Path, PathBuf};
+
+/// Read a module and everything it imports, as SDF3 composition does:
+/// imported sections come first, additively. `imports cish` resolves to
+/// `cish.sdf3` beside the importing file. Nothing is overridden -- a sort
+/// gains productions from every module that declares any.
+pub fn load_module(path: &Path) -> anyhow::Result<ast::Module> {
+    let mut visited = BTreeSet::new();
+    visited.insert(path.to_path_buf());
+    load_into(path, &mut visited)
+}
+
+fn load_into(path: &Path, visited: &mut BTreeSet<PathBuf>) -> anyhow::Result<ast::Module> {
+    let text = std::fs::read_to_string(path)
+        .map_err(|e| anyhow::anyhow!("reading {}: {e}", path.display()))?;
+    let mut module = parse_module(&text).map_err(|e| anyhow::anyhow!("{}: {e}", path.display()))?;
+    let dir = path.parent().unwrap_or_else(|| Path::new("."));
+    let mut sections = Vec::new();
+    for name in &module.imports {
+        let sub = dir.join(format!("{name}.sdf3"));
+        if !visited.insert(sub.clone()) {
+            continue;
+        }
+        let imported = load_into(&sub, visited)?;
+        sections.extend(imported.sections);
+    }
+    sections.append(&mut module.sections);
+    module.sections = sections;
+    Ok(module)
+}
 
 /// Findings as a report, grouped by kind, stable across runs so the file
 /// can be committed and diffed.

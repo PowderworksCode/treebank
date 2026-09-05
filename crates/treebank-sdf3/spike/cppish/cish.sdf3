@@ -1,0 +1,55 @@
+// cish: a corner of C, written to be extended.
+//
+// Declarations, assignments, expression statements; identifiers as both
+// types and expressions, which is where C++ will put the ambiguity. Shift
+// binds tighter than comparison, as in C. `cppish.sdf3` imports this
+// module and adds one production to `Type`; nothing here is overridden.
+
+module cish
+
+context-free start-symbols
+  Program
+
+sorts
+  Program Stmt Exp Type
+
+lexical sorts
+  ID NUM
+
+lexical syntax
+  ID     = [a-zA-Z\_] [a-zA-Z0-9\_]*
+  NUM    = [0-9]+
+  LAYOUT = [\ \t\n\r]
+  LAYOUT = "//" ~[\n\r]*
+
+lexical restrictions
+  ID  -/- [a-zA-Z0-9\_]
+  NUM -/- [0-9]
+
+context-free syntax
+  Program.Program = <<Stmt*>>
+
+  Stmt.Decl     = <<type:Type> <name:ID>;>
+  Stmt.Assign   = <<target:ID> = <value:Exp>;>
+  Stmt.ExprStmt = <<Exp>;>
+
+  Type.IntType  = <int>
+  Type.CharType = <char>
+  Type          = ID
+
+  Exp          = ID
+  Exp.Num      = NUM
+  Exp.Call     = <<function:ID>(<arguments:{Exp ","}*>)>
+  Exp.Shr      = <<left:Exp> \>\> <right:Exp>> {left}
+  Exp.Add      = <<left:Exp> + <right:Exp>> {left}
+  Exp.Lt       = <<left:Exp> \< <right:Exp>> {left}
+  Exp.Gt       = <<left:Exp> \> <right:Exp>> {left}
+
+context-free priorities
+  {left: Exp.Add}
+  > {left: Exp.Shr}
+  > {left: Exp.Lt Exp.Gt}
+
+template options
+  ID = keyword {reject}
+  keyword -/- [a-zA-Z0-9\_]
