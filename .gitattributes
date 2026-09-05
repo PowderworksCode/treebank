@@ -40,3 +40,6 @@ crates/treebank-sdf3/spike/*/src/tree_sitter/*.h   linguist-generated=true -diff
 crates/treebank-sdf3/spike/*/grammar.json          linguist-generated=true
 crates/treebank-sdf3/spike/*/grammar.js            linguist-generated=true
 crates/treebank-sdf3/spike/*/findings.md           linguist-generated=true
+# The rubyish spike's scanner.c is GENERATED from its layout constraints,
+# unlike the grammar crates' hand-written ones.
+crates/treebank-sdf3/spike/*/src/scanner.c         linguist-generated=true

@@ -17,6 +17,7 @@
 pub mod ast;
 pub mod lower;
 pub mod parse;
+pub mod scanner;
 
 pub use lower::{lower, to_grammar_js, Finding, Kind, Lowered};
 pub use parse::parse_module;

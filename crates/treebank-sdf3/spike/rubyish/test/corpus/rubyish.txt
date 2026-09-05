@@ -1,0 +1,284 @@
+; tree-sitter's corpus format hands the parser the newline that follows the
+; `===` header line, and `Program = <NL?><Stmt*>` reports it as a leading
+; (nl). A file that starts on its first line has no such node.
+================================================================================
+a spaced, tight minus is a command argument
+================================================================================
+
+foo -1
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (command
+      method: (id)
+      argument: (neg operand: (exp_int (int))))
+    (nl)))
+
+================================================================================
+a minus with space on both sides is subtraction
+================================================================================
+
+foo - 1
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (sub
+      left: (id)
+      right: (exp_int (int)))
+    (nl)))
+
+================================================================================
+a minus with no space before it is subtraction
+================================================================================
+
+foo-1
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (sub
+      left: (id)
+      right: (exp_int (int)))
+    (nl)))
+
+================================================================================
+where only a unary minus is possible, spacing does not matter
+================================================================================
+
+x = -1
+y = - 1
+z=-1
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (assign
+    target: (id)
+    value: (neg operand: (exp_int (int)))
+    (nl))
+  (assign
+    target: (id)
+    value: (neg operand: (exp_int (int)))
+    (nl))
+  (assign
+    target: (id)
+    value: (neg operand: (exp_int (int)))
+    (nl)))
+
+================================================================================
+after a closing paren no command is possible, so a spaced tight minus is binary
+================================================================================
+
+(a+b) -1
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (sub
+      left: (exp_bracket
+        (add
+          left: (id)
+          right: (id)))
+      right: (exp_int (int)))
+    (nl)))
+
+================================================================================
+star: splat when spaced and tight, multiplication otherwise
+================================================================================
+
+foo *a
+foo * a
+foo*a
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (command
+      method: (id)
+      argument: (splat operand: (id)))
+    (nl))
+  (expr
+    (mul
+      left: (id)
+      right: (id))
+    (nl))
+  (expr
+    (mul
+      left: (id)
+      right: (id))
+    (nl)))
+
+================================================================================
+bracket: an array argument when spaced, an index when adjacent
+================================================================================
+
+foo [1]
+foo[1]
+x = [1, 2]
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (command
+      method: (id)
+      argument: (array elements: (exp_int (int))))
+    (nl))
+  (expr
+    (index
+      receiver: (id)
+      index: (exp_int (int)))
+    (nl))
+  (assign
+    target: (id)
+    value: (array
+      elements: (exp_int (int))
+      elements: (exp_int (int)))
+    (nl)))
+
+================================================================================
+paren: a call when adjacent, a parenthesised argument when spaced
+================================================================================
+
+foo(1, 2)
+foo (1)
+x = (1)
+foo((1))
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (call
+      method: (id)
+      arguments: (exp_int (int))
+      arguments: (exp_int (int)))
+    (nl))
+  (expr
+    (command
+      method: (id)
+      argument: (exp_bracket (exp_int (int))))
+    (nl))
+  (assign
+    target: (id)
+    value: (exp_bracket (exp_int (int)))
+    (nl))
+  (expr
+    (call
+      method: (id)
+      arguments: (exp_bracket (exp_int (int))))
+    (nl)))
+
+================================================================================
+slash: a regex argument when spaced and tight, division otherwise
+================================================================================
+
+a /b/
+a / b
+x = /b/
+a / b / c
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (command
+      method: (id)
+      argument: (exp_regex (regex)))
+    (nl))
+  (expr
+    (div
+      left: (id)
+      right: (id))
+    (nl))
+  (assign
+    target: (id)
+    value: (exp_regex (regex))
+    (nl))
+  (expr
+    (div
+      left: (div
+        left: (id)
+        right: (id))
+      right: (id))
+    (nl)))
+
+================================================================================
+a command argument is a whole expression
+================================================================================
+
+foo bar
+foo 1 + 2
+foo bar - 1
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (expr
+    (command
+      method: (id)
+      argument: (id))
+    (nl))
+  (expr
+    (command
+      method: (id)
+      argument: (add
+        left: (exp_int (int))
+        right: (exp_int (int))))
+    (nl))
+  (expr
+    (command
+      method: (id)
+      argument: (sub
+        left: (id)
+        right: (exp_int (int))))
+    (nl)))
+
+================================================================================
+line breaks absorb blank lines and comment lines; a trailing comment is an extra
+================================================================================
+
+# leading comment
+x = 1 # trailing
+
+y = 2
+
+--------------------------------------------------------------------------------
+
+(program
+  (nl)
+  (assign
+    target: (id)
+    value: (exp_int (int))
+    (comment)
+    (nl))
+  (assign
+    target: (id)
+    value: (exp_int (int))
+    (nl)))
+
+================================================================================
+a splat where no command is possible is an error, as in ruby
+:error
+================================================================================
+
+x = *a
+
+--------------------------------------------------------------------------------

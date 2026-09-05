@@ -590,3 +590,87 @@ What the spike does not test is the thing §3 flagged hardest: no `carry`,
 no scanner, no layout-sensitive syntax, no deep priority conflict. Mini is
 LR(1)-clean by construction. The next language to lower is the one that
 is not.
+
+## 14. The second spike: lexer state, from SDF3, generated
+
+§13 ended by naming what mini could not test, and §3 named the seam where
+SDF3's scannerless world and tree-sitter's lexer point in different
+directions. `spike/rubyish` is that seam: the corner of Ruby where the
+lexer needs the parser. `foo -1` is a command call with a negative
+argument; `foo - 1` and `foo-1` subtract. The same spacing rule decides
+`*` (splat against multiply), `[` (array argument against index), `(`
+(parenthesised argument against call) and `/` (regex against divide).
+CRuby decides these in its lexer with `EXPR_ARG` state; treebank's ruby
+grammar decides them in 1,123 lines of hand-written scanner
+(`notes/field_guide.md` §1, rung 1, and §4's one-owner-per-spelling).
+
+**In SDF3 they are layout constraints.** `Exp.Neg = <-<Exp>>
+{layout(1.last.col + 1 == 2.first.col)}` says the minus is adjacent to its
+operand; `Exp.Command = <<ID> <Arg>> {layout(1.last.col + 1 <
+2.first.col), prefer}` says the argument is separated from the method and
+wins the ambiguity. That is the whole specification of the rule, on the
+productions it concerns, in a formalism that has had it since 2012.
+
+**tree-sitter's grammar cannot say it.** Its one whitespace fact is
+`token.immediate` — no layout *before* this token — which cannot express
+"layout required before" at all, and cannot reach into a nonterminal. So
+the lowering does what treebank-ruby's author did by hand, mechanically
+(`crates/treebank-sdf3/src/scanner.rs`):
+
+1. Every constrained spelling is **split** into external tokens that share
+   the spelling and differ in the layout they require: `_minus` and
+   `_minus_spaced_tight`, `_lbracket_adjacent` and `_lbracket_spaced`. An
+   unconstrained occurrence takes the default. A constraint between two
+   nonterminals — Command's "separated" — propagates *required before* to
+   the first literal of everything reachable at the start of the second
+   sort, including a lexical sort opened by a literal, which is how the
+   regex literal became scanner-scanned whole.
+2. Each occurrence is **aliased back** to its spelling, so the tree still
+   carries an anonymous `-` where SDF3 and the cubix-framework article both
+   want one. `node-types.json` lists `(`, `*`, `-`, `/`, `[` as anonymous
+   tokens exactly as before the split.
+3. A **`scanner.c` is generated** — 103 lines — from a table of variants.
+   It decides by *validity first, spacing second*: when the parser can
+   accept only one variant of a spelling it emits that one whatever the
+   spacing (`x = - 1` is unary because nothing else is possible), and only
+   when several are valid does spacing arbitrate (`foo -1` against
+   `foo - 1`). That is the `valid_symbols` discipline of §1 of the field
+   guide, and `_error_sentinel` follows §8. The condition propagated from
+   Command is therefore only ever consulted in the state the constraint
+   exists to settle, which is what makes propagating it through productions
+   also used elsewhere sound.
+
+**Result: 12 of 12 expectations hold, written from Ruby's semantics before
+a parser existed.** Zero conflicts at generate — 23 rules, 42 symbols, 54
+states, 11 externals. `(a+b) -1` subtracts because after `)` no command is
+possible; `x=-1` negates because after `=` nothing else is; `a / b / c`
+divides twice while `a /b/` passes a regex; `foo (1)` and `foo(1)` differ
+by one space and one node. The readable `grammar.js`, now carrying `alias`
+and `externals`, still generates a byte-identical parser.
+
+What `{prefer}` became is the small surprise: dynamic precedence +1 on
+Command, which tree-sitter consults only inside a declared conflict — and
+there is none, because the scanner split made the two readings different
+tokens. The disambiguation moved from SDF3's post-parse filter to the
+lexer, and the `prefer` is inert. Recorded as mapped, not absorbed, because
+generate is what established it.
+
+**What this says about §3's table.** The `lexical` intent's lowering to
+tree-sitter is not "an external scanner the author writes"; for the class
+of decisions that are layout facts, it is a scanner the compiler writes.
+That class is smaller than ruby's scanner — heredocs, string
+interpolation, `%w[]` literals and the `?a` character literal are state,
+not spacing — but it is the class §1 of the field guide calls rung 1, and
+it fell out of the grammar. Where the escape hatch survives, it now has a
+measured boundary.
+
+Two things about the format surfaced. Constraint indices count every
+symbol of the production, literals included, and the `+ 1` arithmetic is
+the shape the Spoofax documentation shows; both should be checked against
+SDF3's own grammar before adoption is called settled. And a scanner-owned
+lexical sort must be opened and closed by single-character literals, which
+is a limit of this generator, not of the formalism.
+
+Not tested, still: `carry` (C++'s `<`), layout-sensitive *structure*
+(python's indent stack, yaml's columns) as opposed to layout-sensitive
+*tokens*, and stateful scanning. The next two languages are those.

@@ -57,6 +57,8 @@ pub struct Finding {
 pub struct Lowered {
     pub grammar: Value,
     pub findings: Vec<Finding>,
+    /// `src/scanner.c`, when the module's layout constraints call for one.
+    pub scanner: Option<String>,
 }
 
 struct Ctx<'m> {
@@ -70,6 +72,10 @@ struct Ctx<'m> {
     /// Word-shaped template literals, for `reserved`.
     keywords: BTreeSet<String>,
     rule_names: BTreeSet<String>,
+    /// Which literal occurrences the generated scanner owns, and why.
+    plan: crate::scanner::Plan,
+    /// Context-free productions in declaration order; `plan` keys on the index.
+    prods: Vec<&'m Production>,
 }
 
 pub fn lower(module: &Module) -> Result<Lowered> {
@@ -81,10 +87,15 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         levels: BTreeMap::new(),
         keywords: BTreeSet::new(),
         rule_names: BTreeSet::new(),
+        plan: crate::scanner::Plan::default(),
+        prods: module.productions(false).collect(),
     };
     for p in module.productions(true) {
         cx.lexical.entry(p.sort.clone()).or_default().push(p);
     }
+    let (plan, mut plan_findings) = crate::scanner::plan(module)?;
+    cx.findings.append(&mut plan_findings);
+    cx.plan = plan;
     cx.assign_levels();
 
     let mut rules: Map<String, Value> = Map::new();
@@ -123,6 +134,10 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     }
     for (sort, prods) in &cx.lexical {
         if sort == "LAYOUT" {
+            continue;
+        }
+        if let Some(external) = cx.plan.lexical_owned.get(sort) {
+            cx.sort_rule.insert(sort.clone(), external.clone());
             continue;
         }
         let rejects_only = prods.iter().all(|p| p.has(&Attr::Reject));
@@ -235,6 +250,13 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                     });
                 }
             }
+            continue;
+        }
+        if let Some(external) = cx.plan.lexical_owned.get(sort).cloned() {
+            cx.findings.push(Finding {
+                kind: Kind::Mapped,
+                what: format!("lexical sort {sort} is scanned by the generated scanner as `{external}`; no token rule emitted"),
+            });
             continue;
         }
         let (keep, rejects): (Vec<&Production>, Vec<&Production>) =
@@ -358,7 +380,16 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     grammar.insert("extras".into(), Value::Array(extras));
     grammar.insert("conflicts".into(), json!([]));
     grammar.insert("precedences".into(), json!([]));
-    grammar.insert("externals".into(), json!([]));
+    let externals: Vec<Value> = if cx.plan.is_empty() {
+        Vec::new()
+    } else {
+        cx.plan
+            .externals()
+            .into_iter()
+            .map(|n| json!({"type": "SYMBOL", "name": n}))
+            .collect()
+    };
+    grammar.insert("externals".into(), Value::Array(externals));
     grammar.insert("inline".into(), json!([]));
     grammar.insert("supertypes".into(), json!(supertypes));
     if !reserved.is_empty() {
@@ -368,9 +399,15 @@ pub fn lower(module: &Module) -> Result<Lowered> {
             .collect();
         grammar.insert("reserved".into(), json!({"global": words}));
     }
+    let scanner = if cx.plan.is_empty() {
+        None
+    } else {
+        Some(crate::scanner::c_source(&cx.plan, &module.name))
+    };
     Ok(Lowered {
         grammar: Value::Object(grammar),
         findings: cx.findings,
+        scanner,
     })
 }
 
@@ -433,48 +470,66 @@ impl<'m> Ctx<'m> {
     }
 
     fn wrap_precedence(&mut self, p: &Production, body: Value) -> Value {
-        let Some(r) = p.reference() else { return body };
-        let Some((level, assoc)) = self.levels.get(&r).cloned() else {
-            return body;
-        };
-        let ty = match assoc {
-            Some(Attr::Left) => "PREC_LEFT",
-            Some(Attr::Right) => "PREC_RIGHT",
-            Some(Attr::NonAssoc) => {
+        let mut body = body;
+        if let Some(r) = p.reference() {
+            if let Some((level, assoc)) = self.levels.get(&r).cloned() {
+                let ty = match assoc {
+                    Some(Attr::Left) => "PREC_LEFT",
+                    Some(Attr::Right) => "PREC_RIGHT",
+                    Some(Attr::NonAssoc) => {
+                        self.findings.push(Finding {
+                            kind: Kind::Widening,
+                            what: format!("{r} is non-assoc; tree-sitter has no non-associativity, lowered to PREC_LEFT so `a == b == c` parses where SDF3 rejects it"),
+                        });
+                        "PREC_LEFT"
+                    }
+                    _ => "PREC",
+                };
                 self.findings.push(Finding {
-                    kind: Kind::Widening,
-                    what: format!("{r} is non-assoc; tree-sitter has no non-associativity, lowered to PREC_LEFT so `a == b == c` parses where SDF3 rejects it"),
+                    kind: Kind::Mapped,
+                    what: format!("{r} at priority level {level} became {ty} at that level"),
                 });
-                "PREC_LEFT"
+                body = json!({"type": ty, "value": level, "content": body});
             }
-            _ => "PREC",
-        };
-        self.findings.push(Finding {
-            kind: Kind::Mapped,
-            what: format!("{r} at priority level {level} became {ty} at that level"),
-        });
-        json!({"type": ty, "value": level, "content": body})
+        }
+        // `prefer` and `avoid` settle an ambiguity between complete parses.
+        // tree-sitter's counterpart is dynamic precedence, which only acts
+        // where a conflict is declared; if the scanner split has made the
+        // readings disjoint, the weight is inert, and generate says which.
+        for (attr, weight, word) in [(Attr::Prefer, 1, "prefer"), (Attr::Avoid, -1, "avoid")] {
+            if p.has(&attr) {
+                self.findings.push(Finding {
+                    kind: Kind::Mapped,
+                    what: format!("{}: `{{{word}}}` became dynamic precedence {weight:+}; it decides only where a conflict is declared", p.display()),
+                });
+                body = json!({"type": "PREC_DYNAMIC", "value": weight, "content": body});
+            }
+        }
+        body
     }
 
     fn production_body(&mut self, p: &Production) -> Result<Value> {
+        let pi = self.prods.iter().position(|q| std::ptr::eq(*q, p));
         match &p.rhs {
             Rhs::Template(parts) => {
                 let mut members = Vec::new();
+                let mut pos = 0;
                 for part in parts {
                     match part {
                         TemplatePart::Layout(_) => {}
                         TemplatePart::Lit(s) => {
-                            self.note_literal(s);
-                            members.push(json!({"type": "STRING", "value": s}));
+                            pos += 1;
+                            members.push(self.literal(pi, pos, s));
                         }
                         TemplatePart::Placeholder { label, symbol } => {
+                            pos += 1;
                             let mut v = self.symbol(symbol)?;
                             if let Some(l) = label {
                                 self.findings.push(Finding {
                                     kind: Kind::Extension,
                                     what: format!(
                                         "{}: placeholder label `{l}` became a field (not SDF3)",
-                                        p.reference().unwrap_or_else(|| p.sort.clone())
+                                        p.display()
                                     ),
                                 });
                                 v = json!({"type": "FIELD", "name": l, "content": v});
@@ -486,11 +541,34 @@ impl<'m> Ctx<'m> {
                 Ok(seq(members))
             }
             Rhs::Symbols(syms) => {
-                let members: Vec<Value> =
-                    syms.iter().map(|s| self.symbol(s)).collect::<Result<_>>()?;
+                let mut members = Vec::new();
+                for (k, s) in syms.iter().enumerate() {
+                    members.push(match s {
+                        Symbol::Lit(l) => self.literal(pi, k + 1, l),
+                        other => self.symbol(other)?,
+                    });
+                }
                 Ok(seq(members))
             }
         }
+    }
+
+    /// A literal at a top-level symbol position: a string token, unless the
+    /// scanner plan owns this occurrence, in which case the external variant
+    /// aliased back to the spelling so the tree still shows `-`.
+    fn literal(&mut self, pi: Option<usize>, pos: usize, s: &str) -> Value {
+        self.note_literal(s);
+        if let Some(pi) = pi {
+            if let Some(external) = self.plan.occurrences.get(&(pi, pos)).cloned() {
+                return json!({
+                    "type": "ALIAS",
+                    "content": {"type": "SYMBOL", "name": external},
+                    "named": false,
+                    "value": s
+                });
+            }
+        }
+        json!({"type": "STRING", "value": s})
     }
 
     fn note_literal(&mut self, s: &str) {
@@ -852,6 +930,14 @@ pub fn to_grammar_js(grammar: &Value) -> String {
                 format!("{f}({}, {})", v["value"], expr(&v["content"], indent))
             }
             "TOKEN" => format!("token({})", expr(&v["content"], indent)),
+            "ALIAS" => {
+                let target = if v["named"].as_bool().unwrap_or(false) {
+                    format!("$.{}", v["value"].as_str().unwrap_or(""))
+                } else {
+                    format!("{:?}", v["value"].as_str().unwrap_or(""))
+                };
+                format!("alias({}, {target})", expr(&v["content"], indent))
+            }
             other => format!("/* {other} */"),
         }
     }
@@ -874,6 +960,15 @@ pub fn to_grammar_js(grammar: &Value) -> String {
             .map(|x| format!("$.{}", x.as_str().unwrap_or("")))
             .collect();
         out.push_str(&format!("  supertypes: $ => [{}],\n", e.join(", ")));
+    }
+    if let Some(ext) = grammar["externals"].as_array() {
+        if !ext.is_empty() {
+            let e: Vec<String> = ext
+                .iter()
+                .map(|x| format!("$.{}", x["name"].as_str().unwrap_or("")))
+                .collect();
+            out.push_str(&format!("  externals: $ => [{}],\n", e.join(", ")));
+        }
     }
     if let Some(words) = grammar["reserved"]["global"].as_array() {
         let e: Vec<String> = words

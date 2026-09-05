@@ -16,6 +16,8 @@ Three pieces:
   supertypes; constructors become named nodes; injections become supertype
   members with no node; priority chains become `prec.left` levels;
   `template options` become `word` plus `reserved`; LAYOUT becomes `extras`.
+- **`src/scanner.rs`** — the planner for layout constraints tree-sitter's
+  grammar cannot express, and the scanner it generates for them.
 - **`spike/mini/`** — a small imperative language in `mini.sdf3`, the
   generated `grammar.json`, a readable `grammar.js`, `findings.md`, the
   generated parser under `src/`, and `test/corpus/mini.txt` — expectations
@@ -48,10 +50,35 @@ the reader accepts `<left:Exp>` as a treebank extension.
 One treebank extension, one tree-sitter constraint, one true widening. The
 rest lowered exactly, and `notes/metagrammar.md` §13 records the numbers.
 
+## The second language: the corner of Ruby where the lexer needs the parser
+
+`spike/rubyish/` is the test mini could not be. The same characters lex
+differently by spacing and by what the parser could accept: `foo -1` is a
+command call with a negative argument, `foo - 1` and `foo-1` subtract; `foo
+*a` splats, `foo * a` multiplies; `foo [1]` passes an array, `foo[1]`
+indexes; `foo(1)` calls, `foo (1)` passes a parenthesised argument; `a /b/`
+passes a regex, `a / b` divides. CRuby decides these in its lexer with
+EXPR_ARG state; treebank's ruby grammar decides them in a hand-written
+scanner (`notes/field_guide.md` §1, rung 1).
+
+In SDF3 they are layout constraints on productions — `{layout(1.last.col +
+1 == 2.first.col)}` for adjacency, `<` for separation — plus `{prefer}`. A
+tree-sitter grammar has no way to say "layout required before this token",
+so `src/scanner.rs` **splits** every constrained spelling into scanner-owned
+variants (`_minus` and `_minus_spaced_tight`), aliases each back to its
+spelling so the tree still shows `-`, and **generates `src/scanner.c`**,
+which decides between variants by what the parser could accept first and by
+the actual spacing second. That is the shape of treebank-ruby's scanner,
+derived from the grammar instead of written.
+
+Twelve expectations written from Ruby's semantics; twelve hold, with zero
+conflicts. `verify.sh` there regenerates grammar and scanner together.
+
 ## What it is not
 
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's
 root, because a `grammar.js` under `crates/treebank-*/` is the repository's
 definition of a shipped grammar (`tools/wasm-pack/list-grammars.sh`,
 `treebank status`, the site build). The generated parser lives under
-`spike/mini/` and nothing gates on it but `verify.sh`.
+`spike/mini/` and `spike/rubyish/`, and nothing gates on them but their
+`verify.sh` scripts.

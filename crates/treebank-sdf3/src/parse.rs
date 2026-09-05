@@ -9,7 +9,7 @@
 //! being skipped, so an unsupported construct is a loud error at the read
 //! rather than a silent hole in the grammar.
 
-use winnow::ascii::multispace1;
+use winnow::ascii::{dec_uint, multispace1};
 use winnow::combinator::{
     alt, cut_err, delimited, eof, fail, opt, peek, preceded, repeat, separated, terminated,
 };
@@ -309,6 +309,10 @@ fn attr(i: &mut In) -> R<Attr> {
     })
     .map(str::to_string)
     .parse_next(i)?;
+    if name == "layout" {
+        let c = delimited((ws, '(', ws), layout_constraint, (ws, ')')).parse_next(i)?;
+        return Ok(Attr::Layout(c));
+    }
     Ok(match name.as_str() {
         "left" => Attr::Left,
         "right" => Attr::Right,
@@ -319,6 +323,39 @@ fn attr(i: &mut In) -> R<Attr> {
         "prefer" => Attr::Prefer,
         "avoid" => Attr::Avoid,
         _ => Attr::Other(name),
+    })
+}
+
+/// `1.last.col`: a symbol position, an end, an axis.
+fn layout_pos(i: &mut In) -> R<LayoutPos> {
+    let symbol: usize = dec_uint.parse_next(i)?;
+    '.'.parse_next(i)?;
+    let end = alt((
+        "first".value(LayoutEnd::First),
+        "last".value(LayoutEnd::Last),
+    ))
+    .parse_next(i)?;
+    '.'.parse_next(i)?;
+    let axis = alt(("col".value(LayoutAxis::Col), "line".value(LayoutAxis::Line))).parse_next(i)?;
+    Ok(LayoutPos { symbol, end, axis })
+}
+
+/// `1.last.col + 1 == 2.first.col`.
+fn layout_constraint(i: &mut In) -> R<LayoutConstraint> {
+    let lhs = lex(layout_pos).parse_next(i)?;
+    let offset: Option<usize> = opt(preceded(sym("+"), lex(dec_uint))).parse_next(i)?;
+    let op = lex(alt((
+        "==".value(LayoutOp::Eq),
+        "<".value(LayoutOp::Lt),
+        ">".value(LayoutOp::Gt),
+    )))
+    .parse_next(i)?;
+    let rhs = layout_pos.parse_next(i)?;
+    Ok(LayoutConstraint {
+        lhs,
+        offset: offset.unwrap_or(0) as i32,
+        op,
+        rhs,
     })
 }
 

@@ -1,7 +1,8 @@
 //! `cargo run -p treebank-sdf3 --example lower -- spike/mini/mini.sdf3`
 //!
 //! Reads the module, lowers it, and writes `grammar.json`, `grammar.js` and
-//! `findings.md` beside it.
+//! `findings.md` beside it -- and `src/scanner.c` when the module's layout
+//! constraints call for a scanner.
 
 use std::path::PathBuf;
 
@@ -26,15 +27,24 @@ fn main() -> anyhow::Result<()> {
         dir.join("findings.md"),
         treebank_sdf3::report(&lowered.findings),
     )?;
+    if let Some(c) = &lowered.scanner {
+        std::fs::create_dir_all(dir.join("src"))?;
+        std::fs::write(dir.join("src/scanner.c"), c)?;
+    }
     let rules = lowered.grammar["rules"]
         .as_object()
         .map(|r| r.len())
         .unwrap_or(0);
     eprintln!(
-        "{}: {} rules, {} findings -> {}",
+        "{}: {} rules, {} findings{} -> {}",
         module.name,
         rules,
         lowered.findings.len(),
+        if lowered.scanner.is_some() {
+            ", generated scanner"
+        } else {
+            ""
+        },
         dir.display()
     );
     Ok(())

@@ -1,11 +1,11 @@
 //! The shape of an SDF3 module, as the reader produces it.
 //!
 //! This is SDF3 as documented for Spoofax -- sections, productions with
-//! constructors, templates, priorities, restrictions, template options --
-//! narrowed to what the spike needs. One thing is not SDF3 and is marked
-//! as such: a template placeholder may carry a `name:` label
-//! ([`TemplatePart::Placeholder::label`]), which lowers to a tree-sitter
-//! field. SDF3's own AST is positional.
+//! constructors, templates, priorities, restrictions, layout constraints,
+//! template options -- narrowed to what the spikes need. One thing is not
+//! SDF3 and is marked as such: a template placeholder may carry a `name:`
+//! label ([`TemplatePart::Placeholder::label`]), which lowers to a
+//! tree-sitter field. SDF3's own AST is positional.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Module {
@@ -38,6 +38,14 @@ pub struct Production {
     pub attrs: Vec<Attr>,
 }
 
+/// One symbol position of a production, as layout constraints count them:
+/// 1-based over literals and placeholders alike, template layout excluded.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SymRef<'a> {
+    Lit(&'a str),
+    Sym(&'a Symbol),
+}
+
 impl Production {
     pub fn has(&self, attr: &Attr) -> bool {
         self.attrs.contains(attr)
@@ -48,6 +56,38 @@ impl Production {
         self.constructor
             .as_ref()
             .map(|c| format!("{}.{}", self.sort, c))
+    }
+
+    /// The name used in findings: `Sort.Cons`, or the sort for an injection.
+    pub fn display(&self) -> String {
+        self.reference().unwrap_or_else(|| self.sort.clone())
+    }
+
+    pub fn symbols(&self) -> Vec<SymRef<'_>> {
+        match &self.rhs {
+            Rhs::Symbols(s) => s
+                .iter()
+                .map(|s| match s {
+                    Symbol::Lit(l) => SymRef::Lit(l),
+                    other => SymRef::Sym(other),
+                })
+                .collect(),
+            Rhs::Template(parts) => parts
+                .iter()
+                .filter_map(|p| match p {
+                    TemplatePart::Lit(l) => Some(SymRef::Lit(l)),
+                    TemplatePart::Placeholder { symbol, .. } => Some(SymRef::Sym(symbol)),
+                    TemplatePart::Layout(_) => None,
+                })
+                .collect(),
+        }
+    }
+
+    pub fn layout_constraints(&self) -> impl Iterator<Item = &LayoutConstraint> {
+        self.attrs.iter().filter_map(|a| match a {
+            Attr::Layout(c) => Some(c),
+            _ => None,
+        })
     }
 }
 
@@ -97,6 +137,13 @@ pub struct CharClass {
     pub ranges: Vec<(char, char)>,
 }
 
+impl CharClass {
+    pub fn contains(&self, c: char) -> bool {
+        let inside = self.ranges.iter().any(|(a, b)| *a <= c && c <= *b);
+        inside != self.negated
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Attr {
     Left,
@@ -107,7 +154,46 @@ pub enum Attr {
     Reject,
     Prefer,
     Avoid,
+    Layout(LayoutConstraint),
     Other(String),
+}
+
+/// `{layout(1.last.col + 1 == 2.first.col)}`: a relation between two
+/// symbol positions of the production.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutConstraint {
+    pub lhs: LayoutPos,
+    /// Added to the left-hand side: the `+ 1` in `1.last.col + 1`.
+    pub offset: i32,
+    pub op: LayoutOp,
+    pub rhs: LayoutPos,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct LayoutPos {
+    /// 1-based symbol index.
+    pub symbol: usize,
+    pub end: LayoutEnd,
+    pub axis: LayoutAxis,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutEnd {
+    First,
+    Last,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutAxis {
+    Col,
+    Line,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutOp {
+    Eq,
+    Lt,
+    Gt,
 }
 
 /// `ID -/- [a-zA-Z0-9]`, or `LAYOUT? -/- [\/].[\/]`: each restricted symbol
