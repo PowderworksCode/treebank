@@ -541,3 +541,52 @@ Named here rather than discovered later.
 5. **No cost estimate.** §9 says it eats the roadmap and §10 sequences around
    that, but the spikes should return a number before the remaining eight
    grammars are committed to.
+
+## 13. The spike: SDF3 to tree-sitter, measured
+
+§11 recommended SDF3 and §3 named the lowering as the risk. So the lowering
+was built, small, and run: `crates/treebank-sdf3` is a reader for SDF3
+modules (winnow), a lowering to tree-sitter `grammar.json`, and a language
+called mini — statements, blocks, functions, calls, a nine-operator
+expression grammar with a four-group priority chain, comments, keywords —
+written in SDF3 as Spoofax documents it (`spike/mini/mini.sdf3`). The
+expectations in `spike/mini/test/corpus/mini.txt` were written from the SDF3
+semantics before the parser existed, and the generated parser was held to
+them.
+
+**Result: 9 of 9 expectations hold.** Priorities nest as the chain says,
+`{left}` groups associate left, the unary group outranks every binary group,
+injections yield no node, separated lists expand, comments are extras, and a
+template keyword cannot be a name. tree-sitter generated the grammar with
+**zero conflicts** — 25 rules, 49 symbols, 124 states — and the readable
+`grammar.js` the lowering also emits generates a byte-identical `parser.c`,
+so the human-facing rendering is a second source rather than documentation.
+
+Everything the lowering could not keep is in `findings.md`, and it is three
+things:
+
+| finding | what happened | kind |
+|---|---|---|
+| `{non-assoc}` | tree-sitter has no non-associativity; lowered to `prec.left`, so `a == b == c` parses where SDF3 rejects it | widening, ×2 |
+| `{bracket}` | a hidden supertype member may have only one visible child ("Supertype symbols must always have a single visible child") and `( Exp )` has three; brackets became a named node SDF3's AST does not have | deviation, ×1 |
+| `<left:Exp>` | SDF3 placeholders are positional; a label prefix is a treebank extension and lowers to a field | extension, ×30 |
+
+One true widening, one tree-sitter constraint, one extension. Five SDF3
+constructs were absorbed with nothing emitted — lexical restrictions and
+`keyword -/-`, because tree-sitter's lexer is longest-match, and the LAYOUT
+restriction, because extras are skipped greedily — and 18 mapped exactly.
+
+Two things were learned about the *format* rather than the lowering. A
+leading `[` is ambiguous between a square template and a character class,
+and the reader resolves it by section (templates in context-free syntax,
+classes in lexical); SDF3 presumably does the same and the reader should be
+checked against its grammar. And SDF3's constructor names are terse because
+the sort supplies context — `Stmt.If`, `Exp.Int` — where tree-sitter node
+names are global, so `Exp.Int` collided with the token `INT` under
+snake-case and became `exp_int`. A naming policy is a real part of the
+meta-grammar's design, not a lowering detail.
+
+What the spike does not test is the thing §3 flagged hardest: no `carry`,
+no scanner, no layout-sensitive syntax, no deep priority conflict. Mini is
+LR(1)-clean by construction. The next language to lower is the one that
+is not.

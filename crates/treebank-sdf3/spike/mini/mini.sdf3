@@ -1,0 +1,74 @@
+// mini: a small imperative language, defined in SDF3.
+//
+// Written to exercise the constructs an adoption of SDF3 as treebank's
+// meta-grammar has to lower: lexical syntax with character classes, LAYOUT,
+// template productions with constructors, injections, bracket productions,
+// separated lists, priority chains with associativity groups, reject
+// productions and template options. It is deliberately ordinary.
+//
+// One thing here is NOT SDF3: the `name:` prefix on a template placeholder
+// (`<left:Exp>`). SDF3 placeholders are positional -- the AST is
+// Add(e1, e2) -- and tree-sitter fields are worth having, so the reader
+// accepts a label as a treebank extension. Everything else is SDF3 as
+// documented for Spoofax.
+
+module mini
+
+context-free start-symbols
+  Program
+
+sorts
+  Program Stmt Block Exp
+
+lexical sorts
+  ID INT
+
+lexical syntax
+  ID     = [a-zA-Z\_] [a-zA-Z0-9\_]*
+  INT    = [0-9]+
+  LAYOUT = [\ \t\n\r]
+  LAYOUT = "//" ~[\n\r]*
+
+lexical restrictions
+  ID  -/- [a-zA-Z0-9\_]
+  INT -/- [0-9]
+
+context-free restrictions
+  LAYOUT? -/- [\ \t\n\r]
+  LAYOUT? -/- [\/].[\/]
+
+context-free syntax
+  Program.Program = <<body:Stmt*>>
+
+  Stmt.Let    = <let <name:ID> = <value:Exp>;>
+  Stmt.Assign = <<target:ID> = <value:Exp>;>
+  Stmt.If     = <if (<condition:Exp>) <consequence:Block> else <alternative:Block>>
+  Stmt.While  = <while (<condition:Exp>) <body:Block>>
+  Stmt.Fun    = <fun <name:ID>(<parameters:{ID ","}*>) <body:Block>>
+  Stmt.Return = <return <value:Exp>;>
+  Stmt.Expr   = <<Exp>;>
+
+  Block.Block = <{ <Stmt*> }>
+
+  Exp          = ID
+  Exp.Int      = INT
+  Exp.Call     = <<function:ID>(<arguments:{Exp ","}*>)>
+  Exp.Neg      = <-<operand:Exp>>
+  Exp.Not      = <!<operand:Exp>>
+  Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
+  Exp.Div      = <<left:Exp> / <right:Exp>> {left}
+  Exp.Add      = <<left:Exp> + <right:Exp>> {left}
+  Exp.Sub      = <<left:Exp> - <right:Exp>> {left}
+  Exp.Eq       = <<left:Exp> == <right:Exp>> {non-assoc}
+  Exp.Lt       = [[left:Exp] < [right:Exp]] {non-assoc}
+  Exp          = <(<Exp>)> {bracket}
+
+context-free priorities
+  {Exp.Neg Exp.Not}
+  > {left: Exp.Mul Exp.Div}
+  > {left: Exp.Add Exp.Sub}
+  > {non-assoc: Exp.Eq Exp.Lt}
+
+template options
+  ID = keyword {reject}
+  keyword -/- [a-zA-Z0-9\_]
