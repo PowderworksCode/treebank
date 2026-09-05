@@ -97,6 +97,19 @@ fn main() -> anyhow::Result<()> {
         dir.join("antlr-findings.md"),
         treebank_sdf3::report(&antlr.findings),
     )?;
+    // Bindings, when the module declares any: data plus the query view.
+    if let Some(b) = treebank_sdf3::bindings::emit(&module, &lowered.names)? {
+        std::fs::write(
+            dir.join("bindings.json"),
+            serde_json::to_string_pretty(&b.json)? + "\n",
+        )?;
+        std::fs::create_dir_all(dir.join("queries"))?;
+        std::fs::write(dir.join("queries/locals.scm"), &b.locals)?;
+        std::fs::write(
+            dir.join("bindings-findings.md"),
+            treebank_sdf3::report(&b.findings),
+        )?;
+    }
     let rules = grammar["rules"].as_object().map(|r| r.len()).unwrap_or(0);
     eprintln!(
         "{}: {} rules, {} findings, {} conflicts{} -> {}",

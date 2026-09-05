@@ -37,7 +37,7 @@ cargo test -p treebank-sdf3
 crates/treebank-sdf3/spike/mini/verify.sh
 crates/treebank-sdf3/spike/rubyish/verify.sh
 crates/treebank-sdf3/spike/cppish/verify.sh   # also asks generate for the carry's conflicts
-crates/treebank-sdf3/spike/pyish/verify.sh    # regenerates the indent-stack scanner
+crates/treebank-sdf3/spike/pyish/verify.sh    # regenerates the indent-stack scanner; checks bindings against symtable
 ```
 
 ## What it found
@@ -138,6 +138,32 @@ the emitter derives the **opener literals** (the literal before each
 indented symbol, `:` here) and a deeper line opens a block only after one.
 The bracket case is the miss worth having: ANTLR rejects it, as SDF3 does,
 and tree-sitter accepted it.
+
+## Bindings, next to the rules that create them
+
+SDF3 has no binding attributes; Spoofax keeps name binding in a separate
+language (NaBL2, then Statix). The design note's §5 wants a binding beside
+the rule that creates it, so pyish carries three attributes that are a
+treebank extension: `scope(function)` on `Stmt.Def` and `scope(module)` on
+`Program`; `binds(target -> enclosing)` on `Stmt.Assign`, `binds(name ->
+enclosing as function)` on `Stmt.Def`, `binds(name -> enclosing as
+parameter)` on `Param.Param`, `binds(names -> module)` on `Stmt.Global`
+(the note's own example: a binding that reaches past every enclosing
+scope); and `refers(1)` on the injection `Exp = ID`. `src/bindings.rs`
+lowers them to **`bindings.json`** — scopes, definitions keyed on (node,
+field), references, and the `_scope`/`_binding` facet memberships
+`roles.json` would carry, derived — and to **`queries/locals.scm`** in
+treebank's locals vocabulary, with a finding at each of the two places the
+query dialect cannot say what the data says (it cannot name the module
+scope, and it files a scope node's own name under that node).
+
+The check is against an oracle that is not ours: `tools/bindings_check.py`
+parses each program under `spike/pyish/bindings/` with the generated
+parser, applies `bindings.json` to the tree, resolves every name the way
+the data says, and compares the per-scope classification (parameter,
+local, free, global) with CPython's `symtable`. Six programs — module
+names, `global`, a closure's free variable, shadowing, a forward
+reference, control flow — and six agree, name for name.
 
 ## The second backend: ANTLR
 

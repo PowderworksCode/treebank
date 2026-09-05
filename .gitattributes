@@ -48,3 +48,7 @@ crates/treebank-sdf3/spike/*/src/scanner.c         linguist-generated=true
 crates/treebank-sdf3/spike/*/*.g4                  linguist-generated=true
 crates/treebank-sdf3/spike/*/antlr-findings.md     linguist-generated=true
 crates/treebank-sdf3/spike/*/antlr-results.md      linguist-generated=true
+crates/treebank-sdf3/spike/*/bindings.json linguist-generated=true
+crates/treebank-sdf3/spike/*/queries/locals.scm linguist-generated=true
+crates/treebank-sdf3/spike/*/bindings-findings.md linguist-generated=true
+crates/treebank-sdf3/spike/*/bindings-results.md linguist-generated=true

@@ -155,7 +155,36 @@ pub enum Attr {
     Prefer,
     Avoid,
     Layout(LayoutConstraint),
+    /// treebank extension: this production's node delimits a lexical
+    /// scope. `scope` or `scope(function)`.
+    Scope(Option<String>),
+    /// treebank extension: `binds(target -> enclosing)`, `binds(names ->
+    /// module as var)`: the names under the labelled field are bound in
+    /// the named scope.
+    Binds(Binding),
+    /// treebank extension: `refers(1)` or `refers(name)`: the name at the
+    /// position or field is a reference, resolved against the bindings
+    /// in scope.
+    Refers(String),
     Other(String),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Binding {
+    /// The placeholder label whose names are bound.
+    pub label: String,
+    pub target: BindTarget,
+    /// `var`, `function`, `parameter`: treebank's locals vocabulary.
+    pub kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BindTarget {
+    /// The nearest scope node that is a proper ancestor of the binding
+    /// node -- for a scope node's own name, the scope around it.
+    Enclosing,
+    /// The outermost scope, past every enclosing one.
+    Module,
 }
 
 /// One constraint of a `{layout(...)}` attribute. SDF3 has two forms: the

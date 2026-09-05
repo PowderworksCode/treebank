@@ -16,7 +16,13 @@
 // of the production, literals included. In `Stmt.If`, 1 is `if`, 4 is the
 // block and 5 is the optional else clause.
 //
-// The `name:` prefix on placeholders is a treebank extension (see mini).
+// The `name:` prefix on placeholders is a treebank extension (see mini),
+// and so are `scope(..)`, `binds(field -> scope as kind)` and
+// `refers(..)`: SDF3 has no binding attributes (Spoofax keeps name binding
+// in NaBL2/Statix, a separate language), and the design note wants a
+// binding next to the rule that creates it. They lower to bindings.json
+// and queries/locals.scm, and tools/bindings_check.py holds the data to
+// CPython's symtable on the programs under bindings/.
 
 module pyish
 
@@ -43,12 +49,12 @@ context-free restrictions
   LAYOUT? -/- [\ \t\n\r]
 
 context-free syntax
-  Program.Program = <<Stmt*>>           {layout(align-list 1)}
+  Program.Program = <<Stmt*>>           {layout(align-list 1), scope(module)}
 
-  Stmt.Assign = <<target:ID> = <value:Exp>>   {layout(offside 1 2 3)}
+  Stmt.Assign = <<target:ID> = <value:Exp>>   {layout(offside 1 2 3), binds(target -> enclosing)}
   Stmt.Expr   = <<Exp>>                       {layout(offside 1)}
   Stmt.Return = <return <value:Exp>>          {layout(offside 1 2)}
-  Stmt.Global = <global <names:{ID ","}+>>
+  Stmt.Global = <global <names:{ID ","}+>>  {binds(names -> module)}
   Stmt.Pass   = <pass>
   Stmt.If     = <
     if <condition:Exp>:
@@ -62,7 +68,7 @@ context-free syntax
   Stmt.Def    = <
     def <name:ID>(<parameters:{Param ","}*>):
       <body:Block>
-  > {layout(indent 1 7)}
+  > {layout(indent 1 7), scope(function), binds(name -> enclosing as function)}
 
   Else.ElseClause = <
     else:
@@ -71,9 +77,9 @@ context-free syntax
 
   Block.Block = <<Stmt+>>      {layout(align-list 1)}
 
-  Param.Param = <<name:ID>>
+  Param.Param = <<name:ID>> {binds(name -> enclosing as parameter)}
 
-  Exp          = ID
+  Exp          = ID {refers(1)}
   Exp.Int      = INT
   Exp.Call     = <<function:Exp>(<arguments:{Exp ","}*>)>
   Exp.Neg      = <-<operand:Exp>>

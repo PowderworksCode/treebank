@@ -15,6 +15,7 @@
 //! expectations; `tests/mini.rs` holds the lowering to the committed output.
 
 pub mod antlr;
+pub mod bindings;
 pub mod ast;
 pub mod lower;
 pub mod parse;

@@ -905,3 +905,70 @@ and nothing else. The bootstrap order of §8 — hardest first — now has
 four data points instead of a sketch: lexer state (rubyish), carry
 (cppish), composition (cppish), column structure (pyish), each lowered
 from the same reader to two backends.
+
+## 18. The fifth spike: bindings beside the syntax, held to symtable
+
+§5's second motive was co-location: `binds left -> enclosing_scope` on the
+rule that creates the binding, and `binds names -> module_scope` for the
+one that reaches outward. SDF3 has nothing of the kind — Spoofax's name
+binding is NaBL2 and then Statix, a separate language over the AST — so
+this is the first extension that adds a *dimension* to the meta-grammar
+rather than a label. Three attributes, on `pyish.sdf3`'s productions:
+
+```
+Program.Program = <<Stmt*>>                 {layout(align-list 1), scope(module)}
+Stmt.Assign     = <<target:ID> = <value:Exp>> {layout(offside 1 2 3), binds(target -> enclosing)}
+Stmt.Global     = <global <names:{ID ","}+>>  {binds(names -> module)}
+Stmt.Def        = <def <name:ID>(..):  <body:Block>>
+                                            {layout(indent 1 7), scope(function), binds(name -> enclosing as function)}
+Param.Param     = <<name:ID>>               {binds(name -> enclosing as parameter)}
+Exp             = ID                        {refers(1)}
+```
+
+`crates/treebank-sdf3/src/bindings.rs` lowers them to two things. The
+data, `bindings.json`: scope node types with kinds; definitions keyed on
+(node type, field) with the name token, the target scope and the kind;
+reference node types; and the `_scope` and `_binding` **facet
+memberships** that `roles.json` carries by hand today, derived — §6 said
+the tier is a lowering decision, and here a facet is one. And the query
+view, `queries/locals.scm` in treebank's own locals vocabulary
+(`@local.scope`, `@local.definition.function`, `@local.reference`), which
+the pinned CLI compiles and runs (17 captures on the closure program).
+
+**The check is against an oracle we did not write.** `tools/bindings_check.py`
+parses six programs — valid pyish and valid Python — with the generated
+parser, applies `bindings.json` to the tree, resolves every name the way
+the data says, and compares each scope's classification of each name
+(parameter, local, free, global) with CPython's `symtable`. **Six of six
+agree, name for name**: module names and a function's locals; `global x`
+followed by `x = 2` in the same function; a closure's free variable and a
+nested `def` bound in its enclosing function; a parameter shadowing a
+module name; a reference before its assignment in the same function
+(local, by Python's whole-scope rule); `while`/`if`/`else` bodies that
+open no scope.
+
+Two semantics live outside the attributes, and the spike names both. The
+resolution rule the checker applies is fixed and stated in
+`bindings.json`'s note: a definition binds in the enclosing or the module
+scope, a reference resolves outward, and a scope's module-directed
+binding of a name **redirects that scope's other bindings of it** — which
+is what makes `global x; x = 2` come out right without a Python-specific
+line anywhere. That rule is enough for Python's whole-scope binding; a
+language with order-sensitive scopes (a Rust `let` shadowing the previous
+`let`, a JavaScript `var` hoisting past a `let`) would need the data model
+to say *when* a binding takes effect, and §12 should carry that as the
+open question it is. The other is the oracle's: `symtable` records a
+function's `global x` on the module table too, and the checker's first
+draft read the module's `x` as "declared global" before "local", which at
+module level are the same thing. One ordering fix; the data was right.
+
+The query dialect is a backend like any other, and it declares what it
+cannot do the same way. Two findings: tree-sitter's locals engine cannot
+name the module scope, so `binds(names -> module)` becomes a pattern that
+binds at the nearest scope with a note pointing at the data; and it files
+a scope node's own name under that node, so the `def` name carries
+nvim-treesitter's `#set! definition.function.scope "parent"`, which
+tree-sitter's own highlighter ignores. Both are places where the JSON is
+the truth and the query is a view — the split §7's `recognizer` row was
+arguing for, now with a concrete consumer on each side.
+

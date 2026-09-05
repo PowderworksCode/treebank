@@ -368,6 +368,24 @@ fn attr(i: &mut In) -> R<Vec<Attr>> {
         let cs = delimited((ws, '(', ws), layout_constraints, (ws, ')')).parse_next(i)?;
         return Ok(cs.into_iter().map(Attr::Layout).collect());
     }
+    if name == "scope" {
+        let kind: Option<String> =
+            opt(delimited((ws, '(', ws), lex(ident), (ws, ')'))).parse_next(i)?;
+        return Ok(vec![Attr::Scope(kind)]);
+    }
+    if name == "binds" {
+        let b = delimited((ws, '(', ws), binding, (ws, ')')).parse_next(i)?;
+        return Ok(vec![Attr::Binds(b)]);
+    }
+    if name == "refers" {
+        let r: String = delimited(
+            (ws, '(', ws),
+            take_while(1.., |c: char| c.is_ascii_alphanumeric() || c == '_').map(str::to_string),
+            (ws, ')'),
+        )
+        .parse_next(i)?;
+        return Ok(vec![Attr::Refers(r)]);
+    }
     Ok(vec![match name.as_str() {
         "left" => Attr::Left,
         "right" => Attr::Right,
@@ -393,6 +411,23 @@ fn layout_pos(i: &mut In) -> R<LayoutPos> {
     '.'.parse_next(i)?;
     let axis = alt(("col".value(LayoutAxis::Col), "line".value(LayoutAxis::Line))).parse_next(i)?;
     Ok(LayoutPos { symbol, end, axis })
+}
+
+/// `target -> enclosing`, `names -> module as var`.
+fn binding(i: &mut In) -> R<Binding> {
+    let label = lex(ident).parse_next(i)?;
+    sym("->").parse_next(i)?;
+    let target = lex(alt((
+        "enclosing".value(BindTarget::Enclosing),
+        "module".value(BindTarget::Module),
+    )))
+    .parse_next(i)?;
+    let kind: Option<String> = opt(preceded(kw("as"), lex(ident))).parse_next(i)?;
+    Ok(Binding {
+        label,
+        target,
+        kind,
+    })
 }
 
 /// The constraints of one `layout(...)`, joined by `,` or `&&`.
