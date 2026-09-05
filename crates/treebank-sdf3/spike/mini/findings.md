@@ -42,7 +42,7 @@
 
 ## ABSORBED -- nothing emitted, tree-sitter gets the effect another way (5)
 
-- `keyword -/- [...]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word
+- `keyword -/- [class]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word
 - lexical restriction on ID: longest-match tokenisation gives the same effect
 - lexical restriction on INT: longest-match tokenisation gives the same effect
 - context-free restriction on LAYOUT?: extras are skipped greedily
@@ -54,14 +54,14 @@
 - sort Block has the single constructor Block; collapsed to the named rule `block`
 - injection into Exp became a supertype member with no node of its own
 - a `{Elem Sep}*` list expanded to seq/repeat; the expansion has no name in grammar.json
-- Exp.Neg at priority level 4 became PREC(4, ...)
-- Exp.Not at priority level 4 became PREC(4, ...)
-- Exp.Mul at priority level 3 became PREC_LEFT(3, ...)
-- Exp.Div at priority level 3 became PREC_LEFT(3, ...)
-- Exp.Add at priority level 2 became PREC_LEFT(2, ...)
-- Exp.Sub at priority level 2 became PREC_LEFT(2, ...)
-- Exp.Eq at priority level 1 became PREC_LEFT(1, ...)
-- Exp.Lt at priority level 1 became PREC_LEFT(1, ...)
+- Exp.Neg at priority level 4 became PREC at that level
+- Exp.Not at priority level 4 became PREC at that level
+- Exp.Mul at priority level 3 became PREC_LEFT at that level
+- Exp.Div at priority level 3 became PREC_LEFT at that level
+- Exp.Add at priority level 2 became PREC_LEFT at that level
+- Exp.Sub at priority level 2 became PREC_LEFT at that level
+- Exp.Eq at priority level 1 became PREC_LEFT at that level
+- Exp.Lt at priority level 1 became PREC_LEFT at that level
 - lexical sort ID became the token `id` /[a-zA-Z_](?:[a-zA-Z0-9_])*/
 - lexical sort INT became the token `int` /(?:[0-9])+/
 - LAYOUT class became an extras pattern /[ \t\n\r]/

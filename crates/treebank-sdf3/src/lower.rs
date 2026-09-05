@@ -302,7 +302,7 @@ pub fn lower(module: &Module) -> Result<Lowered> {
             }
             TemplateOption::KeywordFollow(_) => cx.findings.push(Finding {
                 kind: Kind::Absorbed,
-                what: "`keyword -/- [...]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word".into(),
+                what: "`keyword -/- [class]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word".into(),
             }),
             TemplateOption::Tokenize(s) => cx.findings.push(Finding {
                 kind: Kind::Absorbed,
@@ -451,7 +451,7 @@ impl<'m> Ctx<'m> {
         };
         self.findings.push(Finding {
             kind: Kind::Mapped,
-            what: format!("{r} at priority level {level} became {ty}({level}, ...)"),
+            what: format!("{r} at priority level {level} became {ty} at that level"),
         });
         json!({"type": ty, "value": level, "content": body})
     }

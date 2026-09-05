@@ -585,14 +585,14 @@ mod tests {
     #[test]
     fn templates_split_literals_on_layout_and_read_placeholders() {
         let t = p(template, "<if (<condition:Exp>) <Block> else <Block>>");
-        let lits: Vec<&str> = t
+        let literals: Vec<&str> = t
             .iter()
             .filter_map(|x| match x {
                 TemplatePart::Lit(s) => Some(s.as_str()),
                 _ => None,
             })
             .collect();
-        assert_eq!(lits, vec!["if", "(", ")", "else"]);
+        assert_eq!(literals, vec!["if", "(", ")", "else"]);
         let labels: Vec<Option<&str>> = t
             .iter()
             .filter_map(|x| match x {
