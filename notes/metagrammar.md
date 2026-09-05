@@ -109,6 +109,36 @@ rather than to reference toolchains, and that file already argues the ethic:
 "`None` is a real answer as long as it comes with the sentence saying why,
 because the alternative is a check that silently compares against nothing."
 
+**Where the table over-promises, and what closes the gap.** A cell saying
+`carry` → "declared conflict + `prec.dynamic`" is a lowering, not a
+guarantee, and treating it as one would reproduce the exact failure §2 of the
+field guide exists to prevent. Three of the hardest facts in this repository
+are *resource* and *interaction* facts that no intent can carry:
+
+- **The fork budget is a measurement, not a declaration.** tree-sitter culls
+  beyond six live versions, so a `carry` is only sound if the losing fork
+  dies within a token or two. Whether it does is discovered by parsing with
+  `--debug` and counting `version_count`, not by reading the grammar.
+- **Precedence does not compose with conflicts, in both directions**
+  (field guide §3). A declared conflict switches static precedence off in the
+  cells it covers, and an associativity added elsewhere can silently resolve
+  a cell so a declared conflict never forks at all. Lowering `precedence` and
+  `carry` independently and hoping is how the ruby `do`-binding bug happens
+  again.
+- **A `prefer` needs a total order.** Backends want integers; the intent
+  gives a partial order over pairs. Computing a consistent assignment, and
+  failing loudly when the declared preferences are cyclic, is real compiler
+  work.
+
+So the lowering is not complete until it can *check itself*. Each backend
+lowering owes a **post-condition it verifies against its own generated
+artifact** — for tree-sitter: every `carry` actually forks (parse the
+decision's `example` with `--debug`, assert `version_count` leaves 1), every
+`carry` carries a weight, and every fork's loser dies inside the budget.
+That is `treebank lint` promoted from smell detector to compiler back end,
+and it is the reason the `example` field on a decision is mandatory rather
+than decorative: it is the input the post-condition runs on.
+
 ## 4. The shape of the language
 
 Five layers, each with a different portability story.
@@ -347,7 +377,9 @@ cannot be expressed, the note is filed and the eleven continue as they are.
    `crates/*/lint_policy.toml` and classify every real decision in the eleven
    grammars into intents. If the closed set does not cover them, it is the
    wrong set. This is a reading exercise, costs days, and de-risks everything
-   after it.
+   after it. Read SDF3's disambiguation filters first (§11): that set is the
+   prior state of the art and the right thing to be measured against, in
+   either direction.
 2. **The reference recognizer**, so the abstraction has two implementations
    from the start.
 3. **ruby**, end to end, against its existing gates.
@@ -360,3 +392,152 @@ cannot be expressed, the note is filed and the eleven continue as they are.
 
 Nothing here is a big bang. Step 5 is useful with no backend but tree-sitter;
 step 2 is useful with no meta-grammar at all.
+
+## 11. Prior art, and what is actually new here
+
+Nearly every idea above has been built before, most of it in one research
+lineage, and the design should be read as a re-selection from that work
+rather than an invention. Where a wheel exists, take the wheel.
+
+### The direct ancestor: SDF and the Spoofax lineage
+
+**SDF** (Syntax Definition Formalism — Heering, Hendriks, Klint and Rekers,
+1989; **SDF2** in Visser's 1997 thesis; **SDF3** in Spoofax today) is the
+closest thing to this proposal that has ever shipped, and it got there
+thirty-odd years ago. Its central move is §3's move: **productions are
+written without disambiguation, and disambiguation is declared separately**
+as priorities, associativity, reject productions, follow restrictions and
+preference attributes. That separation is exactly "express the decision, not
+the mechanism", and SDF pairs it with scannerless GLR so the lexical and
+syntactic layers are one formalism rather than two — which is a strictly
+more honest answer to §7's scanner problem than an escape hatch.
+
+Read SDF3 before writing a line of the decision vocabulary. If our closed
+set of intents cannot express what SDF's disambiguation filters express, ours
+is probably too small; if it needs something SDF lacks, that is worth knowing
+precisely.
+
+The same lineage answers §6 and the bindings layer too:
+
+- **NaBL** (Name Binding Language — Konat, Kats, Wachsmuth and Visser, SLE
+  2012) is a declarative DSL for name binding and scope rules, co-located
+  with the syntax definition. It is the artifact `bindings.json` wants to be.
+- **Scope graphs** ("A Theory of Name Resolution" — Néron, Tolmach, Visser
+  and Wachsmuth, ESOP 2015) are the theory underneath, and they handle
+  precisely the cases §5 of this note flags as the hard ones: imports,
+  `global`/`nonlocal` reaching past enclosing scopes, shadowing, and
+  visibility that is not lexical containment. **NaBL2** and **Statix** are
+  the later, more expressive versions.
+- **Rascal** and the older **ASF+SDF Meta-Environment** are the same group's
+  general transformation systems over that base.
+
+The honest reading of this lineage is a caution as much as an endorsement.
+It is academically excellent, it solved these problems properly, and it did
+not win. ANTLR and tree-sitter took the ecosystem on ergonomics, tooling and
+approachability, not on expressiveness. That is the strongest argument in
+this note for keeping the meta-grammar boring, keeping the tree-sitter output
+first-class, and never asking a grammar author to learn a theory before
+writing a rule.
+
+### The scanner problem has a formalism
+
+§7 treats external scanners as an escape hatch. Two bodies of work suggest
+that is more pessimistic than necessary:
+
+- **Data-dependent grammars** (Jim, Mandelbaum and Walker, POPL 2010, and
+  the **Yakker** generator; later **Iguana**, Afroozeh and Izmaylova) extend
+  context-free grammars with parameters, variable binding and constraints —
+  enough to express length-prefixed data, heredocs and other "the parse
+  depends on what was just read" constructs *declaratively*. Ruby's heredoc
+  queue and bash's are the motivating shape.
+- **Layout-sensitive parsing** (Erdweg, Rendel, Kästner and Ostermann, SLE
+  2012; Adams, "Principled parsing for indentation-sensitive languages",
+  POPL 2013) gives indentation and column-driven structure a grammar-level
+  treatment rather than a scanner-level one. That is python's indent stack
+  and yaml's column tracking — 1,686 lines of the 4,332 in this repository.
+
+If either formalism covers those two, the escape hatch shrinks from "eight
+of eleven grammars" to a genuine long tail, and §8's yaml bootstrap is the
+place to find out.
+
+### Grammars as data, and grammar-to-grammar conversion
+
+The exact thing the user asks — write it once, emit ANTLR — has a literature:
+
+- **Ralf Lämmel's grammarware programme**, especially "Semi-automatic Grammar
+  Recovery" (Lämmel and Verhoef, 2001) and the **Software Language Processing
+  Suite**, whose **BGF** (a BNF-like grammar format) and **XBGF** (a set of
+  grammar transformation operators) are grammars-as-data with a checked
+  algebra of edits over them. **Grammar Zoo** (Zaytsev) is the corpus of
+  grammars extracted into that format.
+- Its finding is the sobering one and matches §3: converting the *productions*
+  between notations is largely mechanical, and converting the *disambiguation*
+  is not, because it is where each generator's semantics live.
+
+### Adjacent, and worth reading for one idea each
+
+- **DMS Software Reengineering Toolkit** (Semantic Designs) — commercial, GLR,
+  dozens of languages, and the one system that took **pretty-printing
+  seriously as a co-declared artifact**: a grammar rule carries its
+  prettyprinter box layout. That is the answer to the roundtripping gap the
+  cubix-framework article names and this repository still has.
+- **JastAdd** (reference attribute grammars; ExtendJ) and **Silver/Copper**
+  (Van Wyk et al.) — attribute grammars are what the semantic layer is, and
+  JastAdd's *reference* attributes are how name binding is done well.
+- **Xtext** and **Langium** — one grammar producing parser, AST and a full
+  language server. The realistic model for what layer 3 emits, and evidence
+  that the "one source, many consumer artifacts" half is routine engineering.
+- **Ohm** (Warth et al.) — deliberately separates the grammar from its
+  semantic actions so one grammar carries many semantics. The same instinct
+  as the tree contract.
+- **ANTLR's multi-target backends** — the same `.g4` emits runtimes in Java,
+  C#, Python, Go and more. Worth naming precisely because it is portability
+  along a *different axis*: one parsing algorithm, many host languages. It is
+  not evidence that one grammar can span algorithms.
+- **Cubix** (Koppel, Premtoon and Solar-Lezama, OOPSLA 2018) — the incremental
+  parametric syntax whose article started this thread. Its vocabulary idea is
+  ours; note that it **wrapped existing per-language parsers rather than
+  generating them**, which is the road this note declines to take.
+
+### What is actually new here
+
+Not the meta-grammar. Not declarative disambiguation, not scope graphs, not
+grammars-as-data — all of it exists, most of it done well.
+
+What does not exist in that lineage is **the evidence apparatus**: 220 MB of
+locked corpora, reference-parser adjudication per language, span and field
+oracles, mutation and fuzz in both directions, ratchets with reasons. SDF's
+disambiguation filters are declared and checked for internal consistency;
+they are not checked against what CPython does to 296,567 files. That is the
+part this repository already has and the lineage does not, and it is what
+would make a meta-grammar here trustworthy rather than merely elegant.
+
+So the borrowing is asymmetric and should be deliberate: **take the
+formalisms, keep the evidence.**
+
+## 12. What this design does not yet answer
+
+Named here rather than discovered later.
+
+1. **Error recovery has no portable story.** `treebank recovery` measures
+   blast radius, tree-sitter recovers by design, and an Earley recognizer
+   does not recover at all. So the §7 reference recognizer is a differential
+   oracle for accept/reject and for tree shape on *valid* input only — it
+   cannot check the recovery gate, and the note should not imply it can.
+2. **Incremental reparse is backend-semantic and stays that way.**
+   `incremental.rs` tests a tree-sitter contract. Either the gate becomes a
+   per-backend capability like the oracle ones, or it stays a tree-sitter
+   gate that other backends simply do not have.
+3. **The meta-language needs its own version, and its own bootstrap story.**
+   `vocabulary 0.2.0` versions the role terms; nothing yet versions the
+   surface syntax or the intent set. Self-hosting — parsing the meta-grammar
+   with a treebank grammar written in it — is the obvious forcing function
+   and is how SDF and Rascal do it.
+4. **`because` fields are unchecked prose**, which is against this
+   repository's ethic everywhere else. The `example` on a decision is the
+   part that can be executed; §3's post-conditions are what make it load
+   bearing, and the design should say that a decision without an example does
+   not compile.
+5. **No cost estimate.** §9 says it eats the roadmap and §10 sequences around
+   that, but the spikes should return a number before the remaining eight
+   grammars are committed to.
