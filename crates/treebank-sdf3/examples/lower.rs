@@ -84,6 +84,19 @@ fn main() -> anyhow::Result<()> {
         std::fs::create_dir_all(dir.join("src"))?;
         std::fs::write(dir.join("src/scanner.c"), c)?;
     }
+    // The second backend, from the same module and the same names.
+    let antlr = treebank_sdf3::antlr::emit(&module, &lowered.names, &lowered.levels)?;
+    let gname = {
+        let mut c = module.name.chars();
+        c.next()
+            .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+            .unwrap_or_default()
+    };
+    std::fs::write(dir.join(format!("{gname}.g4")), &antlr.grammar)?;
+    std::fs::write(
+        dir.join("antlr-findings.md"),
+        treebank_sdf3::report(&antlr.findings),
+    )?;
     let rules = grammar["rules"].as_object().map(|r| r.len()).unwrap_or(0);
     eprintln!(
         "{}: {} rules, {} findings, {} conflicts{} -> {}",

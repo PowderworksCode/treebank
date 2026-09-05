@@ -13,3 +13,4 @@ __pycache__/
 # file's own comment is the rule: the styles are versioned by .vale.ini and
 # fetched at run time, not committed.
 /.vale/
+crates/treebank-sdf3/spike/*/antlr-gen/

@@ -1,3 +1,7 @@
+## WIDENING -- tree-sitter accepts more than SDF3 here (1)
+
+- the scanner decides by validity first: where only one variant of a spelling is valid it is emitted whatever the spacing, so a layout constraint is enforced only in the states that have a choice -- `y = - 1` parses as a negation where the module's adjacency constraint rejects it, which is Ruby's behaviour and not SDF3's
+
 ## DEVIATION -- the tree differs in shape from SDF3's AST (1)
 
 - bracket production of Exp became the named node `exp_bracket`; SDF3's AST has no node for brackets, but a hidden supertype member may have only one visible child and `( Exp )` has three

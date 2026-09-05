@@ -59,6 +59,21 @@ pub struct Lowered {
     pub findings: Vec<Finding>,
     /// `src/scanner.c`, when the module's layout constraints call for one.
     pub scanner: Option<String>,
+    /// The node and rule names this lowering chose, so a second backend can
+    /// use the same ones and one corpus can serve both.
+    pub names: Names,
+    /// `Sort.Cons` -> (priority level, associativity), as assigned.
+    pub levels: BTreeMap<String, (u32, Option<Attr>)>,
+}
+
+#[derive(Debug, Clone, Default)]
+pub struct Names {
+    /// Sort -> the rule a reference to it becomes (`_exp`, `program`, `id`).
+    pub sort_rule: BTreeMap<String, String>,
+    /// `Sort.Cons` -> the node name.
+    pub node: BTreeMap<String, String>,
+    /// Lexical sorts, so a backend can tell a token from a rule.
+    pub lexical: BTreeSet<String>,
 }
 
 struct Ctx<'m> {
@@ -72,6 +87,8 @@ struct Ctx<'m> {
     /// Word-shaped template literals, for `reserved`.
     keywords: BTreeSet<String>,
     rule_names: BTreeSet<String>,
+    /// `Sort.Cons` -> node name, as chosen.
+    node_names: BTreeMap<String, String>,
     /// Which literal occurrences the generated scanner owns, and why.
     plan: crate::scanner::Plan,
     /// Context-free productions in declaration order; `plan` keys on the index.
@@ -87,6 +104,7 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         levels: BTreeMap::new(),
         keywords: BTreeSet::new(),
         rule_names: BTreeSet::new(),
+        node_names: BTreeMap::new(),
         plan: crate::scanner::Plan::default(),
         prods: module.productions(false).collect(),
     };
@@ -168,6 +186,9 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                     p.constructor.as_deref().unwrap_or("?")
                 ),
             });
+            if let Some(r) = p.reference() {
+                cx.node_names.insert(r, rule_name.clone());
+            }
             cx.insert_rule(&mut rules, rule_name, body)?;
             continue;
         }
@@ -209,6 +230,9 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                     }
                     let body = cx.production_body(p)?;
                     let body = cx.wrap_precedence(p, body);
+                    if let Some(r) = p.reference() {
+                        cx.node_names.insert(r, node.clone());
+                    }
                     cx.insert_rule(&mut rules, node.clone(), body)?;
                     members.push(json!({"type": "SYMBOL", "name": node}));
                 }
@@ -413,10 +437,17 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     } else {
         Some(crate::scanner::c_source(&cx.plan, &module.name))
     };
+    let names = Names {
+        sort_rule: cx.sort_rule.clone(),
+        node: cx.node_names.clone(),
+        lexical: cx.lexical.keys().cloned().collect(),
+    };
     Ok(Lowered {
         grammar: Value::Object(grammar),
         findings: cx.findings,
         scanner,
+        names,
+        levels: cx.levels.clone(),
     })
 }
 

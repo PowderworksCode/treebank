@@ -744,3 +744,76 @@ conflict (cppish), and composition by import. Still untested:
 layout-sensitive *structure* (python's indent stack, yaml's columns) and
 stateful scanning (heredocs, interpolation) — the two places the scanner
 escape hatch is expected to survive, and now the only two.
+
+## 16. The second backend, and what the table got right and wrong
+
+§7 said an abstraction with one implementation is not an abstraction, and
+§3's capability table made claims about ANTLR that only an ANTLR lowering
+could test. `crates/treebank-sdf3/src/antlr.rs` lowers the same three
+modules to ANTLR4 — same reader, same names, same corpus — and
+`tools/antlr_check.py` generates the Python target and holds it to the
+expectations the tree-sitter parsers were held to. The mapping is the
+natural one: a sort is a rule and a constructor a labeled alternative,
+which is ANTLR's own supertype/subtype split; a priority chain is
+alternative order in a left-recursive rule; `{prefer}` is alternative order
+within its rule; `{non-assoc}` widens as before.
+
+**Result: 23 of 29 expectations hold across the three spikes** — 8 of 9 on
+mini, 8 of 12 on rubyish, 7 of 8 on cppish — and every miss is
+attributable to one of three capability differences, none of them a
+lowering bug:
+
+| difference | what it costs | cases |
+|---|---|---|
+| the lexer cannot ask the parser what is valid | a spacing decision that tree-sitter's scanner settled by validity is a token ANTLR has no consumer for | `(a+b) -1`, `z=-1`, `foo((1))` |
+| the lexer runs without parser state | `>>` is one token and closes no template, where tree-sitter's per-state lexer offered only `>` | `vector<vector<int>> v;` |
+| trivia is on the hidden channel | comments are absent where tree-sitter shows extras | both comment cases |
+
+The first row is the finding. Ruby's spacing rule lowered to ANTLR by the
+*same* planner that generated tree-sitter's scanner — the same split into
+`V_MINUS` and `V_MINUS_SPACED_TIGHT`, as lexer rules with lexer predicates
+on the character before and after — minus the one thing the scanner had:
+`valid_symbols`. Where tree-sitter emitted the only valid variant whatever
+the spacing, ANTLR's lexer emits the variant the spacing says and the
+parser has to take it or fail. Eight of twelve Ruby cases survive that;
+the four that do not are precisely the ones §14 credited to validity.
+The corpus now names the tree-sitter case that *widened* SDF3 (`y = - 1`,
+a negation Ruby accepts and the module's adjacency constraint rejects),
+which the ANTLR run rejects faithfully — the first time the two backends
+disagreed with each other *and* one of them agreed with the source.
+
+**What §3's table got wrong.** It said `lexical` lowers to ANTLR as "lexer
+mode + predicate" and `predicate` as "semantic predicate", and the first
+attempt did exactly that: layout constraints as parser predicates
+comparing token offsets, placed where SDF3 states them. They rejected
+instead of steering. A four-line grammar settled why: **ANTLR consults a
+left-edge semantic predicate during prediction in a plain rule and not in
+a left-recursive one** — the plain rule prunes the alternative, the
+left-recursive one takes it and throws at parse time — and every
+expression rule is left-recursive. So the `predicate` row is narrower than
+written: predicates steer only in rules the left-recursion rewrite does not
+touch. The corrected lowering puts every layout fact in the lexer, where
+predicates are always consulted, and that is why the deviation table above
+is about lexer capabilities and not parser ones.
+
+**What it got right.** `prefer` as alternative order held on cppish: `a < b
+> c;` is a declaration under ANTLR because ALL(*) takes the first viable
+alternative and `Decl` precedes `ExprStmt` in cish — by source order, which
+the attribute on `TemplateId` does not reach, and the finding says so. The
+`carry` row was right to say "unavailable": ALL(*) does not keep both
+readings, it picks one, and where `{prefer}` names the one to pick that is
+enough; where nothing does, ANTLR would choose silently. And composition,
+priorities, injections, brackets and keywords crossed without incident:
+mini's only miss is the comment.
+
+The corrected table rows, as measured:
+
+| intent | tree-sitter | ANTLR |
+|---|---|---|
+| `lexical` (layout facts) | generated scanner, validity first | lexer token variants with lexer predicates, no validity |
+| `predicate` | unavailable | steers only in non-left-recursive rules |
+| `carry` | declared conflict + weight, discovered by generate | unavailable; `prefer` by order where a preference is declared |
+
+Two backends from one source, twenty-nine shared expectations, six
+divergences each with a named cause. That is what §4 meant by a backend
+declaring what it cannot do, and it was cheaper to measure than to argue.

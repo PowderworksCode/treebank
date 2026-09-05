@@ -372,6 +372,12 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
             .cmp(&a.specificity())
             .then(a.name.cmp(&b.name))
     });
+    if plan.variants.iter().any(|v| v.specificity() > 0) {
+        findings.push(Finding {
+            kind: Kind::Widening,
+            what: "the scanner decides by validity first: where only one variant of a spelling is valid it is emitted whatever the spacing, so a layout constraint is enforced only in the states that have a choice -- `y = - 1` parses as a negation where the module's adjacency constraint rejects it, which is Ruby's behaviour and not SDF3's".into(),
+        });
+    }
 
     for p in lexical.get("LAYOUT").into_iter().flatten() {
         if let Rhs::Symbols(s) = &p.rhs {

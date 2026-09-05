@@ -50,7 +50,7 @@ foo-1
     (nl)))
 
 ================================================================================
-where only a unary minus is possible, spacing does not matter
+WIDENING (tree-sitter): where only a unary minus is possible, spacing does not matter; the module's adjacency constraint rejects `y = - 1`, Ruby accepts it
 ================================================================================
 
 x = -1

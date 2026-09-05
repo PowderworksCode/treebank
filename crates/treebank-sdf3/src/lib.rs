@@ -14,6 +14,7 @@
 //! `spike/mini/` holds the language, the generated grammar, and the
 //! expectations; `tests/mini.rs` holds the lowering to the committed output.
 
+pub mod antlr;
 pub mod ast;
 pub mod lower;
 pub mod parse;

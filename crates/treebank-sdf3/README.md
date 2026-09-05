@@ -105,6 +105,34 @@ because after `=` no declaration is possible). `vector<vector<int>> v;`
 parses with `>>` a single token in the grammar, because tree-sitter's lexer
 only offers the tokens the state accepts.
 
+## The second backend: ANTLR
+
+`src/antlr.rs` lowers the same modules to ANTLR4 grammars (`<Name>.g4`,
+Python3 target), with the node names the tree-sitter lowering chose so one
+corpus serves both, and `tools/antlr_check.py` generates the parser and holds
+it to that corpus, writing `antlr-results.md` beside each spike. Sorts become
+rules and constructors labeled alternatives — ANTLR's own supertype/subtype
+split — priority chains become alternative order in left-recursive rules,
+and layout constraints become lexer token variants with lexer predicates,
+from the same plan as the generated scanner.
+
+Across the three spikes, 23 of 29 expectations hold under ANTLR, and every
+miss is one of three capability differences the design's table predicted
+and the runs now measure: the ANTLR lexer cannot ask the parser what is
+valid, so spacing decisions that tree-sitter's scanner settled by validity
+are rejected (`(a+b) -1`, `z=-1`, `foo((1))`); it lexes without parser
+state, so `>>` is one token and closes no template; and trivia goes to the
+hidden channel, so comments are absent where tree-sitter shows extras. One
+fact was established by a four-line experiment on the way and is recorded:
+ANTLR consults a left-edge semantic predicate during prediction in a plain
+rule and not in a left-recursive one, which is why parser predicates could
+not carry Ruby's spacing rule.
+
+```sh
+pip install antlr4-python3-runtime==4.13.2   # the tool jar is fetched on first use
+python3 crates/treebank-sdf3/tools/antlr_check.py crates/treebank-sdf3/spike/rubyish
+```
+
 ## What it is not
 
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's
