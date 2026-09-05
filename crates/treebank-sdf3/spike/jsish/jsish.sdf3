@@ -7,6 +7,10 @@
 // holds it. Same three attributes as pyish and rustish; the only new
 // thing is a target named by scope kind: `binds(name -> function)`.
 //
+// The template whitespace is also the pretty-printer's layout (see
+// src/print.rs), written in prettier's style, and tools/format_check.py
+// holds the printer to prettier.
+//
 // The programs under programs/ are valid JavaScript; tools/resolve_check.py
 // resolves and evaluates them from bindings.json and compares with what
 // node prints.
@@ -51,7 +55,11 @@ context-free syntax
   Stmt.Expr   = <<Exp>;>
   Stmt        = Block
 
-  Block.Block = <{ <Stmt*> }> {scope(block)}
+  Block.Block = <
+    {
+      <Stmt*>
+    }
+  > {scope(block)}
   Else.ElseClause = <else <body:Block>>
   Param.Param = <<name:ID>> {binds(name -> enclosing as parameter)}
 

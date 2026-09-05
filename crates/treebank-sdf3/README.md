@@ -239,6 +239,47 @@ its keep on the first run: the modules had put `let` in `_declaration`,
 Python's `prefix = name` is not one, and the shipped grammars agree with
 Python, so the modules were corrected.
 
+## Terms, and the printer the templates already contain
+
+An SDF3 module is a signature: `Exp.Add = <<left:Exp> + <right:Exp>>`
+declares `Add : Exp * Exp -> Exp`, and the parse of `y + 1` is the term
+`Add("y", Int("1"))`, with literals and layout gone, lexical sorts as
+their text, injections and brackets passed through. Spoofax calls the
+pass from parse tree to term *implosion*; `src/term.rs` runs it from a
+tree-sitter tree, through the names the lowering chose (node to
+constructor, field to label, the bracket deviation node removed, a
+wrapper around a token collapsed to the token). Comments and blank lines
+have no place in a term and survive as annotations.
+
+The templates are then read a second time. The parser read their
+literals and placeholders; the printer (`src/print.rs`) reads their
+whitespace, which SDF3 defines as the pretty-printer's layout, and
+lowers each template to Box, the layout algebra Spoofax uses: a template's
+lines are a vertical box, each line a horizontal one, the lines' relative
+indentation the box's. A list placeholder alone on its line prints one
+element per line; an absent optional alone on its line vanishes; a
+trailing comment follows its term. Two things the whitespace cannot say
+are attributes: `separate(2)` puts blank lines around a term in a
+vertical list, and `collapse(100)` is Box's `HV`, a box printed on one
+line when it holds no vertical list and fits. `collapse` sits on the
+injection `Exp = Block`, because that is the one place that names "a
+block in expression position", which rustfmt collapses where it never
+collapses a function body.
+
+So the template whitespace *is* the style, and the oracle is the
+language's own formatter. `tools/format_check.py` parses each program,
+implodes it, prints it, and checks three things: the printed text
+implodes to the same term (nothing lost), printing it again changes
+nothing (idempotent), and it equals what **rustfmt**, **black** or
+**prettier** produces for the same source. With the three modules'
+templates written in those styles, **21 of 21** programs match, comments
+and preserved blank lines included, and the parsers were not touched.
+
+```sh
+cargo run -p treebank-sdf3 --example format -- crates/treebank-sdf3/spike/rustish path/to/file.rs          # print
+cargo run -p treebank-sdf3 --example format -- crates/treebank-sdf3/spike/rustish path/to/file.rs --term   # the term
+```
+
 ## The second backend: ANTLR
 
 `src/antlr.rs` lowers the same modules to ANTLR4 grammars (`<Name>.g4`,

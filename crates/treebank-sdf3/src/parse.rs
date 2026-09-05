@@ -378,6 +378,14 @@ fn attr(i: &mut In) -> R<Vec<Attr>> {
         let b = delimited((ws, '(', ws), binding, (ws, ')')).parse_next(i)?;
         return Ok(vec![Attr::Binds(b)]);
     }
+    if name == "collapse" {
+        let n: u32 = delimited((ws, '(', ws), dec_uint, (ws, ')')).parse_next(i)?;
+        return Ok(vec![Attr::Collapse(n)]);
+    }
+    if name == "separate" {
+        let n: u32 = delimited((ws, '(', ws), dec_uint, (ws, ')')).parse_next(i)?;
+        return Ok(vec![Attr::Separate(n)]);
+    }
     if name == "refers" {
         let r: String = delimited(
             (ws, '(', ws),

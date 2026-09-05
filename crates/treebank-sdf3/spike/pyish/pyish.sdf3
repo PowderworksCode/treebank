@@ -16,6 +16,10 @@
 // of the production, literals included. In `Stmt.If`, 1 is `if`, 4 is the
 // block and 5 is the optional else clause.
 //
+// The template whitespace is also the pretty-printer's layout (see
+// src/print.rs): bodies indented by four and `separate(2)` on `def`
+// are black's style, and tools/format_check.py holds the printer to black.
+//
 // The `name:` prefix on placeholders is a treebank extension (see mini),
 // and so are `scope(..)`, `binds(field -> scope as kind)` and
 // `refers(..)`: SDF3 has no binding attributes (Spoofax keeps name binding
@@ -59,21 +63,21 @@ context-free syntax
   Stmt.Print  = <print(<value:Exp>)>
   Stmt.If     = <
     if <condition:Exp>:
-      <consequence:Block>
+        <consequence:Block>
     <alternative:Else?>
   > {layout(indent 1 4, align 1 5)}
   Stmt.While  = <
     while <condition:Exp>:
-      <body:Block>
+        <body:Block>
   > {layout(indent 1 4)}
   Stmt.Def    = <
     def <name:ID>(<parameters:{Param ","}*>):
-      <body:Block>
-  > {layout(indent 1 7), scope(function), binds(name -> enclosing as function)}
+        <body:Block>
+  > {layout(indent 1 7), scope(function), binds(name -> enclosing as function), separate(2)}
 
   Else.ElseClause = <
     else:
-      <body:Block>
+        <body:Block>
   > {layout(indent 1 3)}
 
   Block.Block = <<Stmt+>>      {layout(align-list 1)}

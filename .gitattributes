@@ -55,3 +55,4 @@ crates/treebank-sdf3/spike/*/bindings-results.md linguist-generated=true
 crates/treebank-sdf3/spike/*/resolve-results.md linguist-generated=true
 crates/treebank-sdf3/spike/*/roles.json linguist-generated=true
 crates/treebank-sdf3/spike/rosetta/rosetta-results.md linguist-generated=true
+crates/treebank-sdf3/spike/*/format-results.md linguist-generated=true

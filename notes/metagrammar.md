@@ -1150,3 +1150,82 @@ What this changes in the design is §6's claim, now a mechanism: the sorts
 a grammar author makes by hand today, which tier a term lives in, is the
 lowering's to make and to explain.
 
+## 21. The eighth spike: the term, and the printer the templates contain
+
+Two things fell out of the last conversations. Symbolic evaluation wants
+to stand on SDF3's term, not on a backend's tree; and SDF3 templates
+were designed to be read twice, once for the parser and once for the
+pretty-printer. This spike builds both feet of that: an imploder from the
+tree-sitter tree to the module's term, and a printer from the templates'
+whitespace to text, held to the languages' own formatters.
+
+**The term.** A module is a signature. `Exp.Add = <<left:Exp> +
+<right:Exp>>` declares `Add : Exp * Exp -> Exp`; the parse of `y + 1` is
+`Add("y", Int("1"))`. Literals and layout are gone, lexical sorts are
+their text, injections and brackets pass their child through, lists are
+lists, optionals are `Some` or `None`. `crates/treebank-sdf3/src/term.rs`
+implodes a tree-sitter tree into that term through the names the
+lowering already keeps: node to constructor, field to label, unlabelled
+children to unlabelled placeholders in order, the `exp_bracket` deviation
+node removed, `exp_int` around `int` collapsed to `Int("1")`. Comments
+and blank lines, which have no place in a term, become annotations on the
+term they precede or follow. The imploder is the map §4's reference
+recognizer and every backend share: whichever parser ran, evaluation sees
+`Assign("x", Add("y", Int("1")))`.
+
+**The printer.** SDF3 defines a template's whitespace as the layout the
+pretty-printer produces, and Spoofax lowers it to Box, de Jonge's layout
+algebra of horizontal and vertical boxes. `src/print.rs` does the same:
+a template's lines are a `V` box, each line an `H` box, the lines'
+indentation relative to the first is the box's; a list placeholder alone
+on its line prints one element per line at that indent; an absent
+optional alone on its line vanishes; a trailing comment follows its
+term. One deliberate difference from pp-Box: a vertical box indents
+relative to the line it started on, not the column, which is what
+rustfmt, black and prettier all do, and none of them needs column
+alignment. Two things the whitespace cannot say are attributes, and both
+are Box's own ideas: `separate(2)` is blank lines around a term in a
+vertical list, and `collapse(100)` is Box's `HV`, a box printed on one
+line when it holds no vertical list and fits in the width. `collapse`
+sits on the injection `Exp = Block`, because an injection is a production
+and the one that names "a block in expression position", which rustfmt
+collapses where it never collapses a function body. The imploder keeps a
+blank line an author left, since all three formatters preserve one.
+
+**The oracle is the language's formatter.** The templates of pyish,
+rustish and jsish were rewritten in black's, rustfmt's and prettier's
+styles, which is the whole of the style specification: four-space bodies
+and `separate(2)` on `def`, braces on the opening line with four-space
+bodies, braces with two-space bodies. `tools/format_check.py` parses each
+program, implodes it, prints it, and checks that the printed text
+implodes to the same term, that printing it again changes nothing, and
+that it equals what rustfmt, black or prettier prints for the same
+source.
+
+| spike | programs | round trip | idempotent | equals the formatter |
+|---|---|---|---|---|
+| rustish (rustfmt 1.8) | 8 | 8 | 8 | 8 |
+| pyish (black 26.5) | 5 | 5 | 5 | 5 |
+| jsish (prettier) | 8 | 8 | 8 | 8 |
+
+Twenty-one of twenty-one, comments and blank lines included, with the
+parsers untouched. Three differences the first run showed were each a
+rule the template whitespace could not state, and each became one
+explicit word rather than a special case: black's blank lines around
+definitions (`separate`), rustfmt's one-line block expressions
+(`collapse`, on the injection), and a trailing comment that sat on a
+token child of `assign` before its hidden newline and needed to bubble up
+to the term.
+
+**What this settles.** §5's `example` and `oracle` lines wanted a printer
+that could regenerate the surface; it exists, and it is derived. The
+formatter treebank would ship for a language is the module's templates,
+held to the language's formatter in CI the way its parser is held to its
+corpus. And the term is now a real artifact: `--term` prints it, tests
+implode a tree without a parser in the loop, and the interpreter of §19
+has a cleaner thing to stand on than the tree. What the printer does not
+do yet is wrap long lines, which is Box's `HV` at line width across
+arbitrary boxes rather than one production, and comments inside
+expressions, which the annotation model attaches to the nearest
+statement; both are the next things a real formatter would need.
+

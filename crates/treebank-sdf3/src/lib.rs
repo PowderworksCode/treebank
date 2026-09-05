@@ -19,7 +19,9 @@ pub mod bindings;
 pub mod ast;
 pub mod lower;
 pub mod parse;
+pub mod print;
 pub mod scanner;
+pub mod term;
 pub mod vocab;
 
 pub use lower::{

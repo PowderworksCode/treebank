@@ -169,6 +169,15 @@ pub enum Attr {
     /// position or field is a reference, resolved against the bindings
     /// in scope.
     Refers(String),
+    /// treebank extension for the printer: `separate(2)` puts this many
+    /// blank lines around the term when it is an element of a vertical
+    /// list, as black does around top-level definitions.
+    Separate(u32),
+    /// treebank extension for the printer: `collapse(100)` prints the
+    /// template on one line when none of its lines holds a vertical list
+    /// and the result fits in this many columns -- Box's `HV`, with the
+    /// refinement rustfmt applies to blocks.
+    Collapse(u32),
     Other(String),
 }
 

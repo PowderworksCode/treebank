@@ -33,3 +33,6 @@ echo "queries/locals.scm: $captures captures on bindings/nested.py"
 [ "$captures" -gt 0 ]
 python3 "$HERE/../../tools/bindings_check.py" "$HERE"
 python3 "$HERE/../../tools/resolve_check.py" "$HERE"
+
+# The printer derived from the templates, held to the language's own formatter.
+python3 "$HERE/../../tools/format_check.py" "$HERE"

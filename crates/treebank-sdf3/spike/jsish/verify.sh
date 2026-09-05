@@ -27,3 +27,6 @@ cmp "$tmp/src/parser.c" src/parser.c
 echo "grammar.js and grammar.json generate an identical parser"
 
 python3 "$HERE/../../tools/resolve_check.py" "$HERE"
+
+# The printer derived from the templates, held to the language's own formatter.
+python3 "$HERE/../../tools/format_check.py" "$HERE"

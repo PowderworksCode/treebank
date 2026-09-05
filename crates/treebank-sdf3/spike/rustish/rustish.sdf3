@@ -8,6 +8,10 @@
 // and this module says it with one word: `binds(pattern -> enclosing
 // after)`. Everything else is the same three attributes.
 //
+// The template whitespace is also the pretty-printer's layout (see
+// src/print.rs), written in rustfmt's style, and tools/format_check.py
+// holds the printer to rustfmt.
+//
 // The programs under programs/ are valid Rust; tools/resolve_check.py
 // resolves and evaluates them from bindings.json and compares with what
 // rustc's binary prints.
@@ -45,7 +49,12 @@ context-free syntax
   Ret.Ret = <-\> i64>
   Param.Param = <<name:ID>: i64> {binds(name -> enclosing as parameter)}
 
-  Block.Block = <{ <Stmt*> <tail:Exp?> }> {scope(block)}
+  Block.Block = <
+    {
+        <Stmt*>
+        <tail:Exp?>
+    }
+  > {scope(block)}
 
   Stmt.Let    = <let <pattern:ID> = <value:Exp>;>     {binds(pattern -> enclosing after)}
   Stmt.LetMut = <let mut <pattern:ID> = <value:Exp>;> {binds(pattern -> enclosing after)}
@@ -62,7 +71,7 @@ context-free syntax
 
   Exp          = ID {refers(1)}
   Exp.Int      = INT
-  Exp          = Block
+  Exp          = Block {collapse(100)}
   Exp.Call     = <<function:Exp>(<arguments:{Exp ","}*>)>
   Exp.Neg      = <-<operand:Exp>>
   Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
