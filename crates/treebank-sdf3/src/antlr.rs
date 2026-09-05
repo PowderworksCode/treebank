@@ -6,7 +6,7 @@
 //! that only a second backend can test. Where the tree-sitter lowering needed
 //! a generated scanner for layout facts, ANTLR has semantic predicates; where
 //! tree-sitter carried an ambiguity with a declared conflict and a weight,
-//! ANTLR's ALL(*) takes the first viable alternative. Each is recorded.
+//! ANTLR's ALL(*) takes the first alternative that can match. Each is recorded.
 //!
 //! The mapping:
 //!
@@ -21,7 +21,7 @@
 //!   highest first; `{right}` becomes `<assoc=right>`; `{non-assoc}` has no
 //!   form and widens, as in tree-sitter.
 //! - `{prefer}` / `{avoid}` move an alternative to the front / back of its own
-//!   rule. ALL(*) resolves a true ambiguity to the first viable alternative,
+//!   rule. ALL(*) resolves a true ambiguity to the first alternative that can match,
 //!   so this is `prefer` lowered exactly -- within the rule. An ambiguity that
 //!   is decided in an ancestor rule is resolved by *that* rule's source
 //!   order, which the attribute does not reach. Recorded.
@@ -143,7 +143,7 @@ pub fn emit(
                 findings.push(Finding {
                     kind: Kind::Mapped,
                     what: format!(
-                        "{}: `{{{}}}` became alternative order within `{rule}`; ALL(*) takes the first viable alternative, so an ambiguity decided in an ancestor rule follows that rule's source order, which this attribute does not reach",
+                        "{}: `{{{}}}` became alternative order within `{rule}`; ALL(*) takes the first alternative that can match, so an ambiguity decided in an ancestor rule follows that rule's source order, which this attribute does not reach",
                         p.display(),
                         if p.has(&Attr::Prefer) { "prefer" } else { "avoid" }
                     ),

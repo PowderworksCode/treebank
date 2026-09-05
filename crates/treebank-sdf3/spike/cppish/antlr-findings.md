@@ -10,5 +10,5 @@
 
 ## MAPPED -- lowered exactly (1)
 
-- Type.TemplateId: `{prefer}` became alternative order within `type`; ALL(*) takes the first viable alternative, so an ambiguity decided in an ancestor rule follows that rule's source order, which this attribute does not reach
+- Type.TemplateId: `{prefer}` became alternative order within `type`; ALL(*) takes the first alternative that can match, so an ambiguity decided in an ancestor rule follows that rule's source order, which this attribute does not reach
 

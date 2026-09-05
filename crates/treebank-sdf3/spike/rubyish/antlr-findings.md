@@ -13,5 +13,5 @@
 ## MAPPED -- lowered exactly (2)
 
 - layout constraints became lexer token variants with lexer predicates on the character before and after, from the same plan as the tree-sitter scanner; the parser has no say in which variant the lexer emits, which is the validity tree-sitter's scanner had and ANTLR's lexer does not
-- Exp.Command: `{prefer}` became alternative order within `exp`; ALL(*) takes the first viable alternative, so an ambiguity decided in an ancestor rule follows that rule's source order, which this attribute does not reach
+- Exp.Command: `{prefer}` became alternative order within `exp`; ALL(*) takes the first alternative that can match, so an ambiguity decided in an ancestor rule follows that rule's source order, which this attribute does not reach
 
