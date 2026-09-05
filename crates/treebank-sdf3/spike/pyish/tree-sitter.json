@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "pyish",
+      "camelcase": "Pyish",
+      "scope": "source.pyish",
+      "file-types": ["pyish"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike; not a shipped grammar"
+  }
+}

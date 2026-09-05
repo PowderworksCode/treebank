@@ -153,7 +153,9 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         let name =
             if alternatives == 1 && prods[0].constructor.is_some() && !prods[0].has(&Attr::Bracket)
             {
-                snake(sort)
+                // SDF3's AST node is the constructor, so `Else.ElseClause`
+                // is `else_clause`, not `else`.
+                snake(prods[0].constructor.as_deref().unwrap_or(sort))
             } else {
                 format!("_{}", snake(sort))
             };
@@ -360,8 +362,8 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                 what: "`keyword -/- [class]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word".into(),
             }),
             TemplateOption::Tokenize(s) => cx.findings.push(Finding {
-                kind: Kind::Absorbed,
-                what: format!("`tokenize: {s:?}` concerns template whitespace and has no parser effect"),
+                kind: Kind::Mapped,
+                what: format!("`tokenize: {s:?}`: the reader split template literal runs at these characters, so each is its own token"),
             }),
         }
     }
@@ -550,9 +552,9 @@ impl<'m> Ctx<'m> {
 
     fn production_body(&mut self, p: &Production) -> Result<Value> {
         let pi = self.prods.iter().position(|q| std::ptr::eq(*q, p));
+        let mut members = Vec::new();
         match &p.rhs {
             Rhs::Template(parts) => {
-                let mut members = Vec::new();
                 let mut pos = 0;
                 for part in parts {
                     match part {
@@ -574,22 +576,46 @@ impl<'m> Ctx<'m> {
                                 });
                                 v = json!({"type": "FIELD", "name": l, "content": v});
                             }
-                            members.push(v);
+                            self.push_symbol(&mut members, pi, pos, v);
                         }
                     }
                 }
-                Ok(seq(members))
             }
             Rhs::Symbols(syms) => {
-                let mut members = Vec::new();
                 for (k, s) in syms.iter().enumerate() {
-                    members.push(match s {
-                        Symbol::Lit(l) => self.literal(pi, k + 1, l),
-                        other => self.symbol(other)?,
-                    });
+                    match s {
+                        Symbol::Lit(l) => members.push(self.literal(pi, k + 1, l)),
+                        other => {
+                            let v = self.symbol(other)?;
+                            self.push_symbol(&mut members, pi, k + 1, v);
+                        }
+                    }
                 }
-                Ok(seq(members))
             }
+        }
+        if let (Some(pi), Some(ind)) = (pi, &self.plan.indent) {
+            if ind.terminated.contains(&pi) {
+                members.push(json!({"type": "SYMBOL", "name": "_newline"}));
+            }
+        }
+        Ok(seq(members))
+    }
+
+    /// A nonterminal at a symbol position, wrapped in `_indent .. _dedent`
+    /// when the indent plan says the occurrence is an indented block.
+    fn push_symbol(&self, members: &mut Vec<Value>, pi: Option<usize>, pos: usize, v: Value) {
+        let wrapped = pi.is_some_and(|pi| {
+            self.plan
+                .indent
+                .as_ref()
+                .is_some_and(|ind| ind.blocks.contains(&(pi, pos)))
+        });
+        if wrapped {
+            members.push(json!({"type": "SYMBOL", "name": "_indent"}));
+            members.push(v);
+            members.push(json!({"type": "SYMBOL", "name": "_dedent"}));
+        } else {
+            members.push(v);
         }
     }
 

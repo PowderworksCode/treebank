@@ -1,0 +1,250 @@
+; Expectations written from the SDF3 semantics of pyish.sdf3 -- the
+; declarative layout constraints -- before the lowering was run. The
+; `_newline`, `_indent` and `_dedent` tokens the lowering adds are hidden
+; and do not appear; comments are LAYOUT and appear as extras.
+================================================================================
+a statement ends at the line break; the next line at its column is the next statement
+================================================================================
+
+x = 1
+y = x + 1
+
+--------------------------------------------------------------------------------
+
+(program
+  (assign
+    target: (id)
+    value: (exp_int (int)))
+  (assign
+    target: (id)
+    value: (add
+      left: (id)
+      right: (exp_int (int)))))
+
+================================================================================
+a block is the lines indented past the line that opened it
+================================================================================
+
+if x:
+    pass
+    y = 2
+z = 3
+
+--------------------------------------------------------------------------------
+
+(program
+  (if
+    condition: (id)
+    consequence: (block
+      (pass)
+      (assign
+        target: (id)
+        value: (exp_int (int)))))
+  (assign
+    target: (id)
+    value: (exp_int (int))))
+
+================================================================================
+one line closes every block it has left
+================================================================================
+
+if a:
+    if b:
+        pass
+c = 1
+
+--------------------------------------------------------------------------------
+
+(program
+  (if
+    condition: (id)
+    consequence: (block
+      (if
+        condition: (id)
+        consequence: (block
+          (pass)))))
+  (assign
+    target: (id)
+    value: (exp_int (int))))
+
+================================================================================
+else sits at its if's column
+================================================================================
+
+if a:
+    pass
+else:
+    return 1
+
+--------------------------------------------------------------------------------
+
+(program
+  (if
+    condition: (id)
+    consequence: (block
+      (pass))
+    alternative: (else_clause
+      body: (block
+        (return
+          value: (exp_int (int)))))))
+
+================================================================================
+offside: a deeper next line continues the statement
+================================================================================
+
+x = foo
+    + 1
+y = 2
+
+--------------------------------------------------------------------------------
+
+(program
+  (assign
+    target: (id)
+    value: (add
+      left: (id)
+      right: (exp_int (int))))
+  (assign
+    target: (id)
+    value: (exp_int (int))))
+
+================================================================================
+offside: a next line at the statement's column is a new statement, so a minus there is unary
+================================================================================
+
+foo
+-1
+
+--------------------------------------------------------------------------------
+
+(program
+  (expr (id))
+  (expr (neg operand: (exp_int (int)))))
+
+================================================================================
+blank lines and comment lines neither end nor continue a block
+================================================================================
+
+if x:
+    pass
+
+    # a comment at the block's column
+  # a comment at some other column
+    pass
+y = 1
+
+--------------------------------------------------------------------------------
+
+(program
+  (if
+    condition: (id)
+    consequence: (block
+      (pass)
+      (comment)
+      (comment)
+      (pass)))
+  (assign
+    target: (id)
+    value: (exp_int (int))))
+
+================================================================================
+a trailing comment is an extra before the line break that ends the statement
+================================================================================
+
+x = 1  # one
+if x:  # opener
+    pass
+
+--------------------------------------------------------------------------------
+
+(program
+  (assign
+    target: (id)
+    value: (exp_int (int))
+    (comment))
+  (if
+    condition: (id)
+    (comment)
+    consequence: (block
+      (pass))))
+
+================================================================================
+def: parameters, a body, a return; a call with arguments
+================================================================================
+
+def add(a, b):
+    return a + b
+add(1, 2)
+
+--------------------------------------------------------------------------------
+
+(program
+  (def
+    name: (id)
+    parameters: (param name: (id))
+    parameters: (param name: (id))
+    body: (block
+      (return
+        value: (add
+          left: (id)
+          right: (id)))))
+  (expr
+    (call
+      function: (id)
+      arguments: (exp_int (int))
+      arguments: (exp_int (int)))))
+
+================================================================================
+WIDENING (tree-sitter): inside brackets a line break is layout at any column, as in Python; the offside constraint rejects the `2`
+================================================================================
+
+x = (1 +
+2)
+y = 3
+
+--------------------------------------------------------------------------------
+
+(program
+  (assign
+    target: (id)
+    value: (exp_bracket
+      (add
+        left: (exp_int (int))
+        right: (exp_int (int)))))
+  (assign
+    target: (id)
+    value: (exp_int (int))))
+
+================================================================================
+a dedent to a column no open block has is an error
+:error
+================================================================================
+
+if a:
+    if b:
+        pass
+  c = 1
+
+--------------------------------------------------------------------------------
+
+================================================================================
+else off its if's column is an error
+:error
+================================================================================
+
+if a:
+    pass
+  else:
+    pass
+
+--------------------------------------------------------------------------------
+
+================================================================================
+a block opener with nothing indented after it is an error
+:error
+================================================================================
+
+if a:
+pass
+
+--------------------------------------------------------------------------------

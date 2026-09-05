@@ -64,7 +64,87 @@ pub fn emit(
         module.name
     ));
 
-    if !plan.is_empty() {
+    let mut members: Vec<String> = Vec::new();
+    if let Some(ind) = &plan.indent {
+        out.push_str("// H_ tokens are hidden in the tree, as tree-sitter's `_` externals are.\n\n");
+        let openers: Vec<String> = ind.openers.iter().map(|l| literal(l)).collect();
+        let comment_open = plan.comment_open.map(|c| c as u32).unwrap_or(0);
+        members.push(format!(
+            r#"# Indentation, from the module's indent/align-list constraints: the
+# indent stack tree-sitter's generated scanner keeps, without validity.
+# The lexer cannot ask the parser whether a block may open here, so a
+# deeper line opens one only after an opener literal, and continues
+# the statement otherwise.
+_OPENERS = ({openers},)
+_COMMENT_OPEN = {comment_open}
+def _ind(self):
+    if not hasattr(self, '_stack'):
+        self._stack = [0]
+        self._queue = []
+        self._last = None
+    return self._stack
+def _make(self, ttype):
+    return self._factory.create(self._tokenFactorySourcePair, ttype, '',
+        Token.DEFAULT_CHANNEL, self._input.index, self._input.index - 1,
+        self.line, self.column)
+def nextToken(self):
+    stack = self._ind()
+    if self._queue:
+        return self._queue.pop(0)
+    t = super().nextToken()
+    if t.type == Token.EOF:
+        if self._last is not None and self._last.type not in (self.H_NEWLINE, self.H_DEDENT):
+            self._queue.append(self._make(self.H_NEWLINE))
+        while len(stack) > 1:
+            stack.pop()
+            self._queue.append(self._make(self.H_DEDENT))
+        if self._queue:
+            self._queue.append(t)
+            return self._queue.pop(0)
+        return t
+    if t.channel == Token.DEFAULT_CHANNEL:
+        self._last = t
+    return t
+def on_newline(self):
+    stack = self._ind()
+    if self._last is None:
+        self.skip()  # a break before the first token
+        return
+    nxt = self._input.LA(1)
+    if nxt in (10, 13) or (self._COMMENT_OPEN and nxt == self._COMMENT_OPEN):
+        self.skip()  # a blank or comment line: the next break decides
+        return
+    col = 0 if nxt == -1 else len(self.text.lstrip('\r\n'))
+    top = stack[-1]
+    if col > top:
+        if self._last.text in self._OPENERS:
+            stack.append(col)
+            self._type = self.H_INDENT
+            return
+        self.skip()  # a continuation line: the offside rule
+        return
+    self._type = self.H_NEWLINE
+    while col < stack[-1]:
+        stack.pop()
+        self._queue.append(self._make(self.H_DEDENT))
+    if col != stack[-1]:
+        # a dedent to a column no open block has: a token no rule accepts
+        self._queue.append(self._make(Token.INVALID_TYPE))"#,
+            openers = openers.join(", "),
+        ));
+        findings.push(Finding {
+            kind: Kind::Mapped,
+            what: "indent/align-list/align/offside became `H_NEWLINE`, `H_INDENT` and `H_DEDENT` from an indent stack in the lexer, as CPython's tokenizer keeps one; the parser rules are shaped exactly as the tree-sitter lowering's".into(),
+        });
+        findings.push(Finding {
+            kind: Kind::Deviation,
+            what: format!(
+                "the lexer cannot ask the parser whether `_indent` is valid, so a deeper line opens a block only after one of [{}] (the literals before an indented symbol) and continues the statement otherwise; tree-sitter's scanner decides the same question by validity",
+                ind.openers.iter().map(|l| format!("{l:?}")).collect::<Vec<_>>().join(", ")
+            ),
+        });
+    }
+    if !plan.variants.is_empty() {
         let mut chars: Vec<String> = plan
             .layout_chars
             .iter()
@@ -73,8 +153,8 @@ pub fn emit(
         chars.sort();
         chars.dedup();
         let layout = chars.join(", ");
-        out.push_str(&format!(
-            "@lexer::members {{\ndef gap_before(self):\n    return self._input.LA(-1) in (-1, 10, 13, {layout})\ndef gap_after(self):\n    return self._input.LA(1) in (-1, 10, 13, {layout})\n}}\n\n"
+        members.push(format!(
+            "def gap_before(self):\n    return self._input.LA(-1) in (-1, 10, 13, {layout})\ndef gap_after(self):\n    return self._input.LA(1) in (-1, 10, 13, {layout})"
         ));
         findings.push(Finding {
             kind: Kind::Mapped,
@@ -88,6 +168,10 @@ pub fn emit(
             kind: Kind::Widening,
             what: "without validity, an unconstrained occurrence takes only the default variant and a constrained one only its own: `(a+b) -1` has no token that subtraction accepts, `z=-1` has no token that negation accepts, and both are rejected where SDF3 accepts them; `y = - 1` is rejected as SDF3 rejects it, where tree-sitter's scanner widened".into(),
         });
+    }
+
+    if !members.is_empty() {
+        out.push_str(&format!("@lexer::members {{\n{}\n}}\n\n", members.join("\n")));
     }
 
     // Parser rules, start symbol first.
@@ -108,7 +192,7 @@ pub fn emit(
 
     let mut inj = 0usize;
     for sort in order {
-        let rule = rule_name(sort);
+        let rule = rule_for(names, sort);
         let mut alts = cf[sort].clone();
         // prefer first, avoid last, then priority (highest first), then source.
         alts.sort_by_key(|(pi, p)| {
@@ -211,12 +295,27 @@ pub fn emit(
         lexical.entry(&p.sort).or_default().push(p);
     }
     let mut layout_n = 0;
+    if plan.indent.is_some() {
+        // Before WS, so a line break is never whitespace: the action
+        // decides what it is.
+        out.push_str("H_NEWLINE : ( '\\r'? '\\n' | '\\r' ) [ \\t]* { self.on_newline() } ;\n");
+        // Lexer rules rather than `tokens {}`: the Python target's lexer
+        // exposes no constant for a declared token, and the action needs
+        // the types. No source holds these control characters.
+        out.push_str("H_INDENT : '\\u0001' ;\nH_DEDENT : '\\u0002' ;\n");
+    }
     for (sort, prods) in &lexical {
         if *sort == "LAYOUT" {
             for p in prods {
                 layout_n += 1;
-                let body = lexical_body(p, &lexical)?;
                 let is_class = matches!(&p.rhs, Rhs::Symbols(s) if s.len() == 1 && matches!(s[0], Symbol::CharClass(_)));
+                let body = match &p.rhs {
+                    Rhs::Symbols(s) if is_class && plan.indent.is_some() => {
+                        let Symbol::CharClass(c) = &s[0] else { unreachable!() };
+                        class(&without(c, &['\n', '\r']))
+                    }
+                    _ => lexical_body(p, &lexical)?,
+                };
                 let name = if is_class {
                     format!("WS{layout_n}")
                 } else {
@@ -289,6 +388,14 @@ fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> R
             None => literal(l),
         }
     };
+    // An indented occurrence is `H_INDENT .. H_DEDENT`, as the tree-sitter
+    // lowering wraps it.
+    let wrap = |pos: usize, text: String| -> String {
+        match &plan.indent {
+            Some(ind) if ind.blocks.contains(&(pi, pos)) => format!("H_INDENT {text} H_DEDENT"),
+            _ => text,
+        }
+    };
     match &p.rhs {
         Rhs::Template(tp) => {
             for part in tp {
@@ -300,7 +407,8 @@ fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> R
                     }
                     TemplatePart::Placeholder { label, symbol } => {
                         pos += 1;
-                        parts.push(symbol_text(symbol, label.as_deref(), names, plan)?);
+                        let t = symbol_text(symbol, label.as_deref(), names, plan)?;
+                        parts.push(wrap(pos, t));
                     }
                 }
             }
@@ -310,10 +418,16 @@ fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> R
                 pos += 1;
                 parts.push(match s {
                     Symbol::Lit(l) => lit_at(pos, l),
-                    other => symbol_text(other, None, names, plan)?,
+                    other => {
+                        let t = symbol_text(other, None, names, plan)?;
+                        wrap(pos, t)
+                    }
                 });
             }
         }
+    }
+    if plan.indent.as_ref().is_some_and(|ind| ind.terminated.contains(&pi)) {
+        parts.push("H_NEWLINE".into());
     }
     Ok(parts.join(" "))
 }
@@ -336,7 +450,7 @@ fn symbol_text(
     // ANTLR refuses an element label spelled like a rule; suffix it, and the
     // driver strips the suffix when it prints the field.
     let owned: Option<String> = label.map(|l| {
-        if names.sort_rule.keys().any(|sort| rule_name(sort) == l) {
+        if names.sort_rule.keys().any(|sort| rule_for(names, sort) == l) {
             format!("{l}_")
         } else {
             l.to_string()
@@ -352,7 +466,7 @@ fn symbol_text(
             let r = if names.lexical.contains(name) || plan.lexical_owned.contains_key(name) {
                 token_name(name)
             } else {
-                rule_name(name)
+                rule_for(names, name)
             };
             lab("=", r)
         }
@@ -447,6 +561,35 @@ fn lexical_symbol(s: &Symbol, lexical: &BTreeMap<&str, Vec<&Production>>) -> Res
     })
 }
 
+/// The class minus the given characters, for a whitespace rule that must
+/// leave line breaks to the indentation rule.
+fn without(c: &CharClass, drop: &[char]) -> CharClass {
+    let mut ranges = Vec::new();
+    for &(a, b) in &c.ranges {
+        let mut start = a;
+        let mut ch = a;
+        loop {
+            if drop.contains(&ch) {
+                if start < ch {
+                    ranges.push((start, char::from_u32(ch as u32 - 1).unwrap_or(start)));
+                }
+                start = char::from_u32(ch as u32 + 1).unwrap_or(ch);
+            }
+            if ch >= b {
+                break;
+            }
+            ch = char::from_u32(ch as u32 + 1).unwrap_or(b);
+        }
+        if start <= b && !drop.contains(&b) {
+            ranges.push((start, b));
+        }
+    }
+    CharClass {
+        negated: c.negated,
+        ranges,
+    }
+}
+
 fn class(c: &CharClass) -> String {
     let mut s = String::new();
     if c.negated {
@@ -491,6 +634,17 @@ fn literal(l: &str) -> String {
 
 pub fn rule_name(sort: &str) -> String {
     crate::lower::snake(sort)
+}
+
+/// The parser rule for a sort: the tree-sitter rule name without its
+/// hidden-marker underscore, so a single-constructor sort is named for its
+/// constructor there and here alike (`Else.ElseClause` is `else_clause`).
+fn rule_for(names: &Names, sort: &str) -> String {
+    names
+        .sort_rule
+        .get(sort)
+        .map(|r| r.trim_start_matches('_').to_string())
+        .unwrap_or_else(|| rule_name(sort))
 }
 
 pub fn token_name(sort: &str) -> String {

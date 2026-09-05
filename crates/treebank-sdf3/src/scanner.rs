@@ -93,16 +93,57 @@ pub struct Plan {
     pub variants: Vec<Variant>,
     /// Characters LAYOUT skips; the scanner skips the same ones.
     pub layout_chars: Vec<char>,
+    /// The character that opens a line comment in LAYOUT, if one does; the
+    /// indentation scanner looks past comment lines.
+    pub comment_open: Option<char>,
+    /// Block structure by column, when the module's declarative layout
+    /// constraints ask for it.
+    pub indent: Option<IndentPlan>,
+}
+
+/// What `indent`, `align-list`, `align` and `offside` lower to: three
+/// external tokens (`_newline`, `_indent`, `_dedent`) emitted by a scanner
+/// that keeps a stack of open block columns -- CPython's tokenizer and
+/// tree-sitter-python's scanner, derived from the constraints instead of
+/// written.
+///
+/// - `indent a b` wraps the occurrence at `b` as `_indent b _dedent`.
+/// - `align-list n` makes the element sort line-aligned: every production
+///   of it ends with `_newline` unless it already ends in an indented
+///   block, whose `_dedent` closes it. The scanner emits `_newline` at a
+///   line break whose next line starts at or left of the open column,
+///   `_indent` when the next line is deeper and the parser can open a
+///   block, nothing (a continuation) when it is deeper and cannot -- which
+///   is the `offside` rule -- and `_dedent`, zero-width, for each open
+///   column the next line has left.
+/// - `align a b` after an indented block holds by construction: the
+///   scanner refuses a dedent to a column no open block has.
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
+pub struct IndentPlan {
+    /// (production index, symbol position) wrapped in `_indent .. _dedent`.
+    pub blocks: BTreeSet<(usize, usize)>,
+    /// Production indices that end with `_newline`.
+    pub terminated: BTreeSet<usize>,
+    /// Literals that immediately precede an indented occurrence. A backend
+    /// whose lexer cannot ask the parser whether a block may open decides
+    /// by these instead.
+    pub openers: BTreeSet<String>,
+    /// Sorts whose elements are line-aligned.
+    pub aligned: BTreeSet<String>,
 }
 
 impl Plan {
     pub fn is_empty(&self) -> bool {
-        self.variants.is_empty()
+        self.variants.is_empty() && self.indent.is_none()
     }
 
     /// External names in declaration order, sentinel last.
     pub fn externals(&self) -> Vec<String> {
-        let mut v: Vec<String> = self.variants.iter().map(|v| v.name.clone()).collect();
+        let mut v: Vec<String> = Vec::new();
+        if self.indent.is_some() {
+            v.extend(["_newline", "_indent", "_dedent"].map(String::from));
+        }
+        v.extend(self.variants.iter().map(|v| v.name.clone()));
         v.push("_error_sentinel".into());
         v
     }
@@ -131,10 +172,16 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
         m
     };
     let mut cons = Constraints::default();
+    let mut indent = IndentPlan::default();
+    let mut offside: BTreeSet<usize> = BTreeSet::new();
 
     for (pi, p) in prods.iter().enumerate() {
         let symbols = p.symbols();
         for c in p.layout_constraints() {
+            if let LayoutConstraint::Decl(d) = c {
+                plan_decl(p, pi, d, &symbols, &mut indent, &mut offside, &mut findings)?;
+                continue;
+            }
             let Some((a, adjacent)) = classify(c) else {
                 findings.push(Finding {
                     kind: Kind::Unsupported,
@@ -216,6 +263,19 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
         }
     }
 
+    let mut plan = Plan::default();
+    for p in lexical.get("LAYOUT").into_iter().flatten() {
+        if let Rhs::Symbols(s) = &p.rhs {
+            if let [Symbol::Lit(open), ..] = s.as_slice() {
+                plan.comment_open = single(open);
+            }
+        }
+    }
+    if !indent.blocks.is_empty() || !indent.aligned.is_empty() {
+        finish_indent(&prods, &mut indent, &offside, &mut findings);
+        plan.indent = Some(indent);
+    }
+
     // Which spellings are split: every literal with a constrained occurrence.
     let mut split: BTreeMap<String, Vec<Occurrence>> = BTreeMap::new();
     for (&(pi, pos), &conds) in &cons.on {
@@ -227,7 +287,6 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
             .or_default()
             .push(((pi, pos), conds));
     }
-    let mut plan = Plan::default();
     for (spelling, constrained) in &split {
         if spelling.chars().count() != 1 {
             findings.push(Finding {
@@ -404,7 +463,226 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
     Ok((plan, findings))
 }
 
+/// One declarative constraint into the indent plan.
+fn plan_decl(
+    p: &Production,
+    pi: usize,
+    d: &LayoutDecl,
+    symbols: &[SymRef<'_>],
+    indent: &mut IndentPlan,
+    offside: &mut BTreeSet<usize>,
+    findings: &mut Vec<Finding>,
+) -> Result<()> {
+    let at = |n: usize| -> Result<SymRef<'_>> {
+        symbols
+            .get(n.wrapping_sub(1))
+            .copied()
+            .ok_or_else(|| anyhow::anyhow!("{}: layout constraint refers to symbol {n}, which the production does not have", p.display()))
+    };
+    let shown = render(&LayoutConstraint::Decl(d.clone()));
+    match d.kind {
+        LayoutDeclKind::AlignList => {
+            let [n] = d.refs[..] else {
+                bail!("{}: align-list takes one symbol", p.display());
+            };
+            let elem = match at(n)? {
+                SymRef::Sym(Symbol::Star(e) | Symbol::Plus(e)) => e.as_ref(),
+                SymRef::Sym(Symbol::SepList { elem, .. }) => elem.as_ref(),
+                _ => {
+                    findings.push(Finding {
+                        kind: Kind::Unsupported,
+                        what: format!("{}: `{shown}` on a symbol that is not a list; ignored", p.display()),
+                    });
+                    return Ok(());
+                }
+            };
+            let Symbol::Sort(sort) = elem else {
+                findings.push(Finding {
+                    kind: Kind::Unsupported,
+                    what: format!("{}: `{shown}` on a list whose element is not a sort; ignored", p.display()),
+                });
+                return Ok(());
+            };
+            indent.aligned.insert(sort.clone());
+            findings.push(Finding {
+                kind: Kind::Mapped,
+                what: format!(
+                    "{}: `{shown}`: every {sort} in the list starts a line at the list's column, so each production of {sort} ends with `_newline` unless an indented block already ends it",
+                    p.display()
+                ),
+            });
+        }
+        LayoutDeclKind::Indent => {
+            let [a, rest @ ..] = &d.refs[..] else {
+                bail!("{}: indent takes two or more symbols", p.display());
+            };
+            at(*a)?;
+            for b in rest {
+                if matches!(at(*b)?, SymRef::Lit(_)) {
+                    findings.push(Finding {
+                        kind: Kind::Unsupported,
+                        what: format!("{}: `{shown}` indents a literal; ignored", p.display()),
+                    });
+                    continue;
+                }
+                indent.blocks.insert((pi, *b));
+                let opener = match b.checked_sub(2).and_then(|k| symbols.get(k)) {
+                    Some(SymRef::Lit(l)) => {
+                        indent.openers.insert(l.to_string());
+                        format!("after the literal {l:?}")
+                    }
+                    _ => "with no literal before it".to_string(),
+                };
+                findings.push(Finding {
+                    kind: Kind::Mapped,
+                    what: format!(
+                        "{}: `{shown}`: symbol {b} is wrapped as `_indent .. _dedent`; the scanner opens a block when the next line is deeper than the open column and the parser can accept `_indent` ({opener})",
+                        p.display()
+                    ),
+                });
+            }
+        }
+        LayoutDeclKind::Align => {
+            let [a, rest @ ..] = &d.refs[..] else {
+                bail!("{}: align takes two or more symbols", p.display());
+            };
+            at(*a)?;
+            for b in rest {
+                at(*b)?;
+                if b.checked_sub(1).is_some_and(|prev| indent.blocks.contains(&(pi, prev))) {
+                    findings.push(Finding {
+                        kind: Kind::Mapped,
+                        what: format!(
+                            "{}: `{shown}`: symbol {b} follows an indented block, so it sits at symbol {a}'s column by the indent stack; a dedent to a column no open block has is an error",
+                            p.display()
+                        ),
+                    });
+                } else {
+                    findings.push(Finding {
+                        kind: Kind::Unsupported,
+                        what: format!("{}: `{shown}` between symbols not separated by an indented block; ignored", p.display()),
+                    });
+                }
+            }
+        }
+        LayoutDeclKind::Offside => {
+            for r in &d.refs {
+                at(*r)?;
+            }
+            offside.insert(pi);
+            findings.push(Finding {
+                kind: Kind::Mapped,
+                what: format!(
+                    "{}: `{shown}`: a line break followed by a deeper line continues the statement and one at the open column ends it; the scanner decides by the next line's column",
+                    p.display()
+                ),
+            });
+        }
+        LayoutDeclKind::NewlineIndent | LayoutDeclKind::SingleLine => {
+            findings.push(Finding {
+                kind: Kind::Unsupported,
+                what: format!("{}: `{shown}` has no lowering yet; ignored", p.display()),
+            });
+        }
+    }
+    Ok(())
+}
+
+/// Decide which productions end with `_newline`, and say what the
+/// derived scanner does that the module did not ask for.
+fn finish_indent(
+    prods: &[&Production],
+    indent: &mut IndentPlan,
+    offside: &BTreeSet<usize>,
+    findings: &mut Vec<Finding>,
+) {
+    let mut widened = Vec::new();
+    for (pi, p) in prods.iter().enumerate() {
+        if !indent.aligned.contains(&p.sort) {
+            continue;
+        }
+        let mut visiting = BTreeSet::new();
+        if block_ended(prods, &indent.blocks, pi, &mut visiting) {
+            continue;
+        }
+        indent.terminated.insert(pi);
+        if !offside.contains(&pi) {
+            widened.push(p.display());
+        }
+    }
+    if !widened.is_empty() {
+        findings.push(Finding {
+            kind: Kind::Widening,
+            what: format!(
+                "the scanner applies the offside rule to every element of an aligned list, since it ends an element at a line break by the next line's column alone; [{}] declare no `offside` and get it anyway",
+                widened.join(", ")
+            ),
+        });
+    }
+    findings.push(Finding {
+        kind: Kind::Widening,
+        what: "where no `_newline` can end a statement the scanner is not consulted and a line break is layout, so inside brackets a line may continue at any column: Python's implicit line joining, which the offside rule rejects".into(),
+    });
+    findings.push(Finding {
+        kind: Kind::Deviation,
+        what: "the outermost aligned list is aligned at column 0, as in CPython, where SDF3 aligns it at its first line's column: a file indented throughout parses its second line as a continuation of its first".into(),
+    });
+    findings.push(Finding {
+        kind: Kind::Deviation,
+        what: "a tab is one column, as tree-sitter's lexer counts; CPython uses tab stops of eight".into(),
+    });
+}
+
+/// Does the production end in an indented block, so that `_dedent` already
+/// ends it? Walks optional trailing sorts back to the block.
+fn block_ended(
+    prods: &[&Production],
+    blocks: &BTreeSet<(usize, usize)>,
+    pi: usize,
+    visiting: &mut BTreeSet<usize>,
+) -> bool {
+    if !visiting.insert(pi) {
+        return false;
+    }
+    let symbols = prods[pi].symbols();
+    for k in (0..symbols.len()).rev() {
+        if blocks.contains(&(pi, k + 1)) {
+            return true;
+        }
+        match symbols[k] {
+            SymRef::Sym(Symbol::Opt(inner)) => match inner.as_ref() {
+                Symbol::Sort(s) if sort_block_ended(prods, blocks, s, visiting) => continue,
+                _ => return false,
+            },
+            SymRef::Sym(Symbol::Sort(s)) => return sort_block_ended(prods, blocks, s, visiting),
+            _ => return false,
+        }
+    }
+    false
+}
+
+fn sort_block_ended(
+    prods: &[&Production],
+    blocks: &BTreeSet<(usize, usize)>,
+    sort: &str,
+    visiting: &mut BTreeSet<usize>,
+) -> bool {
+    let mut any = false;
+    for (qi, q) in prods.iter().enumerate() {
+        if q.sort == sort {
+            any = true;
+            if !block_ended(prods, blocks, qi, &mut visiting.clone()) {
+                return false;
+            }
+        }
+    }
+    any
+}
+
 fn classify(c: &LayoutConstraint) -> Option<(usize, bool)> {
+    let LayoutConstraint::Rel(c) = c else {
+        return None;
+    };
     let adjacent = match c.op {
         LayoutOp::Eq => true,
         LayoutOp::Lt => false,
@@ -419,7 +697,22 @@ fn classify(c: &LayoutConstraint) -> Option<(usize, bool)> {
     ok.then_some((c.lhs.symbol, adjacent))
 }
 
-fn render(c: &LayoutConstraint) -> String {
+pub(crate) fn render(c: &LayoutConstraint) -> String {
+    let c = match c {
+        LayoutConstraint::Rel(r) => r,
+        LayoutConstraint::Decl(d) => {
+            let word = match d.kind {
+                LayoutDeclKind::Indent => "indent",
+                LayoutDeclKind::Align => "align",
+                LayoutDeclKind::AlignList => "align-list",
+                LayoutDeclKind::Offside => "offside",
+                LayoutDeclKind::NewlineIndent => "newline-indent",
+                LayoutDeclKind::SingleLine => "single-line",
+            };
+            let refs: Vec<String> = d.refs.iter().map(|r| r.to_string()).collect();
+            return format!("{word} {}", refs.join(" "));
+        }
+    };
     let pos = |p: &LayoutPos| {
         format!(
             "{}.{}.{}",
@@ -540,31 +833,15 @@ pub fn spelling_name(s: &str) -> String {
 pub fn c_source(plan: &Plan, language: &str) -> String {
     let mut out = String::new();
     out.push_str("// GENERATED by treebank-sdf3 from the module's layout constraints. Do not\n// edit: the lowering regenerates it. See src/scanner.rs for the rules.\n\n");
-    out.push_str("#include \"tree_sitter/parser.h\"\n#include <stdbool.h>\n\n");
+    out.push_str("#include \"tree_sitter/parser.h\"\n#include <stdbool.h>\n#include <stdlib.h>\n#include <string.h>\n\n");
     out.push_str("enum TokenType {\n");
     for name in plan.externals() {
         out.push_str(&format!("  {},\n", enum_name(&name)));
     }
     out.push_str("};\n\n");
-    out.push_str("typedef struct {\n  int32_t ch;\n  bool before_req, before_forbid, after_req, after_forbid;\n  int32_t closer;\n  enum TokenType sym;\n} Variant;\n\n");
-    out.push_str("// Most specific first; the default for a spelling is last.\nstatic const Variant VARIANTS[] = {\n");
-    for v in &plan.variants {
-        let ch = v.spelling.chars().next().unwrap_or('\0');
-        out.push_str(&format!(
-            "  {{{}, {}, {}, {}, {}, {}, {}}},\n",
-            c_char(ch),
-            v.before == Cond::Req,
-            v.before == Cond::Forbid,
-            v.after == Cond::Req,
-            v.after == Cond::Forbid,
-            v.closer.map(c_char).unwrap_or_else(|| "0".into()),
-            enum_name(&v.name)
-        ));
-    }
-    out.push_str("};\n");
-    out.push_str(
-        "static const unsigned VARIANT_COUNT = sizeof(VARIANTS) / sizeof(VARIANTS[0]);\n\n",
-    );
+    let has_variants = !plan.variants.is_empty();
+    let has_indent = plan.indent.is_some();
+
     out.push_str("static bool is_layout(int32_t c) {\n  return ");
     if plan.layout_chars.is_empty() {
         out.push_str("false");
@@ -577,21 +854,116 @@ pub fn c_source(plan: &Plan, language: &str) -> String {
         out.push_str(&parts.join(" || "));
     }
     out.push_str(";\n}\n\n");
-    out.push_str("static bool ends_token(int32_t c) {\n  return c == 0 || c == '\\n' || c == '\\r' || is_layout(c);\n}\n\n");
+    out.push_str("static bool is_break(int32_t c) {\n  return c == '\\n' || c == '\\r';\n}\n\n");
+    out.push_str(&format!(
+        "// The character that opens a line comment in LAYOUT, or 0.\nstatic const int32_t COMMENT_OPEN = {};\n\n",
+        plan.comment_open.map(c_char).unwrap_or_else(|| "0".into())
+    ));
+
+    if has_variants {
+        out.push_str("typedef struct {\n  int32_t ch;\n  bool before_req, before_forbid, after_req, after_forbid;\n  int32_t closer;\n  enum TokenType sym;\n} Variant;\n\n");
+        out.push_str("// Most specific first; the default for a spelling is last.\nstatic const Variant VARIANTS[] = {\n");
+        for v in &plan.variants {
+            let ch = v.spelling.chars().next().unwrap_or('\0');
+            out.push_str(&format!(
+                "  {{{}, {}, {}, {}, {}, {}, {}}},\n",
+                c_char(ch),
+                v.before == Cond::Req,
+                v.before == Cond::Forbid,
+                v.after == Cond::Req,
+                v.after == Cond::Forbid,
+                v.closer.map(c_char).unwrap_or_else(|| "0".into()),
+                enum_name(&v.name)
+            ));
+        }
+        out.push_str("};\n");
+        out.push_str(
+            "static const unsigned VARIANT_COUNT = sizeof(VARIANTS) / sizeof(VARIANTS[0]);\n\n",
+        );
+        out.push_str("static bool ends_token(int32_t c) {\n  return c == 0 || is_break(c) || is_layout(c);\n}\n\n");
+    }
+
     let fname = |suffix: &str| format!("tree_sitter_{language}_external_scanner_{suffix}");
-    out.push_str(&format!(
-        "void *{}(void) {{ return NULL; }}\n",
-        fname("create")
-    ));
-    out.push_str(&format!(
-        "void {}(void *payload) {{ (void)payload; }}\n",
-        fname("destroy")
-    ));
-    out.push_str(&format!(
-        "unsigned {}(void *payload, char *buffer) {{ (void)payload; (void)buffer; return 0; }}\n",
-        fname("serialize")
-    ));
-    out.push_str(&format!("void {}(void *payload, const char *buffer, unsigned length) {{ (void)payload; (void)buffer; (void)length; }}\n\n", fname("deserialize")));
+    if has_indent {
+        out.push_str(
+            r#"// The open block columns, outermost first. Column 0 is always open.
+#define MAX_DEPTH 64
+typedef struct {
+  uint16_t depth;
+  uint16_t cols[MAX_DEPTH];
+} Indent;
+
+static bool on_stack(const Indent *s, int col) {
+  for (unsigned i = 0; i < s->depth; i++) {
+    if (s->cols[i] == col) return true;
+  }
+  return false;
+}
+
+// Past a line break: the column of the next line that holds a token,
+// looking over blank lines and comment lines, or -1 at end of input. Moves
+// the lexer without marking, so the caller's token ends where it chose.
+static int next_line_column(TSLexer *lexer) {
+  for (;;) {
+    int col = 0;
+    for (;;) {
+      if (lexer->lookahead == ' ') {
+        col++;
+      } else if (lexer->lookahead == '\t') {
+        col++;
+      } else {
+        break;
+      }
+      lexer->advance(lexer, false);
+    }
+    if (lexer->lookahead == 0) return -1;
+    if (COMMENT_OPEN && lexer->lookahead == COMMENT_OPEN) {
+      while (lexer->lookahead != 0 && !is_break(lexer->lookahead)) lexer->advance(lexer, false);
+      if (lexer->lookahead == 0) return -1;
+    }
+    if (is_break(lexer->lookahead)) {
+      if (lexer->lookahead == '\r') lexer->advance(lexer, false);
+      if (lexer->lookahead == '\n') lexer->advance(lexer, false);
+      continue;
+    }
+    return col;
+  }
+}
+
+"#,
+        );
+        out.push_str(&format!(
+            "void *{}(void) {{\n  Indent *s = calloc(1, sizeof(Indent));\n  s->depth = 1;\n  return s;\n}}\n",
+            fname("create")
+        ));
+        out.push_str(&format!(
+            "void {}(void *payload) {{ free(payload); }}\n",
+            fname("destroy")
+        ));
+        out.push_str(&format!(
+            "unsigned {}(void *payload, char *buffer) {{\n  Indent *s = payload;\n  unsigned n = sizeof(uint16_t) * (1 + s->depth);\n  memcpy(buffer, s, n);\n  return n;\n}}\n",
+            fname("serialize")
+        ));
+        out.push_str(&format!(
+            "void {}(void *payload, const char *buffer, unsigned length) {{\n  Indent *s = payload;\n  s->depth = 1;\n  s->cols[0] = 0;\n  if (length >= sizeof(uint16_t)) memcpy(s, buffer, length);\n}}\n\n",
+            fname("deserialize")
+        ));
+    } else {
+        out.push_str(&format!(
+            "void *{}(void) {{ return NULL; }}\n",
+            fname("create")
+        ));
+        out.push_str(&format!(
+            "void {}(void *payload) {{ (void)payload; }}\n",
+            fname("destroy")
+        ));
+        out.push_str(&format!(
+            "unsigned {}(void *payload, char *buffer) {{ (void)payload; (void)buffer; return 0; }}\n",
+            fname("serialize")
+        ));
+        out.push_str(&format!("void {}(void *payload, const char *buffer, unsigned length) {{ (void)payload; (void)buffer; (void)length; }}\n\n", fname("deserialize")));
+    }
+
     out.push_str(&format!(
         "bool {}(void *payload, TSLexer *lexer, const bool *valid) {{\n",
         fname("scan")
@@ -599,16 +971,80 @@ pub fn c_source(plan: &Plan, language: &str) -> String {
     out.push_str(
         r#"  (void)payload;
   // During error recovery every symbol is marked valid (the sentinel is
-  // never produced, so seeing it valid is the tell). Decide by spacing then.
+  // never produced, so seeing it valid is the tell).
   bool recovery = valid[ERROR_SENTINEL];
 
   bool space_before = false;
-  while (is_layout(lexer->lookahead)) {
+  while (is_layout(lexer->lookahead) && !is_break(lexer->lookahead)) {
     lexer->advance(lexer, true);
     space_before = true;
   }
   int32_t c = lexer->lookahead;
-
+"#,
+    );
+    if has_indent {
+        out.push_str(
+            r#"
+  // Block structure by column. `_newline` is the line break that ends a
+  // statement; `_indent` is the break that opens a block, and consumes it;
+  // `_dedent` is zero-width, one per closed block, at the first token of
+  // the line that closed them. A deeper line that opens no block is a
+  // continuation and gets no token at all.
+  Indent *s = payload;
+  bool want_nl = valid[NEWLINE] || recovery;
+  bool want_in = valid[INDENT] && !recovery;
+  bool want_de = valid[DEDENT] || recovery;
+  if (want_nl || want_in || want_de) {
+    int top = s->cols[s->depth - 1];
+    bool at_break = c == 0 || is_break(c);
+    // A comment before the break is an extra the parser wants to see;
+    // come back for the break after it.
+    if (COMMENT_OPEN && c == COMMENT_OPEN && (want_nl || want_in)) return false;
+    lexer->mark_end(lexer);
+    int col;
+    if (at_break) {
+      if (c == '\r') lexer->advance(lexer, false);
+      if (lexer->lookahead == '\n') lexer->advance(lexer, false);
+      if (want_nl || want_in) lexer->mark_end(lexer);
+      col = next_line_column(lexer);
+    } else if (COMMENT_OPEN && c == COMMENT_OPEN) {
+      // A comment line while only `_dedent` is wanted: decide by the line
+      // after it, and leave the comment to the parser.
+      while (lexer->lookahead != 0 && !is_break(lexer->lookahead)) lexer->advance(lexer, false);
+      if (lexer->lookahead == '\r') lexer->advance(lexer, false);
+      if (lexer->lookahead == '\n') lexer->advance(lexer, false);
+      col = next_line_column(lexer);
+    } else {
+      col = (int)lexer->get_column(lexer);
+    }
+    if (at_break && want_in && col > top && s->depth < MAX_DEPTH) {
+      s->cols[s->depth++] = (uint16_t)col;
+      lexer->result_symbol = INDENT;
+      return true;
+    }
+    if (at_break && want_nl) {
+      if (col > top) return false;  // a continuation line: the offside rule
+      lexer->result_symbol = NEWLINE;
+      return true;
+    }
+    if (want_de && s->depth > 1 && col < top) {
+      if (col >= 0 && !on_stack(s, col)) {
+        // A dedent to a column no open block has: `else` off its `if`.
+        lexer->result_symbol = ERROR_SENTINEL;
+        return true;
+      }
+      s->depth--;
+      lexer->result_symbol = DEDENT;
+      return true;
+    }
+    if (at_break) return false;
+  }
+"#,
+        );
+    }
+    if has_variants {
+        out.push_str(
+            r#"
   unsigned n_valid = 0;
   for (unsigned i = 0; i < VARIANT_COUNT; i++) {
     if (VARIANTS[i].ch == c && (recovery || valid[VARIANTS[i].sym])) n_valid++;
@@ -645,7 +1081,10 @@ pub fn c_source(plan: &Plan, language: &str) -> String {
   return false;
 }
 "#,
-    );
+        );
+    } else {
+        out.push_str("  (void)space_before;\n  (void)c;\n  return false;\n}\n");
+    }
     out
 }
 
@@ -678,7 +1117,7 @@ mod tests {
 
     #[test]
     fn adjacency_and_separation_are_recognised() {
-        let c = LayoutConstraint {
+        let c = LayoutRel {
             lhs: LayoutPos {
                 symbol: 1,
                 end: LayoutEnd::Last,
@@ -692,13 +1131,13 @@ mod tests {
                 axis: LayoutAxis::Col,
             },
         };
-        assert_eq!(classify(&c), Some((1, true)));
-        let sep = LayoutConstraint {
+        assert_eq!(classify(&LayoutConstraint::Rel(c.clone())), Some((1, true)));
+        let sep = LayoutRel {
             op: LayoutOp::Lt,
             ..c.clone()
         };
-        assert_eq!(classify(&sep), Some((1, false)));
-        let skip = LayoutConstraint {
+        assert_eq!(classify(&LayoutConstraint::Rel(sep)), Some((1, false)));
+        let skip = LayoutRel {
             rhs: LayoutPos {
                 symbol: 3,
                 end: LayoutEnd::First,
@@ -706,6 +1145,6 @@ mod tests {
             },
             ..c
         };
-        assert_eq!(classify(&skip), None);
+        assert_eq!(classify(&LayoutConstraint::Rel(skip)), None);
     }
 }

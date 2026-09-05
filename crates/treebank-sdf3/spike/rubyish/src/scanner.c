@@ -3,6 +3,8 @@
 
 #include "tree_sitter/parser.h"
 #include <stdbool.h>
+#include <stdlib.h>
+#include <string.h>
 
 enum TokenType {
   REGEX,
@@ -17,6 +19,17 @@ enum TokenType {
   STAR,
   ERROR_SENTINEL,
 };
+
+static bool is_layout(int32_t c) {
+  return c == ' ' || c == '\t';
+}
+
+static bool is_break(int32_t c) {
+  return c == '\n' || c == '\r';
+}
+
+// The character that opens a line comment in LAYOUT, or 0.
+static const int32_t COMMENT_OPEN = '#';
 
 typedef struct {
   int32_t ch;
@@ -40,12 +53,8 @@ static const Variant VARIANTS[] = {
 };
 static const unsigned VARIANT_COUNT = sizeof(VARIANTS) / sizeof(VARIANTS[0]);
 
-static bool is_layout(int32_t c) {
-  return c == ' ' || c == '\t';
-}
-
 static bool ends_token(int32_t c) {
-  return c == 0 || c == '\n' || c == '\r' || is_layout(c);
+  return c == 0 || is_break(c) || is_layout(c);
 }
 
 void *tree_sitter_rubyish_external_scanner_create(void) { return NULL; }
@@ -56,11 +65,11 @@ void tree_sitter_rubyish_external_scanner_deserialize(void *payload, const char 
 bool tree_sitter_rubyish_external_scanner_scan(void *payload, TSLexer *lexer, const bool *valid) {
   (void)payload;
   // During error recovery every symbol is marked valid (the sentinel is
-  // never produced, so seeing it valid is the tell). Decide by spacing then.
+  // never produced, so seeing it valid is the tell).
   bool recovery = valid[ERROR_SENTINEL];
 
   bool space_before = false;
-  while (is_layout(lexer->lookahead)) {
+  while (is_layout(lexer->lookahead) && !is_break(lexer->lookahead)) {
     lexer->advance(lexer, true);
     space_before = true;
   }

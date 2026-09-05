@@ -122,7 +122,9 @@ def main(spike: Path) -> int:
             if t.type == -1:
                 return None
             name = parser.symbolicNames[t.type] if t.type < len(parser.symbolicNames) else None
-            if not name or name == "<INVALID>" or name.startswith("V_"):
+            # `V_`: a scanner-plan variant, aliased to its spelling in
+            # tree-sitter's tree; `H_`: a hidden token (`_newline`).
+            if not name or name == "<INVALID>" or name.startswith(("V_", "H_")):
                 return None
             return f"({name.lower()})"
         rule = parser.ruleNames[node.getRuleIndex()]

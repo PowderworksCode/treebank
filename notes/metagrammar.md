@@ -817,3 +817,91 @@ The corrected table rows, as measured:
 Two backends from one source, twenty-nine shared expectations, six
 divergences each with a named cause. That is what §4 meant by a backend
 declaring what it cannot do, and it was cheaper to measure than to argue.
+
+## 17. The fourth spike: indentation, and the declarative form that does exist
+
+§5 sketched `external _indent { ... because "column-driven structure; no
+declarative form covers it yet" }`, an escape hatch for the one thing the
+surface could not say. That line was wrong, and the fourth spike is the
+proof. Spoofax's layout-sensitive SDF3 (Erdweg, Rendel, Kästner and
+Ostermann's layout constraints, 2012; the declarative forms of Amorim,
+Steindorfer, Erdweg and Visser, SLE 2018) states block structure in four
+constraint kinds, and `crates/treebank-sdf3/spike/pyish/pyish.sdf3` — a
+Python subset with `if`/`else`, `while`, `def`, `return`, `global`,
+assignment and expressions — uses exactly those: `align-list 1` on each
+statement list, `indent 1 4` on the compound statements, `align 1 5` for
+`else`, and `offside 1 2 3` on the simple ones. The module contains no
+NEWLINE, INDENT or DEDENT. It says what the layout *means*.
+
+**The lowering derives the mechanism.** The reader gained the declarative
+constraints (and `&&`/`,` conjunctions, and `tokenize:`, which it had been
+recording and misfiling as "no parser effect" — `else:` is two tokens
+because of it). The planner turns the constraints into an indent plan:
+every indented occurrence is wrapped `_indent .. _dedent`; every
+production of an aligned sort ends in `_newline` unless it already ends in
+an indented block (walking optional trailing sorts back to the block, which
+is how `if .. else?` comes out right); and the literal before each indented
+symbol is recorded as a block opener for backends that will need it. The
+generated scanner keeps a column stack, serialized for incremental
+parsing, and decides at a line break by the next token-bearing line's
+column: deeper and `_indent` valid, push and open; deeper and not,
+nothing at all, so the line continues — the offside rule as a *consequence*
+of validity; at the open column, `_newline`; left of it, one zero-width
+`_dedent` per column left, and an error token when the column matches no
+open block. Comments and blank lines are looked past and left to the
+parser, so they stay extras. That is tree-sitter-python's hand-written
+scanner, derived from four attribute kinds.
+
+**Result: 13 of 13 expectations hold** — ten semantic cases (blocks, nested
+dedents, `else` alignment, offside continuation and separation, comment
+lines inside blocks, trailing comments, `def`/call) and three errors
+(dedent to no open column, `else` off its `if`, an opener with nothing
+indented). The findings say where the lowering is not SDF3, and both
+widenings land on Python's own behaviour rather than anywhere arbitrary:
+
+| finding | kind | why |
+|---|---|---|
+| the offside rule applies to every aligned element, declared or not | widening | the scanner ends an element by the next line's column alone |
+| inside brackets a line break is layout at any column | widening | no `_newline` is valid there, so the scanner is never asked: Python's implicit line joining, which `offside 1 2 3` rejects |
+| the outermost list is aligned at column 0 | deviation | SDF3 aligns it at its first line's column; CPython does this |
+| a tab is one column | deviation | tree-sitter's column count; CPython uses tab stops of eight |
+
+One bug in the earlier spikes surfaced on the way: a single-constructor
+sort collapsed to a rule named for the *sort*, so `Else.ElseClause` became
+`else` and collided with the keyword. SDF3's AST node is the constructor;
+it is `else_clause` now, on both backends.
+
+**ANTLR: 10 of 13**, and the shape of the misses is the capability table
+again. The emitter gives the lexer the same indent stack (a token queue
+behind `nextToken`, as CPython's tokenizer and the grammars-v4 Python
+grammar do) and the parser rules are wrapped and terminated exactly as
+tree-sitter's. What the lexer lacks is `valid_symbols`: it cannot ask
+whether a block may open here. So the emitter derives the **opener
+literals** from the grammar — the literal immediately before each indented
+symbol, `:` in pyish — and a deeper line opens a block only after one of
+them, continuing the statement otherwise. Two misses are the hidden-channel
+comments, as before. The third is the bracket case: ANTLR's lexer emits the
+newline inside the parentheses and the parser rejects, which is what
+`offside 1 2 3` says and what tree-sitter's lowering widened past. The
+second time the backends disagree and the one without validity is the one
+that agrees with the source. (One target quirk, recorded in the emitter:
+ANTLR's Python lexer exposes no constant for a `tokens {}` declaration, so
+`H_INDENT` and `H_DEDENT` are lexer rules on control characters no source
+holds.)
+
+The table row this adds:
+
+| intent | tree-sitter | ANTLR |
+|---|---|---|
+| `lexical` (block structure by column) | generated stateful scanner, stack serialized; block-or-continuation by validity | lexer indent stack with a token queue; block-or-continuation by derived opener literals |
+
+**What it changes in the design.** §5's `external _indent` block, with its
+`state indent_stack: u16[32]` and its `because`, was the design admitting a
+hole. The hole is filled from above: the four constraints are the source,
+the `external` is generated output (`uint16_t cols[64]` in the scanner,
+`_stack = [0]` in the lexer), and the reference recognizer of §4 can
+implement the constraints directly, since they are constraints on columns
+and nothing else. The bootstrap order of §8 — hardest first — now has
+four data points instead of a sketch: lexer state (rubyish), carry
+(cppish), composition (cppish), column structure (pyish), each lowered
+from the same reader to two backends.

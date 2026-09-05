@@ -25,7 +25,10 @@ type R<T> = ModalResult<T, ContextError>;
 pub fn parse_module(text: &str) -> anyhow::Result<Module> {
     let mut input = text;
     match module.parse_next(&mut input) {
-        Ok(m) => Ok(m),
+        Ok(mut m) => {
+            apply_tokenize(&mut m);
+            Ok(m)
+        }
         Err(e) => {
             let consumed = text.len() - input.len();
             let line = text[..consumed].matches('\n').count() + 1;
@@ -37,6 +40,57 @@ pub fn parse_module(text: &str) -> anyhow::Result<Module> {
 }
 
 // ── trivia ──────────────────────────────────────────────────────────
+
+/// `tokenize: "():,"`: a template literal run is split at each listed
+/// character, so `else:` is the two tokens `else` and `:`. SDF3 applies the
+/// option module-wide, and options usually come last, so this is a pass
+/// over the read module rather than part of the template reader.
+fn apply_tokenize(m: &mut Module) {
+    let chars: Vec<char> = m
+        .template_options()
+        .filter_map(|o| match o {
+            TemplateOption::Tokenize(s) => Some(s.chars().collect::<Vec<_>>()),
+            _ => None,
+        })
+        .flatten()
+        .collect();
+    if chars.is_empty() {
+        return;
+    }
+    for section in &mut m.sections {
+        let Section::ContextFreeSyntax(prods) = section else {
+            continue;
+        };
+        for p in prods {
+            let Rhs::Template(parts) = &mut p.rhs else {
+                continue;
+            };
+            let mut split = Vec::with_capacity(parts.len());
+            for part in parts.drain(..) {
+                match part {
+                    TemplatePart::Lit(l) if l.chars().any(|c| chars.contains(&c)) => {
+                        let mut run = String::new();
+                        for c in l.chars() {
+                            if chars.contains(&c) {
+                                if !run.is_empty() {
+                                    split.push(TemplatePart::Lit(std::mem::take(&mut run)));
+                                }
+                                split.push(TemplatePart::Lit(c.to_string()));
+                            } else {
+                                run.push(c);
+                            }
+                        }
+                        if !run.is_empty() {
+                            split.push(TemplatePart::Lit(run));
+                        }
+                    }
+                    other => split.push(other),
+                }
+            }
+            *parts = split;
+        }
+    }
+}
 
 fn ws(i: &mut In) -> R<()> {
     repeat::<_, _, (), _, _>(
@@ -303,17 +357,18 @@ fn flush(parts: &mut Vec<TemplatePart>, buf: &mut String, is_lit: bool) {
 
 // ── productions ─────────────────────────────────────────────────────
 
-fn attr(i: &mut In) -> R<Attr> {
+/// One attribute; `layout(a, b)` is several.
+fn attr(i: &mut In) -> R<Vec<Attr>> {
     let name: String = take_while(1.., |c: char| {
         c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.'
     })
     .map(str::to_string)
     .parse_next(i)?;
     if name == "layout" {
-        let c = delimited((ws, '(', ws), layout_constraint, (ws, ')')).parse_next(i)?;
-        return Ok(Attr::Layout(c));
+        let cs = delimited((ws, '(', ws), layout_constraints, (ws, ')')).parse_next(i)?;
+        return Ok(cs.into_iter().map(Attr::Layout).collect());
     }
-    Ok(match name.as_str() {
+    Ok(vec![match name.as_str() {
         "left" => Attr::Left,
         "right" => Attr::Right,
         "non-assoc" => Attr::NonAssoc,
@@ -323,7 +378,7 @@ fn attr(i: &mut In) -> R<Attr> {
         "prefer" => Attr::Prefer,
         "avoid" => Attr::Avoid,
         _ => Attr::Other(name),
-    })
+    }])
 }
 
 /// `1.last.col`: a symbol position, an end, an axis.
@@ -340,8 +395,36 @@ fn layout_pos(i: &mut In) -> R<LayoutPos> {
     Ok(LayoutPos { symbol, end, axis })
 }
 
-/// `1.last.col + 1 == 2.first.col`.
+/// The constraints of one `layout(...)`, joined by `,` or `&&`.
+fn layout_constraints(i: &mut In) -> R<Vec<LayoutConstraint>> {
+    separated(1.., lex(layout_constraint), lex(alt(("&&", ",")))).parse_next(i)
+}
+
 fn layout_constraint(i: &mut In) -> R<LayoutConstraint> {
+    alt((
+        layout_decl.map(LayoutConstraint::Decl),
+        layout_rel.map(LayoutConstraint::Rel),
+    ))
+    .parse_next(i)
+}
+
+/// `indent 1 4`, `align-list 1`: a declarative constraint and its positions.
+fn layout_decl(i: &mut In) -> R<LayoutDecl> {
+    let kind = alt((
+        "align-list".value(LayoutDeclKind::AlignList),
+        "align".value(LayoutDeclKind::Align),
+        "indent".value(LayoutDeclKind::Indent),
+        "offside".value(LayoutDeclKind::Offside),
+        "newline-indent".value(LayoutDeclKind::NewlineIndent),
+        "single-line".value(LayoutDeclKind::SingleLine),
+    ))
+    .parse_next(i)?;
+    let refs: Vec<usize> = repeat(1.., preceded(multispace1, dec_uint::<_, usize, _>)).parse_next(i)?;
+    Ok(LayoutDecl { kind, refs })
+}
+
+/// `1.last.col + 1 == 2.first.col`.
+fn layout_rel(i: &mut In) -> R<LayoutRel> {
     let lhs = lex(layout_pos).parse_next(i)?;
     let offset: Option<usize> = opt(preceded(sym("+"), lex(dec_uint))).parse_next(i)?;
     let op = lex(alt((
@@ -351,7 +434,7 @@ fn layout_constraint(i: &mut In) -> R<LayoutConstraint> {
     )))
     .parse_next(i)?;
     let rhs = layout_pos.parse_next(i)?;
-    Ok(LayoutConstraint {
+    Ok(LayoutRel {
         lhs,
         offset: offset.unwrap_or(0) as i32,
         op,
@@ -360,7 +443,8 @@ fn layout_constraint(i: &mut In) -> R<LayoutConstraint> {
 }
 
 fn attr_list(i: &mut In) -> R<Vec<Attr>> {
-    separated(0.., lex(attr), sym(",")).parse_next(i)
+    let groups: Vec<Vec<Attr>> = separated(0.., lex(attr), sym(",")).parse_next(i)?;
+    Ok(groups.into_iter().flatten().collect())
 }
 
 fn attrs(i: &mut In) -> R<Vec<Attr>> {
@@ -449,7 +533,10 @@ fn priority_group(i: &mut In) -> R<PriorityGroup> {
             (opt(terminated(lex(attr), sym(":"))), prod_refs),
             sym("}"),
         )
-        .map(|(assoc, members)| PriorityGroup { assoc, members }),
+        .map(|(assoc, members): (Option<Vec<Attr>>, Vec<String>)| PriorityGroup {
+            assoc: assoc.and_then(|mut a| a.pop()),
+            members,
+        }),
         lex(prod_ref).map(|m| PriorityGroup {
             assoc: None,
             members: vec![m],

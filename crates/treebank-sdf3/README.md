@@ -37,6 +37,7 @@ cargo test -p treebank-sdf3
 crates/treebank-sdf3/spike/mini/verify.sh
 crates/treebank-sdf3/spike/rubyish/verify.sh
 crates/treebank-sdf3/spike/cppish/verify.sh   # also asks generate for the carry's conflicts
+crates/treebank-sdf3/spike/pyish/verify.sh    # regenerates the indent-stack scanner
 ```
 
 ## What it found
@@ -105,6 +106,39 @@ because after `=` no declaration is possible). `vector<vector<int>> v;`
 parses with `>>` a single token in the grammar, because tree-sitter's lexer
 only offers the tokens the state accepts.
 
+## The fourth language: structure by column
+
+`spike/pyish/` is the one the design note's §5 said had no declarative form
+yet: blocks by indentation. It does have one. Spoofax's layout-sensitive
+SDF3 states it in four constraint kinds, and `pyish.sdf3` uses them and
+nothing else: `align-list 1` on a statement list (every element starts a
+line at one column), `indent 1 4` on `Stmt.If` (the block is deeper than
+the `if`), `align 1 5` (`else` sits at the `if`'s column), and `offside 1 2
+3` on a simple statement (a deeper next line continues it). No NEWLINE, no
+INDENT, no DEDENT: the module says what the layout means and the lowering
+derives the mechanism. `src/scanner.rs` turns the constraints into an
+**indent-stack scanner** (160 lines of generated C, with the stack
+serialized so incremental parsing works): a wrapped `_indent .. _dedent`
+around every indented occurrence, a `_newline` terminator on every
+production of an aligned sort that does not already end in a block, and a
+scanner that emits `_indent` when the next line is deeper and the parser
+can open a block, nothing when it is deeper and cannot (the offside rule),
+`_newline` at the open column, and one zero-width `_dedent` per column the
+next line has left, refusing a column no open block has. That is the shape
+of tree-sitter-python's hand-written scanner, derived.
+
+Thirteen expectations from the SDF3 semantics, three of them errors;
+thirteen hold. The findings name two places tree-sitter widens SDF3 and
+lands on Python's own behaviour: the offside rule applies to every aligned
+element whether or not its production declared it, and inside brackets a
+line break is layout at any column (Python's implicit line joining, which
+`offside` rejects). Under ANTLR the same module gives 10 of 13: the lexer
+keeps the same stack but cannot ask the parser whether a block may open, so
+the emitter derives the **opener literals** (the literal before each
+indented symbol, `:` here) and a deeper line opens a block only after one.
+The bracket case is the miss worth having: ANTLR rejects it, as SDF3 does,
+and tree-sitter accepted it.
+
 ## The second backend: ANTLR
 
 `src/antlr.rs` lowers the same modules to ANTLR4 grammars (`<Name>.g4`,
@@ -138,6 +172,6 @@ python3 crates/treebank-sdf3/tools/antlr_check.py crates/treebank-sdf3/spike/rub
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's
 root, because a `grammar.js` under `crates/treebank-*/` is the repository's
 definition of a shipped grammar (`tools/wasm-pack/list-grammars.sh`,
-`treebank status`, the site build). The generated parser lives under
-`spike/mini/`, `spike/rubyish/` and `spike/cppish/`, and nothing gates on
-them but their `verify.sh` scripts.
+`treebank status`, the site build). The generated parsers live under
+`spike/mini/`, `spike/rubyish/`, `spike/cppish/` and `spike/pyish/`, and
+nothing gates on them but their `verify.sh` scripts.

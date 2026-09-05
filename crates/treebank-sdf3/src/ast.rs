@@ -158,15 +158,52 @@ pub enum Attr {
     Other(String),
 }
 
-/// `{layout(1.last.col + 1 == 2.first.col)}`: a relation between two
-/// symbol positions of the production.
+/// One constraint of a `{layout(...)}` attribute. SDF3 has two forms: the
+/// explicit relation between two positions, and the declarative
+/// constraints of Spoofax's layout-sensitive SDF3 (Amorim et al., SLE
+/// 2018), which name the common shapes. A `layout(a, b)` or
+/// `layout(a && b)` attribute reads as one `Attr::Layout` per constraint.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct LayoutConstraint {
+pub enum LayoutConstraint {
+    Rel(LayoutRel),
+    Decl(LayoutDecl),
+}
+
+/// `1.last.col + 1 == 2.first.col`: a relation between two symbol
+/// positions of the production.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutRel {
     pub lhs: LayoutPos,
     /// Added to the left-hand side: the `+ 1` in `1.last.col + 1`.
     pub offset: i32,
     pub op: LayoutOp,
     pub rhs: LayoutPos,
+}
+
+/// `indent 1 4`, `align 1 5`, `align-list 1`, `offside 1`: a declarative
+/// constraint over symbol positions.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LayoutDecl {
+    pub kind: LayoutDeclKind,
+    /// 1-based symbol positions, in the order written.
+    pub refs: Vec<usize>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LayoutDeclKind {
+    /// `indent a b..`: each of b.. starts at a column greater than a's.
+    Indent,
+    /// `align a b..`: each of b.. starts at a's column.
+    Align,
+    /// `align-list a`: every element of the list at a starts at one column.
+    AlignList,
+    /// `offside a` (`offside a b..`): every token of a (of b..) after the
+    /// first is at a column greater than a's first column.
+    Offside,
+    /// `newline-indent a b`: b starts on a later line, indented past a.
+    NewlineIndent,
+    /// `single-line a b..`: all on one line.
+    SingleLine,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
