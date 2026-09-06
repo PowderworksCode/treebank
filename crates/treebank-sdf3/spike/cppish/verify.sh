@@ -37,3 +37,7 @@ case "$peak" in
   version_count:1) ;;
   *) echo "the assignment forked, but no declaration is possible there" >&2; exit 1 ;;
 esac
+
+# The third backend, held to the same corpus, and the three compared.
+python3 "$HERE/../../tools/winnow_check.py" "$HERE"
+python3 "$HERE/../../tools/confer.py" "$HERE"

@@ -1382,3 +1382,96 @@ them, since the checker holds every supertype to the table tier and `_dir`
 inside `_modifier` was one that was not. And a facet-only term's
 multi-constructor sort (`Upsert` under `_clause`) leaves the supertypes
 list, for the same rule; it remains a hidden rule and the tree is unchanged.
+
+## 23. The third backend: winnow, scannerless, and whether the three confer
+
+Two backends measured each other; a third measures the pair. `src/winnow.rs`
+lowers the same modules to a parser written with winnow, emitted as a
+Rust crate beside each spike and each target (`winnow/src/main.rs`), and
+`tools/winnow_check.py` holds it to the same corpus files the other two are
+held to. `tools/confer.py` then puts the three verdicts side by side per
+case, and `tools/targets_check.py` gained a winnow column: for every cell
+of the SQL and editions matrices, the target's winnow parser is run beside
+its tree-sitter parser and the two must agree on the verdict and, where
+they accept, on the tree.
+
+**The lowering is scannerless, because SDF3 is.** tree-sitter and ANTLR both
+lex first and parse second, and every capability difference §16 measured
+came from that split: the lexer cannot ask the parser what is valid, `>>`
+is one token, a spacing decision needs a scanner or a variant. SDF3 states
+its semantics over characters with `LAYOUT?` between context-free symbols,
+and winnow lets a parser be written that way directly. A lexical sort is a
+parser over characters (`one_of`, `none_of`, `literal`, `repeat`, `alt`),
+its `-/-` restriction is `not(one_of(..))` after it, and its `{reject}` is
+a comparison on the matched text. A literal is matched where the grammar
+puts it, with the keyword follow restriction as a lookahead. LAYOUT is
+skipped before every symbol, and a LAYOUT production that is not a
+character class is recorded as the extra the tree-sitter lowering named.
+A sort is a function trying its productions; a production whose first
+symbol is its own sort is an operator in a precedence-climbing loop driven
+by the levels the tree-sitter lowering assigned (`Add` tries its tail at
+level 2, its right operand parses at level 3), one whose last symbol is its
+own sort is a prefix operator parsing its operand at its own level, and
+the rest are primaries. Node names come from the same `Names` the ANTLR
+backend uses, so one corpus serves all three; the bracket deviation and the
+`_inj` elision are reproduced deliberately.
+
+**Two things a PEG needed.** Ordered choice let `Exp = ID` shadow
+`Exp.Call = ID(..)`, so the primary position takes the longest match among
+the alternatives, ties to `{prefer}` and source order; the operator loop is
+ordered by level. And winnow's checkpoint does not restore the parser's
+own bookkeeping, so the last token end is saved and restored with it.
+
+**Layout constraints are checked in place.** The parser has the positions,
+so a relational constraint is a comparison after the later of its two
+symbols, `indent` and `align` compare columns after the aligned symbol,
+`align-list` is a column check inside the list's loop, and `offside` pushes
+a column limit that the layout skipper enforces when it crosses a line
+break. No variants, no generated scanner, no lexer token queue, no opener
+literals: the rubyish and pyish modules lower with nothing derived from
+their constraints but the checks themselves. The one accommodation to
+tree-sitter is for extras: the tree-sitter lowering ends pyish's
+statements with a hidden newline token, which puts a trailing comment
+inside the statement, so a production the scanner plan terminates that
+way reaches to the end of its line when extras are attached.
+
+**Do they confer?** Over the six spikes' 48 corpus cases:
+
+| spike | cases | all three agree | tree-sitter widened, winnow follows the source | ANTLR differs |
+|---|---|---|---|---|
+| mini | 9 | 7 | 1 (`a == b == c`) | 1 |
+| rubyish | 12 | 8 | 1 (`y = - 1`) | 3 |
+| cppish | 8 | 7 | 0 | 1 |
+| pyish | 13 | 10 | 1 (a line break inside brackets) | 2 |
+| rustish | 3 | 2 | 0 | 1 |
+| jsish | 3 | 2 | 0 | 1 |
+
+winnow holds every case: 45 by producing tree-sitter's tree and three by
+rejecting the input, which is what the SDF3 says and where tree-sitter
+widened (§13's non-associativity, §14's validity-first scanner, §17's
+implicit line joining). `{non-assoc}` is exact here for the first time:
+the loop refuses a second operator of the group. The nine rows where
+ANTLR differs are the capability gaps §16 measured and nothing new: three
+spacing or `>>` cases its lexer cannot decide without the parser, and six
+comment cases its hidden channel drops. Every ANTLR miss on a spacing case
+is a winnow pass, which is the scannerless claim of the design table
+measured rather than asserted. Over the two families, winnow agrees with
+tree-sitter on all 252 SQL cells and all 24 edition cells, verdict and
+tree alike, case-insensitive keywords and reserved words included; the
+`hiding`, hole and per-target machinery is above the backends and needed
+nothing from this one.
+
+**What it costs and what it does not do.** Longest match among primaries
+tries every alternative at each primary position, so a deeply nested
+expression does more work than an LR parser would; none of the corpora
+notice, and a real deployment would memoise. `{prefer}` reaches only its
+own sort, as under ANTLR: an ambiguity decided in an ancestor sort follows
+source order, which is why `a < b > c;` parses as the declaration on all
+three backends for the same reason on two of them. Comments attach to the
+innermost node whose span holds them, which matches tree-sitter's
+placement everywhere in the corpora once the newline reach is accounted
+for, and would not match a grammar whose hidden tokens sit elsewhere.
+`newline-indent` and `single-line` are not lowered, since no spike uses
+them. And the generated crate parses a file into an S-expression and
+nothing more: no incremental parsing, no error recovery, no tree API,
+which is the honest shape of a backend that exists to confer.

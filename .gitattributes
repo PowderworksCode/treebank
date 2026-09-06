@@ -67,3 +67,10 @@ crates/treebank-sdf3/spike/*/targets/*/antlr-findings.md     linguist-generated=
 crates/treebank-sdf3/spike/*/targets/*/roles.json            linguist-generated=true
 crates/treebank-sdf3/spike/*/targets/*/tree-sitter.json      linguist-generated=true
 crates/treebank-sdf3/spike/*/targets-results.md              linguist-generated=true
+# The winnow backend: a generated crate per spike and per target, and the
+# results of holding it to the corpus and comparing the three backends.
+crates/treebank-sdf3/spike/**/winnow/src/main.rs             linguist-generated=true
+crates/treebank-sdf3/spike/**/winnow/Cargo.toml              linguist-generated=true
+crates/treebank-sdf3/spike/**/winnow-findings.md             linguist-generated=true
+crates/treebank-sdf3/spike/*/winnow-results.md               linguist-generated=true
+crates/treebank-sdf3/spike/*/confer-results.md               linguist-generated=true

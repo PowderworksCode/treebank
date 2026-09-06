@@ -146,6 +146,15 @@ fn main() -> anyhow::Result<()> {
         dir.join("antlr-findings.md"),
         treebank_sdf3::report(&antlr.findings),
     )?;
+    // The third backend: a scannerless winnow parser, as a crate of its own.
+    let wn = treebank_sdf3::winnow::emit(&module, &lowered.names, &lowered.levels)?;
+    std::fs::create_dir_all(dir.join("winnow/src"))?;
+    std::fs::write(dir.join("winnow/Cargo.toml"), &wn.cargo_toml)?;
+    std::fs::write(dir.join("winnow/src/main.rs"), &wn.source)?;
+    std::fs::write(
+        dir.join("winnow-findings.md"),
+        treebank_sdf3::report(&wn.findings),
+    )?;
     if let Some(v) = &everything.vocab {
         std::fs::write(
             dir.join("roles.json"),

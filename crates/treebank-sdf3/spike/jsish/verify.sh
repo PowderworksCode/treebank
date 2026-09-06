@@ -30,3 +30,7 @@ python3 "$HERE/../../tools/resolve_check.py" "$HERE"
 
 # The printer derived from the templates, held to the language's own formatter.
 python3 "$HERE/../../tools/format_check.py" "$HERE"
+
+# The third backend, held to the same corpus, and the three compared.
+python3 "$HERE/../../tools/winnow_check.py" "$HERE"
+python3 "$HERE/../../tools/confer.py" "$HERE"

@@ -21,3 +21,7 @@ cp grammar.js tree-sitter.json "$tmp/"
 (cd "$tmp" && tree-sitter generate >/dev/null)
 cmp "$tmp/src/parser.c" src/parser.c
 echo "grammar.js and grammar.json generate an identical parser"
+
+# The third backend, held to the same corpus, and the three compared.
+python3 "$HERE/../../tools/winnow_check.py" "$HERE"
+python3 "$HERE/../../tools/confer.py" "$HERE"

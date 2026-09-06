@@ -23,6 +23,7 @@ pub mod print;
 pub mod scanner;
 pub mod term;
 pub mod vocab;
+pub mod winnow;
 
 pub use lower::{
     apply_conflicts, conflicts_suggested, lower, read_conflicts, to_grammar_js, Finding, Kind,

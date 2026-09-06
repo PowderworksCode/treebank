@@ -332,6 +332,27 @@ crates/treebank-sdf3/spike/sql/verify.sh --require-oracles
 crates/treebank-sdf3/spike/editions/verify.sh
 ```
 
+## The third backend: winnow, scannerless
+
+`src/winnow.rs` lowers the same modules to a parser written with winnow,
+emitted as a crate beside each spike and each target (`winnow/`). It is
+scannerless, as SDF3 is: literals and lexical sorts are matched where the
+grammar puts them, restrictions are lookahead, priorities become
+precedence climbing, and layout constraints are checked on the positions
+the parser has, with no scanner and no token variants.
+`tools/winnow_check.py` holds it to the same corpus as the other two and
+`tools/confer.py` writes `confer-results.md` per spike with the three
+verdicts side by side. All 48 corpus cases hold under winnow, three of them
+by rejecting what the source rejects where tree-sitter widened; every ANTLR
+difference is a measured capability gap. `tools/targets_check.py` runs the
+winnow parser of every SQL and edition target beside its tree-sitter
+parser: 276 cells agree on verdict and tree.
+
+```sh
+python3 crates/treebank-sdf3/tools/winnow_check.py crates/treebank-sdf3/spike/rubyish
+python3 crates/treebank-sdf3/tools/confer.py crates/treebank-sdf3/spike/rubyish
+```
+
 ## What it is not
 
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's
