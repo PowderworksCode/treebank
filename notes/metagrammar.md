@@ -1318,7 +1318,7 @@ only.
 | `WITH x AS (SELECT)` | ✓ ✓ ✓ ✓ ✓• | ✗ ✗ ✓ | ✓• |
 | `# comment` | ✗ ✗ ✗ ✗ ✗• | ✓ ✓ ✓ | ✓• |
 
-Twenty-five files by nine targets, 225 cells, every parser where its header
+Twenty-eight files by nine targets, 252 cells, every parser where its header
 says, and the two oracles agreeing with every header they can judge (`•`).
 The full table is `spike/sql/targets-results.md`. One row of it is the
 point of the whole design: `SELECT "name" FROM t;` is accepted by all nine
@@ -1351,10 +1351,29 @@ family, N corpora and oracle runs in CI, and build time that scales with
 N. Source cost stays flat, because a version module is three lines. What
 the spike did not need and so did not test: a version that changes a
 shared production in place rather than adding or removing one, which
-would be a `hiding` followed by a restatement; case-insensitive keywords,
-which SQL wants and this core ignores by writing them upper; and layout
-constraints on a production a hole is closed in, whose symbol positions
-would shift.
+would be a `hiding` followed by a restatement; and layout constraints on a
+production a hole is closed in, whose symbol positions would shift.
+
+**Case-insensitive keywords**, which the first run of this spike left out,
+are one template option: `keyword = case-insensitive`, the template-side
+form of SDF3's own `'kw'` literal in productive syntax. Tree-sitter's
+keyword machinery is built on strings: `word` extracts string tokens that
+match the identifier, and `reserved` refuses them where an identifier is
+expected. A pattern is neither, and the first two lowerings tried showed
+the two ways that goes wrong: a plain pattern beside `word` loses to the
+identifier everywhere, and dropping `word` loses the reservation, so
+`select` parses as a column. What works keeps `word` and lowers each
+keyword to `token(prec(1, /[sS][eE][lL][eE][cC][tT]/))`, aliased back to
+the template's spelling and reserved by symbol: lexical precedence wins
+the keyword over the identifier of the same length, keyword extraction
+still runs, and the reserved set still bites. Three corpus files hold it
+across all nine targets, with both servers agreeing: `select ... from`
+parses to the same tree as `SELECT ... FROM`, `SELECT select FROM t` is a
+syntax error in every case, and `selection` is a name. The tree and the
+printer show `SELECT` whatever was typed, which is what a formatter does
+with keyword case. ANTLR gets the grammar option `caseInsensitive`, a
+widening it reports: it folds every literal, not only the keywords, and
+here nothing else has a case.
 
 Two changes to the vocabulary lowering came out of the roles gate running
 over nine targets. A threaded term whose members are sorts rather than

@@ -63,6 +63,16 @@ pub fn emit(
         "// GENERATED from {}.sdf3 by treebank-sdf3's ANTLR backend. Python3 target.\ngrammar {grammar_name};\n\n",
         module.name
     ));
+    if module
+        .template_options()
+        .any(|o| matches!(o, TemplateOption::KeywordCaseInsensitive))
+    {
+        out.push_str("options { caseInsensitive = true; }\n\n");
+        findings.push(Finding {
+            kind: Kind::Widening,
+            what: "`keyword = case-insensitive` became the grammar option `caseInsensitive`, which folds every literal and character class in the lexer, not only the keywords; here nothing but keywords has a case".into(),
+        });
+    }
 
     let mut members: Vec<String> = Vec::new();
     if let Some(ind) = &plan.indent {

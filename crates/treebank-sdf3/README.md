@@ -317,7 +317,9 @@ it added, with a `hiding` clause for what it dropped. Every target lowers to
 its own parser under `spike/sql/targets/`; there is no union table.
 `tools/targets_check.py` holds all nine parsers to one corpus whose files
 say which targets accept them, and holds the corpus itself to a real
-PostgreSQL 16 and MariaDB 10.11 where those can judge. `spike/editions/`
+PostgreSQL 16 and MariaDB 10.11 where those can judge. Keywords match in
+any case (`keyword = case-insensitive` in the core's template options) and
+stay reserved in any case. `spike/editions/`
 does the same for Rust's four editions over `spike/rustish`, with `rustc
 --edition` as the oracle for every cell. §22 of `notes/metagrammar.md` has
 the design and the results.

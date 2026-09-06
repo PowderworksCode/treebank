@@ -1,6 +1,8 @@
 // GENERATED from mysql/5.6.sdf3 by treebank-sdf3's ANTLR backend. Python3 target.
 grammar Mysql_5_6;
 
+options { caseInsensitive = true; }
+
 script
     : statement* EOF
     ;

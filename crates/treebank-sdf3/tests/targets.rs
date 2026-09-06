@@ -188,3 +188,39 @@ fn tempfile_dir() -> PathBuf {
     std::fs::create_dir_all(&dir).unwrap();
     dir
 }
+
+#[test]
+fn case_insensitive_keywords_are_pattern_tokens_reserved_by_symbol() {
+    let m = treebank_sdf3::load_module(&sql("postgres/16")).unwrap();
+    let lowered = treebank_sdf3::lower(&m).unwrap();
+    let g = &lowered.grammar;
+    assert_eq!(
+        g["word"],
+        serde_json::json!("name"),
+        "keyword extraction stays on"
+    );
+    let select = &g["rules"]["_kw_select"];
+    assert_eq!(select["type"], "TOKEN");
+    assert_eq!(
+        select["content"]["content"]["value"],
+        "[sS][eE][lL][eE][cC][tT]"
+    );
+    let reserved: Vec<&str> = g["reserved"]["global"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|v| v["name"].as_str())
+        .collect();
+    assert!(reserved.contains(&"_kw_select") && reserved.contains(&"_kw_from"));
+    // The template's spelling is what the tree shows.
+    let text = serde_json::to_string(&g["rules"]["select"]).unwrap();
+    assert!(text.contains(r#""type":"ALIAS","content":{"type":"SYMBOL","name":"_kw_select"},"named":false,"value":"SELECT""#), "{text}");
+    // A module without the option keeps string keywords.
+    let r = treebank_sdf3::load_module(Path::new(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/spike/rustish/rustish.sdf3"
+    )))
+    .unwrap();
+    let rl = treebank_sdf3::lower(&r).unwrap();
+    assert!(rl.grammar["rules"].get("_kw_fn").is_none());
+}

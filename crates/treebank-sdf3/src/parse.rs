@@ -629,6 +629,8 @@ fn template_option(i: &mut In) -> R<TemplateOption> {
             .map(|(sort, _, _, _)| TemplateOption::KeywordReject { sort }),
         preceded((kw("keyword"), sym("-/-")), lex(char_class)).map(TemplateOption::KeywordFollow),
         preceded((kw("tokenize"), sym(":")), lex(string_lit)).map(TemplateOption::Tokenize),
+        (kw("keyword"), sym("="), kw("case-insensitive"))
+            .map(|_| TemplateOption::KeywordCaseInsensitive),
     ))
     .parse_next(i)
 }

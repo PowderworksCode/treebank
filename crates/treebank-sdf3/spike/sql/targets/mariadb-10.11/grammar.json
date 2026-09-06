@@ -43,7 +43,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_insert"
+          },
+          "named": false,
           "value": "INSERT"
         },
         {
@@ -58,7 +63,12 @@
           }
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_into"
+          },
+          "named": false,
           "value": "INTO"
         },
         {
@@ -107,7 +117,12 @@
           "value": ")"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_values"
+          },
+          "named": false,
           "value": "VALUES"
         },
         {
@@ -173,7 +188,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_update"
+          },
+          "named": false,
           "value": "UPDATE"
         },
         {
@@ -185,7 +205,12 @@
           }
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_set"
+          },
+          "named": false,
           "value": "SET"
         },
         {
@@ -239,11 +264,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_delete"
+          },
+          "named": false,
           "value": "DELETE"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_from"
+          },
+          "named": false,
           "value": "FROM"
         },
         {
@@ -280,11 +315,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_create"
+          },
+          "named": false,
           "value": "CREATE"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_table"
+          },
+          "named": false,
           "value": "TABLE"
         },
         {
@@ -347,11 +392,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_drop"
+          },
+          "named": false,
           "value": "DROP"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_table"
+          },
+          "named": false,
           "value": "TABLE"
         },
         {
@@ -372,11 +427,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_replace"
+          },
+          "named": false,
           "value": "REPLACE"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_into"
+          },
+          "named": false,
           "value": "INTO"
         },
         {
@@ -425,7 +490,12 @@
           "value": ")"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_values"
+          },
+          "named": false,
           "value": "VALUES"
         },
         {
@@ -504,7 +574,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_select"
+          },
+          "named": false,
           "value": "SELECT"
         },
         {
@@ -658,7 +733,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_as"
+          },
+          "named": false,
           "value": "AS"
         },
         {
@@ -688,7 +768,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_from"
+          },
+          "named": false,
           "value": "FROM"
         },
         {
@@ -705,7 +790,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_where"
+          },
+          "named": false,
           "value": "WHERE"
         },
         {
@@ -718,11 +808,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_order"
+          },
+          "named": false,
           "value": "ORDER"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_by"
+          },
+          "named": false,
           "value": "BY"
         },
         {
@@ -778,11 +878,21 @@
       ]
     },
     "asc": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_asc"
+      },
+      "named": false,
       "value": "ASC"
     },
     "desc": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_desc"
+      },
+      "named": false,
       "value": "DESC"
     },
     "cte": {
@@ -797,7 +907,12 @@
           }
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_as"
+          },
+          "named": false,
           "value": "AS"
         },
         {
@@ -866,14 +981,24 @@
       ]
     },
     "type_int": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_int"
+      },
+      "named": false,
       "value": "INT"
     },
     "varchar": {
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_varchar"
+          },
+          "named": false,
           "value": "VARCHAR"
         },
         {
@@ -891,7 +1016,12 @@
       ]
     },
     "text": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_text"
+      },
+      "named": false,
       "value": "TEXT"
     },
     "_type": {
@@ -970,7 +1100,12 @@
       "name": "string"
     },
     "null": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_null"
+      },
+      "named": false,
       "value": "NULL"
     },
     "_literal": {
@@ -1267,7 +1402,12 @@
             }
           },
           {
-            "type": "STRING",
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_kw_like"
+            },
+            "named": false,
             "value": "LIKE"
           },
           {
@@ -1288,7 +1428,12 @@
         "type": "SEQ",
         "members": [
           {
-            "type": "STRING",
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_kw_not"
+            },
+            "named": false,
             "value": "NOT"
           },
           {
@@ -1313,7 +1458,12 @@
             }
           },
           {
-            "type": "STRING",
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_kw_and"
+            },
+            "named": false,
             "value": "AND"
           },
           {
@@ -1342,7 +1492,12 @@
             }
           },
           {
-            "type": "STRING",
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_kw_or"
+            },
+            "named": false,
             "value": "OR"
           },
           {
@@ -1384,7 +1539,12 @@
             "name": "_expression"
           },
           {
-            "type": "STRING",
+            "type": "ALIAS",
+            "content": {
+              "type": "SYMBOL",
+              "name": "_kw_over"
+            },
+            "named": false,
             "value": "OVER"
           },
           {
@@ -1511,7 +1671,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_limit"
+          },
+          "named": false,
           "value": "LIMIT"
         },
         {
@@ -1528,7 +1693,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_offset"
+          },
+          "named": false,
           "value": "OFFSET"
         },
         {
@@ -1542,26 +1712,51 @@
       ]
     },
     "ignore": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_ignore"
+      },
+      "named": false,
       "value": "IGNORE"
     },
     "on_duplicate_key": {
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_on"
+          },
+          "named": false,
           "value": "ON"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_duplicate"
+          },
+          "named": false,
           "value": "DUPLICATE"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_key"
+          },
+          "named": false,
           "value": "KEY"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_update"
+          },
+          "named": false,
           "value": "UPDATE"
         },
         {
@@ -1592,11 +1787,21 @@
       ]
     },
     "cache": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_sql_cache"
+      },
+      "named": false,
       "value": "SQL_CACHE"
     },
     "no_cache": {
-      "type": "STRING",
+      "type": "ALIAS",
+      "content": {
+        "type": "SYMBOL",
+        "name": "_kw_sql_no_cache"
+      },
+      "named": false,
       "value": "SQL_NO_CACHE"
     },
     "_modifier": {
@@ -1628,7 +1833,12 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_with"
+          },
+          "named": false,
           "value": "WITH"
         },
         {
@@ -1662,11 +1872,21 @@
       "type": "SEQ",
       "members": [
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_partition"
+          },
+          "named": false,
           "value": "PARTITION"
         },
         {
-          "type": "STRING",
+          "type": "ALIAS",
+          "content": {
+            "type": "SYMBOL",
+            "name": "_kw_by"
+          },
+          "named": false,
           "value": "BY"
         },
         {
@@ -1723,6 +1943,413 @@
     "string": {
       "type": "PATTERN",
       "value": "(?:'(?:(?:''|[^']))*'|(?:\"(?:[^\"])*\"))"
+    },
+    "_kw_and": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[aA][nN][dD]"
+        }
+      }
+    },
+    "_kw_as": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[aA][sS]"
+        }
+      }
+    },
+    "_kw_asc": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[aA][sS][cC]"
+        }
+      }
+    },
+    "_kw_by": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[bB][yY]"
+        }
+      }
+    },
+    "_kw_create": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[cC][rR][eE][aA][tT][eE]"
+        }
+      }
+    },
+    "_kw_delete": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[dD][eE][lL][eE][tT][eE]"
+        }
+      }
+    },
+    "_kw_desc": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[dD][eE][sS][cC]"
+        }
+      }
+    },
+    "_kw_drop": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[dD][rR][oO][pP]"
+        }
+      }
+    },
+    "_kw_duplicate": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[dD][uU][pP][lL][iI][cC][aA][tT][eE]"
+        }
+      }
+    },
+    "_kw_from": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[fF][rR][oO][mM]"
+        }
+      }
+    },
+    "_kw_ignore": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[iI][gG][nN][oO][rR][eE]"
+        }
+      }
+    },
+    "_kw_insert": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[iI][nN][sS][eE][rR][tT]"
+        }
+      }
+    },
+    "_kw_int": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[iI][nN][tT]"
+        }
+      }
+    },
+    "_kw_into": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[iI][nN][tT][oO]"
+        }
+      }
+    },
+    "_kw_key": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[kK][eE][yY]"
+        }
+      }
+    },
+    "_kw_like": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[lL][iI][kK][eE]"
+        }
+      }
+    },
+    "_kw_limit": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[lL][iI][mM][iI][tT]"
+        }
+      }
+    },
+    "_kw_not": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[nN][oO][tT]"
+        }
+      }
+    },
+    "_kw_null": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[nN][uU][lL][lL]"
+        }
+      }
+    },
+    "_kw_offset": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[oO][fF][fF][sS][eE][tT]"
+        }
+      }
+    },
+    "_kw_on": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[oO][nN]"
+        }
+      }
+    },
+    "_kw_or": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[oO][rR]"
+        }
+      }
+    },
+    "_kw_order": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[oO][rR][dD][eE][rR]"
+        }
+      }
+    },
+    "_kw_over": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[oO][vV][eE][rR]"
+        }
+      }
+    },
+    "_kw_partition": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[pP][aA][rR][tT][iI][tT][iI][oO][nN]"
+        }
+      }
+    },
+    "_kw_replace": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[rR][eE][pP][lL][aA][cC][eE]"
+        }
+      }
+    },
+    "_kw_select": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[sS][eE][lL][eE][cC][tT]"
+        }
+      }
+    },
+    "_kw_set": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[sS][eE][tT]"
+        }
+      }
+    },
+    "_kw_sql_cache": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[sS][qQ][lL]_[cC][aA][cC][hH][eE]"
+        }
+      }
+    },
+    "_kw_sql_no_cache": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[sS][qQ][lL]_[nN][oO]_[cC][aA][cC][hH][eE]"
+        }
+      }
+    },
+    "_kw_table": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[tT][aA][bB][lL][eE]"
+        }
+      }
+    },
+    "_kw_text": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[tT][eE][xX][tT]"
+        }
+      }
+    },
+    "_kw_update": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[uU][pP][dD][aA][tT][eE]"
+        }
+      }
+    },
+    "_kw_values": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[vV][aA][lL][uU][eE][sS]"
+        }
+      }
+    },
+    "_kw_varchar": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[vV][aA][rR][cC][hH][aA][rR]"
+        }
+      }
+    },
+    "_kw_where": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[wW][hH][eE][rR][eE]"
+        }
+      }
+    },
+    "_kw_with": {
+      "type": "TOKEN",
+      "content": {
+        "type": "PREC",
+        "value": 1,
+        "content": {
+          "type": "PATTERN",
+          "value": "[wW][iI][tT][hH]"
+        }
+      }
     }
   },
   "extras": [
@@ -1757,152 +2384,152 @@
   "reserved": {
     "global": [
       {
-        "type": "STRING",
-        "value": "AND"
+        "type": "SYMBOL",
+        "name": "_kw_and"
       },
       {
-        "type": "STRING",
-        "value": "AS"
+        "type": "SYMBOL",
+        "name": "_kw_as"
       },
       {
-        "type": "STRING",
-        "value": "ASC"
+        "type": "SYMBOL",
+        "name": "_kw_asc"
       },
       {
-        "type": "STRING",
-        "value": "BY"
+        "type": "SYMBOL",
+        "name": "_kw_by"
       },
       {
-        "type": "STRING",
-        "value": "CREATE"
+        "type": "SYMBOL",
+        "name": "_kw_create"
       },
       {
-        "type": "STRING",
-        "value": "DELETE"
+        "type": "SYMBOL",
+        "name": "_kw_delete"
       },
       {
-        "type": "STRING",
-        "value": "DESC"
+        "type": "SYMBOL",
+        "name": "_kw_desc"
       },
       {
-        "type": "STRING",
-        "value": "DROP"
+        "type": "SYMBOL",
+        "name": "_kw_drop"
       },
       {
-        "type": "STRING",
-        "value": "DUPLICATE"
+        "type": "SYMBOL",
+        "name": "_kw_duplicate"
       },
       {
-        "type": "STRING",
-        "value": "FROM"
+        "type": "SYMBOL",
+        "name": "_kw_from"
       },
       {
-        "type": "STRING",
-        "value": "IGNORE"
+        "type": "SYMBOL",
+        "name": "_kw_ignore"
       },
       {
-        "type": "STRING",
-        "value": "INSERT"
+        "type": "SYMBOL",
+        "name": "_kw_insert"
       },
       {
-        "type": "STRING",
-        "value": "INT"
+        "type": "SYMBOL",
+        "name": "_kw_int"
       },
       {
-        "type": "STRING",
-        "value": "INTO"
+        "type": "SYMBOL",
+        "name": "_kw_into"
       },
       {
-        "type": "STRING",
-        "value": "KEY"
+        "type": "SYMBOL",
+        "name": "_kw_key"
       },
       {
-        "type": "STRING",
-        "value": "LIKE"
+        "type": "SYMBOL",
+        "name": "_kw_like"
       },
       {
-        "type": "STRING",
-        "value": "LIMIT"
+        "type": "SYMBOL",
+        "name": "_kw_limit"
       },
       {
-        "type": "STRING",
-        "value": "NOT"
+        "type": "SYMBOL",
+        "name": "_kw_not"
       },
       {
-        "type": "STRING",
-        "value": "NULL"
+        "type": "SYMBOL",
+        "name": "_kw_null"
       },
       {
-        "type": "STRING",
-        "value": "OFFSET"
+        "type": "SYMBOL",
+        "name": "_kw_offset"
       },
       {
-        "type": "STRING",
-        "value": "ON"
+        "type": "SYMBOL",
+        "name": "_kw_on"
       },
       {
-        "type": "STRING",
-        "value": "OR"
+        "type": "SYMBOL",
+        "name": "_kw_or"
       },
       {
-        "type": "STRING",
-        "value": "ORDER"
+        "type": "SYMBOL",
+        "name": "_kw_order"
       },
       {
-        "type": "STRING",
-        "value": "OVER"
+        "type": "SYMBOL",
+        "name": "_kw_over"
       },
       {
-        "type": "STRING",
-        "value": "PARTITION"
+        "type": "SYMBOL",
+        "name": "_kw_partition"
       },
       {
-        "type": "STRING",
-        "value": "REPLACE"
+        "type": "SYMBOL",
+        "name": "_kw_replace"
       },
       {
-        "type": "STRING",
-        "value": "SELECT"
+        "type": "SYMBOL",
+        "name": "_kw_select"
       },
       {
-        "type": "STRING",
-        "value": "SET"
+        "type": "SYMBOL",
+        "name": "_kw_set"
       },
       {
-        "type": "STRING",
-        "value": "SQL_CACHE"
+        "type": "SYMBOL",
+        "name": "_kw_sql_cache"
       },
       {
-        "type": "STRING",
-        "value": "SQL_NO_CACHE"
+        "type": "SYMBOL",
+        "name": "_kw_sql_no_cache"
       },
       {
-        "type": "STRING",
-        "value": "TABLE"
+        "type": "SYMBOL",
+        "name": "_kw_table"
       },
       {
-        "type": "STRING",
-        "value": "TEXT"
+        "type": "SYMBOL",
+        "name": "_kw_text"
       },
       {
-        "type": "STRING",
-        "value": "UPDATE"
+        "type": "SYMBOL",
+        "name": "_kw_update"
       },
       {
-        "type": "STRING",
-        "value": "VALUES"
+        "type": "SYMBOL",
+        "name": "_kw_values"
       },
       {
-        "type": "STRING",
-        "value": "VARCHAR"
+        "type": "SYMBOL",
+        "name": "_kw_varchar"
       },
       {
-        "type": "STRING",
-        "value": "WHERE"
+        "type": "SYMBOL",
+        "name": "_kw_where"
       },
       {
-        "type": "STRING",
-        "value": "WITH"
+        "type": "SYMBOL",
+        "name": "_kw_with"
       }
     ]
   }

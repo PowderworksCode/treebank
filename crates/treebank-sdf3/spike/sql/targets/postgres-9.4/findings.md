@@ -12,7 +12,7 @@
 - bracket production of Exp became the named node `exp_bracket`; SDF3's AST has no node for brackets, but a hidden supertype member may have only one visible child and `( Exp )` has three
 - 11 named node(s) outside the vocabulary, ledgered as uncategorised: [col_def, cte, dquoted, int, item, name, order, partition, script, select, string]
 
-## EXTENSION -- a treebank addition outside SDF3 was used (60)
+## EXTENSION -- a treebank addition outside SDF3 was used (61)
 
 - Stmt.Select: placeholder label `with` became a field (not SDF3)
 - Stmt.Insert: placeholder label `table` became a field (not SDF3)
@@ -73,6 +73,7 @@
 - Exp.ILike: placeholder label `right` became a field (not SDF3)
 - Limit.Limit: placeholder label `count` became a field (not SDF3)
 - Offset.Offset: placeholder label `start` became a field (not SDF3)
+- `keyword = case-insensitive` (not SDF3's template options; its productive form is the `'kw'` literal): 34 keywords became `token(prec(1, /[sS][eE]../))` rules aliased to their spelling and reserved by symbol; the tree and the printer show the template's spelling
 - `vocabulary` section (not SDF3): 9 terms of treebank's vocabulary 0.1.0 bound to this module's sorts and constructors
 
 ## ABSORBED -- nothing emitted, tree-sitter gets the effect another way (5)

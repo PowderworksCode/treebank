@@ -1,5 +1,6 @@
-## WIDENING -- tree-sitter accepts more than SDF3 here (5)
+## WIDENING -- tree-sitter accepts more than SDF3 here (6)
 
+- `keyword = case-insensitive` became the grammar option `caseInsensitive`, which folds every literal and character class in the lexer, not only the keywords; here nothing but keywords has a case
 - Exp.Eq is non-assoc; ANTLR has no non-associativity, lowered as left-associative
 - Exp.Lt is non-assoc; ANTLR has no non-associativity, lowered as left-associative
 - Exp.Gt is non-assoc; ANTLR has no non-associativity, lowered as left-associative

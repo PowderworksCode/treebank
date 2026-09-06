@@ -86,6 +86,9 @@ struct Ctx<'m> {
     levels: BTreeMap<String, (u32, Option<Attr>)>,
     /// Word-shaped template literals, for `reserved`.
     keywords: BTreeSet<String>,
+    /// `keyword = case-insensitive`: keywords are pattern tokens aliased to
+    /// their spelling, not strings.
+    ci_keywords: bool,
     rule_names: BTreeSet<String>,
     /// `Sort.Cons` -> node name, as chosen.
     node_names: BTreeMap<String, String>,
@@ -107,6 +110,9 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         node_names: BTreeMap::new(),
         plan: crate::scanner::Plan::default(),
         prods: module.productions(false).collect(),
+        ci_keywords: module
+            .template_options()
+            .any(|o| matches!(o, TemplateOption::KeywordCaseInsensitive)),
     };
     for p in module.productions(true) {
         cx.lexical.entry(p.sort.clone()).or_default().push(p);
@@ -383,6 +389,8 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                 kind: Kind::Absorbed,
                 what: "`keyword -/- [class]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word".into(),
             }),
+            // Reported where the keyword rules are emitted, below.
+            TemplateOption::KeywordCaseInsensitive => {}
             TemplateOption::Tokenize(s) => cx.findings.push(Finding {
                 kind: Kind::Mapped,
                 what: format!("`tokenize: {s:?}`: the reader split template literal runs at these characters, so each is its own token"),
@@ -440,15 +448,40 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     // that matches nothing. The lexer then knows them as keywords, the
     // reserved set refuses them as identifiers, and no parse can shift
     // them. The effect is SDF3's: the word is a syntax error anywhere.
+    // `keyword = case-insensitive`: one pattern token per keyword, matched
+    // in any case with lexical precedence over the word token, reserved
+    // by symbol. Keyword extraction (`word`) stays: it is what makes the
+    // reserved set bite where an identifier is expected.
+    if cx.ci_keywords {
+        let all: BTreeSet<String> = cx.keywords.union(&reserved).cloned().collect();
+        for w in &all {
+            rules.insert(
+                kw_rule(w),
+                json!({"type": "TOKEN", "content": {"type": "PREC", "value": 1, "content": {"type": "PATTERN", "value": ci_regex(w)}}}),
+            );
+        }
+        cx.findings.push(Finding {
+            kind: Kind::Extension,
+            what: format!(
+                "`keyword = case-insensitive` (not SDF3's template options; its productive form is the `'kw'` literal): {} keywords became `token(prec(1, /[sS][eE]../))` rules aliased to their spelling and reserved by symbol; the tree and the printer show the template's spelling",
+                all.len()
+            ),
+        });
+    }
+    let ci = cx.ci_keywords;
+    let reserved_value = move |w: &str| -> Value {
+        if ci {
+            json!({"type": "SYMBOL", "name": kw_rule(w)})
+        } else {
+            json!({"type": "STRING", "value": w})
+        }
+    };
     let orphans: Vec<&String> = reserved
         .iter()
         .filter(|w| !cx.keywords.contains(*w))
         .collect();
     if !orphans.is_empty() {
-        let words: Vec<Value> = orphans
-            .iter()
-            .map(|w| json!({"type": "STRING", "value": w}))
-            .collect();
+        let words: Vec<Value> = orphans.iter().map(|w| reserved_value(w)).collect();
         rules.insert(
             "_reserved_word".into(),
             json!({"type": "SEQ", "members": [
@@ -485,10 +518,7 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     grammar.insert("inline".into(), json!([]));
     grammar.insert("supertypes".into(), json!(supertypes));
     if !reserved.is_empty() {
-        let words: Vec<Value> = reserved
-            .iter()
-            .map(|w| json!({"type": "STRING", "value": w}))
-            .collect();
+        let words: Vec<Value> = reserved.iter().map(|w| reserved_value(w)).collect();
         grammar.insert("reserved".into(), json!({"global": words}));
     }
     let scanner = if cx.plan.is_empty() {
@@ -691,15 +721,22 @@ impl<'m> Ctx<'m> {
                 });
             }
         }
-        json!({"type": "STRING", "value": s})
+        self.keyword_value(s)
+    }
+
+    /// A literal as a token: a string, or under `keyword = case-insensitive`
+    /// a word-shaped one becomes the `_kw_` pattern token aliased back to the
+    /// template's spelling, so the tree shows `SELECT` whatever was typed.
+    fn keyword_value(&self, s: &str) -> Value {
+        if self.ci_keywords && is_word(s) {
+            json!({"type": "ALIAS", "content": {"type": "SYMBOL", "name": kw_rule(s)}, "named": false, "value": s})
+        } else {
+            json!({"type": "STRING", "value": s})
+        }
     }
 
     fn note_literal(&mut self, s: &str) {
-        if s.chars()
-            .next()
-            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
-            && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
-        {
+        if is_word(s) {
             self.keywords.insert(s.to_string());
         }
     }
@@ -716,7 +753,7 @@ impl<'m> Ctx<'m> {
             }
             Symbol::Lit(l) => {
                 self.note_literal(l);
-                json!({"type": "STRING", "value": l})
+                self.keyword_value(l)
             }
             Symbol::CharClass(c) => json!({"type": "PATTERN", "value": class_regex(c)}),
             Symbol::Star(inner) => json!({"type": "REPEAT", "content": self.symbol(inner)?}),
@@ -925,6 +962,32 @@ pub fn conflicts_suggested(stderr: &str) -> Vec<Vec<String>> {
         }
     }
     out
+}
+
+/// A literal that could be an identifier: a keyword.
+fn is_word(s: &str) -> bool {
+    s.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+/// The token rule a case-insensitive keyword lowers to.
+fn kw_rule(w: &str) -> String {
+    format!("_kw_{}", w.to_ascii_lowercase())
+}
+
+/// `SELECT` as `[sS][eE][lL][eE][cC][tT]`.
+fn ci_regex(w: &str) -> String {
+    w.chars()
+        .map(|c| {
+            if c.is_ascii_alphabetic() {
+                format!("[{}{}]", c.to_ascii_lowercase(), c.to_ascii_uppercase())
+            } else {
+                regex_escape(&c.to_string())
+            }
+        })
+        .collect()
 }
 
 pub fn snake(name: &str) -> String {
@@ -1189,7 +1252,10 @@ pub fn to_grammar_js(grammar: &Value) -> String {
     if let Some(words) = grammar["reserved"]["global"].as_array() {
         let e: Vec<String> = words
             .iter()
-            .map(|x| format!("{:?}", x["value"].as_str().unwrap_or("")))
+            .map(|x| match x["type"].as_str() {
+                Some("SYMBOL") => format!("$.{}", x["name"].as_str().unwrap_or("")),
+                _ => format!("{:?}", x["value"].as_str().unwrap_or("")),
+            })
             .collect();
         out.push_str(&format!(
             "  reserved: {{ global: $ => [{}] }},\n",

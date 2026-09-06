@@ -346,6 +346,11 @@ pub enum TemplateOption {
     KeywordFollow(CharClass),
     /// `tokenize: "()"`.
     Tokenize(String),
+    /// treebank extension: `keyword = case-insensitive`. Every word-shaped
+    /// literal is matched in any case, as SDF3's own `'kw'` literal is in
+    /// productive syntax; the tree and the printer keep the template's
+    /// spelling.
+    KeywordCaseInsensitive,
 }
 
 /// `_statement = Stmt`, `_branch = Stmt.If Stmt.Match`, `_control_flow =

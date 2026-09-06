@@ -1,6 +1,8 @@
 // GENERATED from postgres/16.sdf3 by treebank-sdf3's ANTLR backend. Python3 target.
 grammar Postgres_16;
 
+options { caseInsensitive = true; }
+
 script
     : statement* EOF
     ;

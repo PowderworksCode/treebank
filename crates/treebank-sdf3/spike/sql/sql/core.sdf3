@@ -7,9 +7,10 @@
 // composition in which the hole is closed (the loader removes the optional
 // occurrence, see src/lib.rs `close_holes`). No target sees a union.
 //
-// Case: SQL keywords are case-insensitive and this core writes them in
-// upper case only. A `template options` for case folding is a lowering
-// concern this spike does not take on; the corpus writes keywords upper.
+// Case: SQL keywords are case-insensitive. The core writes them upper and
+// says so once, in `template options`: `keyword = case-insensitive`, the
+// template form of SDF3's own `'kw'` literal. The tree and the printer keep
+// the upper spelling whatever the source typed.
 
 module sql/core
 
@@ -113,5 +114,6 @@ vocabulary
 
 template options
   NAME = keyword {reject}
+  keyword = case-insensitive
   keyword -/- [a-zA-Z0-9\_]
   tokenize: "(),;*."

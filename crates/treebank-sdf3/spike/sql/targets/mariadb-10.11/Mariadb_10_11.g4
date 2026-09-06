@@ -1,6 +1,8 @@
 // GENERATED from mariadb/10.11.sdf3 by treebank-sdf3's ANTLR backend. Python3 target.
 grammar Mariadb_10_11;
 
+options { caseInsensitive = true; }
+
 script
     : statement* EOF
     ;

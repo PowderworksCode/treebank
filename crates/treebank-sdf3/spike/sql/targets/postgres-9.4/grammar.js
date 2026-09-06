@@ -6,7 +6,7 @@ module.exports = grammar({
   word: $ => $.name,
   extras: $ => [/[ \t\n\r]/, $.comment],
   supertypes: $ => [$._statement, $._type, $._name, $._expression, $._literal, $._invocation, $._declaration, $._assignment, $._modifier],
-  reserved: { global: $ => ["AND", "AS", "ASC", "BY", "CREATE", "DELETE", "DESC", "DROP", "FROM", "ILIKE", "INSERT", "INT", "INTO", "LIKE", "LIMIT", "NOT", "NULL", "OFFSET", "OIDS", "OR", "ORDER", "OVER", "PARTITION", "RETURNING", "SELECT", "SET", "TABLE", "TEXT", "UPDATE", "VALUES", "VARCHAR", "WHERE", "WITH", "WITHOUT"] },
+  reserved: { global: $ => [$._kw_and, $._kw_as, $._kw_asc, $._kw_by, $._kw_create, $._kw_delete, $._kw_desc, $._kw_drop, $._kw_from, $._kw_ilike, $._kw_insert, $._kw_int, $._kw_into, $._kw_like, $._kw_limit, $._kw_not, $._kw_null, $._kw_offset, $._kw_oids, $._kw_or, $._kw_order, $._kw_over, $._kw_partition, $._kw_returning, $._kw_select, $._kw_set, $._kw_table, $._kw_text, $._kw_update, $._kw_values, $._kw_varchar, $._kw_where, $._kw_with, $._kw_without] },
   rules: {
     script: $ => repeat($._statement),
 
@@ -17,8 +17,8 @@ module.exports = grammar({
     ),
 
     insert: $ => seq(
-      "INSERT",
-      "INTO",
+      alias($._kw_insert, "INSERT"),
+      alias($._kw_into, "INTO"),
       field("table", $._name),
       "(",
       field("columns", seq(
@@ -29,7 +29,7 @@ module.exports = grammar({
         ))
       )),
       ")",
-      "VALUES",
+      alias($._kw_values, "VALUES"),
       "(",
       field("values", seq(
         $._expression,
@@ -44,9 +44,9 @@ module.exports = grammar({
     ),
 
     update: $ => seq(
-      "UPDATE",
+      alias($._kw_update, "UPDATE"),
       field("table", $._name),
-      "SET",
+      alias($._kw_set, "SET"),
       seq(
         $._assignment,
         repeat(seq(
@@ -60,8 +60,8 @@ module.exports = grammar({
     ),
 
     delete: $ => seq(
-      "DELETE",
-      "FROM",
+      alias($._kw_delete, "DELETE"),
+      alias($._kw_from, "FROM"),
       field("table", $._name),
       field("where", optional($.where)),
       field("returning", optional($.returning)),
@@ -69,8 +69,8 @@ module.exports = grammar({
     ),
 
     create_table: $ => seq(
-      "CREATE",
-      "TABLE",
+      alias($._kw_create, "CREATE"),
+      alias($._kw_table, "TABLE"),
       field("table", $._name),
       "(",
       seq(
@@ -90,8 +90,8 @@ module.exports = grammar({
     ),
 
     drop_table: $ => seq(
-      "DROP",
-      "TABLE",
+      alias($._kw_drop, "DROP"),
+      alias($._kw_table, "TABLE"),
       field("table", $._name),
       ";"
     ),
@@ -106,7 +106,7 @@ module.exports = grammar({
     ),
 
     select: $ => seq(
-      "SELECT",
+      alias($._kw_select, "SELECT"),
       field("items", seq(
         $.item,
         repeat(seq(
@@ -127,7 +127,7 @@ module.exports = grammar({
     ),
 
     as: $ => seq(
-      "AS",
+      alias($._kw_as, "AS"),
       $._name
     ),
 
@@ -139,18 +139,18 @@ module.exports = grammar({
     ),
 
     from: $ => seq(
-      "FROM",
+      alias($._kw_from, "FROM"),
       field("table", $._name)
     ),
 
     where: $ => seq(
-      "WHERE",
+      alias($._kw_where, "WHERE"),
       $._expression
     ),
 
     order_by: $ => seq(
-      "ORDER",
-      "BY",
+      alias($._kw_order, "ORDER"),
+      alias($._kw_by, "BY"),
       seq(
         $.order,
         repeat(seq(
@@ -165,13 +165,13 @@ module.exports = grammar({
       field("dir", optional($._modifier))
     ),
 
-    asc: $ => "ASC",
+    asc: $ => alias($._kw_asc, "ASC"),
 
-    desc: $ => "DESC",
+    desc: $ => alias($._kw_desc, "DESC"),
 
     cte: $ => seq(
       field("name", $._name),
-      "AS",
+      alias($._kw_as, "AS"),
       "(",
       $.select,
       ")"
@@ -192,16 +192,16 @@ module.exports = grammar({
       $._type
     ),
 
-    type_int: $ => "INT",
+    type_int: $ => alias($._kw_int, "INT"),
 
     varchar: $ => seq(
-      "VARCHAR",
+      alias($._kw_varchar, "VARCHAR"),
       "(",
       $.int,
       ")"
     ),
 
-    text: $ => "TEXT",
+    text: $ => alias($._kw_text, "TEXT"),
 
     _type: $ => choice(
       $.type_int,
@@ -230,7 +230,7 @@ module.exports = grammar({
 
     str: $ => $.string,
 
-    null: $ => "NULL",
+    null: $ => alias($._kw_null, "NULL"),
 
     _literal: $ => choice(
       $.exp_int,
@@ -298,24 +298,24 @@ module.exports = grammar({
 
     like: $ => prec.left(14, seq(
       field("left", $._expression),
-      "LIKE",
+      alias($._kw_like, "LIKE"),
       field("right", $._expression)
     )),
 
     not: $ => prec(13, seq(
-      "NOT",
+      alias($._kw_not, "NOT"),
       $._expression
     )),
 
     and: $ => prec.left(12, seq(
       field("left", $._expression),
-      "AND",
+      alias($._kw_and, "AND"),
       field("right", $._expression)
     )),
 
     or: $ => prec.left(11, seq(
       field("left", $._expression),
-      "OR",
+      alias($._kw_or, "OR"),
       field("right", $._expression)
     )),
 
@@ -327,7 +327,7 @@ module.exports = grammar({
 
     over: $ => prec(10, seq(
       $._expression,
-      "OVER",
+      alias($._kw_over, "OVER"),
       "(",
       field("partition", optional($.partition)),
       field("order", optional($.order_by)),
@@ -354,7 +354,7 @@ module.exports = grammar({
 
     i_like: $ => prec.left(4, seq(
       field("left", $._expression),
-      "ILIKE",
+      alias($._kw_ilike, "ILIKE"),
       field("right", $._expression)
     )),
 
@@ -384,17 +384,17 @@ module.exports = grammar({
     ),
 
     limit: $ => seq(
-      "LIMIT",
+      alias($._kw_limit, "LIMIT"),
       field("count", $.int)
     ),
 
     offset: $ => seq(
-      "OFFSET",
+      alias($._kw_offset, "OFFSET"),
       field("start", $.int)
     ),
 
     with: $ => seq(
-      "WITH",
+      alias($._kw_with, "WITH"),
       seq(
         $.cte,
         repeat(seq(
@@ -405,8 +405,8 @@ module.exports = grammar({
     ),
 
     partition: $ => seq(
-      "PARTITION",
-      "BY",
+      alias($._kw_partition, "PARTITION"),
+      alias($._kw_by, "BY"),
       seq(
         $._expression,
         repeat(seq(
@@ -417,7 +417,7 @@ module.exports = grammar({
     ),
 
     returning: $ => seq(
-      "RETURNING",
+      alias($._kw_returning, "RETURNING"),
       seq(
         $.item,
         repeat(seq(
@@ -428,13 +428,13 @@ module.exports = grammar({
     ),
 
     with_oids: $ => seq(
-      "WITH",
-      "OIDS"
+      alias($._kw_with, "WITH"),
+      alias($._kw_oids, "OIDS")
     ),
 
     without_oids: $ => seq(
-      "WITHOUT",
-      "OIDS"
+      alias($._kw_without, "WITHOUT"),
+      alias($._kw_oids, "OIDS")
     ),
 
     _modifier: $ => choice(
@@ -455,6 +455,74 @@ module.exports = grammar({
     name: $ => /[a-zA-Z_](?:[a-zA-Z0-9_])*/,
 
     string: $ => /(?:'(?:(?:''|[^']))*'|(?:\$\$(?:[^$])*\$\$))/,
+
+    _kw_and: $ => token(prec(1, /[aA][nN][dD]/)),
+
+    _kw_as: $ => token(prec(1, /[aA][sS]/)),
+
+    _kw_asc: $ => token(prec(1, /[aA][sS][cC]/)),
+
+    _kw_by: $ => token(prec(1, /[bB][yY]/)),
+
+    _kw_create: $ => token(prec(1, /[cC][rR][eE][aA][tT][eE]/)),
+
+    _kw_delete: $ => token(prec(1, /[dD][eE][lL][eE][tT][eE]/)),
+
+    _kw_desc: $ => token(prec(1, /[dD][eE][sS][cC]/)),
+
+    _kw_drop: $ => token(prec(1, /[dD][rR][oO][pP]/)),
+
+    _kw_from: $ => token(prec(1, /[fF][rR][oO][mM]/)),
+
+    _kw_ilike: $ => token(prec(1, /[iI][lL][iI][kK][eE]/)),
+
+    _kw_insert: $ => token(prec(1, /[iI][nN][sS][eE][rR][tT]/)),
+
+    _kw_int: $ => token(prec(1, /[iI][nN][tT]/)),
+
+    _kw_into: $ => token(prec(1, /[iI][nN][tT][oO]/)),
+
+    _kw_like: $ => token(prec(1, /[lL][iI][kK][eE]/)),
+
+    _kw_limit: $ => token(prec(1, /[lL][iI][mM][iI][tT]/)),
+
+    _kw_not: $ => token(prec(1, /[nN][oO][tT]/)),
+
+    _kw_null: $ => token(prec(1, /[nN][uU][lL][lL]/)),
+
+    _kw_offset: $ => token(prec(1, /[oO][fF][fF][sS][eE][tT]/)),
+
+    _kw_oids: $ => token(prec(1, /[oO][iI][dD][sS]/)),
+
+    _kw_or: $ => token(prec(1, /[oO][rR]/)),
+
+    _kw_order: $ => token(prec(1, /[oO][rR][dD][eE][rR]/)),
+
+    _kw_over: $ => token(prec(1, /[oO][vV][eE][rR]/)),
+
+    _kw_partition: $ => token(prec(1, /[pP][aA][rR][tT][iI][tT][iI][oO][nN]/)),
+
+    _kw_returning: $ => token(prec(1, /[rR][eE][tT][uU][rR][nN][iI][nN][gG]/)),
+
+    _kw_select: $ => token(prec(1, /[sS][eE][lL][eE][cC][tT]/)),
+
+    _kw_set: $ => token(prec(1, /[sS][eE][tT]/)),
+
+    _kw_table: $ => token(prec(1, /[tT][aA][bB][lL][eE]/)),
+
+    _kw_text: $ => token(prec(1, /[tT][eE][xX][tT]/)),
+
+    _kw_update: $ => token(prec(1, /[uU][pP][dD][aA][tT][eE]/)),
+
+    _kw_values: $ => token(prec(1, /[vV][aA][lL][uU][eE][sS]/)),
+
+    _kw_varchar: $ => token(prec(1, /[vV][aA][rR][cC][hH][aA][rR]/)),
+
+    _kw_where: $ => token(prec(1, /[wW][hH][eE][rR][eE]/)),
+
+    _kw_with: $ => token(prec(1, /[wW][iI][tT][hH]/)),
+
+    _kw_without: $ => token(prec(1, /[wW][iI][tT][hH][oO][uU][tT]/)),
 
   },
 });
