@@ -1,0 +1,169 @@
+================================================================================
+priorities nest the way the SDF3 chain says: * above +
+================================================================================
+
+let x = 1 + 2 * 3;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (let
+    name: (id)
+    value: (add
+      left: (exp_int (int))
+      right: (mul
+        left: (exp_int (int))
+        right: (exp_int (int))))))
+
+================================================================================
+{left} groups associate to the left
+================================================================================
+
+x = a - b - c;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (assign
+    target: (id)
+    value: (sub
+      left: (sub
+        left: (id)
+        right: (id))
+      right: (id))))
+
+================================================================================
+the unary group outranks every binary group
+================================================================================
+
+x = -a * b;
+y = !p == q;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (assign
+    target: (id)
+    value: (mul
+      left: (neg operand: (id))
+      right: (id)))
+  body: (assign
+    target: (id)
+    value: (eq
+      left: (not operand: (id))
+      right: (id))))
+
+================================================================================
+DEVIATION: a {bracket} production is a named node here; SDF3's AST has none
+================================================================================
+
+x = (1 + 2) * 3;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (assign
+    target: (id)
+    value: (mul
+      left: (exp_bracket
+        (add
+          left: (exp_int (int))
+          right: (exp_int (int))))
+      right: (exp_int (int)))))
+
+================================================================================
+an injection yields no node: Exp = ID is just the id
+================================================================================
+
+x;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (expr (id)))
+
+================================================================================
+comparison sits below arithmetic
+================================================================================
+
+x = 1 + 2 == 3;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (assign
+    target: (id)
+    value: (eq
+      left: (add
+        left: (exp_int (int))
+        right: (exp_int (int)))
+      right: (exp_int (int)))))
+
+================================================================================
+statements, separated lists, blocks, and a comment as an extra
+================================================================================
+
+// two functions and a loop
+fun f(a, b) { return a - b; }
+fun g() { }
+if (x < 3) { x = f(x, 2); } else { while (x == 1) { } }
+
+--------------------------------------------------------------------------------
+
+(program
+  (comment)
+  body: (fun
+    name: (id)
+    parameters: (id)
+    parameters: (id)
+    body: (block
+      (return
+        value: (sub
+          left: (id)
+          right: (id)))))
+  body: (fun
+    name: (id)
+    body: (block))
+  body: (if
+    condition: (lt
+      left: (id)
+      right: (exp_int (int)))
+    consequence: (block
+      (assign
+        target: (id)
+        value: (call
+          function: (id)
+          arguments: (id)
+          arguments: (exp_int (int)))))
+    alternative: (block
+      (while
+        condition: (eq
+          left: (id)
+          right: (exp_int (int)))
+        body: (block)))))
+
+================================================================================
+WIDENING: non-assoc lowered to prec.left, so a == b == c parses (SDF3 rejects it)
+================================================================================
+
+x = 1 == 2 == 3;
+
+--------------------------------------------------------------------------------
+
+(program
+  body: (assign
+    target: (id)
+    value: (eq
+      left: (eq
+        left: (exp_int (int))
+        right: (exp_int (int)))
+      right: (exp_int (int)))))
+
+================================================================================
+a template keyword is reserved: `let` cannot be a name
+:error
+================================================================================
+
+let let = 1;
+
+--------------------------------------------------------------------------------

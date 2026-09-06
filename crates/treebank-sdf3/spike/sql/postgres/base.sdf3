@@ -1,0 +1,23 @@
+// What every PostgreSQL version in the family has on top of sql/core.
+module postgres/base
+
+imports sql/core sql/limit sql/cte sql/window sql/json-arrow
+
+lexical sorts
+  DQUOTED DOLLAR
+
+lexical syntax
+  DQUOTED = "\"" ~[\"]* "\""
+  DOLLAR  = "$$" ~[\$]* "$$"
+  STRING  = DOLLAR
+
+context-free syntax
+  Ident.Quoted = DQUOTED
+  Exp.Cast  = <<Exp>::<Type>>
+  Exp.ILike = <<left:Exp> ILIKE <right:Exp>> {non-assoc}
+  Returning.Returning = <RETURNING <{Item ","}+>>
+
+context-free priorities
+  {Exp.Cast} > {Exp.Neg},
+  {non-assoc: Exp.ILike} > {Exp.Not},
+  {left: Exp.Add Exp.Sub} > {non-assoc: Exp.ILike}

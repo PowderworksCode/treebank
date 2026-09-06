@@ -1,0 +1,119 @@
+// sql/core: the intersection. What every dialect and version in the
+// family agrees on, and nothing more. Where the dialects diverge, core
+// declares a sort and gives it no production -- a hole -- and puts the
+// hole where the dialect's clause goes: `<limit:Limit?>` at the end of a
+// SELECT, `<upsert:Upsert?>` after the VALUES of an INSERT. A target that
+// imports a feature module fills the hole; a target that does not, gets a
+// composition in which the hole is closed (the loader removes the optional
+// occurrence, see src/lib.rs `close_holes`). No target sees a union.
+//
+// Case: SQL keywords are case-insensitive. The core writes them upper and
+// says so once, in `template options`: `keyword = case-insensitive`, the
+// template form of SDF3's own `'kw'` literal. The tree and the printer keep
+// the upper spelling whatever the source typed.
+
+module sql/core
+
+context-free start-symbols
+  Script
+
+sorts
+  Script Stmt Query Item Alias From Where OrderBy OrderItem Dir
+  Assign ColDef Type Ident Exp Cte With
+  SelectHint InsertHint Limit Offset Upsert Returning CreateTail
+
+lexical sorts
+  NAME INT STRING
+
+lexical syntax
+  NAME   = [a-zA-Z\_] [a-zA-Z0-9\_]*
+  INT    = [0-9]+
+  STRING = "'" ("''" | ~[\'])* "'"
+  LAYOUT = [\ \t\n\r]
+  LAYOUT = "--" ~[\n\r]*
+
+lexical restrictions
+  NAME -/- [a-zA-Z0-9\_]
+  INT  -/- [0-9]
+
+context-free restrictions
+  LAYOUT? -/- [\ \t\n\r]
+  LAYOUT? -/- [\-].[\-]
+
+context-free syntax
+  Script.Script = <<Stmt*>>
+
+  Stmt.Select = <<with:With?> <Query>;>
+  Query.Select = <SELECT <hints:SelectHint*> <items:{Item ","}+> <from:From?> <where:Where?> <order:OrderBy?> <limit:Limit?> <offset:Offset?>>
+  Item.Item = <<Exp> <alias:Alias?>>
+  Alias.As = <AS <Ident>>
+  Alias.Bare = <<Ident>>
+  From.From = <FROM <table:Ident>>
+  Where.Where = <WHERE <Exp>>
+  OrderBy.OrderBy = <ORDER BY <{OrderItem ","}+>>
+  OrderItem.Order = <<Exp> <dir:Dir?>>
+  Dir.Asc = <ASC>
+  Dir.Desc = <DESC>
+
+  Cte.Cte = <<name:Ident> AS (<Query>)>
+
+  Stmt.Insert = <INSERT <hints:InsertHint*> INTO <table:Ident> (<columns:{Ident ","}+>) VALUES (<values:{Exp ","}+>) <upsert:Upsert?> <returning:Returning?>;>
+  Stmt.Update = <UPDATE <table:Ident> SET <{Assign ","}+> <where:Where?> <returning:Returning?>;>
+  Stmt.Delete = <DELETE FROM <table:Ident> <where:Where?> <returning:Returning?>;>
+  Assign.Assign = <<column:Ident> = <value:Exp>>
+
+  Stmt.CreateTable = <CREATE TABLE <table:Ident> (<{ColDef ","}+>) <tail:CreateTail?>;>
+  ColDef.ColDef = <<name:Ident> <Type>>
+  Type.Int = <INT>
+  Type.Varchar = <VARCHAR(<INT>)>
+  Type.Text = <TEXT>
+  Stmt.DropTable = <DROP TABLE <table:Ident>;>
+
+  Ident.Name = NAME
+
+  Exp = Ident
+  Exp.Column = <<table:Ident>.<column:Ident>>
+  Exp.Star = <*>
+  Exp.Int = INT
+  Exp.Str = STRING
+  Exp.Null = <NULL>
+  Exp.Call = <<function:NAME>(<arguments:{Exp ","}*>)>
+  Exp.Neg = <-<Exp>>
+  Exp.Mul = <<left:Exp> * <right:Exp>> {left}
+  Exp.Add = <<left:Exp> + <right:Exp>> {left}
+  Exp.Sub = <<left:Exp> - <right:Exp>> {left}
+  Exp.Eq  = <<left:Exp> = <right:Exp>> {non-assoc}
+  Exp.Lt  = [[left:Exp] < [right:Exp]] {non-assoc}
+  Exp.Gt  = [[left:Exp] > [right:Exp]] {non-assoc}
+  Exp.Like = <<left:Exp> LIKE <right:Exp>> {non-assoc}
+  Exp.Not = <NOT <Exp>>
+  Exp.And = <<left:Exp> AND <right:Exp>> {left}
+  Exp.Or  = <<left:Exp> OR <right:Exp>> {left}
+  Exp = <(<Exp>)> {bracket}
+
+context-free priorities
+  {Exp.Call}
+  > {Exp.Neg}
+  > {left: Exp.Mul}
+  > {left: Exp.Add Exp.Sub}
+  > {non-assoc: Exp.Eq Exp.Lt Exp.Gt Exp.Like}
+  > {Exp.Not}
+  > {left: Exp.And}
+  > {left: Exp.Or}
+
+vocabulary
+  _statement   = Stmt
+  _expression  = Exp
+  _name        = Ident
+  _literal     = Exp.Int Exp.Str Exp.Null
+  _invocation  = Exp.Call
+  _declaration = Stmt.CreateTable
+  _assignment  = Assign
+  _modifier    = Dir SelectHint InsertHint CreateTail
+  _clause      = From Where OrderBy Alias Limit Offset Upsert Returning With
+
+template options
+  NAME = keyword {reject}
+  keyword = case-insensitive
+  keyword -/- [a-zA-Z0-9\_]
+  tokenize: "(),;*."

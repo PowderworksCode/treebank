@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "rubyish",
+      "camelcase": "Rubyish",
+      "scope": "source.rubyish",
+      "file-types": ["rubyish"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike, lexer-state half; not a shipped grammar"
+  }
+}

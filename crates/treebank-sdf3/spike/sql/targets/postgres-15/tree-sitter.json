@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "postgres_15",
+      "camelcase": "Postgres15",
+      "scope": "source.postgres_15",
+      "file-types": [
+        "postgres_15"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target postgres/15 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

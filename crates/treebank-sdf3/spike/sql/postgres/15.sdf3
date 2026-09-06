@@ -1,0 +1,2 @@
+module postgres/15
+imports postgres/12 postgres/merge

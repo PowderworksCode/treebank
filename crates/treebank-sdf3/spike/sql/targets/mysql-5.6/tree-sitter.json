@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "mysql_5_6",
+      "camelcase": "Mysql56",
+      "scope": "source.mysql_5_6",
+      "file-types": [
+        "mysql_5_6"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target mysql/5.6 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

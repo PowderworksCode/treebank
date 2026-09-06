@@ -1,0 +1,4 @@
+module mysql/no-cache
+
+context-free syntax
+  SelectHint.NoCache = <SQL_NO_CACHE>

@@ -1,0 +1,102 @@
+// jsish: the corner of JavaScript where two keywords bind differently.
+//
+// `var` binds in the enclosing *function*, whatever block it sits in,
+// and is visible (as undefined) before its line; `let` binds in the
+// enclosing block, for the whole block, and a use before its line is an
+// error; a function declaration is visible throughout the scope that
+// holds it. Same three attributes as pyish and rustish; the only new
+// thing is a target named by scope kind: `binds(name -> function)`.
+//
+// The template whitespace is also the pretty-printer's layout (see
+// src/print.rs), written in prettier's style, and tools/format_check.py
+// holds the printer to prettier.
+//
+// The programs under programs/ are valid JavaScript; tools/resolve_check.py
+// resolves and evaluates them from bindings.json and compares with what
+// node prints.
+
+module jsish
+
+context-free start-symbols
+  Program
+
+sorts
+  Program Stmt Block Else Param Exp
+
+lexical sorts
+  ID INT
+
+lexical syntax
+  ID     = [a-zA-Z\_$] [a-zA-Z0-9\_$]*
+  INT    = [0-9]+
+  LAYOUT = [\ \t\n\r]
+  LAYOUT = "//" ~[\n\r]*
+
+lexical restrictions
+  ID  -/- [a-zA-Z0-9\_$]
+  INT -/- [0-9]
+
+context-free restrictions
+  LAYOUT? -/- [\ \t\n\r]
+  LAYOUT? -/- [\/].[\/]
+
+context-free syntax
+  Program.Program = <<Stmt*>> {scope(module)}
+
+  Stmt.Function = <function <name:ID>(<parameters:{Param ","}*>) <body:Block>>
+                  {scope(function), binds(name -> enclosing as function)}
+  Stmt.Var    = <var <name:ID> = <value:Exp>;> {binds(name -> function)}
+  Stmt.Let    = <let <name:ID> = <value:Exp>;> {binds(name -> enclosing)}
+  Stmt.Assign = <<target:ID> = <value:Exp>;>
+  Stmt.Print  = <console.log(<value:Exp>);>
+  Stmt.Return = <return <value:Exp>;>
+  Stmt.If     = <if (<condition:Exp>) <consequence:Block> <alternative:Else?>>
+  Stmt.While  = <while (<condition:Exp>) <body:Block>>
+  Stmt.Expr   = <<Exp>;>
+  Stmt        = Block
+
+  Block.Block = <
+    {
+      <Stmt*>
+    }
+  > {scope(block)}
+  Else.ElseClause = <else <body:Block>>
+  Param.Param = <<name:ID>> {binds(name -> enclosing as parameter)}
+
+  Exp          = ID {refers(1)}
+  Exp.Int      = INT
+  Exp.Call     = <<function:Exp>(<arguments:{Exp ","}*>)>
+  Exp.Neg      = <-<operand:Exp>>
+  Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
+  Exp.Add      = <<left:Exp> + <right:Exp>> {left}
+  Exp.Sub      = <<left:Exp> - <right:Exp>> {left}
+  Exp.Lt       = [[left:Exp] < [right:Exp]] {non-assoc}
+  Exp          = <(<Exp>)> {bracket}
+
+context-free priorities
+  {Exp.Call}
+  > {Exp.Neg}
+  > {left: Exp.Mul}
+  > {left: Exp.Add Exp.Sub}
+  > {non-assoc: Exp.Lt}
+
+vocabulary
+  _statement    = Stmt
+  _expression   = Exp
+  _declaration  = Stmt.Function
+  _body         = Block
+  _parameter    = Param
+  _name         = ID
+  _literal      = Exp.Int
+  _assignment   = Stmt.Assign
+  _invocation   = Exp.Call
+  _branch       = Stmt.If
+  _loop         = Stmt.While
+  _jump         = Stmt.Return
+  _control_flow = _branch _loop _jump
+  _clause       = Else
+
+template options
+  ID = keyword {reject}
+  keyword -/- [a-zA-Z0-9\_$]
+  tokenize: "(),;{}"

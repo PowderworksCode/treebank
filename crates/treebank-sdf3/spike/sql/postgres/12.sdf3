@@ -1,0 +1,3 @@
+module postgres/12
+imports postgres/9.5
+hiding CreateTail.WithOids

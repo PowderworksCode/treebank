@@ -1,0 +1,5 @@
+// WITH ... AS (...): PostgreSQL since 8.4, MySQL since 8.0, MariaDB since 10.2.
+module sql/cte
+
+context-free syntax
+  With.With = <WITH <{Cte ","}+>>

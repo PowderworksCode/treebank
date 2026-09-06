@@ -1,0 +1,220 @@
+## WIDENING -- tree-sitter accepts more than SDF3 here (1)
+
+- kernel syntax admits no layout before a scanner-owned token, but tree-sitter's lexer skips extras before the scanner is consulted again, and the scanner cannot see what was skipped: [' ' '\t' '\r' '\n'] before QUOTE, [' ' '\t' '\r' '\n'] before ESCAPE_SEQUENCE, ['\r' '\n'] before _QCHUNK, ['\r' '\n'] before HEREDOC_END, [' ' '\t' '\r' '\n'] before _DIR_ELSE, [' ' '\t' '\r' '\n'] before _DIR_ENDIF, [' ' '\t' '\r' '\n'] before _DIR_ENDFOR may precede it where SDF3 rejects the input -- a raw line break inside a quoted template parses
+
+## DEVIATION -- the tree differs in shape from SDF3's AST (1)
+
+- 11 named node(s) outside the vocabulary, ledgered as uncategorised: [arguments, ellipsis, escape_sequence, function_name, heredoc_end, heredoc_start, object_elem, quote, template_body, template_if, template_literal]
+
+## EXTENSION -- a treebank addition outside SDF3 was used (88)
+
+- HeredocTemplate.HeredocTemplate: `delimiter(1, 3)` (not SDF3): the scanner keeps a stack of the DELIM each HEREDOC_START captured, and HEREDOC_END matches only at the start of a line and only with the word on top, which it pops -- the heredoc's closing delimiter is the word its opener chose
+- Attribute.Attribute: placeholder label `name` became a field (not SDF3)
+- Attribute.Attribute: placeholder label `value` became a field (not SDF3)
+- Block.Block: placeholder label `type` became a field (not SDF3)
+- Block.Block: placeholder label `label` became a field (not SDF3)
+- Block.Block: placeholder label `body` became a field (not SDF3)
+- `_`-prefixed sort _Label is hidden (not SDF3): its 2 production(s) became the hidden rule `_label`, whose symbols are its parent's children
+- Exp.FunctionCall: placeholder label `function` became a field (not SDF3)
+- Exp.UnaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.UnaryExpression: placeholder label `operand` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `left` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `right` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `left` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `right` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `left` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `right` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `left` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `right` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `left` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `right` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `left` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `operator` became a field (not SDF3)
+- Exp.BinaryExpression: placeholder label `right` became a field (not SDF3)
+- Exp.Conditional: placeholder label `condition` became a field (not SDF3)
+- Exp.Conditional: placeholder label `consequence` became a field (not SDF3)
+- Exp.Conditional: placeholder label `alternative` became a field (not SDF3)
+- Exp.GetAttr: placeholder label `operand` became a field (not SDF3)
+- Exp.GetAttr: placeholder label `name` became a field (not SDF3)
+- Exp.Index: placeholder label `operand` became a field (not SDF3)
+- Exp.Index: placeholder label `key` became a field (not SDF3)
+- Exp.LegacyIndex: placeholder label `operand` became a field (not SDF3)
+- Exp.LegacyIndex: placeholder label `key` became a field (not SDF3)
+- Exp.AttrSplat: placeholder label `operand` became a field (not SDF3)
+- Exp.FullSplat: placeholder label `operand` became a field (not SDF3)
+- `_`-prefixed sort _UnOp is hidden (not SDF3): its 2 production(s) became the hidden rule `_un_op`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _BinOpMul is hidden (not SDF3): its 3 production(s) became the hidden rule `_bin_op_mul`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _BinOpAdd is hidden (not SDF3): its 2 production(s) became the hidden rule `_bin_op_add`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _BinOpCmp is hidden (not SDF3): its 4 production(s) became the hidden rule `_bin_op_cmp`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _BinOpEq is hidden (not SDF3): its 2 production(s) became the hidden rule `_bin_op_eq`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _BinOpAnd is hidden (not SDF3): its 1 production(s) became the hidden rule `_bin_op_and`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _BinOpOr is hidden (not SDF3): its 1 production(s) became the hidden rule `_bin_op_or`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- _SplatName: placeholder label `name` became a field (not SDF3)
+- `_`-prefixed sort _SplatName is hidden (not SDF3): its 1 production(s) became the hidden rule `_splat_name`, whose symbols are its parent's children
+- _SplatSuffix: placeholder label `name` became a field (not SDF3)
+- _SplatSuffix: placeholder label `key` became a field (not SDF3)
+- `_`-prefixed sort _SplatSuffix is hidden (not SDF3): its 2 production(s) became the hidden rule `_splat_suffix`, whose symbols are its parent's children
+- `_`-prefixed sort _ObjElems is hidden (not SDF3): its 1 production(s) became the hidden rule `_obj_elems`, whose symbols are its parent's children
+- `_`-prefixed sort _ObjSep is hidden (not SDF3): its 2 production(s) became the hidden rule `_obj_sep`, whose symbols are its parent's children
+- ObjectElem.ObjectElem: placeholder label `key` became a field (not SDF3)
+- ObjectElem.ObjectElem: placeholder label `value` became a field (not SDF3)
+- `_`-prefixed sort _ObjAssign is hidden (not SDF3): its 2 production(s) became the hidden rule `_obj_assign`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- ForTupleExpr.ForTupleExpr: placeholder label `result` became a field (not SDF3)
+- ForTupleExpr.ForTupleExpr: placeholder label `condition` became a field (not SDF3)
+- ForObjectExpr.ForObjectExpr: placeholder label `key` became a field (not SDF3)
+- ForObjectExpr.ForObjectExpr: placeholder label `value` became a field (not SDF3)
+- ForObjectExpr.ForObjectExpr: placeholder label `grouping` became a field (not SDF3)
+- ForObjectExpr.ForObjectExpr: placeholder label `condition` became a field (not SDF3)
+- _ForIntro: placeholder label `binding` became a field (not SDF3)
+- _ForIntro: placeholder label `collection` became a field (not SDF3)
+- `_`-prefixed sort _ForIntro is hidden (not SDF3): its 1 production(s) became the hidden rule `_for_intro`, whose symbols are its parent's children
+- _ForSecond: placeholder label `binding` became a field (not SDF3)
+- `_`-prefixed sort _ForSecond is hidden (not SDF3): its 1 production(s) became the hidden rule `_for_second`, whose symbols are its parent's children
+- ForCond.ForCond: placeholder label `condition` became a field (not SDF3)
+- Interp.TemplateInterpolation: placeholder label `expression` became a field (not SDF3)
+- `_`-prefixed sort _InterpOpen is hidden (not SDF3): its 2 production(s) became the hidden rule `_interp_open`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _InterpClose is hidden (not SDF3): its 2 production(s) became the hidden rule `_interp_close`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _DirOpen is hidden (not SDF3): its 2 production(s) became the hidden rule `_dir_open`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- `_`-prefixed sort _DirClose is hidden (not SDF3): its 2 production(s) became the hidden rule `_dir_close`, whose symbols are its parent's children; made of tokens only, it is inlined so a precedence on the parent reaches its tokens
+- _DirIf: placeholder label `condition` became a field (not SDF3)
+- `_`-prefixed sort _DirIf is hidden (not SDF3): its 1 production(s) became the hidden rule `_dir_if`, whose symbols are its parent's children
+- _DirFor: placeholder label `binding` became a field (not SDF3)
+- _DirFor: placeholder label `collection` became a field (not SDF3)
+- `_`-prefixed sort _DirFor is hidden (not SDF3): its 1 production(s) became the hidden rule `_dir_for`, whose symbols are its parent's children
+- `_`-prefixed sort _QPart is hidden (not SDF3): its 4 production(s) became the hidden rule `_q_part`, whose symbols are its parent's children
+- `_`-prefixed sort _HPart is hidden (not SDF3): its 4 production(s) became the hidden rule `_h_part`, whose symbols are its parent's children
+- QIf.TemplateIf: placeholder label `consequence` became a field (not SDF3)
+- QElse.ElseClause: placeholder label `alternative` became a field (not SDF3)
+- QFor.TemplateFor: placeholder label `body` became a field (not SDF3)
+- HIf.TemplateIf: placeholder label `consequence` became a field (not SDF3)
+- HElse.ElseClause: placeholder label `alternative` became a field (not SDF3)
+- HFor.TemplateFor: placeholder label `body` became a field (not SDF3)
+- `IDENTIFIER = keyword {prefer}` (not SDF3's template options): `word: identifier` with no reserved set, so each of the 6 word-shaped literals is a keyword only where the parse admits it and a identifier elsewhere, and where both are admitted the keyword wins -- tree-sitter's keyword extraction, which is HCL's own rule
+- `vocabulary` section (not SDF3): 15 terms of treebank's vocabulary 0.1.0 bound to this module's sorts and constructors
+
+## ABSORBED -- nothing emitted, tree-sitter gets the effect another way (11)
+
+- `keyword -/- [class]`: tree-sitter's keyword extraction already refuses to lex a keyword that is a prefix of a longer word
+- lexical restriction on IDENTIFIER: longest-match tokenisation gives the same effect
+- lexical restriction on INTEGER: longest-match tokenisation gives the same effect
+- lexical restriction on FLOAT: longest-match tokenisation gives the same effect
+- lexical restriction on DELIM: longest-match tokenisation gives the same effect
+- lexical restriction on _QSIGIL: longest-match tokenisation gives the same effect
+- lexical restriction on HEREDOC_END: longest-match tokenisation gives the same effect
+- context-free restriction on LAYOUT?: extras are skipped greedily
+
+## MAPPED -- lowered exactly (116)
+
+- Exp.LegacyIndex: symbols 1 and 2 adjacent: the lexical sort _LEGACY_KEY at 2 became `token.immediate`, which tree-sitter's lexer refuses to precede with layout
+- lexical sort QUOTE is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort ESCAPE_SEQUENCE is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort _QCHUNK is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort _HCHUNK is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort HEREDOC_END is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort _DIR_ELSE is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort _DIR_ENDIF is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort _DIR_ENDFOR is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it
+- lexical sort _NL's text is LAYOUT: the generated scanner emits it only where the parse admits it, and everywhere else the same text is skipped as layout -- tree-sitter-hcl's `_newline`, derived from the overlap
+- sort ConfigFile has the single constructor ConfigFile; collapsed to the named rule `config_file`
+- injection into Decl became a supertype member with no node of its own
+- sort Attribute has the single constructor Attribute; collapsed to the named rule `attribute`
+- sort Block has the single constructor Block; collapsed to the named rule `block`
+- sort Body's 2 productions share the constructor Body: one named rule `body` with a choice of their bodies, since SDF3's AST has one constructor
+- injection into Name became a supertype member with no node of its own
+- injection into Exp became a supertype member with no node of its own
+- Exp.UnaryExpression at priority level 8 became PREC at that level
+- Exp.BinaryExpression at priority level 7 became PREC_LEFT at that level
+- Exp.BinaryExpression at priority level 6 became PREC_LEFT at that level
+- Exp.BinaryExpression at priority level 5 became PREC_LEFT at that level
+- Exp.BinaryExpression at priority level 4 became PREC_LEFT at that level
+- Exp.BinaryExpression at priority level 3 became PREC_LEFT at that level
+- Exp.BinaryExpression at priority level 2 became PREC_LEFT at that level
+- Exp.BinaryExpression has 6 productions: one named rule `binary_expression` with a choice of their bodies, each at its own precedence, since SDF3's AST has one constructor
+- Exp.Conditional at priority level 1 became PREC_RIGHT at that level
+- Exp.GetAttr at priority level 9 became PREC at that level
+- Exp.Index at priority level 9 became PREC at that level
+- Exp.LegacyIndex at priority level 9 became PREC at that level
+- Exp.AttrSplat at priority level 9 became PREC_RIGHT at that level
+- Exp.FullSplat at priority level 9 became PREC_RIGHT at that level
+- injection into Literal became a supertype member with no node of its own
+- a `{Elem Sep}+` list expanded to seq/repeat; the expansion has no name in grammar.json
+- sort FunctionName has the single constructor FunctionName; collapsed to the named rule `function_name`
+- a `{Elem Sep}+` list expanded to seq/repeat; the expansion has no name in grammar.json
+- sort Arguments has the single constructor Arguments; collapsed to the named rule `arguments`
+- injection into Argument became a supertype member with no node of its own
+- sort Ellipsis has the single constructor Ellipsis; collapsed to the named rule `ellipsis`
+- a `{Elem Sep}+` list expanded to seq/repeat; the expansion has no name in grammar.json
+- sort Tuple has the single constructor Tuple; collapsed to the named rule `tuple`
+- sort Object has the single constructor Object; collapsed to the named rule `object`
+- sort ObjectElem has the single constructor ObjectElem; collapsed to the named rule `object_elem`
+- sort ForTupleExpr has the single constructor ForTupleExpr; collapsed to the named rule `for_tuple_expr`
+- sort ForObjectExpr has the single constructor ForObjectExpr; collapsed to the named rule `for_object_expr`
+- sort ForCond has the single constructor ForCond; collapsed to the named rule `for_cond`
+- sort Interp has the single constructor TemplateInterpolation; collapsed to the named rule `template_interpolation`
+- sort QuotedTemplate has the single constructor QuotedTemplate; collapsed to the named rule `quoted_template`
+- QLit.TemplateLiteral at priority level 0 became PREC_RIGHT at that level
+- sort QLit has the single constructor TemplateLiteral; collapsed to the named rule `template_literal`
+- sort QIf has the single constructor TemplateIf; collapsed to the named rule `template_if`
+- sort QElse has the single constructor ElseClause; collapsed to the named rule `else_clause`
+- sort QFor has the single constructor TemplateFor; collapsed to the named rule `template_for`
+- sort QBody has the single constructor TemplateBody; collapsed to the named rule `template_body`
+- sort HeredocTemplate has the single constructor HeredocTemplate; collapsed to the named rule `heredoc_template`
+- HLit.TemplateLiteral at priority level 0 became PREC_RIGHT at that level
+- sort HLit has the single constructor TemplateLiteral; collapsed to the named rule `h_lit_template_literal`
+- sort HLit's constructor TemplateLiteral is also another sort's: the rule `h_lit_template_literal` is aliased to the node type `template_literal` wherever HLit is referenced, so the two are one term in the tree
+- sort HIf has the single constructor TemplateIf; collapsed to the named rule `h_if_template_if`
+- sort HIf's constructor TemplateIf is also another sort's: the rule `h_if_template_if` is aliased to the node type `template_if` wherever HIf is referenced, so the two are one term in the tree
+- sort HElse has the single constructor ElseClause; collapsed to the named rule `h_else_else_clause`
+- sort HElse's constructor ElseClause is also another sort's: the rule `h_else_else_clause` is aliased to the node type `else_clause` wherever HElse is referenced, so the two are one term in the tree
+- sort HFor has the single constructor TemplateFor; collapsed to the named rule `h_for_template_for`
+- sort HFor's constructor TemplateFor is also another sort's: the rule `h_for_template_for` is aliased to the node type `template_for` wherever HFor is referenced, so the two are one term in the tree
+- sort HBody has the single constructor TemplateBody; collapsed to the named rule `h_body_template_body`
+- sort HBody's constructor TemplateBody is also another sort's: the rule `h_body_template_body` is aliased to the node type `template_body` wherever HBody is referenced, so the two are one term in the tree
+- lexical sort DELIM is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
+- lexical sort ESCAPE_SEQUENCE is scanned by the generated scanner as `escape_sequence`; no token rule emitted
+- lexical sort FLOAT became the token `float` /(?:(?:[0-9])+\.(?:[0-9])+(?:(?:[eE](?:[\-+])?(?:[0-9])+))?|(?:[0-9])+[eE](?:[\-+])?(?:[0-9])+)/
+- lexical sort HEREDOC_END is scanned by the generated scanner as `heredoc_end`; no token rule emitted
+- lexical sort HEREDOC_START is scanned by the generated scanner as `heredoc_start`; no token rule emitted
+- lexical sort HEX is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
+- lexical sort IDENTIFIER became the token `identifier` /[a-zA-Z_](?:[a-zA-Z0-9_\-])*/
+- lexical sort INTEGER became the token `integer` /(?:[0-9])+/
+- LAYOUT class became an extras pattern /[ \t]/
+- LAYOUT class became an extras pattern /(?:[\r])?[\n]/
+- LAYOUT production became the named extra `comment` /(?:#|\/\/)(?:[^\n\r])*/
+- LAYOUT production became the named extra `block_comment` /\/\*(?:(?:[^*]|(?:[*])+[^*\/]))*(?:[*])+\//
+- lexical sort QUOTE is scanned by the generated scanner as `quote`; no token rule emitted
+- lexical sort STRING_LIT became the token `string_lit` /"(?:(?:[^"\\\r\n]|\\[nrt"\\]|\\u(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])|\\U(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])(?:[0-9a-fA-F])))*"/
+- lexical sort _DIR_ELSE is scanned by the generated scanner as `_dir_else`; no token rule emitted
+- lexical sort _DIR_ENDFOR is scanned by the generated scanner as `_dir_endfor`; no token rule emitted
+- lexical sort _DIR_ENDIF is scanned by the generated scanner as `_dir_endif`; no token rule emitted
+- lexical sort _HCHUNK is scanned by the generated scanner as `_hchunk`; no token rule emitted
+- lexical sort _HTEXT is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
+- lexical sort _LEGACY_KEY became the token `_legacy_key` /\.(?:[0-9])+/
+- lexical sort _NL is scanned by the generated scanner as `_nl`; no token rule emitted
+- lexical sort _QCHUNK is scanned by the generated scanner as `_qchunk`; no token rule emitted
+- lexical sort _QESC is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
+- lexical sort _QSIGIL is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
+- lexical sort _QTEXT is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
+- `tokenize: "()[],:?.*"`: the reader split template literal runs at these characters, so each is its own token
+- `_expression` is the sort Exp: its supertype `_exp` is named `_expression`
+- `_declaration` is the sort Decl: its supertype `_decl` is named `_declaration`
+- `_name` is the sort Name: its supertype `_name` is named `_name`
+- `_literal` is the sort Literal: its supertype `_literal` is named `_literal`
+- `_argument` is the sort Argument: its supertype `_argument` is named `_argument`
+- `_body` threaded as a supertype over [body]; every reference to a member now goes through it, and the tree is unchanged
+- `_branch` threaded as a supertype over [conditional]; every reference to a member now goes through it, and the tree is unchanged
+- `_loop` threaded as a supertype over [for_tuple_expr, for_object_expr]; every reference to a member now goes through it, and the tree is unchanged
+- `_invocation` threaded as a supertype over [function_call]; every reference to a member now goes through it, and the tree is unchanged
+- `_access` threaded as a supertype over [get_attr, index, legacy_index, attr_splat, full_splat]; every reference to a member now goes through it, and the tree is unchanged
+- `_interpolation` threaded as a supertype over [template_interpolation]; every reference to a member now goes through it, and the tree is unchanged
+- `_clause` is a facet: [else_clause, for_cond] listed in roles.json
+- `_identifier` is a facet: [identifier] listed in roles.json
+- `_string` is a facet: [heredoc_template, quoted_template, string_lit] listed in roles.json
+- `_control_flow` threaded as a supertype over [_branch, _loop]; every reference to a member now goes through it, and the tree is unchanged
+- roles.json: 12 of 22 table-tier terms are supertypes, 6 facet(s), 44 named node(s), 11 uncategorised (vocabulary 0.1.0)
+

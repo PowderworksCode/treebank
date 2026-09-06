@@ -1,0 +1,13 @@
+{
+  "note": "if/else in three spike languages, the shape of test/rosetta/branching. `(_declaration body: (_body))` is the field pattern with a supertype child, the writable form; `(else_clause)` is asserted by concrete name because all three modules name the constructor ElseClause. `_control_flow` is 3: the branch and the two jumps it contains, since the containment nests `_jump` inside it.",
+  "queries": {
+    "(_declaration) @d": 1,
+    "(_declaration body: (_body)) @db": 1,
+    "(_branch) @b": 1,
+    "(_control_flow) @cf": 3,
+    "(_jump) @j": 2,
+    "(else_clause) @e": 1,
+    "(_clause) @c": 1,
+    "(_literal) @lit": 3
+  }
+}

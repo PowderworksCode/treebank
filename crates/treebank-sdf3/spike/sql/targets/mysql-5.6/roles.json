@@ -1,0 +1,58 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {},
+  "facets": {
+    "_clause": [
+      "as",
+      "bare",
+      "from",
+      "limit",
+      "offset",
+      "on_duplicate_key",
+      "order_by",
+      "where"
+    ],
+    "_comment": [
+      "comment",
+      "comment_2"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "backtick",
+      "reason": "a piece of [quoted], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "col_def",
+      "reason": "a piece of [create_table], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "int",
+      "reason": "a piece of [varchar, exp_int, limit, offset], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "item",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "name",
+      "reason": "a piece of [ident_name, call], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "order",
+      "reason": "a piece of [order_by], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "script",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "select",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "string",
+      "reason": "a piece of [str], which carry the roles; no term names it on its own"
+    }
+  ]
+}

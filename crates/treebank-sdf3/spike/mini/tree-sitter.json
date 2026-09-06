@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "mini",
+      "camelcase": "Mini",
+      "scope": "source.mini",
+      "file-types": ["mini"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike; not a shipped grammar"
+  }
+}

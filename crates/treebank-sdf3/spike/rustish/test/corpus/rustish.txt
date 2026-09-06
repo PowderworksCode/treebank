@@ -1,0 +1,81 @@
+; Expectations written from rustish.sdf3. The bindings are checked by
+; execution (tools/resolve_check.py); this corpus holds the tree shape.
+================================================================================
+a let is a statement with a pattern and a value; a block has statements and a tail
+================================================================================
+
+fn main() {
+    let x = 1;
+    x + 1
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (fn
+    name: (id)
+    body: (block
+      (let
+        pattern: (id)
+        value: (exp_int (int)))
+      tail: (add
+        left: (id)
+        right: (exp_int (int))))))
+
+================================================================================
+a fn item inside a block is a statement; a block is an expression; a return type
+================================================================================
+
+fn main() {
+    println!("{}", twice(4));
+    fn twice(n: i64) -> i64 {
+        n * 2
+    }
+    let y = { 5 };
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (fn
+    name: (id)
+    body: (block
+      (print
+        value: (call
+          function: (id)
+          arguments: (exp_int (int))))
+      (fn
+        name: (id)
+        parameters: (param name: (id))
+        ret: (ret)
+        body: (block
+          tail: (mul
+            left: (id)
+            right: (exp_int (int)))))
+      (let
+        pattern: (id)
+        value: (block
+          tail: (exp_int (int)))))))
+
+================================================================================
+a block as a statement needs no semicolon; a comment is an extra
+================================================================================
+
+fn main() {
+    // shadow inside
+    {
+        let x = 2;
+    }
+}
+
+--------------------------------------------------------------------------------
+
+(program
+  (fn
+    name: (id)
+    body: (block
+      (comment)
+      (block
+        (let
+          pattern: (id)
+          value: (exp_int (int)))))))

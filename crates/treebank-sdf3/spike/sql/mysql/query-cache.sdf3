@@ -1,0 +1,8 @@
+// SELECT SQL_CACHE: the query cache. MySQL 8.0 removed it (8.0.3 release
+// notes, "The query cache has been removed"); SQL_CACHE became a syntax
+// error and SQL_NO_CACHE (mysql/no-cache) was kept, deprecated, and ignored.
+// MariaDB kept both.
+module mysql/query-cache
+
+context-free syntax
+  SelectHint.Cache = <SQL_CACHE>

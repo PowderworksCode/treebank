@@ -1,0 +1,6 @@
+// A fork: MariaDB continues from MySQL 5.7's syntax, took CTEs and window
+// functions on its own schedule (10.2), kept the query cache, and never
+// took the `->` JSON operators. Said as imports and one hiding.
+module mariadb/10.11
+imports mysql/5.7 sql/cte sql/window
+hiding sql/json-arrow

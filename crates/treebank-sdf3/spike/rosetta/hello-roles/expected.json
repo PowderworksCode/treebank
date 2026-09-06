@@ -1,0 +1,13 @@
+{
+  "note": "the shape of test/rosetta/hello-roles over what the three spike modules share: two functions, three parameters, a loop, three returns, one call. `_scope` and `_binding` are not asserted here: Rust and JavaScript blocks are scopes and Python's are not, and the counts differ for that reason alone.",
+  "queries": {
+    "(_declaration) @d": 2,
+    "(_parameter) @p": 3,
+    "(_loop) @l": 1,
+    "(_jump) @j": 3,
+    "(_invocation) @i": 1,
+    "(_callable) @fn": 2,
+    "(_control_flow) @cf": 4,
+    "(_declaration name: (_name) @n)": 2
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "note": "Declared conflicts the tree-sitter lowering needs, each named by `tree-sitter generate` as unresolved and pinned here so the lowering is reproducible without the CLI. Regenerate with `--generate`; a diff means generate's view of the ambiguity moved.",
+  "conflicts": [
+    [
+      "template_id",
+      "_exp"
+    ]
+  ]
+}

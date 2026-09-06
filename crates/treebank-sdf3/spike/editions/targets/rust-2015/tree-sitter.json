@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "rust_2015",
+      "camelcase": "Rust2015",
+      "scope": "source.rust_2015",
+      "file-types": [
+        "rust_2015"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target rust/2015 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

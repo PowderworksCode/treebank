@@ -1,0 +1,12 @@
+// Window functions: PostgreSQL since 8.4, MySQL since 8.0, MariaDB since 10.2.
+module sql/window
+
+sorts
+  Partition
+
+context-free syntax
+  Exp.Over = <<Exp> OVER (<partition:Partition?> <order:OrderBy?>)>
+  Partition.Partition = <PARTITION BY <{Exp ","}+>>
+
+context-free priorities
+  {Exp.Over} > {Exp.Neg}

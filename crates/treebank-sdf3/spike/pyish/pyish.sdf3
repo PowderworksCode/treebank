@@ -1,0 +1,124 @@
+// pyish: the corner of Python where the structure is whitespace.
+//
+// A block is the statements indented past the line that opened it, and
+// every statement in a block starts at the same column; `else` sits at
+// its `if`'s column; a statement ends where the next line starts at or
+// left of its column, and a deeper next line continues it. CPython decides
+// all of this in its tokenizer with an indent stack that emits NEWLINE,
+// INDENT and DEDENT; tree-sitter-python does the same in a hand-written
+// external scanner. This module says none of that. It states the layout
+// facts in SDF3's declarative layout constraints (Spoofax's
+// layout-sensitive SDF3: `indent`, `align`, `align-list`, `offside`) and
+// leaves the mechanism to the lowering, which is the test: whether an
+// indent-stack scanner can be *derived* from what the language means.
+//
+// Symbol positions in a constraint are counted 1-based over every symbol
+// of the production, literals included. In `Stmt.If`, 1 is `if`, 4 is the
+// block and 5 is the optional else clause.
+//
+// The template whitespace is also the pretty-printer's layout (see
+// src/print.rs): bodies indented by four and `separate(2)` on `def`
+// are black's style, and tools/format_check.py holds the printer to black.
+//
+// The `name:` prefix on placeholders is a treebank extension (see mini),
+// and so are `scope(..)`, `binds(field -> scope as kind)` and
+// `refers(..)`: SDF3 has no binding attributes (Spoofax keeps name binding
+// in NaBL2/Statix, a separate language), and the design note wants a
+// binding next to the rule that creates it. They lower to bindings.json
+// and queries/locals.scm, and tools/bindings_check.py holds the data to
+// CPython's symtable on the programs under bindings/.
+
+module pyish
+
+context-free start-symbols
+  Program
+
+sorts
+  Program Stmt Block Else Param Exp
+
+lexical sorts
+  ID INT
+
+lexical syntax
+  ID     = [a-zA-Z\_] [a-zA-Z0-9\_]*
+  INT    = [0-9]+
+  LAYOUT = [\ \t\n\r]
+  LAYOUT = "#" ~[\n\r]*
+
+lexical restrictions
+  ID  -/- [a-zA-Z0-9\_]
+  INT -/- [0-9]
+
+context-free restrictions
+  LAYOUT? -/- [\ \t\n\r]
+
+context-free syntax
+  Program.Program = <<Stmt*>>           {layout(align-list 1), scope(module)}
+
+  Stmt.Assign = <<target:ID> = <value:Exp>>   {layout(offside 1 2 3), binds(target -> enclosing)}
+  Stmt.Expr   = <<Exp>>                       {layout(offside 1)}
+  Stmt.Return = <return <value:Exp>>          {layout(offside 1 2)}
+  Stmt.Global = <global <names:{ID ","}+>>  {binds(names -> module)}
+  Stmt.Pass   = <pass>
+  Stmt.Print  = <print(<value:Exp>)>
+  Stmt.If     = <
+    if <condition:Exp>:
+        <consequence:Block>
+    <alternative:Else?>
+  > {layout(indent 1 4, align 1 5)}
+  Stmt.While  = <
+    while <condition:Exp>:
+        <body:Block>
+  > {layout(indent 1 4)}
+  Stmt.Def    = <
+    def <name:ID>(<parameters:{Param ","}*>):
+        <body:Block>
+  > {layout(indent 1 7), scope(function), binds(name -> enclosing as function), separate(2)}
+
+  Else.ElseClause = <
+    else:
+        <body:Block>
+  > {layout(indent 1 3)}
+
+  Block.Block = <<Stmt+>>      {layout(align-list 1)}
+
+  Param.Param = <<name:ID>> {binds(name -> enclosing as parameter)}
+
+  Exp          = ID {refers(1)}
+  Exp.Int      = INT
+  Exp.Call     = <<function:Exp>(<arguments:{Exp ","}*>)>
+  Exp.Neg      = <-<operand:Exp>>
+  Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
+  Exp.Add      = <<left:Exp> + <right:Exp>> {left}
+  Exp.Sub      = <<left:Exp> - <right:Exp>> {left}
+  Exp.Lt       = [[left:Exp] < [right:Exp]] {non-assoc}
+  Exp          = <(<Exp>)> {bracket}
+
+context-free priorities
+  {Exp.Call}
+  > {Exp.Neg}
+  > {left: Exp.Mul}
+  > {left: Exp.Add Exp.Sub}
+  > {non-assoc: Exp.Lt}
+
+vocabulary
+  _statement    = Stmt
+  _expression   = Exp
+  _declaration  = Stmt.Def
+  _body         = Block
+  _parameter    = Param
+  _name         = ID
+  _literal      = Exp.Int
+  _directive    = Stmt.Global
+  _assignment   = Stmt.Assign
+  _invocation   = Exp.Call
+  _branch       = Stmt.If
+  _loop         = Stmt.While
+  _jump         = Stmt.Return
+  _control_flow = _branch _loop _jump
+  _clause       = Else
+
+template options
+  ID = keyword {reject}
+  keyword -/- [a-zA-Z0-9\_]
+  tokenize: "():,"

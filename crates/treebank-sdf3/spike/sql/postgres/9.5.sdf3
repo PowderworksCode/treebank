@@ -1,0 +1,2 @@
+module postgres/9.5
+imports postgres/9.4 postgres/on-conflict

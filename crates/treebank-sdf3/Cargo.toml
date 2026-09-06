@@ -1,0 +1,17 @@
+[package]
+name = "treebank-sdf3"
+version = "0.1.0"
+# Only the `treebank` crate is published. Everything else is a workspace
+# member: the grammars ship as wasm packs and the CLI is not a library.
+publish = false
+edition = "2021"
+license = "MIT"
+description = "A reader for SDF3 syntax definitions and a lowering to tree-sitter grammar.json: the meta-grammar spike from notes/metagrammar.md"
+
+[dependencies]
+anyhow = "1"
+# The vocabulary, the roles manifest and its checker: the spikes are held to
+# the same code the shipped grammars are. No engine, so no wasmer.
+treebank = { path = "../treebank", default-features = false }
+serde_json = { version = "1", features = ["preserve_order"] }
+winnow = "1"

@@ -1,0 +1,5 @@
+// Nothing this family models changed between 15 and 16; the module exists
+// because 16 is the version the oracle runs (verify.sh), and a target is
+// exact or it is nothing.
+module postgres/16
+imports postgres/15

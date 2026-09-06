@@ -1,0 +1,8 @@
+{
+  "note": "Rust editions as exact targets of one source (spike/rustish). rustc --edition is the oracle for every one of them, so every cell of the matrix is checked against the real thing.",
+  "targets": ["rust/2015", "rust/2018", "rust/2021", "rust/2024"],
+  "corpus": "corpus",
+  "suffix": ".rs",
+  "comment": "//",
+  "oracle": { "kind": "rustc" }
+}

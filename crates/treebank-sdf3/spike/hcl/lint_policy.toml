@@ -1,0 +1,34 @@
+# `treebank lint` baselines for the SDF3 rewrite of treebank-hcl, held
+# beside crates/treebank-hcl/lint_policy.toml's numbers. Every value is
+# the generated grammar's own, with the reference's in the comment, so a
+# diff between the two is a finding about the lowering and not about the
+# language.
+
+[baselines]
+# Reference: 0. The lowering declared none; tree-sitter generate needed
+# none. The single-token closing directives and the priority ladder settle
+# every ambiguity, as in grammar.js.
+declared_conflicts = 0
+
+# Reference: 0.
+early_commit_conflicts = 0
+
+# Reference: 0. No `{prefer}`/`{avoid}` in the module, so no dynamic weight.
+dynamic_weights = 0
+
+# Reference: 0. `"` is scanner-owned wherever a template may open or close
+# and `string_lit` is one internal token, exactly as grammar.js has it.
+same_text_tokens = 0
+
+# Reference: 9 (else, endfor, endif, false, for, if, in, null, true). Here
+# 6: `else`, `endif` and `endfor` sit inside the scanner-owned closing
+# directives (`_DIR_ELSE` and its siblings are lexical sorts kernel syntax
+# reaches), so the lexer never sees them as words. As in the reference,
+# none of these is debt: HCL reserves no words, and the module says so
+# with `IDENTIFIER = keyword {prefer}`.
+unreserved_keywords = 6
+
+# Reference: 474. Three more states, from the hidden rules the `_`-prefixed
+# sorts became (`_obj_elems`, `_for_intro`, `_label`) where grammar.js
+# writes the same shapes inline or as its own hidden rules.
+state_count = 477

@@ -1,0 +1,74 @@
+// rubyish: the corner of Ruby where the lexer needs the parser.
+//
+// The same characters lex differently by spacing and by what the parser
+// could accept: `foo -1` is a command call with a negative argument, while
+// `foo - 1` and `foo-1` are subtraction; `foo *a` splats, `foo * a`
+// multiplies; `foo [1]` passes an array, `foo[1]` indexes; `foo(1)` calls,
+// `foo (1)` passes a parenthesised argument; `a /b/` passes a regex, `a / b`
+// divides. CRuby decides these in its lexer with EXPR_ARG/EXPR_BEG state,
+// and treebank's ruby grammar decides them in an external scanner
+// (notes/field_guide.md §1, rung 1). In SDF3 they are layout constraints
+// on productions plus `{prefer}`, and this module is the test of whether
+// that survives lowering to tree-sitter.
+//
+// Layout constraints follow SDF3's `{layout(...)}` attribute with symbol
+// positions counted 1-based over every symbol of the production, literals
+// included. `1.last.col + 1 == 2.first.col` means symbols 1 and 2 are
+// adjacent; `<` means separated. Whether Spoofax's constraint language
+// admits the `+ 1` arithmetic exactly this way is to be checked against its
+// grammar; the shape is the documented one.
+//
+// The `name:` prefix on placeholders is a treebank extension (see mini).
+
+module rubyish
+
+context-free start-symbols
+  Program
+
+sorts
+  Program Stmt Exp Arg
+
+lexical sorts
+  ID INT REGEX NL
+
+lexical syntax
+  ID     = [a-z\_] [a-zA-Z0-9\_]*
+  INT    = [0-9]+
+  REGEX  = "/" ~[\/\n\ \t] ~[\/\n]* "/"
+  NL     = [\n] ([\ \t\n] | "#" ~[\n]*)*
+  LAYOUT = [\ \t]
+  LAYOUT = "#" ~[\n]*
+
+lexical restrictions
+  ID  -/- [a-zA-Z0-9\_]
+  INT -/- [0-9]
+
+context-free syntax
+  Program.Program = <<NL?><Stmt*>>
+
+  Stmt.Assign = <<target:ID> = <value:Exp><NL>>
+  Stmt.Expr   = <<Exp><NL>>
+
+  Exp          = ID
+  Exp.Int      = INT
+  Exp.Regex    = REGEX
+  Exp.Array    = <[<elements:{Exp ","}*>]>
+  Exp          = <(<Exp>)> {bracket}
+  Exp.Index    = <<receiver:Exp>[<index:Exp>]>          {layout(1.last.col + 1 == 2.first.col)}
+  Exp.Call     = <<method:ID>(<arguments:{Exp ","}*>)>  {layout(1.last.col + 1 == 2.first.col)}
+  Exp.Command  = <<method:ID> <argument:Arg>>           {layout(1.last.col + 1 < 2.first.col), prefer}
+  Exp.Neg      = <-<operand:Exp>>                       {layout(1.last.col + 1 == 2.first.col)}
+  Exp.Mul      = <<left:Exp> * <right:Exp>> {left}
+  Exp.Div      = <<left:Exp> / <right:Exp>> {left}
+  Exp.Add      = <<left:Exp> + <right:Exp>> {left}
+  Exp.Sub      = <<left:Exp> - <right:Exp>> {left}
+
+  Arg          = Exp
+  Arg.Splat    = <*<operand:Exp>>                       {layout(1.last.col + 1 == 2.first.col)}
+
+context-free priorities
+  {Exp.Index Exp.Call}
+  > {Exp.Neg}
+  > {left: Exp.Mul Exp.Div}
+  > {left: Exp.Add Exp.Sub}
+  > {Exp.Command}

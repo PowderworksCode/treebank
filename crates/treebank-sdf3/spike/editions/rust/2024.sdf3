@@ -1,0 +1,2 @@
+module rust/2024
+imports rust/2021 rust/keywords-2024

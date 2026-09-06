@@ -1,0 +1,23 @@
+// What every MySQL-family version here has on top of sql/core: backtick
+// identifiers, double-quoted strings, `#` comments, and the upsert forms.
+module mysql/base
+
+imports sql/core sql/limit
+
+lexical sorts
+  BACKTICK DQSTRING
+
+lexical syntax
+  BACKTICK = "`" ~[`]* "`"
+  DQSTRING = "\"" ~[\"]* "\""
+  STRING   = DQSTRING
+  LAYOUT   = "#" ~[\n\r]*
+
+context-free restrictions
+  LAYOUT? -/- [\#]
+
+context-free syntax
+  Ident.Quoted = BACKTICK
+  InsertHint.Ignore = <IGNORE>
+  Upsert.OnDuplicateKey = <ON DUPLICATE KEY UPDATE <{Assign ","}+>>
+  Stmt.Replace = <REPLACE INTO <table:Ident> (<columns:{Ident ","}+>) VALUES (<values:{Exp ","}+>);>

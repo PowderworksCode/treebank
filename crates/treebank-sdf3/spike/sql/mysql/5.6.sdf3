@@ -1,0 +1,2 @@
+module mysql/5.6
+imports mysql/base mysql/query-cache mysql/no-cache

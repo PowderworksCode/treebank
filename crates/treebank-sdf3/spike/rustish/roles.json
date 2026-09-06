@@ -1,0 +1,32 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {},
+  "facets": {
+    "_binding": [
+      "fn",
+      "let",
+      "let_mut",
+      "param"
+    ],
+    "_callable": [
+      "fn"
+    ],
+    "_clause": [
+      "else_clause"
+    ],
+    "_comment": [
+      "comment"
+    ],
+    "_scope": [
+      "block",
+      "fn",
+      "program"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "int",
+      "reason": "a piece of [exp_int], which carry the roles; no term names it on its own"
+    }
+  ]
+}

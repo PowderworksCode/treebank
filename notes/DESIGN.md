@@ -468,6 +468,11 @@ accepting it for mysql — and adding one more oracle to it moved adjudicated
 gaps from 48 to 364 in a single sweep, with nothing about the grammar
 changed. **A union across siblings is never built.**
 
+A spiked alternative to the within-a-row union is in `notes/metagrammar.md`
+§22: the family keeps one source and lowers to one exact parser per dialect
+and version, so the three cases above and `version_policy.toml` have nothing
+to arbitrate. It is measured there, not adopted here.
+
 #### Narrowing a shared table
 
 A rung-1 row narrower than the table it shares carries `narrowing.json` in

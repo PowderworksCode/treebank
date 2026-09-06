@@ -1,0 +1,8 @@
+// The 2018 edition reserved async, await, dyn and try.
+module rust/keywords-2018
+
+lexical syntax
+  ID = "async" {reject}
+  ID = "await" {reject}
+  ID = "dyn"   {reject}
+  ID = "try"   {reject}

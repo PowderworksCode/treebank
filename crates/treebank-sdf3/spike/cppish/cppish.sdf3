@@ -1,0 +1,22 @@
+// cppish: C plus the one thing that makes C++ hard to parse.
+//
+// `a < b > c;` is either the expression `(a < b) > c` or a declaration of
+// `c` with type `a<b>`, and nothing short of a symbol table decides it.
+// SDF3 parses both and keeps them; `{prefer}` picks the template reading
+// when both survive to the end of the statement. treebank-cpp carries the
+// same ambiguity as declared conflicts, and cut template arguments in
+// EXPRESSION position (`f<int>(x)`) to keep its table converging -- see its
+// ledger. This module keeps them in TYPE position only, as that grammar
+// does.
+//
+// The module IMPORTS cish rather than copying it: SDF3 composition is
+// additive, so `Type` gains a production and every other rule is cish's.
+// `>>` stays a single token in cish; `vector<vector<int>> v;` must still
+// parse, which tree-sitter's state-aware lexer settles without a scanner.
+
+module cppish
+
+imports cish
+
+context-free syntax
+  Type.TemplateId = <<name:ID>\<<arguments:{Type ","}+>\>> {prefer}
