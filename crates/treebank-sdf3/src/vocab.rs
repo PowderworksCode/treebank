@@ -158,6 +158,7 @@ pub fn apply(
             let nodes: BTreeSet<String> = members
                 .iter()
                 .flat_map(|m| closure_of(grammar, m))
+                .map(|n| names.alias.get(&n).cloned().unwrap_or(n))
                 .collect();
             facets
                 .entry(term.to_string())
@@ -383,6 +384,11 @@ fn closure_of(grammar: &Value, rule: &str) -> BTreeSet<String> {
                 for m in members {
                     if let Some(n) = m["name"].as_str() {
                         stack.push(n.to_string());
+                    } else if m["type"] == "ALIAS" && m["named"] == true {
+                        // A member aliased to a node type is that type.
+                        if let Some(v) = m["value"].as_str() {
+                            out.insert(v.to_string());
+                        }
                     }
                 }
             }
@@ -439,9 +445,19 @@ fn named_nodes(grammar: &Value) -> Vec<String> {
             todo.extend(refs);
         }
     }
+    // A rule referenced only through a named alias is no node type of its
+    // own; the alias's name is one.
+    let mut bare: BTreeSet<String> = BTreeSet::new();
+    let mut aliased: BTreeSet<String> = BTreeSet::new();
+    let mut alias_names: BTreeSet<String> = BTreeSet::new();
+    for body in rules.values().chain(grammar["extras"].as_array().into_iter().flatten()) {
+        alias_refs(body, false, &mut bare, &mut aliased, &mut alias_names);
+    }
     let mut v: Vec<String> = reached
         .into_iter()
         .filter(|k| !k.starts_with('_'))
+        .filter(|k| bare.contains(k) || !aliased.contains(k))
+        .chain(alias_names)
         .collect();
     if let Some(ext) = grammar["externals"].as_array() {
         for e in ext {
@@ -455,6 +471,45 @@ fn named_nodes(grammar: &Value) -> Vec<String> {
     v.sort();
     v.dedup();
     v
+}
+
+/// Symbols referenced bare, symbols referenced as the content of a named
+/// alias, and the alias names.
+fn alias_refs(
+    v: &Value,
+    in_alias: bool,
+    bare: &mut BTreeSet<String>,
+    aliased: &mut BTreeSet<String>,
+    alias_names: &mut BTreeSet<String>,
+) {
+    match v {
+        Value::Object(o) => {
+            let ty = o.get("type").and_then(Value::as_str);
+            if ty == Some("SYMBOL") {
+                if let Some(n) = o.get("name").and_then(Value::as_str) {
+                    if in_alias {
+                        aliased.insert(n.to_string());
+                    } else {
+                        bare.insert(n.to_string());
+                    }
+                }
+                return;
+            }
+            let named_alias = ty == Some("ALIAS") && o.get("named") == Some(&Value::Bool(true));
+            if named_alias {
+                if let Some(n) = o.get("value").and_then(Value::as_str) {
+                    alias_names.insert(n.to_string());
+                }
+            }
+            for x in o.values() {
+                alias_refs(x, in_alias || named_alias, bare, aliased, alias_names);
+            }
+        }
+        Value::Array(a) => a
+            .iter()
+            .for_each(|x| alias_refs(x, in_alias, bare, aliased, alias_names)),
+        _ => {}
+    }
 }
 
 fn symbols_in(v: &Value, out: &mut Vec<String>) {

@@ -71,19 +71,19 @@ program
     ;
 
 statement
-    :     target=ID '=' value=expression H_NEWLINE  # assign
+    :     target=ID  '='  value=expression H_NEWLINE  # assign
     |     expression H_NEWLINE  # expr
-    |     'return' value=expression H_NEWLINE  # return
-    |     'global' names+=ID (',' names+=ID)* H_NEWLINE  # global
+    |     'return'  value=expression H_NEWLINE  # return
+    |     'global'  names+=ID (',' names+=ID)* H_NEWLINE  # global
     |     'pass' H_NEWLINE  # pass
-    |     'print' '(' value=expression ')' H_NEWLINE  # print
-    |     'if' condition=expression ':' H_INDENT consequence=block H_DEDENT (alternative=else_clause)?  # if
-    |     'while' condition=expression ':' H_INDENT body=block H_DEDENT  # while
-    |     'def' name=ID '(' (parameters+=param (',' parameters+=param)*)? ')' ':' H_INDENT body=block H_DEDENT  # def
+    |     'print'  '('  value=expression  ')' H_NEWLINE  # print
+    |     'if'  condition=expression  ':'  H_INDENT consequence=block H_DEDENT  (alternative=else_clause)?  # if
+    |     'while'  condition=expression  ':'  H_INDENT body=block H_DEDENT  # while
+    |     'def'  name=ID  '('  (parameters+=param (',' parameters+=param)*)?  ')'  ':'  H_INDENT body=block H_DEDENT  # def
     ;
 
 else_clause
-    : 'else' ':' H_INDENT body=block H_DEDENT
+    : 'else'  ':'  H_INDENT body=block H_DEDENT
     ;
 
 block
@@ -95,15 +95,15 @@ param
     ;
 
 expression
-    :     function=expression '(' (arguments+=expression (',' arguments+=expression)*)? ')'  # call
-    |     '-' operand=expression  # neg
-    |     left=expression '*' right=expression  # mul
-    |     left=expression '+' right=expression  # add
-    |     left=expression '-' right=expression  # sub
-    |     left=expression '<' right=expression  # lt
+    :     function=expression  '('  (arguments+=expression (',' arguments+=expression)*)?  ')'  # call
+    |     '-'  operand=expression  # neg
+    |     left=expression  '*'  right=expression  # mul
+    |     left=expression  '+'  right=expression  # add
+    |     left=expression  '-'  right=expression  # sub
+    |     left=expression  '<'  right=expression  # lt
     |     ID  # inj_exp_1
     |     INT  # exp_int
-    |     '(' expression ')'  # exp_bracket
+    |     '('  expression  ')'  # exp_bracket
     ;
 
 H_NEWLINE : ( '\r'? '\n' | '\r' ) [ \t]* { self.on_newline() } ;

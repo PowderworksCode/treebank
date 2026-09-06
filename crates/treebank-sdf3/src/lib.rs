@@ -18,6 +18,7 @@ pub mod antlr;
 pub mod ast;
 pub mod bindings;
 pub mod lower;
+pub mod nfa;
 pub mod parse;
 pub mod print;
 pub mod scanner;
@@ -149,8 +150,9 @@ fn prune(
                 for c in chains.iter_mut() {
                     for g in &mut c.groups {
                         g.members.retain(|m| !refs.contains(m));
+                        g.prods.retain(|q| !removed.iter().any(|r| r.same_as(q)));
                     }
-                    c.groups.retain(|g| !g.members.is_empty());
+                    c.groups.retain(|g| !g.members.is_empty() || !g.prods.is_empty());
                 }
                 chains.retain(|c| !c.groups.is_empty());
             }

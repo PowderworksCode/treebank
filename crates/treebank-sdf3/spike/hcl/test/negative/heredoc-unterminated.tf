@@ -1,0 +1,2 @@
+x = <<EOT
+hello

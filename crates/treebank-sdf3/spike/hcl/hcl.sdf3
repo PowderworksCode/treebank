@@ -1,0 +1,306 @@
+// hcl: treebank-hcl, rewritten in SDF3 end to end.
+//
+// The shipped grammar (crates/treebank-hcl/grammar.js, 64 rules, a
+// 479-line scanner) is the reference. This module is held to that crate's
+// own corpus, negative corpus, roles gate, lint baselines, shape check and
+// the sweep over the locked Terraform corpus, and the question is not
+// whether it can be written -- it can -- but what the findings ledger
+// looks like at this size, and what the scanner had to say that the
+// grammar could not.
+//
+// The three decisions grammar.js records are taken here as follows.
+//
+// NEWLINES. HCL is newline sensitive at body level and inside an object,
+// and not inside `(...)`, `[...]`, a call or an index. grammar.js makes
+// `_newline` an external token the scanner emits only where the parse
+// table admits one. SDF3 has the same idea without the scanner: `_NL` is
+// a lexical sort whose text is also LAYOUT, so a derivation that needs a
+// line terminator takes one and every other line break is layout. The
+// lowering to tree-sitter derives the scanner's newline rule from that
+// overlap; the winnow lowering matches `_NL` before it skips layout.
+//
+// KEYWORDS. HCL has no reserved words. `for = 1` and `x = for` are valid;
+// `for` is a keyword only where a for-expression may begin. The template
+// option `IDENTIFIER = keyword {prefer}` says exactly that: a keyword wins
+// over the identifier where the grammar admits it and is an identifier
+// elsewhere. Two negative fixtures that need the keyword to win where the
+// grammar admits BOTH readings (`[for, a]`) are the cost, and are named in
+// the results.
+//
+// TEMPLATES. A quoted template and a heredoc carry one sub-language over
+// two kinds of literal text, and grammar.js keeps a mode stack in the
+// scanner to lex the text. Here the sub-language is written in kernel
+// syntax (SDF3's `syntax` section, where no layout is admitted between
+// symbols unless `LAYOUT?-CF` is written), once per literal-text sort,
+// and the constructors coincide (`QIf.TemplateIf` and `HIf.TemplateIf`
+// are one term), so the trees do not differ. The lowering derives the
+// scanner from the kernel syntax: every lexical sort reached where no
+// layout may precede it is scanned by the generated scanner, which is
+// consulted before tree-sitter's extras. What remains is one thing SDF3
+// cannot say: the heredoc's closing delimiter is the word its opener
+// chose. That is the `delimiter(1, 3)` attribute, the one extension this
+// module needed that is about parsing rather than about naming.
+
+module hcl
+
+context-free start-symbols
+  ConfigFile
+
+sorts
+  ConfigFile Decl Attribute Block Body
+  Exp Literal Name Argument Arguments FunctionName Ellipsis
+  Tuple Object ObjectElem ForTupleExpr ForObjectExpr ForCond
+  QuotedTemplate HeredocTemplate Interp
+  _QPart QLit QIf QElse QFor QBody
+  _HPart HLit HIf HElse HFor HBody
+  _Label _ObjElems _ObjSep _ForIntro _ForSecond _SplatSuffix _SplatName
+  _BinOpMul _BinOpAdd _BinOpCmp _BinOpEq _BinOpAnd _BinOpOr _UnOp
+  _InterpOpen _InterpClose _DirOpen _DirClose _DirIf _DirFor _ObjAssign
+
+lexical sorts
+  IDENTIFIER INTEGER FLOAT STRING_LIT QUOTE ESCAPE_SEQUENCE
+  HEREDOC_START HEREDOC_END DELIM HEX
+  _NL _LEGACY_KEY _QCHUNK _HCHUNK _QTEXT _HTEXT _QESC _QSIGIL
+  _DIR_ELSE _DIR_ENDIF _DIR_ENDFOR
+
+lexical syntax
+  IDENTIFIER  = [a-zA-Z\_] [a-zA-Z0-9\_\-]*
+  INTEGER     = [0-9]+
+  FLOAT       = [0-9]+ "." [0-9]+ ([eE] [\-\+]? [0-9]+)?
+  FLOAT       = [0-9]+ [eE] [\-\+]? [0-9]+
+  HEX         = [0-9a-fA-F]
+  STRING_LIT  = "\"" (~[\"\\\r\n] | "\\" [nrt\"\\] | "\\u" HEX HEX HEX HEX | "\\U" HEX HEX HEX HEX HEX HEX HEX HEX)* "\""
+  QUOTE       = "\""
+  ESCAPE_SEQUENCE = "\\" ([nrt\"\\] | "u" HEX HEX HEX HEX | "U" HEX HEX HEX HEX HEX HEX HEX HEX)
+  _LEGACY_KEY = "." [0-9]+
+
+  // Literal template text. A `$` or `%` is text unless a `{` follows it
+  // (the restriction on _QSIGIL says so), and `$${` and `%%{` are the
+  // escaped introductions. A quoted template's text stops at the quote, a
+  // backslash and a line break; a heredoc's is one line at most, or the
+  // part of a line before an introduction, and a backslash is text.
+  _QTEXT  = ~[\"\\\$\%\n\r]
+  _HTEXT  = ~[\$\%\n\r]
+  _QESC   = "$${"
+  _QESC   = "%%{"
+  _QSIGIL = [\$\%]
+  _QCHUNK = (_QTEXT | _QESC | _QSIGIL)+
+  _HCHUNK = (_HTEXT | _QESC | _QSIGIL)* [\r]? [\n]
+  _HCHUNK = (_HTEXT | _QESC | _QSIGIL)+
+
+  // `<<EOT` or `<<-EOT` through its line break, and the delimiter line
+  // that closes it, trailing spaces included and its line break not: HCL
+  // requires one after the delimiter, and the attribute's own terminator
+  // is what takes it.
+  DELIM         = [a-zA-Z0-9\_\-]+
+  HEREDOC_START = "<<" "-"? DELIM [\r]? [\n]
+  HEREDOC_END   = [\ \t]* DELIM [\ \t]*
+
+  // The closing directives, one token each, which is what buys the
+  // grammar its freedom from conflicts (see grammar.js).
+  _DIR_ELSE   = "%{" "~"? [\ \t\r\n]* "else" [\ \t\r\n]* "~"? "}"
+  _DIR_ENDIF  = "%{" "~"? [\ \t\r\n]* "endif" [\ \t\r\n]* "~"? "}"
+  _DIR_ENDFOR = "%{" "~"? [\ \t\r\n]* "endfor" [\ \t\r\n]* "~"? "}"
+
+  // The line terminator: a run of line breaks, blank lines between them
+  // included, whose text is also LAYOUT. It begins at the break itself, so
+  // the horizontal layout before it is layout, not part of it. A bare
+  // carriage return is not a line ending in HCL and is not layout either.
+  _NL = [\r]? [\n] ([\ \t]* [\r]? [\n])*
+
+  LAYOUT = [\ \t]
+  LAYOUT = [\r]? [\n]
+  LAYOUT.Comment = ("#" | "//") ~[\n\r]*
+  LAYOUT.BlockComment = "/*" (~[\*] | [\*]+ ~[\*\/])* [\*]+ "/"
+
+lexical restrictions
+  IDENTIFIER -/- [a-zA-Z0-9\_\-]
+  INTEGER    -/- [0-9\.eE]
+  FLOAT      -/- [0-9]
+  DELIM      -/- [a-zA-Z0-9\_\-]
+  _QSIGIL    -/- [\{]
+  HEREDOC_END -/- ~[\n\r] | [\EOF]
+
+context-free restrictions
+  LAYOUT? -/- [\ \t\n\r]
+  LAYOUT? -/- [\#]
+  LAYOUT? -/- [\/].[\/]
+  LAYOUT? -/- [\/].[\*]
+
+context-free syntax
+  // A file is a body without braces. Every item but the last carries a
+  // terminator; the last may end at end of file.
+  ConfigFile.ConfigFile = <<(Decl _NL)*><Decl?>> {scope(module)}
+
+  Decl = Attribute
+  Decl = Block
+
+  Attribute.Attribute = <<name:Name> = <value:Exp>> {binds(name -> enclosing as attribute)}
+  Block.Block = <<type:Name> <label:_Label*> <body:Body>> {binds(type -> enclosing as block)}
+  _Label = Name
+  _Label = STRING_LIT
+
+  // The spec's Block and OneLineBlock: once a body takes the line break
+  // after `{` it must have one before `}` too; a one-line body admits one
+  // attribute and no nested block.
+  Body.Body = <{<_NL><(Decl _NL)*>}> {scope(block)}
+  Body.Body = <{<Attribute?>}> {scope(block)}
+
+  Name = IDENTIFIER
+
+  // Expressions. One sort, one precedence ladder (hclsyntax/spec.md,
+  // "Operations"), the suffix operators above the unary ones.
+  Exp = Literal
+  Exp = IDENTIFIER {refers(1)}
+  Exp = QuotedTemplate
+  Exp = HeredocTemplate
+  Exp = Tuple
+  Exp = Object
+  Exp = ForTupleExpr
+  Exp = ForObjectExpr
+  Exp.FunctionCall = <<function:FunctionName>(<Arguments?>)>
+  Exp.ParenthesizedExpression = <(<Exp>)>
+
+  Exp.UnaryExpression = <<operator:_UnOp><operand:Exp>>
+  _UnOp = "-"
+  _UnOp = "!"
+
+  Exp.BinaryExpression = <<left:Exp> <operator:_BinOpMul> <right:Exp>> {left}
+  Exp.BinaryExpression = <<left:Exp> <operator:_BinOpAdd> <right:Exp>> {left}
+  Exp.BinaryExpression = <<left:Exp> <operator:_BinOpCmp> <right:Exp>> {left}
+  Exp.BinaryExpression = <<left:Exp> <operator:_BinOpEq> <right:Exp>> {left}
+  Exp.BinaryExpression = <<left:Exp> <operator:_BinOpAnd> <right:Exp>> {left}
+  Exp.BinaryExpression = <<left:Exp> <operator:_BinOpOr> <right:Exp>> {left}
+  _BinOpMul = "*"
+  _BinOpMul = "/"
+  _BinOpMul = "%"
+  _BinOpAdd = "+"
+  _BinOpAdd = "-"
+  _BinOpCmp = ">"
+  _BinOpCmp = ">="
+  _BinOpCmp = "<"
+  _BinOpCmp = "<="
+  _BinOpEq = "=="
+  _BinOpEq = "!="
+  _BinOpAnd = "&&"
+  _BinOpOr = "||"
+
+  Exp.Conditional = <<condition:Exp> ? <consequence:Exp> : <alternative:Exp>> {right}
+
+  // Access. A conditional is not an ExprTerm in HCL, so `a ? b : c[0]`
+  // indexes `c`; the priority ladder says so. `.0` is the HIL-compatible
+  // index the spec requires, one token, adjacent to its operand.
+  Exp.GetAttr = <<operand:Exp>.<name:Name>>
+  Exp.Index = <<operand:Exp>[<key:Exp>]>
+  Exp.LegacyIndex = <<operand:Exp><key:_LEGACY_KEY>> {layout(1.last.col + 1 == 2.first.col)}
+  Exp.AttrSplat = <<operand:Exp>.*<_SplatName*>> {right}
+  Exp.FullSplat = <<operand:Exp>[*]<_SplatSuffix*>> {right}
+  _SplatName = <.<name:Name>>
+  _SplatSuffix = <.<name:Name>>
+  _SplatSuffix = <[<key:Exp>]>
+
+  Literal = INTEGER
+  Literal = FLOAT
+  Literal.True = <true>
+  Literal.False = <false>
+  Literal.Null = <null>
+
+  FunctionName.FunctionName = <<{Name "::"}+>>
+  Arguments.Arguments = <<{Argument ","}+><("," | Ellipsis)?>>
+  Argument = Exp
+  Ellipsis.Ellipsis = "..."
+
+  // A tuple's elements are separated by commas only; line breaks inside
+  // the brackets are layout because no `_NL` is admitted here.
+  Tuple.Tuple = <[<({Exp ","}+ ","?)?>]>
+
+  // An object's elements are separated by a comma or a line break, and a
+  // line break after a comma is layout where a comma after a line break
+  // is a second separator.
+  Object.Object = <{<_NL?><_ObjElems?>}>
+  _ObjElems = <<ObjectElem><(_ObjSep ObjectElem)*><_ObjSep?>>
+  _ObjSep = <,<_NL?>>
+  _ObjSep = <<_NL>>
+  ObjectElem.ObjectElem = <<key:Exp><_ObjAssign><value:Exp>>
+  _ObjAssign = "="
+  _ObjAssign = ":"
+
+  ForTupleExpr.ForTupleExpr = <[<_ForIntro><result:Exp><condition:ForCond?>]> {scope(for)}
+  ForObjectExpr.ForObjectExpr = <{<_NL?><_ForIntro><key:Exp> =\> <value:Exp><grouping:Ellipsis?><condition:ForCond?>}> {scope(for)}
+  _ForIntro = <for <binding:Name><_ForSecond?> in <collection:Exp> :>
+  _ForSecond = <, <binding:Name>>
+  ForCond.ForCond = <if <condition:Exp>>
+
+  // The template sub-language's context-free parts: an interpolation and
+  // the heads of the two directives admit layout inside their braces.
+  Interp.TemplateInterpolation = <<_InterpOpen><expression:Exp><_InterpClose>>
+  _InterpOpen = "${~"
+  _InterpOpen = "${"
+  _InterpClose = "~}"
+  _InterpClose = "}"
+  _DirOpen = "%{~"
+  _DirOpen = "%{"
+  _DirClose = "~}"
+  _DirClose = "}"
+  _DirIf = <<_DirOpen> if <condition:Exp> <_DirClose>>
+  _DirFor = <<_DirOpen> for <binding:Name><_ForSecond?> in <collection:Exp> <_DirClose>>
+
+  _QPart = QLit
+  _QPart = Interp
+  _QPart = QIf
+  _QPart = QFor
+  _HPart = HLit
+  _HPart = Interp
+  _HPart = HIf
+  _HPart = HFor
+
+// Kernel syntax: between these symbols no layout is admitted, since a
+// template's text is text. The quoted form and the heredoc form are the
+// same sub-language over different literal text.
+syntax
+  QuotedTemplate-CF.QuotedTemplate = <<QUOTE-LEX><_QPart*-CF><QUOTE-LEX>>
+  QLit-CF.TemplateLiteral = <<(_QCHUNK-LEX | ESCAPE_SEQUENCE-LEX)+>> {right}
+  QIf-CF.TemplateIf = <<_DirIf-CF><consequence:QBody?-CF><QElse?-CF><_DIR_ENDIF-LEX>>
+  QElse-CF.ElseClause = <<_DIR_ELSE-LEX><alternative:QBody?-CF>>
+  QFor-CF.TemplateFor = <<_DirFor-CF><body:QBody?-CF><_DIR_ENDFOR-LEX>> {scope(for)}
+  QBody-CF.TemplateBody = <<_QPart+-CF>>
+
+  HeredocTemplate-CF.HeredocTemplate = <<HEREDOC_START-LEX><_HPart*-CF><HEREDOC_END-LEX>> {delimiter(1, 3)}
+  HLit-CF.TemplateLiteral = <<_HCHUNK+-LEX>> {right}
+  HIf-CF.TemplateIf = <<_DirIf-CF><consequence:HBody?-CF><HElse?-CF><_DIR_ENDIF-LEX>>
+  HElse-CF.ElseClause = <<_DIR_ELSE-LEX><alternative:HBody?-CF>>
+  HFor-CF.TemplateFor = <<_DirFor-CF><body:HBody?-CF><_DIR_ENDFOR-LEX>> {scope(for)}
+  HBody-CF.TemplateBody = <<_HPart+-CF>>
+
+context-free priorities
+  {Exp.GetAttr Exp.Index Exp.LegacyIndex Exp.AttrSplat Exp.FullSplat}
+  > {Exp.UnaryExpression}
+  > {left: Exp.BinaryExpression = <<left:Exp> <operator:_BinOpMul> <right:Exp>>}
+  > {left: Exp.BinaryExpression = <<left:Exp> <operator:_BinOpAdd> <right:Exp>>}
+  > {left: Exp.BinaryExpression = <<left:Exp> <operator:_BinOpCmp> <right:Exp>>}
+  > {left: Exp.BinaryExpression = <<left:Exp> <operator:_BinOpEq> <right:Exp>>}
+  > {left: Exp.BinaryExpression = <<left:Exp> <operator:_BinOpAnd> <right:Exp>>}
+  > {left: Exp.BinaryExpression = <<left:Exp> <operator:_BinOpOr> <right:Exp>>}
+  > {right: Exp.Conditional}
+
+vocabulary
+  _expression    = Exp
+  _declaration   = Decl
+  _name          = Name
+  _literal       = Literal
+  _argument      = Argument
+  _body          = Body
+  _branch        = Exp.Conditional
+  _loop          = ForTupleExpr ForObjectExpr
+  _control_flow  = _branch _loop
+  _invocation    = Exp.FunctionCall
+  _access        = Exp.GetAttr Exp.Index Exp.LegacyIndex Exp.AttrSplat Exp.FullSplat
+  _interpolation = Interp
+  _clause        = QElse HElse ForCond
+  _identifier    = IDENTIFIER
+  _string        = QuotedTemplate HeredocTemplate STRING_LIT
+
+template options
+  IDENTIFIER = keyword {prefer}
+  keyword -/- [a-zA-Z0-9\_\-]
+  tokenize: "()[],:?.*"

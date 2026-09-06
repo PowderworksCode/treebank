@@ -22,6 +22,10 @@ struct St<'a> {
     offside: Vec<usize>,
     last_end: usize,
     furthest: usize,
+    /// The span of the captured sort inside the last lexical token.
+    cap: Option<(usize, usize)>,
+    /// Open delimiters: the closer's parser and the word it must carry.
+    delim: Vec<(fn(&mut In<'a>) -> ModalResult<Node>, String)>,
 }
 
 impl<'a> St<'a> {
@@ -30,7 +34,7 @@ impl<'a> St<'a> {
         for (k, c) in src.char_indices() {
             if c == '\n' { line_starts.push(k + 1); }
         }
-        St { src, line_starts, comments: BTreeMap::new(), offside: Vec::new(), last_end: 0, furthest: 0 }
+        St { src, line_starts, comments: BTreeMap::new(), offside: Vec::new(), last_end: 0, furthest: 0, cap: None, delim: Vec::new() }
     }
 }
 
@@ -56,6 +60,16 @@ fn line_end(i: &In, p: usize) -> usize {
 }
 
 fn bt() -> ErrMode<ContextError> { ErrMode::Backtrack(ContextError::new()) }
+fn no_layout(_i: &mut In) -> ModalResult<()> { Ok(()) }
+/// Is the innermost open delimiter's closer here, at the start of a line?
+fn closer_here(i: &mut In) -> bool {
+    let Some((f, w)) = i.state.delim.last().cloned() else { return false };
+    if col(i, pos(i)) != 0 { return false; }
+    let cp = save(i);
+    let hit = f(i).is_ok() && i.state.cap.map(|(s, e)| i.state.src[s..e] == *w).unwrap_or(false);
+    restore(i, &cp);
+    hit
+}
 type Cp<'a> = (<In<'a> as Stream>::Checkpoint, usize);
 /// A checkpoint that also remembers the last token end, which winnow's
 /// reset would not restore.
@@ -109,6 +123,15 @@ fn sexp(n: &Node, field: Option<&str>, out: &mut String) {
     out.push(')');
 }
 
+fn layout_nl(i: &mut In) -> ModalResult<()> {
+    loop {
+        let mut progressed = false;
+        if let Ok(()) = run(((one_of(|c: char| matches!(c, ' ' | '\t' | '\n' | '\r')),).void()).void(), i) { progressed = true; continue; }
+        { let s = pos(i); if let Ok(()) = run(((literal("//"), star(none_of(|c: char| matches!(c, '\n' | '\r'))),).void()).void(), i) { let e = pos(i); i.state.comments.insert(s, (e, "comment")); progressed = true; continue; } }
+        if !progressed { break; }
+    }
+    Ok(())
+}
 fn layout(i: &mut In) -> ModalResult<()> {
     let before = pos(i);
     loop {
@@ -125,12 +148,16 @@ fn layout(i: &mut In) -> ModalResult<()> {
     }
     Ok(())
 }
-fn lxb_id(i: &mut In) -> ModalResult<()> { run((one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '_')), star(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))),).void(), i) }
+fn lxb_id(i: &mut In) -> ModalResult<()> {
+    run((one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '_')), star(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))),).void(), i)?;
+    run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?;
+    Ok(())
+}
 fn lx_id(i: &mut In) -> ModalResult<Node> {
     let start = pos(i);
     i.state.furthest = i.state.furthest.max(start);
+    i.state.cap = None;
     lxb_id(i)?;
-    run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?;
     let end = pos(i);
     let text = &i.state.src[start..end];
     const REJECT: &[&str] = &["async", "await", "dyn", "try", "else", "fn", "i64", "if", "let", "mut", "return", "while"];
@@ -138,12 +165,16 @@ fn lx_id(i: &mut In) -> ModalResult<Node> {
     token_end(i, end);
     Ok(Node::leaf("id", start, end))
 }
-fn lxb_int(i: &mut In) -> ModalResult<()> { run((plus(one_of(|c: char| matches!(c, '0'..='9'))),).void(), i) }
+fn lxb_int(i: &mut In) -> ModalResult<()> {
+    run((plus(one_of(|c: char| matches!(c, '0'..='9'))),).void(), i)?;
+    run(not(one_of(|c: char| matches!(c, '0'..='9'))), i)?;
+    Ok(())
+}
 fn lx_int(i: &mut In) -> ModalResult<Node> {
     let start = pos(i);
     i.state.furthest = i.state.furthest.max(start);
+    i.state.cap = None;
     lxb_int(i)?;
-    run(not(one_of(|c: char| matches!(c, '0'..='9'))), i)?;
     let end = pos(i);
     let text = &i.state.src[start..end];
     const REJECT: &[&str] = &[];
@@ -167,8 +198,10 @@ fn r_program_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_0(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_0_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_0_body(i: &mut In) -> ModalResult<Node> {
@@ -180,12 +213,14 @@ fn c_0_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; loop { let cp = save(i); if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_item(i)?]) })(i) { Ok(ns) => v.extend(ns), Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
+      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; loop { let cp = save(i);  if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_item(i)?]) })(i) { Ok(ns) => v.extend(ns), Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "program", start, end, reach: end, children: ch })
 }
@@ -205,8 +240,10 @@ fn r_item_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_1(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_1_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_1_body(i: &mut In) -> ModalResult<Node> {
@@ -218,6 +255,8 @@ fn c_1_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("fn"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -235,7 +274,7 @@ fn c_1_body(i: &mut In) -> ModalResult<Node> {
       for n in ns { ch.push((None, n)); } }
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; let mut first = true; loop { let cp = save(i); if !first { if layout(i).is_err() { restore(i, &cp); break; } if (|i: &mut In| -> ModalResult<Vec<Node>> { Ok({ i.state.furthest = i.state.furthest.max(pos(i)); run(literal(","), i)?;  let e = pos(i); token_end(i, e); Vec::new() }) })(i).is_err() { restore(i, &cp); break; } } if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_param(i)?]) })(i) { Ok(ns) => { v.extend(ns); first = false; } Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
+      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; let mut first = true; loop { let cp = save(i);  if !first { if layout(i).is_err() { restore(i, &cp); break; } if (|i: &mut In| -> ModalResult<Vec<Node>> { Ok({ i.state.furthest = i.state.furthest.max(pos(i)); run(literal(","), i)?;  let e = pos(i); token_end(i, e); Vec::new() }) })(i).is_err() { restore(i, &cp); break; } } if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_param(i)?]) })(i) { Ok(ns) => { v.extend(ns); first = false; } Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("parameters"), n)); } }
     layout(i)?;
@@ -245,7 +284,7 @@ fn c_1_body(i: &mut In) -> ModalResult<Node> {
       for n in ns { ch.push((None, n)); } }
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> { layout(i)?; Ok(vec![r_ret(i)?]) })(i) { Ok(v) => v, Err(_) => { restore(i, &cp); Vec::new() } } };
+      let ns: Vec<Node> = { let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> {  layout(i)?; Ok(vec![r_ret(i)?]) })(i) { Ok(v) => v, Err(_) => { restore(i, &cp); Vec::new() } } };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("ret"), n)); } }
     layout(i)?;
@@ -253,7 +292,7 @@ fn c_1_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_block(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("body"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "fn", start, end, reach: end, children: ch })
 }
@@ -273,8 +312,10 @@ fn r_ret_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_2(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_2_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_2_body(i: &mut In) -> ModalResult<Node> {
@@ -286,6 +327,8 @@ fn c_2_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("->"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
@@ -296,7 +339,7 @@ fn c_2_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("i64"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "ret", start, end, reach: end, children: ch })
 }
@@ -316,8 +359,10 @@ fn r_param_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_3(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_3_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_3_body(i: &mut In) -> ModalResult<Node> {
@@ -329,6 +374,8 @@ fn c_3_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![lx_id(i)?];
@@ -344,7 +391,7 @@ fn c_3_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("i64"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "param", start, end, reach: end, children: ch })
 }
@@ -364,8 +411,10 @@ fn r_block_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_4(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_4_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_4_body(i: &mut In) -> ModalResult<Node> {
@@ -377,6 +426,8 @@ fn c_4_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("{"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
@@ -384,12 +435,12 @@ fn c_4_body(i: &mut In) -> ModalResult<Node> {
       for n in ns { ch.push((None, n)); } }
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; loop { let cp = save(i); if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_stmt(i)?]) })(i) { Ok(ns) => v.extend(ns), Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
+      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; loop { let cp = save(i);  if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_stmt(i)?]) })(i) { Ok(ns) => v.extend(ns), Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> { layout(i)?; Ok(vec![r_exp(i)?]) })(i) { Ok(v) => v, Err(_) => { restore(i, &cp); Vec::new() } } };
+      let ns: Vec<Node> = { let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> {  layout(i)?; Ok(vec![r_exp(i)?]) })(i) { Ok(v) => v, Err(_) => { restore(i, &cp); Vec::new() } } };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("tail"), n)); } }
     layout(i)?;
@@ -397,7 +448,7 @@ fn c_4_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("}"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "block", start, end, reach: end, children: ch })
 }
@@ -426,8 +477,10 @@ fn r_stmt_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_5(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_5_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_5_body(i: &mut In) -> ModalResult<Node> {
@@ -439,6 +492,8 @@ fn c_5_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("let"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -464,14 +519,16 @@ fn c_5_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(";"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "let", start, end, reach: end, children: ch })
 }
 fn c_6(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_6_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_6_body(i: &mut In) -> ModalResult<Node> {
@@ -483,6 +540,8 @@ fn c_6_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("let"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -513,14 +572,16 @@ fn c_6_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(";"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "let_mut", start, end, reach: end, children: ch })
 }
 fn c_7(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_7_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_7_body(i: &mut In) -> ModalResult<Node> {
@@ -532,6 +593,8 @@ fn c_7_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![lx_id(i)?];
@@ -552,14 +615,16 @@ fn c_7_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(";"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "assign", start, end, reach: end, children: ch })
 }
 fn c_8(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_8_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_8_body(i: &mut In) -> ModalResult<Node> {
@@ -571,6 +636,8 @@ fn c_8_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("if"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -588,17 +655,19 @@ fn c_8_body(i: &mut In) -> ModalResult<Node> {
       for n in ns { ch.push((Some("consequence"), n)); } }
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> { layout(i)?; Ok(vec![r_else(i)?]) })(i) { Ok(v) => v, Err(_) => { restore(i, &cp); Vec::new() } } };
+      let ns: Vec<Node> = { let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> {  layout(i)?; Ok(vec![r_else(i)?]) })(i) { Ok(v) => v, Err(_) => { restore(i, &cp); Vec::new() } } };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("alternative"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "if", start, end, reach: end, children: ch })
 }
 fn c_9(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_9_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_9_body(i: &mut In) -> ModalResult<Node> {
@@ -610,6 +679,8 @@ fn c_9_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("while"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -625,14 +696,16 @@ fn c_9_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_block(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("body"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "while", start, end, reach: end, children: ch })
 }
 fn c_10(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_10_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_10_body(i: &mut In) -> ModalResult<Node> {
@@ -644,6 +717,8 @@ fn c_10_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("return"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -659,14 +734,16 @@ fn c_10_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(";"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "return", start, end, reach: end, children: ch })
 }
 fn c_11(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_11_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_11_body(i: &mut In) -> ModalResult<Node> {
@@ -678,6 +755,8 @@ fn c_11_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("println!"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
@@ -728,14 +807,16 @@ fn c_11_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(";"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "print", start, end, reach: end, children: ch })
 }
 fn c_12(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_12_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_12_body(i: &mut In) -> ModalResult<Node> {
@@ -747,6 +828,8 @@ fn c_12_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![r_exp(i)?];
@@ -757,14 +840,16 @@ fn c_12_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(";"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "expr", start, end, reach: end, children: ch })
 }
 fn c_13(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_13_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_13_body(i: &mut In) -> ModalResult<Node> {
@@ -776,19 +861,23 @@ fn c_13_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![r_item(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let (_, n) = ch.pop().unwrap();
     Ok(n)
 }
 fn c_14(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_14_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_14_body(i: &mut In) -> ModalResult<Node> {
@@ -800,12 +889,14 @@ fn c_14_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![r_block(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let (_, n) = ch.pop().unwrap();
     Ok(n)
 }
@@ -825,8 +916,10 @@ fn r_else_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_15(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_15_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_15_body(i: &mut In) -> ModalResult<Node> {
@@ -838,6 +931,8 @@ fn c_15_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("else"), i)?; run(not(one_of(|c: char| matches!(c, 'a'..='z' | 'A'..='Z' | '0'..='9' | '_'))), i)?; let e = pos(i); token_end(i, e); Vec::new() };
@@ -848,7 +943,7 @@ fn c_15_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_block(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("body"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "else_clause", start, end, reach: end, children: ch })
 }
@@ -883,8 +978,10 @@ fn r_exp_prec(i: &mut In, min: u32) -> ModalResult<Node> {
 }
 fn c_16(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_16_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_16_body(i: &mut In) -> ModalResult<Node> {
@@ -896,19 +993,23 @@ fn c_16_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![lx_id(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let (_, n) = ch.pop().unwrap();
     Ok(n)
 }
 fn c_17(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_17_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_17_body(i: &mut In) -> ModalResult<Node> {
@@ -920,19 +1021,23 @@ fn c_17_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![lx_int(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "exp_int", start, end, reach: end, children: ch })
 }
 fn c_18(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_18_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_18_body(i: &mut In) -> ModalResult<Node> {
@@ -944,19 +1049,23 @@ fn c_18_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = vec![r_block(i)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let (_, n) = ch.pop().unwrap();
     Ok(n)
 }
 fn c_20(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_20_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_20_body(i: &mut In) -> ModalResult<Node> {
@@ -968,6 +1077,8 @@ fn c_20_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("-"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
@@ -978,14 +1089,16 @@ fn c_20_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_exp_prec(i, 4)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("operand"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "neg", start, end, reach: end, children: ch })
 }
 fn c_25(i: &mut In) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = c_25_body(i);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn c_25_body(i: &mut In) -> ModalResult<Node> {
@@ -997,6 +1110,8 @@ fn c_25_body(i: &mut In) -> ModalResult<Node> {
     let mut pr: Vec<bool> = Vec::new();
     layout(i)?;
     let start = pos(i);
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     layout(i)?;
     { let s = pos(i);
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal("("), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
@@ -1012,14 +1127,16 @@ fn c_25_body(i: &mut In) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(")"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "exp_bracket", start, end, reach: end, children: ch })
 }
 fn t_19(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = t_19_body(i, left, start);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn t_19_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
@@ -1029,6 +1146,8 @@ fn t_19_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let mut sp: Vec<(usize, usize)> = Vec::new();
     #[allow(unused_mut)]
     let mut pr: Vec<bool> = Vec::new();
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     sp.push((left.start, left.end)); pr.push(true);
     ch.push((Some("function"), left.clone()));
     layout(i)?;
@@ -1038,7 +1157,7 @@ fn t_19_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
       for n in ns { ch.push((None, n)); } }
     layout(i)?;
     { let s = pos(i);
-      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; let mut first = true; loop { let cp = save(i); if !first { if layout(i).is_err() { restore(i, &cp); break; } if (|i: &mut In| -> ModalResult<Vec<Node>> { Ok({ i.state.furthest = i.state.furthest.max(pos(i)); run(literal(","), i)?;  let e = pos(i); token_end(i, e); Vec::new() }) })(i).is_err() { restore(i, &cp); break; } } if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_exp(i)?]) })(i) { Ok(ns) => { v.extend(ns); first = false; } Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
+      let ns: Vec<Node> = { let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; let mut first = true; loop { let cp = save(i);  if !first { if layout(i).is_err() { restore(i, &cp); break; } if (|i: &mut In| -> ModalResult<Vec<Node>> { Ok({ i.state.furthest = i.state.furthest.max(pos(i)); run(literal(","), i)?;  let e = pos(i); token_end(i, e); Vec::new() }) })(i).is_err() { restore(i, &cp); break; } } if layout(i).is_err() { restore(i, &cp); break; }  match (|i: &mut In| -> ModalResult<Vec<Node>> { Ok(vec![r_exp(i)?]) })(i) { Ok(ns) => { v.extend(ns); first = false; } Err(_) => { restore(i, &cp); break; } } } if v.len() < 0 { return Err(bt()); } v };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("arguments"), n)); } }
     layout(i)?;
@@ -1046,14 +1165,16 @@ fn t_19_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
       let ns: Vec<Node> = { i.state.furthest = i.state.furthest.max(pos(i)); run(literal(")"), i)?;  let e = pos(i); token_end(i, e); Vec::new() };
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((None, n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "call", start, end, reach: end, children: ch })
 }
 fn t_21(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = t_21_body(i, left, start);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn t_21_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
@@ -1063,6 +1184,8 @@ fn t_21_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let mut sp: Vec<(usize, usize)> = Vec::new();
     #[allow(unused_mut)]
     let mut pr: Vec<bool> = Vec::new();
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     sp.push((left.start, left.end)); pr.push(true);
     ch.push((Some("left"), left.clone()));
     layout(i)?;
@@ -1075,14 +1198,16 @@ fn t_21_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_exp_prec(i, 4)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("right"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "mul", start, end, reach: end, children: ch })
 }
 fn t_22(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = t_22_body(i, left, start);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn t_22_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
@@ -1092,6 +1217,8 @@ fn t_22_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let mut sp: Vec<(usize, usize)> = Vec::new();
     #[allow(unused_mut)]
     let mut pr: Vec<bool> = Vec::new();
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     sp.push((left.start, left.end)); pr.push(true);
     ch.push((Some("left"), left.clone()));
     layout(i)?;
@@ -1104,14 +1231,16 @@ fn t_22_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_exp_prec(i, 3)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("right"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "add", start, end, reach: end, children: ch })
 }
 fn t_23(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = t_23_body(i, left, start);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn t_23_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
@@ -1121,6 +1250,8 @@ fn t_23_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let mut sp: Vec<(usize, usize)> = Vec::new();
     #[allow(unused_mut)]
     let mut pr: Vec<bool> = Vec::new();
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     sp.push((left.start, left.end)); pr.push(true);
     ch.push((Some("left"), left.clone()));
     layout(i)?;
@@ -1133,14 +1264,16 @@ fn t_23_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_exp_prec(i, 3)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("right"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "sub", start, end, reach: end, children: ch })
 }
 fn t_24(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let guard = i.state.offside.len();
+    let dguard = i.state.delim.len();
     let r = t_24_body(i, left, start);
     i.state.offside.truncate(guard);
+    if r.is_err() { i.state.delim.truncate(dguard); }
     r
 }
 fn t_24_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
@@ -1150,6 +1283,8 @@ fn t_24_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
     let mut sp: Vec<(usize, usize)> = Vec::new();
     #[allow(unused_mut)]
     let mut pr: Vec<bool> = Vec::new();
+    #[allow(unused_mut)]
+    let mut open_word: String = String::new();
     sp.push((left.start, left.end)); pr.push(true);
     ch.push((Some("left"), left.clone()));
     layout(i)?;
@@ -1162,7 +1297,7 @@ fn t_24_body(i: &mut In, left: &Node, start: usize) -> ModalResult<Node> {
       let ns: Vec<Node> = vec![r_exp_prec(i, 2)?];
       let e = i.state.last_end.max(s); sp.push((s, e)); pr.push(e > s);
       for n in ns { ch.push((Some("right"), n)); } }
-    let _ = (&sp, &pr);
+    let _ = (&sp, &pr, &open_word);
     let end = i.state.last_end.max(start);
     Ok(Node { kind: "lt", start, end, reach: end, children: ch })
 }

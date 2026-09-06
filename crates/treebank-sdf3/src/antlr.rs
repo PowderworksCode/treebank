@@ -53,10 +53,41 @@ pub struct Emitted {
 pub fn emit(
     module: &Module,
     names: &Names,
-    levels: &BTreeMap<String, (u32, Option<Attr>)>,
+    levels: &BTreeMap<usize, (u32, Option<Attr>)>,
 ) -> Result<Emitted> {
     let mut findings = Vec::new();
     let (plan, _) = scanner::plan(module)?;
+    let nfa_builder = crate::nfa::Builder::new(module);
+    let layout_like: BTreeSet<String> = plan
+        .owned
+        .iter()
+        .filter(|o| {
+            !plan.layout_chars.is_empty()
+                && nfa_builder.alphabet(&o.sort).is_some_and(|a| {
+                    !a.is_empty() && a.iter().all(|c| plan.layout_chars.contains(c))
+                })
+        })
+        .map(|o| o.sort.clone())
+        .collect();
+    let kernel_owned: BTreeSet<String> = plan
+        .owned
+        .iter()
+        .filter(|o| !layout_like.contains(&o.sort))
+        .map(|o| o.sort.clone())
+        .collect();
+    let kw_prefer: Option<(String, String)> = module.template_options().find_map(|o| match o {
+        TemplateOption::KeywordPrefer { sort } => Some((
+            sort.clone(),
+            format!("h_{}_kw", token_name(sort).to_ascii_lowercase()),
+        )),
+        _ => None,
+    });
+    let ecx = ElemCx {
+        module,
+        layout_like,
+        kernel_owned,
+        kw_prefer,
+    };
     let grammar_name = capitalize(&module.symbol_name());
     let mut out = String::new();
     out.push_str(&format!(
@@ -218,20 +249,17 @@ def on_newline(self):
             } else {
                 1
             };
-            let level = p
-                .reference()
-                .and_then(|r| levels.get(&r).map(|(l, _)| *l))
-                .unwrap_or(0);
+            let level = levels.get(pi).map(|(l, _)| *l).unwrap_or(0);
             (class, std::cmp::Reverse(level), *pi)
         });
         let mut lines = Vec::new();
         for (pi, p) in &alts {
             let mut alt = String::new();
             if let Some(r) = p.reference() {
-                if let Some((_, Some(Attr::Right))) = levels.get(&r) {
+                if let Some((_, Some(Attr::Right))) = levels.get(pi) {
                     alt.push_str("<assoc=right> ");
                 }
-                if let Some((_, Some(Attr::NonAssoc))) = levels.get(&r) {
+                if let Some((_, Some(Attr::NonAssoc))) = levels.get(pi) {
                     findings.push(Finding {
                         kind: Kind::Widening,
                         what: format!("{r} is non-assoc; ANTLR has no non-associativity, lowered as left-associative"),
@@ -264,7 +292,18 @@ def on_newline(self):
                     .cloned()
                     .unwrap_or_else(|| rule_name(sort))
             };
-            alt.push_str(&elements(p, *pi, names, &plan)?);
+            // ANTLR refuses an alternative label spelled like its rule, which
+            // a constructor with several productions produces; the driver
+            // strips the `_altN` suffix.
+            let label = if label == rule {
+                format!("{label}_alt{}", lines.len() + 1)
+            } else {
+                label
+            };
+            if sort == *start {
+                alt.push_str(&lead_layout(&ecx));
+            }
+            alt.push_str(&elements(p, *pi, names, &plan, &ecx)?);
             if sort == *start {
                 alt.push_str(" EOF");
             }
@@ -275,9 +314,9 @@ def on_newline(self):
         if single {
             // One constructor: the rule name is the node name, no label needed.
             let (pi, p) = alts[0];
-            let mut body = elements(p, pi, names, &plan)?;
+            let mut body = elements(p, pi, names, &plan, &ecx)?;
             if sort == *start {
-                body.push_str(" EOF");
+                body = format!("{}{body} EOF", lead_layout(&ecx));
             }
             out.push_str(&format!("{rule}\n    : {body}\n    ;\n\n"));
         } else {
@@ -286,6 +325,36 @@ def on_newline(self):
                 lines.join("\n    | ")
             ));
         }
+    }
+
+    if let Some((sort, rule)) = &ecx.kw_prefer {
+        let mut kws: Vec<String> = Vec::new();
+        for p in module.productions(false) {
+            for sym in p.symbols() {
+                if let SymRef::Lit(l) = sym {
+                    if is_word_lit(l) && !kws.contains(&l.to_string()) {
+                        kws.push(l.to_string());
+                    }
+                }
+            }
+        }
+        let alts: Vec<String> = std::iter::once(token_name(sort))
+            .chain(kws.iter().map(|k| literal(k)))
+            .collect();
+        out.push_str(&format!("{rule}\n    : {}\n    ;\n\n", alts.join(" | ")));
+        findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "`{sort} = keyword {{prefer}}`: every {sort} position goes through `{rule}`, which admits the {} keyword literals as well, since ANTLR's lexer gives a literal its own token everywhere; where both readings are viable ALL(*) takes the earlier alternative, the keyword's where its production precedes the identifier's, and where they are alternatives of different rules the outer rule's order decides",
+                kws.len()
+            ),
+        });
+        findings.push(Finding {
+            kind: Kind::Widening,
+            what: format!(
+                "through `{rule}` a keyword is an identifier wherever an identifier is admitted, even where SDF3's `{{prefer}}` would take the keyword reading: `[for, a]` parses as a tuple here and is rejected by tree-sitter's keyword extraction"
+            ),
+        });
     }
 
     // Lexer rules: the variants first, most specific first, so an equal-length
@@ -310,6 +379,50 @@ def on_newline(self):
         lexical.entry(&p.sort).or_default().push(p);
     }
     let mut layout_n = 0;
+    // The first characters of the layout-like sorts are theirs, not
+    // whitespace: `\n` is a token, `H_NL*` stands wherever layout is admitted.
+    let mut claimed: Vec<char> = Vec::new();
+    {
+        let mut b = crate::nfa::Builder::new(module);
+        for sort in &ecx.layout_like {
+            if let Ok(start) = b.token(sort, None) {
+                for c in ['\n', '\r', ' ', '\t', '\u{c}'] {
+                    if b.can_start(start, c) && !claimed.contains(&c) {
+                        claimed.push(c);
+                    }
+                }
+            }
+        }
+    }
+    for sort in &ecx.layout_like {
+        let prods = lexical.get(sort.as_str()).cloned().unwrap_or_default();
+        let alts: Vec<String> = prods
+            .iter()
+            .map(|p| lexical_body(p, &lexical))
+            .collect::<Result<_>>()?;
+        out.push_str(&format!("{} : ( {} ) ;
+", token_name(sort), alts.join(" | ")));
+        findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "lexical sort {sort}'s text is LAYOUT: it is the token `{}`, its first characters are no longer whitespace, and `{}*` stands at every position where layout is admitted -- SDF3's `LAYOUT?` between context-free symbols, made explicit for the one kind of layout that is also a token",
+                token_name(sort),
+                token_name(sort)
+            ),
+        });
+    }
+    if !ecx.kernel_owned.is_empty() {
+        findings.push(Finding {
+            kind: Kind::Unsupported,
+            what: format!(
+                "kernel syntax reaches [{}] where no layout may precede them; tree-sitter's scanner lexes them in a mode of their own, and ANTLR would need lexer modes, which this lowering does not derive. Their tokens are declared unmatchable so the grammar compiles, and every construct that needs them is a parse error here",
+                ecx.kernel_owned.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        });
+    }
+    let mut unreachable_n = 2u32;
+    let cf_referenced = crate::lower::cf_referenced_sorts(module);
+    let mut fragments: Vec<String> = Vec::new();
     if plan.indent.is_some() {
         // Before WS, so a line break is never whitespace: the action
         // decides what it is.
@@ -320,19 +433,50 @@ def on_newline(self):
         out.push_str("H_INDENT : '\\u0001' ;\nH_DEDENT : '\\u0002' ;\n");
     }
     for (sort, prods) in &lexical {
+        if ecx.layout_like.contains(*sort) {
+            continue;
+        }
+        if ecx.kernel_owned.contains(*sort) {
+            unreachable_n += 1;
+            out.push_str(&format!(
+                "{} : '\\u{:04x}' ;  // kernel-owned: needs a lexer mode\n",
+                token_name(sort),
+                unreachable_n
+            ));
+            continue;
+        }
         if *sort == "LAYOUT" {
             for p in prods {
                 layout_n += 1;
+                let mut chars = Vec::new();
+                let is_ws = p.constructor.is_none()
+                    && matches!(&p.rhs, Rhs::Symbols(s) if s.iter().all(|sym| scanner::whitespace_alphabet(sym, &mut chars)));
+                if is_ws && chars.iter().any(|c| claimed.contains(c)) {
+                    let single = matches!(&p.rhs, Rhs::Symbols(s) if s.len() == 1 && matches!(s[0], Symbol::CharClass(_)));
+                    if !single {
+                        // Its text is the layout-like token's; nothing left.
+                        continue;
+                    }
+                }
                 let is_class = matches!(&p.rhs, Rhs::Symbols(s) if s.len() == 1 && matches!(s[0], Symbol::CharClass(_)));
                 let body = match &p.rhs {
-                    Rhs::Symbols(s) if is_class && plan.indent.is_some() => {
+                    Rhs::Symbols(s) if is_class && (plan.indent.is_some() || !claimed.is_empty()) => {
                         let Symbol::CharClass(c) = &s[0] else {
                             unreachable!()
                         };
-                        class(&without(c, &['\n', '\r']))
+                        let mut drop: Vec<char> = claimed.clone();
+                        if plan.indent.is_some() {
+                            drop.extend(['\n', '\r']);
+                        }
+                        let trimmed = without(c, &drop);
+                        if trimmed.ranges.is_empty() {
+                            continue;
+                        }
+                        class(&trimmed)
                     }
                     _ => lexical_body(p, &lexical)?,
                 };
+                let is_class = is_ws;
                 let name = if is_class {
                     format!("WS{layout_n}")
                 } else {
@@ -380,7 +524,25 @@ def on_newline(self):
             }
             _ => "",
         };
-        out.push_str(&format!("{} : {pred}{body} ;\n", token_name(sort)));
+        // A sort only other tokens' text refers to is a fragment: a lexer
+        // rule of its own would compete with the real tokens (`DELIM`
+        // against `IDENTIFIER`) and win on declaration order.
+        let fragment = if cf_referenced.contains(*sort) {
+            ""
+        } else {
+            fragments.push(sort.to_string());
+            "fragment "
+        };
+        out.push_str(&format!("{fragment}{} : {pred}{body} ;\n", token_name(sort)));
+    }
+    if !fragments.is_empty() {
+        findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "lexical sorts referenced by lexical syntax only became `fragment` rules: [{}]",
+                fragments.join(", ")
+            ),
+        });
     }
     for opt in module.template_options() {
         if let TemplateOption::KeywordReject { sort } = opt {
@@ -396,7 +558,75 @@ def on_newline(self):
     })
 }
 
-fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> Result<String> {
+/// What the element emitter needs of the module beyond the plan: the
+/// lexical sorts whose text is layout, and which sorts may begin with one.
+pub struct ElemCx<'m> {
+    pub module: &'m Module,
+    pub layout_like: BTreeSet<String>,
+    pub kernel_owned: BTreeSet<String>,
+    /// `ID = keyword {prefer}`: the sort, and the hidden rule that admits
+    /// every keyword literal beside it.
+    pub kw_prefer: Option<(String, String)>,
+}
+
+impl<'m> ElemCx<'m> {
+    fn may_start_layout_like(&self, sym: &Symbol, seen: &mut BTreeSet<String>) -> bool {
+        match sym {
+            Symbol::Sort(n) if self.layout_like.contains(n) => true,
+            Symbol::Sort(n) => {
+                if self.module.productions(true).any(|p| p.sort == *n) || !seen.insert(n.clone()) {
+                    return false;
+                }
+                self.module
+                    .productions(false)
+                    .filter(|p| p.sort == *n)
+                    .any(|p| match p.symbols().first() {
+                        Some(SymRef::Sym(f)) => self.may_start_layout_like(f, seen),
+                        _ => false,
+                    })
+            }
+            Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => self.may_start_layout_like(i, seen),
+            Symbol::SepList { elem, .. } => self.may_start_layout_like(elem, seen),
+            Symbol::Group(alts) => alts
+                .iter()
+                .filter_map(|a| a.first())
+                .any(|f| self.may_start_layout_like(f, seen)),
+            Symbol::Lit(_) | Symbol::CharClass(_) => false,
+        }
+    }
+
+    /// `H_NL*` before a symbol where layout is admitted, since a line
+    /// break is a token here; nothing in kernel syntax, and nothing before
+    /// a symbol that may itself begin with the newline token.
+    fn layout_before(&self, p: &Production, sym: Option<&Symbol>) -> String {
+        if self.layout_like.is_empty() || p.is_kernel() {
+            return String::new();
+        }
+        let mut seen = BTreeSet::new();
+        if sym.is_some_and(|s| self.may_start_layout_like(s, &mut seen)) {
+            return String::new();
+        }
+        let toks: Vec<String> = self.layout_like.iter().map(|s| token_name(s)).collect();
+        format!("{}* ", toks.join("* "))
+    }
+}
+
+/// `H_NL*` at the start of the start rule: a file may begin with a break.
+fn lead_layout(ecx: &ElemCx) -> String {
+    if ecx.layout_like.is_empty() {
+        return String::new();
+    }
+    let toks: Vec<String> = ecx.layout_like.iter().map(|s| token_name(s)).collect();
+    format!("{}* ", toks.join("* "))
+}
+
+fn elements(
+    p: &Production,
+    pi: usize,
+    names: &Names,
+    plan: &scanner::Plan,
+    ecx: &ElemCx,
+) -> Result<String> {
     let mut parts = Vec::new();
     let mut pos = 0;
     let lit_at = |pos: usize, l: &str| -> String {
@@ -420,11 +650,25 @@ fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> R
                     TemplatePart::Layout(_) => {}
                     TemplatePart::Lit(l) => {
                         pos += 1;
+                        if pos > 1 {
+                            parts.push(ecx.layout_before(p, None));
+                        }
                         parts.push(lit_at(pos, l));
                     }
                     TemplatePart::Placeholder { label, symbol } => {
                         pos += 1;
-                        let t = symbol_text(symbol, label.as_deref(), names, plan)?;
+                        if scanner::is_layout_symbol(SymRef::Sym(symbol)) {
+                            let toks: Vec<String> =
+                                ecx.layout_like.iter().map(|s| token_name(s)).collect();
+                            if !toks.is_empty() {
+                                parts.push(format!("{}*", toks.join("* ")));
+                            }
+                            continue;
+                        }
+                        if pos > 1 {
+                            parts.push(ecx.layout_before(p, Some(symbol)));
+                        }
+                        let t = symbol_text(symbol, label.as_deref(), names, plan, ecx)?;
                         parts.push(wrap(pos, t));
                     }
                 }
@@ -433,10 +677,27 @@ fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> R
         Rhs::Symbols(syms) => {
             for s in syms {
                 pos += 1;
+                if scanner::is_layout_symbol(SymRef::Sym(s)) {
+                    let toks: Vec<String> =
+                        ecx.layout_like.iter().map(|x| token_name(x)).collect();
+                    if !toks.is_empty() {
+                        parts.push(format!("{}*", toks.join("* ")));
+                    }
+                    continue;
+                }
+                if pos > 1 {
+                    parts.push(ecx.layout_before(
+                        p,
+                        match s {
+                            Symbol::Lit(_) => None,
+                            other => Some(other),
+                        },
+                    ));
+                }
                 parts.push(match s {
                     Symbol::Lit(l) => lit_at(pos, l),
                     other => {
-                        let t = symbol_text(other, None, names, plan)?;
+                        let t = symbol_text(other, None, names, plan, ecx)?;
                         wrap(pos, t)
                     }
                 });
@@ -467,6 +728,7 @@ fn symbol_text(
     label: Option<&str>,
     names: &Names,
     plan: &scanner::Plan,
+    ecx: &ElemCx,
 ) -> Result<String> {
     // ANTLR refuses an element label spelled like a rule; suffix it, and the
     // driver strips the suffix when it prints the field.
@@ -488,38 +750,50 @@ fn symbol_text(
     };
     Ok(match s {
         Symbol::Sort(name) => {
-            let r = if names.lexical.contains(name) || plan.lexical_owned.contains_key(name) {
+            let r = if ecx.kw_prefer.as_ref().is_some_and(|(sort, _)| sort == name) {
+                // The identifier position admits the keywords too.
+                ecx.kw_prefer.as_ref().map(|(_, r)| r.clone()).unwrap_or_default()
+            } else if names.lexical.contains(name) || plan.lexical_owned.contains_key(name) {
                 token_name(name)
             } else {
                 rule_for(names, name)
             };
+            // ANTLR holds one label to one rule type across a rule's
+            // alternatives; a label on a hidden rule (`operator=h_bin_op_mul`,
+            // `operator=h_bin_op_add`) is suffixed with the rule, and the
+            // driver strips it.
+            if r.starts_with("h_") {
+                if let Some(l) = label {
+                    return Ok(format!("{l}__{r}={r}"));
+                }
+            }
             lab("=", r)
         }
         Symbol::Lit(l) => lab("=", literal(l)),
         Symbol::Star(inner) => {
-            let i = symbol_text(inner, label.map(|_| "").filter(|_| false), names, plan)?;
+            let i = symbol_text(inner, label.map(|_| "").filter(|_| false), names, plan, ecx)?;
             match label {
                 Some(l) => format!("({l}+={i})*"),
                 None => format!("{i}*"),
             }
         }
         Symbol::Plus(inner) => {
-            let i = symbol_text(inner, None, names, plan)?;
+            let i = symbol_text(inner, None, names, plan, ecx)?;
             match label {
                 Some(l) => format!("({l}+={i})+"),
                 None => format!("{i}+"),
             }
         }
         Symbol::Opt(inner) => {
-            let i = symbol_text(inner, None, names, plan)?;
+            let i = symbol_text(inner, None, names, plan, ecx)?;
             match label {
                 Some(l) => format!("({l}={i})?"),
                 None => format!("{i}?"),
             }
         }
         Symbol::SepList { elem, sep, min } => {
-            let e = symbol_text(elem, None, names, plan)?;
-            let sp = symbol_text(sep, None, names, plan)?;
+            let e = symbol_text(elem, None, names, plan, ecx)?;
+            let sp = symbol_text(sep, None, names, plan, ecx)?;
             let one = match label {
                 Some(l) => format!("{l}+={e} ({sp} {l}+={e})*"),
                 None => format!("{e} ({sp} {e})*"),
@@ -535,7 +809,7 @@ fn symbol_text(
                 .iter()
                 .map(|a| {
                     a.iter()
-                        .map(|s| symbol_text(s, None, names, plan))
+                        .map(|s| symbol_text(s, None, names, plan, ecx))
                         .collect::<Result<Vec<_>>>()
                         .map(|v| v.join(" "))
                 })
@@ -657,14 +931,26 @@ fn literal(l: &str) -> String {
     s
 }
 
+/// A hidden sort's rule cannot start with `_` in ANTLR; `h_` marks it, and
+/// the driver elides it as it does injections.
 pub fn rule_name(sort: &str) -> String {
-    crate::lower::snake(sort)
+    let s = crate::lower::snake(sort);
+    if s.starts_with('_') {
+        format!("h_{}", s.trim_start_matches('_'))
+    } else {
+        s
+    }
 }
 
 /// The parser rule for a sort: the tree-sitter rule name without its
 /// hidden-marker underscore, so a single-constructor sort is named for its
 /// constructor there and here alike (`Else.ElseClause` is `else_clause`).
 fn rule_for(names: &Names, sort: &str) -> String {
+    if sort.starts_with('_') {
+        // A hidden sort's rule keeps its marker as `h_`, which the
+        // driver elides.
+        return rule_name(sort);
+    }
     names
         .sort_rule
         .get(sort)
@@ -673,7 +959,18 @@ fn rule_for(names: &Names, sort: &str) -> String {
 }
 
 pub fn token_name(sort: &str) -> String {
-    sort.to_ascii_uppercase()
+    if sort.starts_with('_') {
+        format!("H_{}", sort.trim_start_matches('_').to_ascii_uppercase())
+    } else {
+        sort.to_ascii_uppercase()
+    }
+}
+
+fn is_word_lit(s: &str) -> bool {
+    s.chars()
+        .next()
+        .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && s.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
 fn capitalize(s: &str) -> String {

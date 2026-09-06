@@ -1475,3 +1475,122 @@ for, and would not match a grammar whose hidden tokens sit elsewhere.
 them. And the generated crate parses a file into an S-expression and
 nothing more: no incremental parsing, no error recovery, no tree API,
 which is the honest shape of a backend that exists to confer.
+
+## 24. The tenth spike: a shipped grammar, rewritten end to end
+
+The nine spikes before this one were languages written for the purpose,
+small enough that every construct was chosen to probe something. The
+question left open was scale: what does the findings ledger look like when
+the module is a real language, held to everything a shipped grammar is
+held to? `spike/hcl/hcl.sdf3` is `crates/treebank-hcl` -- grammar.js's 64
+rules and its 479-line hand-written scanner -- written as one 275-line
+SDF3 module, and `spike/hcl/results.md` is the answer, gate by gate, with
+the reference's number beside each.
+
+**The result.** The generated parser passes the crate's own corpus (17 of
+17), rejects 27 of its 28 negatives, passes `treebank roles` with the same
+twelve supertypes, six facets, 44 named nodes and eleven uncategorised
+entries, passes `treebank lint` with zero conflicts, zero weights and zero
+same-text splits, passes the shape fixtures, and over the locked corpus --
+499 packages, 19,219 files -- parses every file and matches hclsyntax on
+all 2,227,614 oracle nodes with no lexical or field disagreement, which is
+the reference grammar's own score exactly. The one negative it accepts is a
+raw line break inside a quoted template, and the lowering names it as its
+only WIDENING finding (below). The parse table has three more states than
+the reference's 474.
+
+**What the language asked of SDF3.** HCL's three hard parts are the ones
+grammar.js's header names: newline sensitivity in some brackets and not
+others, no reserved words, and a template sub-language lexed in a mode of
+its own. Each turned out to have an SDF3 spelling, and the lowering's job
+was to derive from that spelling what the hand-written scanner does.
+
+- *Newlines.* `_NL` is a lexical sort whose text is also LAYOUT. A
+  production that needs a line terminator takes one; everywhere else the
+  same text is layout. The planner detects the overlap (the sort's
+  alphabet is inside LAYOUT's) and the generated scanner emits `_nl` only
+  where the parse admits it -- tree-sitter-hcl's `_newline`, derived.
+  The winnow lowering skips only the layout that is not the sort's own
+  text before it; ANTLR gets a token and `H_NL*` at every position layout
+  is admitted, which is `LAYOUT?` written out.
+- *Keywords.* `IDENTIFIER = keyword {prefer}` is the treebank spelling of
+  "no reserved words, the keyword wins where both readings are admitted".
+  It lowers to `word` without a reserved set, which is tree-sitter's
+  keyword extraction, which is HCL's own rule. Two negatives that need the
+  keyword to win where the grammar admits both readings (`[for, a]`,
+  `{for = 1}`) are rejected as the reference rejects them.
+- *Templates.* The sub-language is in SDF3's kernel syntax, the `syntax`
+  section where no layout is admitted between symbols unless
+  `LAYOUT?-CF` is written, once per literal-text sort, with the
+  constructors shared (`QIf.TemplateIf` and `HIf.TemplateIf` are one node
+  type, by an alias). The lowering computes which lexical sorts kernel
+  syntax reaches at a position no layout may precede, and the generated
+  scanner owns those: it compiles each to an automaton (Thompson's
+  construction over the character classes, follow restrictions as guarded
+  epsilon edges, one tagged pair of edges for the capture below) and
+  simulates all the valid ones at once, `mark_end` at every accepting
+  position, so the longest match falls out of a lexer that cannot step
+  back. It is consulted before extras, which is what keeps `"# not a
+  comment"` a string. No mode stack: the parse state already says which
+  chunk sort is valid.
+- *The delimiter.* What SDF3 cannot say is that the heredoc's closing
+  word is the one its opener chose. `{delimiter(1, 3)}` on the heredoc
+  production says it: the two lexical sorts must share exactly one
+  lexical sort (the word), the scanner captures it from the opener onto
+  a stack, and the closer matches only at the start of a line and only
+  with the word on top. It is the one extension this module needed that
+  is about parsing rather than naming, and the winnow lowering carries it
+  as a dynamic guard every list loop consults.
+
+Three smaller things the reader and lowering learned on the way, each an
+extension named in the ledger: `_`-prefixed sorts are hidden rules (SDF3
+has no constructor-less production of more than one symbol; grammar.js
+has `_for_intro` and `_object_separator`), and one made of tokens only is
+inlined so a parent's precedence reaches its tokens; a priority group may
+name a whole production, SDF3's own form, since `Exp.BinaryExpression` has
+six productions at six levels; and `LAYOUT.Comment` names its extra.
+`token.immediate` arrived as the lowering of an adjacency constraint on a
+lexical sort (`foo.0`), and `[\EOF]` in a follow restriction as the way to
+say a line must follow the closing delimiter.
+
+**What the scanner cannot do, and says so.** tree-sitter's lexer skips
+extras before the external scanner is consulted again, and the scanner
+cannot see what was skipped. So a layout character a kernel-owned token
+excludes may still precede it: `"a` `\n` `b"` parses. The reference rejects
+it by an accident of lex-state merging -- its internal lexer happens to
+find `identifier` after the skipped break where this grammar's finds
+nothing and asks the scanner again. The planner computes the affected
+tokens (every kernel-owned sort whose first set excludes some layout
+character) and emits one WIDENING finding naming them; it is the only
+widening in a 217-line ledger.
+
+**The other two backends.** winnow holds all 17 cases once kernel syntax
+is parsed as written, the newline token is matched before layout, the
+delimiter guard is dynamic, and a sort's follow restrictions travel with
+it into the sorts that use it -- `_QSIGIL -/- [\{]` inside `_QCHUNK` is
+what ends a chunk at `${`, and had been checked only at the token
+boundary. ANTLR holds the three cases with no quoted string and fails the
+fourteen with one: kernel syntax needs lexer modes, which the lowering
+does not derive, so the template tokens are declared unmatchable and the
+UNSUPPORTED finding says why. Its newline and keyword lowerings did land
+(a token with `H_NL*` where layout is admitted; a hidden rule admitting
+every keyword at the identifier position). Deriving modes from kernel
+syntax -- a mode per kernel sort, its tokens the sorts reached inside it,
+a push at the sort's first token and a pop at its last, with a bracket
+counter for the context-free islands inside -- is the next thing the
+ANTLR backend would need, and it is a bounded piece of work rather than
+an unknown.
+
+**What it says about the design.** A real language at this size needed
+three new extensions (a hidden-sort marker, a delimiter attribute, and
+the scanner derivation from kernel syntax) and no change to anything the
+nine spikes established; the ledger is 217 lines, of which 116 are exact,
+88 are the labels and attributes counted per production, eleven are
+absorbed, one is the bracket deviation every spike has, and one is the
+widening above. The hand-written scanner's three jobs -- the newline, the
+mode stack, the delimiter -- became one derived automaton, one attribute,
+and nothing. Whether the same holds for a language with a real lexer
+mode problem (a string with nested braces and its own escapes, in a
+language whose parser also uses braces) is what the ANTLR gap above is
+really asking, and the tree-sitter scanner already answers it for
+heredocs nested in interpolations nested in heredocs.

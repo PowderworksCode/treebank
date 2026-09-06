@@ -535,8 +535,6 @@ module.exports = grammar({
       $.not_matched
     ),
 
-    dollar: $ => /\$\$(?:[^$])*\$\$/,
-
     dquoted: $ => /"(?:[^"])*"/,
 
     int: $ => /(?:[0-9])+/,

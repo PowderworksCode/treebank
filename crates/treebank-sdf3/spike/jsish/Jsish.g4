@@ -6,24 +6,24 @@ program
     ;
 
 statement
-    :     'function' name=ID '(' (parameters+=param (',' parameters+=param)*)? ')' body=block  # function
-    |     'var' name=ID '=' value=expression ';'  # var
-    |     'let' name=ID '=' value=expression ';'  # let
-    |     target=ID '=' value=expression ';'  # assign
-    |     'console.log' '(' value=expression ')' ';'  # print
-    |     'return' value=expression ';'  # return
-    |     'if' '(' condition=expression ')' consequence=block (alternative=else_clause)?  # if
-    |     'while' '(' condition=expression ')' body=block  # while
-    |     expression ';'  # expr
+    :     'function'  name=ID  '('  (parameters+=param (',' parameters+=param)*)?  ')'  body=block  # function
+    |     'var'  name=ID  '='  value=expression  ';'  # var
+    |     'let'  name=ID  '='  value=expression  ';'  # let
+    |     target=ID  '='  value=expression  ';'  # assign
+    |     'console.log'  '('  value=expression  ')'  ';'  # print
+    |     'return'  value=expression  ';'  # return
+    |     'if'  '('  condition=expression  ')'  consequence=block  (alternative=else_clause)?  # if
+    |     'while'  '('  condition=expression  ')'  body=block  # while
+    |     expression  ';'  # expr
     |     block  # inj_stmt_1
     ;
 
 block
-    : '{' statement* '}'
+    : '{'  statement*  '}'
     ;
 
 else_clause
-    : 'else' body=block
+    : 'else'  body=block
     ;
 
 param
@@ -31,15 +31,15 @@ param
     ;
 
 expression
-    :     function=expression '(' (arguments+=expression (',' arguments+=expression)*)? ')'  # call
-    |     '-' operand=expression  # neg
-    |     left=expression '*' right=expression  # mul
-    |     left=expression '+' right=expression  # add
-    |     left=expression '-' right=expression  # sub
-    |     left=expression '<' right=expression  # lt
+    :     function=expression  '('  (arguments+=expression (',' arguments+=expression)*)?  ')'  # call
+    |     '-'  operand=expression  # neg
+    |     left=expression  '*'  right=expression  # mul
+    |     left=expression  '+'  right=expression  # add
+    |     left=expression  '-'  right=expression  # sub
+    |     left=expression  '<'  right=expression  # lt
     |     ID  # inj_exp_2
     |     INT  # exp_int
-    |     '(' expression ')'  # exp_bracket
+    |     '('  expression  ')'  # exp_bracket
     ;
 
 ID : [a-zA-Z_$] ([a-zA-Z0-9_$])* ;

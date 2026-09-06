@@ -454,8 +454,6 @@ module.exports = grammar({
 
     backtick: $ => /`(?:[^`])*`/,
 
-    dqstring: $ => /"(?:[^"])*"/,
-
     int: $ => /(?:[0-9])+/,
 
     comment: $ => /--(?:[^\n\r])*/,

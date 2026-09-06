@@ -1,0 +1,15 @@
+{
+  "grammars": [
+    {
+      "name": "hcl",
+      "camelcase": "Hcl",
+      "scope": "source.hcl",
+      "file-types": ["hcl"]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "the SDF3 lowering spike; not a shipped grammar"
+  }
+}

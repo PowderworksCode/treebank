@@ -444,8 +444,6 @@ module.exports = grammar({
       $.without_oids
     ),
 
-    dollar: $ => /\$\$(?:[^$])*\$\$/,
-
     dquoted: $ => /"(?:[^"])*"/,
 
     int: $ => /(?:[0-9])+/,

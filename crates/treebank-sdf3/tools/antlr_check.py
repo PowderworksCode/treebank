@@ -78,6 +78,8 @@ def read_corpus(path: Path):
 
 def snake_of_context(cls_name: str, rule: str) -> str:
     base = cls_name[: -len("Context")]
+    # A label spelled like its rule carries `_altN`, which ANTLR demands.
+    base = re.sub(r"_alt\d+$", "", base)
     if base.lower() == rule.replace("_", "").lower() or base.lower() == rule.lower():
         return rule
     return base[0].lower() + base[1:]
@@ -128,6 +130,11 @@ def main(spike: Path) -> int:
                 return None
             return f"({name.lower()})"
         rule = parser.ruleNames[node.getRuleIndex()]
+        # `h_<token>_kw`: a keyword standing where the token is admitted,
+        # under `ID = keyword {prefer}`; it is that token in the tree.
+        m_kw = re.match(r"h_(.*)_kw$", rule)
+        if m_kw:
+            return f"({m_kw.group(1)})"
         label = snake_of_context(type(node).__name__, rule)
         fields = {}
         for k, v in vars(node).items():
@@ -150,14 +157,16 @@ def main(spike: Path) -> int:
             if f is None and isinstance(ch, TerminalNode):
                 f = fields.get(id(ch.symbol))
             if f:
-                f = f.rstrip("_")
+                f = f.split("__")[0].rstrip("_")
             parts.append(f"{f}: {s}" if f else s)
-        if label.startswith("inj_"):
+        # An injection and a hidden sort's rule are no node: their
+        # children are their parent's, as in tree-sitter's tree.
+        if label.startswith(("inj_", "h_")):
             return " ".join(parts) if parts else None
         inner = (" " + " ".join(parts)) if parts else ""
         return f"({label}{inner})"
 
-    cases = read_corpus(next((spike / "test" / "corpus").glob("*.txt")))
+    cases = [c for f in sorted((spike / "test" / "corpus").glob("*.txt")) for c in read_corpus(f)]
     start = None
     with open(g4) as f:
         for line in f:

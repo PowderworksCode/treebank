@@ -83,7 +83,7 @@ pub fn emit(module: &Module, names: &Names) -> Result<Option<Emitted>> {
                             b.label
                         );
                     };
-                    let Some(token) = name_token(sym, names) else {
+                    let Some(token) = name_token(sym, names, module) else {
                         findings.push(Finding {
                             kind: Kind::Unsupported,
                             what: format!(
@@ -168,7 +168,7 @@ pub fn emit(module: &Module, names: &Names) -> Result<Option<Emitted>> {
                             p.display()
                         );
                     };
-                    let Some(token) = name_token(sym, names) else {
+                    let Some(token) = name_token(sym, names, module) else {
                         findings.push(Finding {
                             kind: Kind::Unsupported,
                             what: format!(
@@ -252,12 +252,27 @@ fn labelled<'a>(p: &'a Production, label: &str) -> Option<&'a Symbol> {
 }
 
 /// The lexical sort's token name, through lists and options, or None when
-/// the symbol is not a name token.
-fn name_token(sym: &Symbol, names: &Names) -> Option<String> {
+/// the symbol is not a name token. A context-free sort whose every
+/// production injects a name token (`Name = ID`) is one too, under its own
+/// rule name, which is a supertype the query can match.
+fn name_token(sym: &Symbol, names: &Names, module: &Module) -> Option<String> {
     match sym {
         Symbol::Sort(s) if names.lexical.contains(s) => names.sort_rule.get(s).cloned(),
-        Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => name_token(i, names),
-        Symbol::SepList { elem, .. } => name_token(elem, names),
+        Symbol::Sort(s) => {
+            let prods: Vec<&Production> = module.productions(false).filter(|p| p.sort == *s).collect();
+            let all_names = !prods.is_empty()
+                && prods.iter().all(|p| {
+                    p.constructor.is_none()
+                        && matches!(p.symbols().as_slice(), [SymRef::Sym(inner)] if *inner != sym && name_token(inner, names, module).is_some())
+                });
+            if all_names {
+                names.sort_rule.get(s).cloned()
+            } else {
+                None
+            }
+        }
+        Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => name_token(i, names, module),
+        Symbol::SepList { elem, .. } => name_token(elem, names, module),
         _ => None,
     }
 }

@@ -1920,10 +1920,6 @@
       "type": "PATTERN",
       "value": "`(?:[^`])*`"
     },
-    "dqstring": {
-      "type": "PATTERN",
-      "value": "\"(?:[^\"])*\""
-    },
     "int": {
       "type": "PATTERN",
       "value": "(?:[0-9])+"

@@ -481,8 +481,6 @@ module.exports = grammar({
       $.upsert_update
     ),
 
-    dollar: $ => /\$\$(?:[^$])*\$\$/,
-
     dquoted: $ => /"(?:[^"])*"/,
 
     int: $ => /(?:[0-9])+/,

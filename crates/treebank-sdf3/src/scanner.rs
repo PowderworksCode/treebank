@@ -99,6 +99,36 @@ pub struct Plan {
     /// Block structure by column, when the module's declarative layout
     /// constraints ask for it.
     pub indent: Option<IndentPlan>,
+    /// Lexical sorts the scanner matches by simulating their automaton:
+    /// those kernel syntax reaches where no layout may precede them, those
+    /// whose text is layout (`_NL`), and those a `delimiter` pairs.
+    pub owned: Vec<Owned>,
+    pub nfa: Option<crate::nfa::Nfa>,
+    /// NFA state -> index into `owned`.
+    pub state_tok: Vec<usize>,
+    /// (production index, symbol position) of a lexical sort that must be
+    /// adjacent to what precedes it: `token.immediate`.
+    pub immediate: BTreeSet<(usize, usize)>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Owned {
+    pub sort: String,
+    /// The external symbol's name; a named node unless the sort is hidden.
+    pub name: String,
+    pub role: OwnedRole,
+    /// The automaton's start state.
+    pub start: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum OwnedRole {
+    Plain,
+    /// `delimiter(a, c)`'s `a`: the captured word is pushed.
+    Opener,
+    /// `delimiter(a, c)`'s `c`: matched at the start of a line only, and
+    /// only with the word on top of the stack, which it pops.
+    Closer,
 }
 
 /// What `indent`, `align-list`, `align` and `offside` lower to: three
@@ -134,7 +164,7 @@ pub struct IndentPlan {
 
 impl Plan {
     pub fn is_empty(&self) -> bool {
-        self.variants.is_empty() && self.indent.is_none()
+        self.variants.is_empty() && self.indent.is_none() && self.owned.is_empty()
     }
 
     /// External names in declaration order, sentinel last.
@@ -144,6 +174,7 @@ impl Plan {
             v.extend(["_newline", "_indent", "_dedent"].map(String::from));
         }
         v.extend(self.variants.iter().map(|v| v.name.clone()));
+        v.extend(self.owned.iter().map(|o| o.name.clone()));
         v.push("_error_sentinel".into());
         v
     }
@@ -174,6 +205,7 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
     let mut cons = Constraints::default();
     let mut indent = IndentPlan::default();
     let mut offside: BTreeSet<usize> = BTreeSet::new();
+    let mut immediate: BTreeSet<(usize, usize)> = BTreeSet::new();
 
     for (pi, p) in prods.iter().enumerate() {
         let symbols = p.symbols();
@@ -227,10 +259,23 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
                 }
                 (SymRef::Sym(_), SymRef::Sym(Symbol::Sort(sort))) => {
                     if adjacent {
-                        findings.push(Finding {
-                            kind: Kind::Unsupported,
-                            what: format!("{}: adjacency between two nonterminals ({a}, {b}) has no tree-sitter form; ignored", p.display()),
-                        });
+                        if lexical.contains_key(sort.as_str()) {
+                            // `token.immediate`: the one whitespace fact
+                            // tree-sitter's grammar can state.
+                            immediate.insert((pi, b));
+                            findings.push(Finding {
+                                kind: Kind::Mapped,
+                                what: format!(
+                                    "{}: symbols {a} and {b} adjacent: the lexical sort {sort} at {b} became `token.immediate`, which tree-sitter's lexer refuses to precede with layout",
+                                    p.display()
+                                ),
+                            });
+                        } else {
+                            findings.push(Finding {
+                                kind: Kind::Unsupported,
+                                what: format!("{}: adjacency between two nonterminals ({a}, {b}) has no tree-sitter form; ignored", p.display()),
+                            });
+                        }
                         continue;
                     }
                     let mut visited = BTreeSet::new();
@@ -264,6 +309,7 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
     }
 
     let mut plan = Plan::default();
+    plan.immediate = immediate;
     for p in lexical.get("LAYOUT").into_iter().flatten() {
         if let Rhs::Symbols(s) = &p.rhs {
             if let [Symbol::Lit(open), ..] = s.as_slice() {
@@ -438,22 +484,25 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
         });
     }
 
+    // The characters LAYOUT skips: every constructor-less LAYOUT production
+    // made only of whitespace classes (`[\ \t]`, `[\r]? [\n]`); a comment
+    // production has a negated class and is not one.
     for p in lexical.get("LAYOUT").into_iter().flatten() {
+        if p.constructor.is_some() {
+            continue;
+        }
         if let Rhs::Symbols(s) = &p.rhs {
-            if let [Symbol::CharClass(c)] = s.as_slice() {
-                for (a, b) in &c.ranges {
-                    let mut ch = *a;
-                    loop {
+            let mut chars = Vec::new();
+            if s.iter().all(|sym| whitespace_alphabet(sym, &mut chars)) {
+                for ch in chars {
+                    if !plan.layout_chars.contains(&ch) {
                         plan.layout_chars.push(ch);
-                        if ch >= *b {
-                            break;
-                        }
-                        ch = char::from_u32(ch as u32 + 1).unwrap_or(*b);
                     }
                 }
             }
         }
     }
+    plan_owned(module, &prods, &lexical, &mut plan, &mut findings)?;
     if !plan.is_empty() && plan.layout_chars.is_empty() {
         findings.push(Finding {
             kind: Kind::Widening,
@@ -461,6 +510,262 @@ pub fn plan(module: &Module) -> Result<(Plan, Vec<Finding>)> {
         });
     }
     Ok((plan, findings))
+}
+
+/// The characters of a symbol made of whitespace classes only, or false.
+pub fn whitespace_alphabet(s: &Symbol, out: &mut Vec<char>) -> bool {
+    match s {
+        Symbol::CharClass(c) if !c.negated => {
+            for (a, b) in &c.ranges {
+                let mut ch = *a;
+                loop {
+                    if !ch.is_whitespace() {
+                        return false;
+                    }
+                    out.push(ch);
+                    if ch >= *b {
+                        break;
+                    }
+                    ch = char::from_u32(ch as u32 + 1).unwrap_or(*b);
+                }
+            }
+            true
+        }
+        Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => whitespace_alphabet(i, out),
+        _ => false,
+    }
+}
+
+/// The lexical sorts the scanner matches whole, and their automaton.
+fn plan_owned(
+    module: &Module,
+    prods: &[&Production],
+    lexical: &BTreeMap<&str, Vec<&Production>>,
+    plan: &mut Plan,
+    findings: &mut Vec<Finding>,
+) -> Result<()> {
+    let mut builder = crate::nfa::Builder::new(module);
+    // (sort, role, capture), in the order the module declares the sorts.
+    let mut owned: Vec<(String, OwnedRole, Option<String>)> = Vec::new();
+    let mut declared: Vec<&str> = Vec::new();
+    for p in module.productions(true) {
+        if !declared.contains(&p.sort.as_str()) {
+            declared.push(&p.sort);
+        }
+    }
+    let kernel = kernel_reached(prods, lexical);
+    for sort in &declared {
+        if *sort == "LAYOUT" {
+            continue;
+        }
+        if kernel.contains(*sort) {
+            owned.push((sort.to_string(), OwnedRole::Plain, None));
+            findings.push(Finding {
+                kind: Kind::Mapped,
+                what: format!(
+                    "lexical sort {sort} is reached by kernel syntax where no layout may precede it; the generated scanner matches it by simulating its automaton, and is consulted before extras, so no comment or whitespace is skipped in front of it"
+                ),
+            });
+            continue;
+        }
+        let layout_like = !plan.layout_chars.is_empty()
+            && builder
+                .alphabet(sort)
+                .is_some_and(|a| !a.is_empty() && a.iter().all(|c| plan.layout_chars.contains(c)));
+        if layout_like {
+            owned.push((sort.to_string(), OwnedRole::Plain, None));
+            findings.push(Finding {
+                kind: Kind::Mapped,
+                what: format!(
+                    "lexical sort {sort}'s text is LAYOUT: the generated scanner emits it only where the parse admits it, and everywhere else the same text is skipped as layout -- tree-sitter-hcl's `_newline`, derived from the overlap"
+                ),
+            });
+        }
+    }
+    for p in prods {
+        for a in &p.attrs {
+            let Attr::Delimiter(open, close) = a else {
+                continue;
+            };
+            let symbols = p.symbols();
+            let name_at = |n: usize| -> Result<String> {
+                match symbols.get(n.wrapping_sub(1)) {
+                    Some(SymRef::Sym(Symbol::Sort(s))) if lexical.contains_key(s.as_str()) => {
+                        Ok(s.clone())
+                    }
+                    _ => bail!(
+                        "{}: delimiter({open}, {close}) must name lexical sorts at both positions",
+                        p.display()
+                    ),
+                }
+            };
+            let o = name_at(*open)?;
+            let c = name_at(*close)?;
+            let shared: Vec<String> = builder
+                .referenced(&o)
+                .into_iter()
+                .filter(|s| builder.referenced(&c).contains(s))
+                .collect();
+            let [capture] = shared.as_slice() else {
+                bail!(
+                    "{}: delimiter({open}, {close}): {o} and {c} must share exactly one lexical sort, the word; they share [{}]",
+                    p.display(),
+                    shared.join(", ")
+                );
+            };
+            for (sort, role) in [(&o, OwnedRole::Opener), (&c, OwnedRole::Closer)] {
+                match owned.iter_mut().find(|(s, _, _)| s == sort) {
+                    Some(entry) => {
+                        entry.1 = role;
+                        entry.2 = Some(capture.clone());
+                    }
+                    None => owned.push((sort.clone(), role, Some(capture.clone()))),
+                }
+            }
+            findings.push(Finding {
+                kind: Kind::Extension,
+                what: format!(
+                    "{}: `delimiter({open}, {close})` (not SDF3): the scanner keeps a stack of the {capture} each {o} captured, and {c} matches only at the start of a line and only with the word on top, which it pops -- the heredoc's closing delimiter is the word its opener chose",
+                    p.display()
+                ),
+            });
+        }
+    }
+    if owned.is_empty() {
+        return Ok(());
+    }
+    if plan.indent.is_some() {
+        bail!("scanner-owned lexical sorts and indentation in one module are not supported yet");
+    }
+    let mut state_tok = Vec::new();
+    let mut skipped_before: Vec<String> = Vec::new();
+    for (k, (sort, role, capture)) in owned.iter().enumerate() {
+        let start = builder.token(sort, capture.as_deref())?;
+        state_tok.resize(builder.nfa.states.len(), k);
+        if kernel.contains(sort.as_str()) {
+            // tree-sitter's lexer skips extras before the scanner is
+            // re-consulted, so a layout character the token itself
+            // excludes may still precede it where kernel syntax admits no
+            // layout at all.
+            let excluded: Vec<String> = plan
+                .layout_chars
+                .iter()
+                .filter(|c| !builder.can_start(start, **c))
+                .map(|c| format!("{c:?}"))
+                .collect();
+            if !excluded.is_empty() {
+                skipped_before.push(format!("[{}] before {sort}", excluded.join(" ")));
+            }
+        }
+        let name = crate::lower::snake(sort);
+        plan.lexical_owned.insert(sort.clone(), name.clone());
+        plan.owned.push(Owned {
+            sort: sort.clone(),
+            name,
+            role: *role,
+            start,
+        });
+    }
+    let dropped: Vec<String> = builder
+        .dropped
+        .iter()
+        .filter(|s| {
+            owned.iter().any(|(o, _, _)| {
+                o == *s || builder.referenced(o).iter().any(|r| r == *s)
+            })
+        })
+        .cloned()
+        .collect();
+    if !dropped.is_empty() {
+        findings.push(Finding {
+            kind: Kind::Widening,
+            what: format!(
+                "lexical restrictions with a multi-character lookahead on [{}] are not carried by the scanner's automaton, which looks one character ahead",
+                dropped.join(", ")
+            ),
+        });
+    }
+    if !skipped_before.is_empty() {
+        findings.push(Finding {
+            kind: Kind::Widening,
+            what: format!(
+                "kernel syntax admits no layout before a scanner-owned token, but tree-sitter's lexer skips extras before the scanner is consulted again, and the scanner cannot see what was skipped: {} may precede it where SDF3 rejects the input -- a raw line break inside a quoted template parses",
+                skipped_before.join(", ")
+            ),
+        });
+    }
+    plan.nfa = Some(builder.nfa);
+    plan.state_tok = state_tok;
+    Ok(())
+}
+
+/// The lexical sorts kernel syntax reaches at a position no layout may
+/// precede: a symbol after another symbol that is not `LAYOUT?`, and then
+/// the first symbol of every production of a sort so reached.
+fn kernel_reached(
+    prods: &[&Production],
+    lexical: &BTreeMap<&str, Vec<&Production>>,
+) -> BTreeSet<String> {
+    layout_free_sorts(prods, lexical)
+        .into_iter()
+        .filter(|s| lexical.contains_key(s.as_str()) && s != "LAYOUT")
+        .collect()
+}
+
+/// Every sort, context-free or lexical, that kernel syntax reaches at a
+/// position no layout may precede.
+pub fn layout_free_sorts(
+    prods: &[&Production],
+    lexical: &BTreeMap<&str, Vec<&Production>>,
+) -> BTreeSet<String> {
+    fn first_sorts(s: &Symbol, out: &mut Vec<String>) {
+        match s {
+            Symbol::Sort(n) => out.push(n.clone()),
+            Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => first_sorts(i, out),
+            Symbol::SepList { elem, .. } => first_sorts(elem, out),
+            Symbol::Group(alts) => {
+                for a in alts {
+                    if let Some(f) = a.first() {
+                        first_sorts(f, out);
+                    }
+                }
+            }
+            Symbol::Lit(_) | Symbol::CharClass(_) => {}
+        }
+    }
+    let mut todo: Vec<String> = Vec::new();
+    for p in prods.iter().filter(|p| p.is_kernel()) {
+        let syms = p.symbols();
+        for k in 1..syms.len() {
+            if is_layout_symbol(syms[k - 1]) {
+                continue;
+            }
+            if let SymRef::Sym(s) = syms[k] {
+                first_sorts(s, &mut todo);
+            }
+        }
+    }
+    let mut reached: BTreeSet<String> = BTreeSet::new();
+    while let Some(s) = todo.pop() {
+        if !reached.insert(s.clone()) || lexical.contains_key(s.as_str()) {
+            continue;
+        }
+        for p in prods.iter().filter(|p| p.sort == s) {
+            if let Some(SymRef::Sym(sym)) = p.symbols().first() {
+                first_sorts(sym, &mut todo);
+            }
+        }
+    }
+    reached
+}
+
+/// `LAYOUT?` written in kernel syntax: layout is admitted here.
+pub fn is_layout_symbol(s: SymRef<'_>) -> bool {
+    match s {
+        SymRef::Sym(Symbol::Opt(inner)) => matches!(inner.as_ref(), Symbol::Sort(n) if n == "LAYOUT"),
+        SymRef::Sym(Symbol::Sort(n)) => n == "LAYOUT",
+        _ => false,
+    }
 }
 
 /// One declarative constraint into the indent plan.
@@ -852,6 +1157,7 @@ pub fn c_source(plan: &Plan, language: &str) -> String {
     out.push_str("};\n\n");
     let has_variants = !plan.variants.is_empty();
     let has_indent = plan.indent.is_some();
+    let has_owned = !plan.owned.is_empty();
 
     out.push_str("static bool is_layout(int32_t c) {\n  return ");
     if plan.layout_chars.is_empty() {
@@ -894,8 +1200,54 @@ pub fn c_source(plan: &Plan, language: &str) -> String {
         out.push_str("static bool ends_token(int32_t c) {\n  return c == 0 || is_break(c) || is_layout(c);\n}\n\n");
     }
 
+    if has_owned {
+        out.push_str(&owned_c(plan));
+    }
+
     let fname = |suffix: &str| format!("tree_sitter_{language}_external_scanner_{suffix}");
-    if has_indent {
+    if has_owned {
+        out.push_str(&format!(
+            "void *{}(void) {{ return calloc(1, sizeof(Scanner)); }}\n",
+            fname("create")
+        ));
+        out.push_str(&format!(
+            "void {}(void *payload) {{ free(payload); }}\n",
+            fname("destroy")
+        ));
+        out.push_str(&format!(
+            r#"unsigned {}(void *payload, char *buffer) {{
+  Scanner *s = payload;
+  unsigned n = 0;
+  buffer[n++] = (char)s->delims.depth;
+  for (unsigned i = 0; i < s->delims.depth; i++) {{
+    buffer[n++] = (char)s->delims.len[i];
+    memcpy(buffer + n, s->delims.word[i], s->delims.len[i]);
+    n += s->delims.len[i];
+  }}
+  return n;
+}}
+"#,
+            fname("serialize")
+        ));
+        out.push_str(&format!(
+            r#"void {}(void *payload, const char *buffer, unsigned length) {{
+  Scanner *s = payload;
+  memset(s, 0, sizeof(Scanner));
+  if (length == 0) return;
+  unsigned n = 0;
+  uint8_t depth = (uint8_t)buffer[n++];
+  for (unsigned i = 0; i < depth && n < length && i < MAX_DELIMS; i++) {{
+    s->delims.len[i] = (uint8_t)buffer[n++];
+    memcpy(s->delims.word[i], buffer + n, s->delims.len[i]);
+    n += s->delims.len[i];
+    s->delims.depth++;
+  }}
+}}
+
+"#,
+            fname("deserialize")
+        ));
+    } else if has_indent {
         out.push_str(
             r#"// The open block columns, outermost first. Column 0 is always open.
 #define MAX_DEPTH 64
@@ -984,7 +1336,26 @@ static int next_line_column(TSLexer *lexer) {
   // During error recovery every symbol is marked valid (the sentinel is
   // never produced, so seeing it valid is the tell).
   bool recovery = valid[ERROR_SENTINEL];
-
+"#,
+    );
+    if has_owned {
+        out.push_str(
+            r#"
+  // The scanner-owned lexical sorts, at the raw position: what they may
+  // begin with is theirs, and layout is skipped only where none of them
+  // could start. Nothing is offered during recovery, so the delimiter
+  // stack stays in step with a parse that is happening.
+  if (recovery) return false;
+  if (scan_owned((Scanner *)payload, lexer, valid)) return true;
+"#,
+        );
+        if !has_variants {
+            out.push_str("  return false;\n}\n");
+            return out;
+        }
+    }
+    out.push_str(
+        r#"
   bool space_before = false;
   while (is_layout(lexer->lookahead) && !is_break(lexer->lookahead)) {
     lexer->advance(lexer, true);
@@ -1096,6 +1467,210 @@ static int next_line_column(TSLexer *lexer) {
     } else {
         out.push_str("  (void)space_before;\n  (void)c;\n  return false;\n}\n");
     }
+    out
+}
+
+/// The automaton tables and the matcher for the scanner-owned sorts.
+fn owned_c(plan: &Plan) -> String {
+    let mut out = String::new();
+    let Some(nfa) = &plan.nfa else {
+        return out;
+    };
+    out.push_str("// ---- Scanner-owned lexical sorts: the module's automaton, simulated ----\n\n");
+    out.push_str(&crate::nfa::c_tables(nfa, &plan.state_tok));
+    out.push_str("typedef struct { uint16_t start; enum TokenType sym; uint8_t role; } Owned;\n");
+    out.push_str("// role: 0 plain, 1 opener (pushes its captured word), 2 closer (pops it).\n");
+    out.push_str("static const Owned OWNED[] = {\n");
+    for o in &plan.owned {
+        let role = match o.role {
+            OwnedRole::Plain => 0,
+            OwnedRole::Opener => 1,
+            OwnedRole::Closer => 2,
+        };
+        out.push_str(&format!(
+            "  {{{}, {}, {role}}},  // {}\n",
+            o.start,
+            enum_name(&o.name),
+            o.sort
+        ));
+    }
+    out.push_str("};\n");
+    out.push_str(&format!("#define N_OWNED {}\n", plan.owned.len()));
+    out.push_str(
+        r#"#define MAX_TEXT 256
+#define MAX_DELIMS 16
+#define MAX_WORD 64
+
+typedef struct {
+  uint8_t depth;
+  uint8_t len[MAX_DELIMS];
+  char word[MAX_DELIMS][MAX_WORD];
+} Delims;
+
+typedef struct { uint16_t state; int16_t cs, ce; } Thread;
+typedef struct { Thread t[N_STATES]; unsigned n; bool seen[N_STATES]; } Threads;
+
+// The delimiter stack is the state; the thread lists are scratch space
+// kept here rather than static so that parsers on several threads do not
+// share them.
+typedef struct {
+  Delims delims;
+  Threads cur, next, probe;
+} Scanner;
+
+static int32_t look(TSLexer *lexer) {
+  return lexer->eof(lexer) ? EOF_CP : lexer->lookahead;
+}
+
+// Epsilon closure from `s`, with `la` the character that would come next:
+// a guarded edge is crossed only when `la` is outside its classes, and a
+// tagged edge records the capture's start or end at `pos`.
+static void add_thread(Threads *l, uint16_t s, int16_t cs, int16_t ce, int32_t la, int pos) {
+  if (l->seen[s]) return;
+  l->seen[s] = true;
+  l->t[l->n].state = s;
+  l->t[l->n].cs = cs;
+  l->t[l->n].ce = ce;
+  l->n++;
+  const State *st = &STATES[s];
+  for (unsigned i = 0; i < st->n_eps; i++) {
+    const Eps *e = &st->eps[i];
+    bool blocked = false;
+    for (unsigned g = 0; g < e->n_guard; g++) {
+      if (class_has(e->guard[g], la)) { blocked = true; break; }
+    }
+    if (blocked) continue;
+    add_thread(l, e->target, e->tag == 1 ? (int16_t)pos : cs, e->tag == 2 ? (int16_t)pos : ce, la, pos);
+  }
+}
+
+static bool can_start(Threads *l, const bool *cand, int32_t la) {
+  memset(l, 0, sizeof(*l));
+  for (unsigned i = 0; i < N_OWNED; i++) {
+    if (cand[i]) add_thread(l, OWNED[i].start, -1, -1, la, 0);
+  }
+  for (unsigned k = 0; k < l->n; k++) {
+    const State *st = &STATES[l->t[k].state];
+    for (unsigned e = 0; e < st->n_edges; e++) {
+      if (class_has(st->edges[e].cls, la)) return true;
+    }
+  }
+  return false;
+}
+
+static bool word_on_top(const Scanner *s, const char *text, int cs, int ce) {
+  if (s->delims.depth == 0 || cs < 0 || ce < cs) return false;
+  const Delims *d = &s->delims;
+  unsigned n = d->depth - 1;
+  if ((int)d->len[n] != ce - cs) return false;
+  return memcmp(d->word[n], text + cs, (size_t)(ce - cs)) == 0;
+}
+
+// Every valid owned token at once: the live states of all of them are
+// stepped together, the token ends at the last position where one was
+// accepting, and among several the closer wins outright and otherwise the
+// longest, ties to the first declared. `mark_end` at each accept is what
+// makes this longest-match with a lexer that cannot step back.
+static bool scan_owned(Scanner *s, TSLexer *lexer, const bool *valid) {
+  Threads *cur = &s->cur;
+  Threads *next = &s->next;
+  bool cand[N_OWNED];
+  unsigned n_cand = 0;
+  for (unsigned i = 0; i < N_OWNED; i++) {
+    cand[i] = valid[OWNED[i].sym] && (OWNED[i].role != 2 || s->delims.depth > 0);
+    if (cand[i]) n_cand++;
+  }
+  if (n_cand == 0) return false;
+
+  // Layout no candidate could begin with is skipped; the rest is theirs.
+  for (;;) {
+    int32_t la = look(lexer);
+    if (la == EOF_CP || !is_layout(la) || can_start(&s->probe, cand, la)) break;
+    lexer->advance(lexer, true);
+  }
+  // A closer is matched at the start of a line only.
+  bool at_line_start = lexer->get_column(lexer) == 0;
+  for (unsigned i = 0; i < N_OWNED; i++) {
+    if (cand[i] && OWNED[i].role == 2 && !at_line_start) cand[i] = false;
+  }
+
+  char text[MAX_TEXT];
+  int pos = 0;
+  int best = -1, best_len = -1;
+  int16_t best_cs = -1, best_ce = -1;
+  int32_t la = look(lexer);
+  memset(cur, 0, sizeof(*cur));
+  for (unsigned i = 0; i < N_OWNED; i++) {
+    if (cand[i]) add_thread(cur, OWNED[i].start, -1, -1, la, 0);
+  }
+  for (;;) {
+    bool decided = false;
+    for (unsigned k = 0; k < cur->n && !decided; k++) {
+      const Thread *t = &cur->t[k];
+      const State *st = &STATES[t->state];
+      if (!st->accept) continue;
+      int tok = st->tok;
+      if (OWNED[tok].role == 2) {
+        if (word_on_top(s, text, t->cs, t->ce)) {
+          best = tok;
+          best_len = pos;
+          lexer->mark_end(lexer);
+          decided = true;
+        }
+        continue;
+      }
+      if (best < 0 || pos > best_len || (pos == best_len && tok < best)) {
+        best = tok;
+        best_len = pos;
+        best_cs = t->cs;
+        best_ce = t->ce;
+        lexer->mark_end(lexer);
+      }
+    }
+    if (decided || la == EOF_CP) break;
+    // Step every live state over `la`; the closure waits for the next
+    // lookahead, which the guards need.
+    memset(next, 0, sizeof(*next));
+    unsigned np = 0;
+    for (unsigned k = 0; k < cur->n; k++) {
+      const State *st = &STATES[cur->t[k].state];
+      for (unsigned e = 0; e < st->n_edges; e++) {
+        if (!class_has(st->edges[e].cls, la)) continue;
+        uint16_t target = st->edges[e].target;
+        if (next->seen[target]) continue;
+        next->seen[target] = true;
+        next->t[np].state = target;
+        next->t[np].cs = cur->t[k].cs;
+        next->t[np].ce = cur->t[k].ce;
+        np++;
+      }
+    }
+    if (np == 0) break;
+    if (pos < MAX_TEXT) text[pos] = (char)la;
+    pos++;
+    lexer->advance(lexer, false);
+    la = look(lexer);
+    memset(cur, 0, sizeof(*cur));
+    for (unsigned k = 0; k < np; k++) {
+      add_thread(cur, next->t[k].state, next->t[k].cs, next->t[k].ce, la, pos);
+    }
+  }
+  if (best < 0) return false;
+  if (OWNED[best].role == 1) {
+    if (best_cs < 0 || best_ce < best_cs || s->delims.depth >= MAX_DELIMS || best_ce - best_cs > MAX_WORD) return false;
+    Delims *d = &s->delims;
+    d->len[d->depth] = (uint8_t)(best_ce - best_cs);
+    memcpy(d->word[d->depth], text + best_cs, (size_t)(best_ce - best_cs));
+    d->depth++;
+  } else if (OWNED[best].role == 2) {
+    s->delims.depth--;
+  }
+  lexer->result_symbol = OWNED[best].sym;
+  return true;
+}
+
+"#,
+    );
     out
 }
 

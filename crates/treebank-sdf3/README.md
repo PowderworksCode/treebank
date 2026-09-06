@@ -353,6 +353,27 @@ python3 crates/treebank-sdf3/tools/winnow_check.py crates/treebank-sdf3/spike/ru
 python3 crates/treebank-sdf3/tools/confer.py crates/treebank-sdf3/spike/rubyish
 ```
 
+## The tenth language: HCL, the shipped grammar, end to end
+
+`spike/hcl/hcl.sdf3` is `crates/treebank-hcl` written as one SDF3 module,
+and `spike/hcl/verify.sh` holds the generated parser to everything the
+shipped crate is held to: its corpus (17 of 17), its negative corpus (27
+of 28), `treebank roles`, `treebank lint`, `treebank shape` on its
+fixtures, and the sweep and shape check over the locked corpus -- 19,219
+files, 2,227,614 oracle nodes, none missed, which is the reference's own
+score. The hand-written scanner's three jobs came out of the module: the
+newline token from a lexical sort whose text is LAYOUT, the template
+modes from kernel syntax (the `syntax` section, lowered to a scanner that
+simulates each reached sort's automaton), and the heredoc delimiter from
+one attribute, `{delimiter(1, 3)}`. `spike/hcl/results.md` has every
+number beside the reference's; winnow holds all 17 cases, ANTLR the 3
+without a string, since it would need lexer modes the lowering does not
+derive yet.
+
+```sh
+crates/treebank-sdf3/spike/hcl/verify.sh      # needs corpus/hcl hydrated for the sweep
+```
+
 ## What it is not
 
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's

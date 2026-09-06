@@ -58,8 +58,14 @@ fn apply_tokenize(m: &mut Module) {
         return;
     }
     for section in &mut m.sections {
-        let Section::ContextFreeSyntax(prods) = section else {
-            continue;
+        let prods: Vec<&mut Production> = match section {
+            Section::ContextFreeSyntax(prods) => prods.iter_mut().collect(),
+            Section::ContextFreePriorities(chains) => chains
+                .iter_mut()
+                .flat_map(|c| c.groups.iter_mut())
+                .flat_map(|g| g.prods.iter_mut())
+                .collect(),
+            _ => continue,
         };
         for p in prods {
             let Rhs::Template(parts) = &mut p.rhs else {
@@ -160,10 +166,21 @@ const SECTION_WORDS: &[&str] = &[
     "hiding",
 ];
 
+/// A sort name; in kernel syntax it carries `-CF` or `-LEX`, which says
+/// which of SDF3's two normalised grammars the sort belongs to and is
+/// dropped here, where every sort is one or the other by its section.
 fn sort_name(i: &mut In) -> R<String> {
     ident
+        .map(|s: String| strip_kernel_suffix(&s))
         .verify(|s: &String| !SECTION_WORDS.contains(&s.as_str()))
         .parse_next(i)
+}
+
+fn strip_kernel_suffix(s: &str) -> String {
+    s.strip_suffix("-CF")
+        .or_else(|| s.strip_suffix("-LEX"))
+        .unwrap_or(s)
+        .to_string()
 }
 
 fn string_lit(i: &mut In) -> R<String> {
@@ -187,6 +204,7 @@ fn string_lit(i: &mut In) -> R<String> {
 
 fn class_char(i: &mut In) -> R<char> {
     alt((
+        preceded('\\', literal("EOF")).value(EOF_CHAR),
         preceded(
             '\\',
             any.map(|c| match c {
@@ -245,7 +263,8 @@ fn sep_list(i: &mut In) -> R<Symbol> {
     })
 }
 
-/// A symbol without its trailing trivia; callers wrap in `lex`.
+/// A symbol without its trailing trivia; callers wrap in `lex`. In kernel
+/// syntax the `-CF`/`-LEX` suffix follows the postfix (`QPart*-CF`).
 fn symbol(i: &mut In) -> R<Symbol> {
     let base = alt((
         sep_list,
@@ -255,7 +274,9 @@ fn symbol(i: &mut In) -> R<Symbol> {
         sort_name.map(Symbol::Sort),
     ))
     .parse_next(i)?;
-    postfix(base, i)
+    let s = postfix(base, i)?;
+    opt(alt((literal("-CF"), literal("-LEX")))).parse_next(i)?;
+    Ok(s)
 }
 
 fn symbol_sequence(i: &mut In) -> R<Vec<Symbol>> {
@@ -378,6 +399,12 @@ fn attr(i: &mut In) -> R<Vec<Attr>> {
     if name == "binds" {
         let b = delimited((ws, '(', ws), binding, (ws, ')')).parse_next(i)?;
         return Ok(vec![Attr::Binds(b)]);
+    }
+    if name == "delimiter" {
+        let (a, _, c): (usize, _, usize) =
+            delimited((ws, '(', ws), (dec_uint, (ws, ',', ws), dec_uint), (ws, ')'))
+                .parse_next(i)?;
+        return Ok(vec![Attr::Delimiter(a, c)]);
     }
     if name == "collapse" {
         let n: u32 = delimited((ws, '(', ws), dec_uint, (ws, ')')).parse_next(i)?;
@@ -579,27 +606,50 @@ fn prod_ref(i: &mut In) -> R<String> {
         .parse_next(i)
 }
 
-fn prod_refs(i: &mut In) -> R<Vec<String>> {
-    repeat(1.., lex(prod_ref)).parse_next(i)
+enum PriorityMember {
+    Ref(String),
+    Prod(Production),
+}
+
+/// `Exp.Add`, or a whole production `Exp.Bin = <<Exp> + <Exp>>` where the
+/// constructor alone would not say which production is meant.
+fn priority_member(i: &mut In) -> R<PriorityMember> {
+    if starts_production.parse_next(i).is_ok() {
+        return production(true)(i).map(PriorityMember::Prod);
+    }
+    lex(prod_ref).map(PriorityMember::Ref).parse_next(i)
 }
 
 fn priority_group(i: &mut In) -> R<PriorityGroup> {
+    let group = |members: Vec<PriorityMember>, assoc: Option<Attr>| {
+        let mut g = PriorityGroup {
+            assoc,
+            members: Vec::new(),
+            prods: Vec::new(),
+        };
+        for m in members {
+            match m {
+                PriorityMember::Ref(r) => g.members.push(r),
+                PriorityMember::Prod(p) => g.prods.push(p),
+            }
+        }
+        g
+    };
     alt((
         delimited(
             sym("{"),
-            (opt(terminated(lex(attr), sym(":"))), prod_refs),
+            (
+                opt(terminated(lex(attr), sym(":"))),
+                repeat(1.., priority_member),
+            ),
             sym("}"),
         )
         .map(
-            |(assoc, members): (Option<Vec<Attr>>, Vec<String>)| PriorityGroup {
-                assoc: assoc.and_then(|mut a| a.pop()),
-                members,
+            move |(assoc, members): (Option<Vec<Attr>>, Vec<PriorityMember>)| {
+                group(members, assoc.and_then(|mut a| a.pop()))
             },
         ),
-        lex(prod_ref).map(|m| PriorityGroup {
-            assoc: None,
-            members: vec![m],
-        }),
+        lex(prod_ref).map(move |m| group(vec![PriorityMember::Ref(m)], None)),
     ))
     .parse_next(i)
 }
@@ -625,8 +675,14 @@ fn template_options(i: &mut In) -> R<Vec<TemplateOption>> {
 fn template_option(i: &mut In) -> R<TemplateOption> {
     alt((
         (lex(sort_name), sym("="), kw("keyword"), attrs)
-            .verify(|(_, _, _, a)| a.contains(&Attr::Reject))
-            .map(|(sort, _, _, _)| TemplateOption::KeywordReject { sort }),
+            .verify(|(_, _, _, a)| a.contains(&Attr::Reject) || a.contains(&Attr::Prefer))
+            .map(|(sort, _, _, a)| {
+                if a.contains(&Attr::Reject) {
+                    TemplateOption::KeywordReject { sort }
+                } else {
+                    TemplateOption::KeywordPrefer { sort }
+                }
+            }),
         preceded((kw("keyword"), sym("-/-")), lex(char_class)).map(TemplateOption::KeywordFollow),
         preceded((kw("tokenize"), sym(":")), lex(string_lit)).map(TemplateOption::Tokenize),
         (kw("keyword"), sym("="), kw("case-insensitive"))
@@ -669,6 +725,25 @@ fn sec_cf_sorts(i: &mut In) -> R<Section> {
 fn sec_cf_syntax(i: &mut In) -> R<Section> {
     preceded((kw("context-free"), kw("syntax")), cf_productions)
         .map(Section::ContextFreeSyntax)
+        .parse_next(i)
+}
+
+/// SDF3's kernel syntax: `syntax`, whose productions admit no layout
+/// between their symbols unless `LAYOUT?-CF` is written. Read into the
+/// context-free syntax with the `Kernel` marker, since every lowering
+/// treats the two alike except for the layout.
+fn sec_kernel_syntax(i: &mut In) -> R<Section> {
+    preceded(kw("syntax"), cf_productions)
+        .map(|ps: Vec<Production>| {
+            Section::ContextFreeSyntax(
+                ps.into_iter()
+                    .map(|mut p| {
+                        p.attrs.push(Attr::Kernel);
+                        p
+                    })
+                    .collect(),
+            )
+        })
         .parse_next(i)
 }
 
@@ -771,6 +846,7 @@ fn section(i: &mut In) -> R<Section> {
             sec_sorts,
             sec_template_options,
             sec_vocabulary,
+            sec_kernel_syntax,
         )),
         no_section,
     ))

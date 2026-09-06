@@ -130,7 +130,7 @@
 - sort Returning has the single constructor Returning; collapsed to the named rule `returning`
 - sort CreateTail has the single constructor WithoutOids; collapsed to the named rule `without_oids`
 - a `{Elem Sep}+` list expanded to seq/repeat; the expansion has no name in grammar.json
-- lexical sort DOLLAR became the token `dollar` /\$\$(?:[^$])*\$\$/
+- lexical sort DOLLAR is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own
 - lexical sort DQUOTED became the token `dquoted` /"(?:[^"])*"/
 - lexical sort INT became the token `int` /(?:[0-9])+/
 - LAYOUT class became an extras pattern /[ \t\n\r]/

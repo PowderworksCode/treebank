@@ -62,8 +62,10 @@ pub struct Lowered {
     /// The node and rule names this lowering chose, so a second backend can
     /// use the same ones and one corpus can serve both.
     pub names: Names,
-    /// `Sort.Cons` -> (priority level, associativity), as assigned.
-    pub levels: BTreeMap<String, (u32, Option<Attr>)>,
+    /// Context-free production index -> (priority level, associativity),
+    /// as assigned. By index, since one constructor may have several
+    /// productions at different levels (`Exp.BinaryExpression`).
+    pub levels: BTreeMap<usize, (u32, Option<Attr>)>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -74,16 +76,22 @@ pub struct Names {
     pub node: BTreeMap<String, String>,
     /// Lexical sorts, so a backend can tell a token from a rule.
     pub lexical: BTreeSet<String>,
+    /// Rule -> the node type it is aliased to: a sort whose constructor is
+    /// another sort's (`HIf.TemplateIf` beside `QIf.TemplateIf`) keeps its
+    /// own rule and shows as the shared node type.
+    pub alias: BTreeMap<String, String>,
 }
 
 struct Ctx<'m> {
     module: &'m Module,
     /// sort -> the rule name a reference to it becomes.
     sort_rule: BTreeMap<String, String>,
+    /// sort -> the node type its rule is aliased to at every reference.
+    alias: BTreeMap<String, String>,
     lexical: BTreeMap<String, Vec<&'m Production>>,
     findings: Vec<Finding>,
-    /// Sort.Cons -> (level, assoc)
-    levels: BTreeMap<String, (u32, Option<Attr>)>,
+    /// production index -> (level, assoc)
+    levels: BTreeMap<usize, (u32, Option<Attr>)>,
     /// Word-shaped template literals, for `reserved`.
     keywords: BTreeSet<String>,
     /// `keyword = case-insensitive`: keywords are pattern tokens aliased to
@@ -98,10 +106,19 @@ struct Ctx<'m> {
     prods: Vec<&'m Production>,
 }
 
+fn choice_or_single(mut bodies: Vec<Value>) -> Value {
+    if bodies.len() == 1 {
+        bodies.pop().unwrap()
+    } else {
+        json!({"type": "CHOICE", "members": bodies})
+    }
+}
+
 pub fn lower(module: &Module) -> Result<Lowered> {
     let mut cx = Ctx {
         module,
         sort_rule: BTreeMap::new(),
+        alias: BTreeMap::new(),
         lexical: BTreeMap::new(),
         findings: Vec::new(),
         levels: BTreeMap::new(),
@@ -175,18 +192,33 @@ pub fn lower(module: &Module) -> Result<Lowered> {
 
     // Decide every sort's rule name before emitting any body, since bodies
     // refer to other sorts.
+    let mut taken: BTreeSet<String> = BTreeSet::new();
     for sort in &order {
         let prods = &cf[sort];
-        let alternatives = prods.len();
-        let name =
-            if alternatives == 1 && prods[0].constructor.is_some() && !prods[0].has(&Attr::Bracket)
-            {
-                // SDF3's AST node is the constructor, so `Else.ElseClause`
-                // is `else_clause`, not `else`.
-                snake(prods[0].constructor.as_deref().unwrap_or(sort))
+        let constructors: BTreeSet<Option<&str>> =
+            prods.iter().map(|p| p.constructor.as_deref()).collect();
+        let one_cons = constructors.len() == 1
+            && prods[0].constructor.is_some()
+            && !prods.iter().any(|p| p.has(&Attr::Bracket));
+        let name = if sort.starts_with('_') {
+            // A hidden sort: a hidden rule, its symbols the parent's.
+            snake(sort)
+        } else if one_cons {
+            // SDF3's AST node is the constructor, so `Else.ElseClause`
+            // is `else_clause`, not `else`.
+            let node = snake(prods[0].constructor.as_deref().unwrap_or(sort));
+            if taken.contains(&node) {
+                // The constructor is another sort's too: one term, one
+                // node type, so this sort's rule is aliased to it.
+                cx.alias.insert(sort.clone(), node.clone());
+                format!("{}_{}", snake(sort), node)
             } else {
-                format!("_{}", snake(sort))
-            };
+                node
+            }
+        } else {
+            format!("_{}", snake(sort))
+        };
+        taken.insert(name.clone());
         cx.sort_rule.insert(sort.clone(), name);
     }
     for (sort, prods) in &cx.lexical {
@@ -203,48 +235,124 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         }
     }
 
+    let mut inline: Vec<String> = Vec::new();
     for sort in &order {
         let prods = cf[sort].clone();
         let rule_name = cx.sort_rule[sort].clone();
-        if !rule_name.starts_with('_') {
-            let p = prods[0];
-            let body = cx.production_body(p)?;
+        if sort.starts_with('_') {
+            // A hidden sort (a treebank extension: SDF3 has no constructor-
+            // less production of more than one symbol). Its productions
+            // become one hidden rule, not a supertype, and the symbols
+            // are the parent's children. A rule made of tokens only is
+            // inlined, so a precedence on the parent reaches its tokens:
+            // tree-sitter resolves a shift by the precedence of the
+            // production the token is in, and `_bin_op_mul` has none.
+            let mut bodies = Vec::new();
+            for p in &prods {
+                let b = cx.production_body(p)?;
+                bodies.push(cx.wrap_precedence(p, b));
+            }
+            let token_only = prods.iter().all(|p| {
+                p.symbols().iter().all(|s| match s {
+                    SymRef::Lit(_) => true,
+                    SymRef::Sym(Symbol::Sort(n)) => cx.lexical.contains_key(n),
+                    SymRef::Sym(_) => false,
+                })
+            });
+            if token_only {
+                inline.push(rule_name.clone());
+            }
             cx.findings.push(Finding {
-                kind: Kind::Mapped,
+                kind: Kind::Extension,
                 what: format!(
-                    "sort {sort} has the single constructor {}; collapsed to the named rule `{rule_name}`",
-                    p.constructor.as_deref().unwrap_or("?")
+                    "`_`-prefixed sort {sort} is hidden (not SDF3): its {} production(s) became the hidden rule `{rule_name}`, whose symbols are its parent's children{}",
+                    prods.len(),
+                    if token_only { "; made of tokens only, it is inlined so a precedence on the parent reaches its tokens" } else { "" }
                 ),
             });
-            if let Some(r) = p.reference() {
-                cx.node_names.insert(r, rule_name.clone());
+            cx.insert_rule(&mut rules, rule_name, choice_or_single(bodies))?;
+            continue;
+        }
+        if !rule_name.starts_with('_') {
+            // One constructor: one named rule, a choice when the
+            // constructor has several productions.
+            let mut bodies = Vec::new();
+            for p in &prods {
+                let b = cx.production_body(p)?;
+                bodies.push(cx.wrap_precedence(p, b));
             }
-            cx.insert_rule(&mut rules, rule_name, body)?;
+            let cons = prods[0].constructor.as_deref().unwrap_or("?").to_string();
+            let node = cx.alias.get(sort).cloned().unwrap_or_else(|| rule_name.clone());
+            if prods.len() == 1 {
+                cx.findings.push(Finding {
+                    kind: Kind::Mapped,
+                    what: format!(
+                        "sort {sort} has the single constructor {cons}; collapsed to the named rule `{rule_name}`"
+                    ),
+                });
+            } else {
+                cx.findings.push(Finding {
+                    kind: Kind::Mapped,
+                    what: format!(
+                        "sort {sort}'s {} productions share the constructor {cons}: one named rule `{rule_name}` with a choice of their bodies, since SDF3's AST has one constructor",
+                        prods.len()
+                    ),
+                });
+            }
+            if node != rule_name {
+                cx.findings.push(Finding {
+                    kind: Kind::Mapped,
+                    what: format!(
+                        "sort {sort}'s constructor {cons} is also another sort's: the rule `{rule_name}` is aliased to the node type `{node}` wherever {sort} is referenced, so the two are one term in the tree"
+                    ),
+                });
+            }
+            for p in &prods {
+                if let Some(r) = p.reference() {
+                    cx.node_names.insert(r, node.clone());
+                }
+            }
+            cx.insert_rule(&mut rules, rule_name, choice_or_single(bodies))?;
             continue;
         }
         let mut members: Vec<Value> = Vec::new();
+        // Constructors in first-appearance order, each with its productions.
+        let mut groups: Vec<(Option<String>, Vec<&Production>)> = Vec::new();
         for p in &prods {
-            if p.has(&Attr::Bracket) {
-                // tree-sitter refuses a hidden supertype member with more
-                // than one visible child ("Supertype symbols must always
-                // have a single visible child"), and `( Exp )` has three.
-                // So the bracket becomes a named node, which SDF3's AST does
-                // not have.
-                let node = format!("{}_bracket", snake(sort));
-                let body = cx.production_body(p)?;
-                cx.insert_rule(&mut rules, node.clone(), body)?;
-                members.push(json!({"type": "SYMBOL", "name": node}));
-                cx.findings.push(Finding {
-                    kind: Kind::Deviation,
-                    what: format!("bracket production of {sort} became the named node `{node}`; SDF3's AST has no node for brackets, but a hidden supertype member may have only one visible child and `( {sort} )` has three"),
-                });
-                continue;
+            let key = if p.has(&Attr::Bracket) {
+                None
+            } else {
+                p.constructor.clone()
+            };
+            match groups.iter_mut().find(|(k, _)| *k == key && key.is_some()) {
+                Some((_, g)) => g.push(p),
+                None => groups.push((key, vec![p])),
             }
-            match &p.constructor {
-                None => {
+        }
+        for (cons, group) in groups {
+            let Some(c) = cons else {
+                for p in group {
+                    if p.has(&Attr::Bracket) {
+                        // tree-sitter refuses a hidden supertype member with more
+                        // than one visible child ("Supertype symbols must always
+                        // have a single visible child"), and `( Exp )` has three.
+                        // So the bracket becomes a named node, which SDF3's AST does
+                        // not have.
+                        let node = format!("{}_bracket", snake(sort));
+                        let body = cx.production_body(p)?;
+                        cx.insert_rule(&mut rules, node.clone(), body)?;
+                        members.push(json!({"type": "SYMBOL", "name": node}));
+                        cx.findings.push(Finding {
+                            kind: Kind::Deviation,
+                            what: format!("bracket production of {sort} became the named node `{node}`; SDF3's AST has no node for brackets, but a hidden supertype member may have only one visible child and `( {sort} )` has three"),
+                        });
+                        continue;
+                    }
                     // Injection: the member is whatever the rhs names.
                     let body = cx.production_body(p)?;
-                    if body.get("type").and_then(Value::as_str) != Some("SYMBOL") {
+                    if body.get("type").and_then(Value::as_str) != Some("SYMBOL")
+                        && body.get("type").and_then(Value::as_str) != Some("ALIAS")
+                    {
                         bail!("injection {sort} = ... has a right-hand side that is not a single symbol; unsupported");
                     }
                     members.push(body);
@@ -253,20 +361,31 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                         what: format!("injection into {sort} became a supertype member with no node of its own"),
                     });
                 }
-                Some(c) => {
-                    let mut node = snake(c);
-                    if cx.rule_names.contains(&node) || cx.sort_rule.values().any(|v| *v == node) {
-                        node = format!("{}_{}", snake(sort), node);
-                    }
-                    let body = cx.production_body(p)?;
-                    let body = cx.wrap_precedence(p, body);
-                    if let Some(r) = p.reference() {
-                        cx.node_names.insert(r, node.clone());
-                    }
-                    cx.insert_rule(&mut rules, node.clone(), body)?;
-                    members.push(json!({"type": "SYMBOL", "name": node}));
+                continue;
+            };
+            let mut node = snake(&c);
+            if cx.rule_names.contains(&node) || cx.sort_rule.values().any(|v| *v == node) {
+                node = format!("{}_{}", snake(sort), node);
+            }
+            let mut bodies = Vec::new();
+            for p in &group {
+                let body = cx.production_body(p)?;
+                bodies.push(cx.wrap_precedence(p, body));
+                if let Some(r) = p.reference() {
+                    cx.node_names.insert(r, node.clone());
                 }
             }
+            if group.len() > 1 {
+                cx.findings.push(Finding {
+                    kind: Kind::Mapped,
+                    what: format!(
+                        "{sort}.{c} has {} productions: one named rule `{node}` with a choice of their bodies, each at its own precedence, since SDF3's AST has one constructor",
+                        group.len()
+                    ),
+                });
+            }
+            cx.insert_rule(&mut rules, node.clone(), choice_or_single(bodies))?;
+            members.push(json!({"type": "SYMBOL", "name": node}));
         }
         cx.insert_rule(
             &mut rules,
@@ -281,25 +400,42 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     let mut reserved: BTreeSet<String> = BTreeSet::new();
     let mut word: Option<String> = None;
     let lexical_sorts: Vec<String> = cx.lexical.keys().cloned().collect();
+    // A lexical sort only other lexical sorts refer to (`HEX` inside
+    // `STRING_LIT`) is inlined into their regexes and is no token.
+    let cf_referenced = cf_referenced_sorts(module);
+    let lex_referenced: BTreeSet<String> = {
+        let b = crate::nfa::Builder::new(module);
+        lexical_sorts
+            .iter()
+            .flat_map(|s| b.referenced(s))
+            .collect()
+    };
     for sort in &lexical_sorts {
         let prods = cx.lexical[sort].clone();
         if sort == "LAYOUT" {
             let mut comment_n = 0;
             for p in &prods {
                 let re = cx.regex_of(p)?;
-                let is_ws_class = matches!(&p.rhs, Rhs::Symbols(s) if s.len() == 1 && matches!(s[0], Symbol::CharClass(_)));
-                if is_ws_class {
+                let mut chars = Vec::new();
+                let is_ws = p.constructor.is_none()
+                    && matches!(&p.rhs, Rhs::Symbols(s) if s.iter().all(|sym| crate::scanner::whitespace_alphabet(sym, &mut chars)));
+                if is_ws {
                     extras.push(json!({"type": "PATTERN", "value": re}));
                     cx.findings.push(Finding {
                         kind: Kind::Mapped,
                         what: format!("LAYOUT class became an extras pattern /{re}/"),
                     });
                 } else {
-                    comment_n += 1;
-                    let name = if comment_n == 1 {
-                        "comment".to_string()
-                    } else {
-                        format!("comment_{comment_n}")
+                    let name = match &p.constructor {
+                        Some(c) => snake(c),
+                        None => {
+                            comment_n += 1;
+                            if comment_n == 1 {
+                                "comment".to_string()
+                            } else {
+                                format!("comment_{comment_n}")
+                            }
+                        }
                     };
                     cx.insert_rule(
                         &mut rules,
@@ -319,6 +455,13 @@ pub fn lower(module: &Module) -> Result<Lowered> {
             cx.findings.push(Finding {
                 kind: Kind::Mapped,
                 what: format!("lexical sort {sort} is scanned by the generated scanner as `{external}`; no token rule emitted"),
+            });
+            continue;
+        }
+        if !cf_referenced.contains(sort) && lex_referenced.contains(sort) {
+            cx.findings.push(Finding {
+                kind: Kind::Mapped,
+                what: format!("lexical sort {sort} is referenced by lexical syntax only; inlined into the tokens that use it, no token of its own"),
             });
             continue;
         }
@@ -382,6 +525,21 @@ pub fn lower(module: &Module) -> Result<Lowered> {
                     what: format!(
                         "`{sort} = keyword {{reject}}` became `word: {w}` plus reserved.global = [{}]",
                         reserved.iter().cloned().collect::<Vec<_>>().join(", ")
+                    ),
+                });
+            }
+            TemplateOption::KeywordPrefer { sort } => {
+                let w = cx
+                    .sort_rule
+                    .get(sort)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("template options prefers keywords over {sort}, which is not a lexical sort here"))?;
+                word = Some(w.clone());
+                cx.findings.push(Finding {
+                    kind: Kind::Extension,
+                    what: format!(
+                        "`{sort} = keyword {{prefer}}` (not SDF3's template options): `word: {w}` with no reserved set, so each of the {} word-shaped literals is a keyword only where the parse admits it and a {w} elsewhere, and where both are admitted the keyword wins -- tree-sitter's keyword extraction, which is HCL's own rule",
+                        cx.keywords.len()
                     ),
                 });
             }
@@ -515,7 +673,7 @@ pub fn lower(module: &Module) -> Result<Lowered> {
             .collect()
     };
     grammar.insert("externals".into(), Value::Array(externals));
-    grammar.insert("inline".into(), json!([]));
+    grammar.insert("inline".into(), json!(inline));
     grammar.insert("supertypes".into(), json!(supertypes));
     if !reserved.is_empty() {
         let words: Vec<Value> = reserved.iter().map(|w| reserved_value(w)).collect();
@@ -530,6 +688,11 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         sort_rule: cx.sort_rule.clone(),
         node: cx.node_names.clone(),
         lexical: cx.lexical.keys().cloned().collect(),
+        alias: cx
+            .alias
+            .iter()
+            .map(|(sort, node)| (cx.sort_rule[sort].clone(), node.clone()))
+            .collect(),
     };
     Ok(Lowered {
         grammar: Value::Object(grammar),
@@ -567,23 +730,53 @@ impl<'m> Ctx<'m> {
             });
         }
         let mut level = 0u32;
+        let mut missing: Vec<String> = Vec::new();
         for chain in chains.iter().rev() {
             for group in chain.groups.iter().rev() {
                 level += 1;
                 for m in &group.members {
-                    self.levels.insert(m.clone(), (level, group.assoc.clone()));
+                    let mut any = false;
+                    for (pi, p) in self.prods.iter().enumerate() {
+                        if p.reference().as_deref() == Some(m.as_str()) {
+                            self.levels.insert(pi, (level, group.assoc.clone()));
+                            any = true;
+                        }
+                    }
+                    if !any {
+                        missing.push(m.clone());
+                    }
+                }
+                for q in &group.prods {
+                    let mut any = false;
+                    for (pi, p) in self.prods.iter().enumerate() {
+                        if p.same_as(q) {
+                            self.levels.insert(pi, (level, group.assoc.clone()));
+                            any = true;
+                        }
+                    }
+                    if !any {
+                        missing.push(format!("{} = ...", q.display()));
+                    }
                 }
             }
         }
+        for m in missing {
+            self.findings.push(Finding {
+                kind: Kind::Unsupported,
+                what: format!("priorities name `{m}`, which is no production of the module; ignored"),
+            });
+        }
         // Per-production associativity outside any chain.
-        for p in self.module.productions(false) {
-            let Some(r) = p.reference() else { continue };
+        for (pi, p) in self.prods.clone().iter().enumerate() {
+            if p.reference().is_none() {
+                continue;
+            }
             let attr = p
                 .attrs
                 .iter()
                 .find(|a| matches!(a, Attr::Left | Attr::Right | Attr::NonAssoc))
                 .cloned();
-            match self.levels.get_mut(&r) {
+            match self.levels.get_mut(&pi) {
                 Some(entry) => {
                     if entry.1.is_none() {
                         entry.1 = attr;
@@ -591,7 +784,7 @@ impl<'m> Ctx<'m> {
                 }
                 None => {
                     if attr.is_some() {
-                        self.levels.insert(r, (0, attr));
+                        self.levels.insert(pi, (0, attr));
                     }
                 }
             }
@@ -600,8 +793,9 @@ impl<'m> Ctx<'m> {
 
     fn wrap_precedence(&mut self, p: &Production, body: Value) -> Value {
         let mut body = body;
-        if let Some(r) = p.reference() {
-            if let Some((level, assoc)) = self.levels.get(&r).cloned() {
+        let pi = self.prods.iter().position(|q| std::ptr::eq(*q, p));
+        if let (Some(pi), Some(r)) = (pi, p.reference()) {
+            if let Some((level, assoc)) = self.levels.get(&pi).cloned() {
                 let ty = match assoc {
                     Some(Attr::Left) => "PREC_LEFT",
                     Some(Attr::Right) => "PREC_RIGHT",
@@ -652,7 +846,12 @@ impl<'m> Ctx<'m> {
                         }
                         TemplatePart::Placeholder { label, symbol } => {
                             pos += 1;
-                            let mut v = self.symbol(symbol)?;
+                            if crate::scanner::is_layout_symbol(SymRef::Sym(symbol)) {
+                                // `LAYOUT?` in kernel syntax: layout is admitted
+                                // here, which is what extras do everywhere.
+                                continue;
+                            }
+                            let mut v = self.symbol_at(pi, pos, symbol)?;
                             if let Some(l) = label {
                                 self.findings.push(Finding {
                                     kind: Kind::Extension,
@@ -673,7 +872,10 @@ impl<'m> Ctx<'m> {
                     match s {
                         Symbol::Lit(l) => members.push(self.literal(pi, k + 1, l)),
                         other => {
-                            let v = self.symbol(other)?;
+                            if crate::scanner::is_layout_symbol(SymRef::Sym(other)) {
+                                continue;
+                            }
+                            let v = self.symbol_at(pi, k + 1, other)?;
                             self.push_symbol(&mut members, pi, k + 1, v);
                         }
                     }
@@ -741,15 +943,51 @@ impl<'m> Ctx<'m> {
         }
     }
 
+    /// A symbol at a position of a production: `token.immediate` when the
+    /// scanner plan says the occurrence must be adjacent to what precedes
+    /// it, which tree-sitter's lexer can say of a token and of nothing else.
+    fn symbol_at(&mut self, pi: Option<usize>, pos: usize, s: &Symbol) -> Result<Value> {
+        let immediate = pi.is_some_and(|pi| self.plan.immediate.contains(&(pi, pos)));
+        if immediate {
+            if let Symbol::Sort(name) = s {
+                if let Some(prods) = self.lexical.get(name).cloned() {
+                    let alts: Vec<String> = prods
+                        .iter()
+                        .filter(|p| !p.has(&Attr::Reject))
+                        .map(|p| self.regex_of(p))
+                        .collect::<Result<_>>()?;
+                    let re = if alts.len() == 1 {
+                        alts[0].clone()
+                    } else {
+                        format!("(?:{})", alts.join("|"))
+                    };
+                    let token = json!({"type": "IMMEDIATE_TOKEN", "content": {"type": "PATTERN", "value": re}});
+                    return Ok(if name.starts_with('_') {
+                        token
+                    } else {
+                        json!({"type": "ALIAS", "content": token, "named": true, "value": snake(name)})
+                    });
+                }
+            }
+        }
+        self.symbol(s)
+    }
+
     fn symbol(&mut self, s: &Symbol) -> Result<Value> {
         Ok(match s {
+            Symbol::Sort(name) if name == "LAYOUT" => json!({"type": "BLANK"}),
             Symbol::Sort(name) => {
                 let rule = self
                     .sort_rule
                     .get(name)
                     .cloned()
                     .ok_or_else(|| anyhow!("reference to undefined sort {name}"))?;
-                json!({"type": "SYMBOL", "name": rule})
+                match self.alias.get(name) {
+                    Some(node) => {
+                        json!({"type": "ALIAS", "content": {"type": "SYMBOL", "name": rule}, "named": true, "value": node})
+                    }
+                    None => json!({"type": "SYMBOL", "name": rule}),
+                }
             }
             Symbol::Lit(l) => {
                 self.note_literal(l);
@@ -837,6 +1075,43 @@ impl<'m> Ctx<'m> {
             Symbol::SepList { .. } => bail!("a separated list in lexical syntax is unsupported"),
         })
     }
+}
+
+/// Every sort context-free syntax, the vocabulary or the template options
+/// refer to. A lexical sort outside this set is only ever part of another
+/// token's text: tree-sitter inlines it, ANTLR makes it a `fragment`.
+pub fn cf_referenced_sorts(module: &Module) -> BTreeSet<String> {
+    fn walk(s: &Symbol, out: &mut BTreeSet<String>) {
+        match s {
+            Symbol::Sort(n) => {
+                out.insert(n.clone());
+            }
+            Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => walk(i, out),
+            Symbol::SepList { elem, sep, .. } => {
+                walk(elem, out);
+                walk(sep, out);
+            }
+            Symbol::Group(alts) => alts.iter().flatten().for_each(|s| walk(s, out)),
+            _ => {}
+        }
+    }
+    let mut out = BTreeSet::new();
+    for p in module.productions(false) {
+        for s in p.symbols() {
+            if let SymRef::Sym(s) = s {
+                walk(s, &mut out);
+            }
+        }
+    }
+    for t in module.vocabulary() {
+        out.extend(t.members.iter().cloned());
+    }
+    for o in module.template_options() {
+        if let TemplateOption::KeywordReject { sort } | TemplateOption::KeywordPrefer { sort } = o {
+            out.insert(sort.clone());
+        }
+    }
+    out
 }
 
 fn seq(mut members: Vec<Value>) -> Value {
@@ -1192,6 +1467,7 @@ pub fn to_grammar_js(grammar: &Value) -> String {
                 format!("{f}({}, {})", v["value"], expr(&v["content"], indent))
             }
             "TOKEN" => format!("token({})", expr(&v["content"], indent)),
+            "IMMEDIATE_TOKEN" => format!("token.immediate({})", expr(&v["content"], indent)),
             "ALIAS" => {
                 let target = if v["named"].as_bool().unwrap_or(false) {
                     format!("$.{}", v["value"].as_str().unwrap_or(""))
@@ -1230,6 +1506,15 @@ pub fn to_grammar_js(grammar: &Value) -> String {
                 .map(|x| format!("$.{}", x["name"].as_str().unwrap_or("")))
                 .collect();
             out.push_str(&format!("  externals: $ => [{}],\n", e.join(", ")));
+        }
+    }
+    if let Some(inl) = grammar["inline"].as_array() {
+        if !inl.is_empty() {
+            let e: Vec<String> = inl
+                .iter()
+                .map(|x| format!("$.{}", x.as_str().unwrap_or("")))
+                .collect();
+            out.push_str(&format!("  inline: $ => [{}],\n", e.join(", ")));
         }
     }
     if let Some(conf) = grammar["conflicts"].as_array() {

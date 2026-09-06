@@ -1,0 +1,79 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {},
+  "facets": {
+    "_binding": [
+      "attribute",
+      "block"
+    ],
+    "_clause": [
+      "else_clause",
+      "for_cond"
+    ],
+    "_comment": [
+      "block_comment",
+      "comment"
+    ],
+    "_identifier": [
+      "identifier"
+    ],
+    "_scope": [
+      "body",
+      "config_file",
+      "for_object_expr",
+      "for_tuple_expr",
+      "template_for"
+    ],
+    "_string": [
+      "heredoc_template",
+      "quoted_template",
+      "string_lit"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "arguments",
+      "reason": "a piece of [function_call], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "ellipsis",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "escape_sequence",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "function_name",
+      "reason": "a piece of [function_call], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "heredoc_end",
+      "reason": "a piece of [heredoc_template], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "heredoc_start",
+      "reason": "a piece of [heredoc_template], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "object_elem",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "quote",
+      "reason": "a piece of [quoted_template], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "template_body",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "template_if",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "template_literal",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    }
+  ]
+}

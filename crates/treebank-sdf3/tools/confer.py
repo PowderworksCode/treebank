@@ -62,7 +62,7 @@ def main(spikes):
     bad = 0
     for spike in spikes:
         spike = Path(spike).resolve()
-        cases = read_corpus(next((spike / "test" / "corpus").glob("*.txt")))
+        cases = [c for f in sorted((spike / "test" / "corpus").glob("*.txt")) for c in read_corpus(f)]
         antlr = verdicts(spike / "antlr-results.md")
         winnow = verdicts(spike / "winnow-results.md")
         rows = []

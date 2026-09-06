@@ -15,3 +15,7 @@
 
 - `NAME = keyword {reject}`: parser literals outrank `NAME` in ANTLR's lexer by construction
 
+## MAPPED -- lowered exactly (1)
+
+- lexical sorts referenced by lexical syntax only became `fragment` rules: [DQSTRING]
+

@@ -2389,10 +2389,6 @@
         }
       ]
     },
-    "dollar": {
-      "type": "PATTERN",
-      "value": "\\$\\$(?:[^$])*\\$\\$"
-    },
     "dquoted": {
       "type": "PATTERN",
       "value": "\"(?:[^\"])*\""

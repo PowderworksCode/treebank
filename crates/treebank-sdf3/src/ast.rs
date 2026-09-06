@@ -202,8 +202,24 @@ pub enum Attr {
     /// and the result fits in this many columns -- Box's `HV`, with the
     /// refinement rustfmt applies to blocks.
     Collapse(u32),
+    /// treebank extension: `delimiter(1, 3)`: the lexical sort at symbol
+    /// position 3 closes what the one at position 1 opened, and the word
+    /// both definitions share (their one common lexical sort) must be the
+    /// same text in both -- a heredoc's `<<EOT` and its `EOT` line. The
+    /// closer is matched only at the start of a line. SDF3 cannot say
+    /// this; it is the one thing a heredoc needs a scanner for.
+    Delimiter(usize, usize),
+    /// The reader marks a production of the `syntax` section (SDF3's
+    /// kernel syntax) with this: no layout is admitted between its
+    /// symbols unless `LAYOUT?` is written there.
+    Kernel,
     Other(String),
 }
+
+/// The character that stands for end of file in a character class:
+/// `[\EOF]`, as SDF2 spelled it, so a follow restriction can forbid the
+/// end of input.
+pub const EOF_CHAR: char = '\u{10FFFF}';
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Binding {
@@ -334,6 +350,25 @@ pub struct PriorityGroup {
     pub assoc: Option<Attr>,
     /// `Sort.Cons` references.
     pub members: Vec<String>,
+    /// Members written as whole productions (`Exp.Bin = <<Exp> * <Exp>>`),
+    /// which SDF3 allows where one constructor has several productions;
+    /// each names the production of the same sort, constructor and
+    /// symbols.
+    pub prods: Vec<Production>,
+}
+
+impl Production {
+    /// The same production: sort, constructor and symbols, labels and
+    /// template layout aside.
+    pub fn same_as(&self, other: &Production) -> bool {
+        self.sort == other.sort
+            && self.constructor == other.constructor
+            && self.symbols() == other.symbols()
+    }
+
+    pub fn is_kernel(&self) -> bool {
+        self.has(&Attr::Kernel)
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -351,6 +386,12 @@ pub enum TemplateOption {
     /// productive syntax; the tree and the printer keep the template's
     /// spelling.
     KeywordCaseInsensitive,
+    /// treebank extension: `ID = keyword {prefer}`. No word is reserved:
+    /// a keyword is read as itself where the grammar admits it and as an
+    /// ID elsewhere, and where both readings are admitted the keyword
+    /// wins. HCL's rule, and tree-sitter's keyword extraction without a
+    /// reserved set.
+    KeywordPrefer { sort: String },
 }
 
 /// `_statement = Stmt`, `_branch = Stmt.If Stmt.Match`, `_control_flow =

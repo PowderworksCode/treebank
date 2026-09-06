@@ -59,7 +59,7 @@ def parse(binary: Path, text: str):
 
 def main(spike: Path) -> int:
     binary = build(spike / "winnow")
-    cases = read_corpus(next((spike / "test" / "corpus").glob("*.txt")))
+    cases = [c for f in sorted((spike / "test" / "corpus").glob("*.txt")) for c in read_corpus(f)]
     results = []
     passed = 0
     source = 0

@@ -71,7 +71,7 @@ enum Shape {
 struct Cx<'m> {
     module: &'m Module,
     names: &'m Names,
-    levels: &'m BTreeMap<String, (u32, Option<Attr>)>,
+    levels: &'m BTreeMap<usize, (u32, Option<Attr>)>,
     lexical: BTreeMap<&'m str, Vec<&'m Production>>,
     /// Lexical restrictions: sort -> classes that may not follow.
     follow: BTreeMap<&'m str, Vec<&'m CharClass>>,
@@ -85,6 +85,19 @@ struct Cx<'m> {
     /// token: a trailing comment on their line is inside them there, so
     /// their reach for extras runs to the end of the line here.
     terminated: BTreeSet<usize>,
+    /// Sorts kernel syntax reaches where no layout may precede them: their
+    /// parsers skip no layout, and neither do the first symbols of their
+    /// productions; the caller's context decides.
+    layout_free: BTreeSet<String>,
+    /// Lexical sorts whose text is layout (`_NL`): only the layout that is
+    /// not their own text is skipped before them.
+    layout_like: BTreeSet<String>,
+    /// production index -> (opener position, closer position, captured sort)
+    delims: BTreeMap<usize, (usize, usize, String)>,
+    /// While a lexical body is emitted: the sort whose span is captured.
+    cap_sort: Option<String>,
+    /// While a production is emitted: kernel syntax, no layout between symbols.
+    cur_kernel: bool,
     findings: Vec<Finding>,
     out: String,
 }
@@ -92,7 +105,7 @@ struct Cx<'m> {
 pub fn emit(
     module: &Module,
     names: &Names,
-    levels: &BTreeMap<String, (u32, Option<Attr>)>,
+    levels: &BTreeMap<usize, (u32, Option<Attr>)>,
 ) -> Result<Emitted> {
     let mut lexical: BTreeMap<&str, Vec<&Production>> = BTreeMap::new();
     for p in module.productions(true) {
@@ -109,6 +122,45 @@ pub fn emit(
         }
     }
     let (plan, _) = crate::scanner::plan(module)?;
+    let prods: Vec<&Production> = module.productions(false).collect();
+    let lexical_by_str: BTreeMap<&str, Vec<&Production>> = lexical.clone();
+    let layout_free = crate::scanner::layout_free_sorts(&prods, &lexical_by_str);
+    let builder = crate::nfa::Builder::new(module);
+    let layout_like: BTreeSet<String> = plan
+        .owned
+        .iter()
+        .filter(|o| {
+            !plan.layout_chars.is_empty()
+                && builder.alphabet(&o.sort).is_some_and(|a| {
+                    !a.is_empty() && a.iter().all(|c| plan.layout_chars.contains(c))
+                })
+        })
+        .map(|o| o.sort.clone())
+        .collect();
+    let mut delims: BTreeMap<usize, (usize, usize, String)> = BTreeMap::new();
+    for (pi, p) in prods.iter().enumerate() {
+        for a in &p.attrs {
+            if let Attr::Delimiter(o, c) = a {
+                let symbols = p.symbols();
+                let name_at = |n: usize| match symbols.get(n.wrapping_sub(1)) {
+                    Some(SymRef::Sym(Symbol::Sort(s))) => Some(s.clone()),
+                    _ => None,
+                };
+                let (Some(os), Some(cs)) = (name_at(*o), name_at(*c)) else {
+                    bail!("{}: delimiter positions must be lexical sorts", p.display());
+                };
+                let shared: Vec<String> = builder
+                    .referenced(&os)
+                    .into_iter()
+                    .filter(|s| builder.referenced(&cs).contains(s))
+                    .collect();
+                let [cap] = shared.as_slice() else {
+                    bail!("{}: delimiter sorts must share one lexical sort", p.display());
+                };
+                delims.insert(pi, (*o, *c, cap.clone()));
+            }
+        }
+    }
     let mut cx = Cx {
         module,
         names,
@@ -124,9 +176,41 @@ pub fn emit(
             .as_ref()
             .map(|i| i.terminated.clone())
             .unwrap_or_default(),
+        layout_free,
+        layout_like,
+        delims,
+        cap_sort: None,
+        cur_kernel: false,
         findings: Vec::new(),
         out: String::new(),
     };
+    if !cx.layout_free.is_empty() {
+        cx.findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "kernel syntax: [{}] are reached where no layout may precede them, and no layout is skipped there or between a kernel production's symbols -- SDF3's `syntax` section as written, with no scanner to derive",
+                cx.layout_free.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        });
+    }
+    if !cx.layout_like.is_empty() {
+        cx.findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "[{}] are lexical sorts whose text is LAYOUT: before one, only the layout that is not its own text is skipped, so a line break is a token where the grammar asks for one and layout elsewhere",
+                cx.layout_like.iter().cloned().collect::<Vec<_>>().join(", ")
+            ),
+        });
+    }
+    for (pi, (o, c, cap)) in cx.delims.clone() {
+        cx.findings.push(Finding {
+            kind: Kind::Extension,
+            what: format!(
+                "{}: `delimiter({o}, {c})` (not SDF3): the {cap} the opener matched is remembered, the symbols between stop where the closer with that word begins a line, and the closer must carry it",
+                prods[pi].display()
+            ),
+        });
+    }
     if !cx.terminated.is_empty() {
         cx.findings.push(Finding {
             kind: Kind::Mapped,
@@ -141,6 +225,7 @@ pub fn emit(
             TemplateOption::KeywordFollow(c) => cx.kw_follow = Some(c),
             TemplateOption::KeywordCaseInsensitive => cx.ci = true,
             TemplateOption::Tokenize(_) => {}
+            TemplateOption::KeywordPrefer { .. } => {}
         }
     }
     for p in module.productions(false) {
@@ -263,18 +348,25 @@ impl<'m> Cx<'m> {
         let mut arms = Vec::new();
         let mut comment_n = 0;
         for p in &prods {
-            let is_class = matches!(&p.rhs, Rhs::Symbols(s) if s.len() == 1 && matches!(s[0], Symbol::CharClass(_)));
+            let mut chars = Vec::new();
+            let is_class = p.constructor.is_none()
+                && matches!(&p.rhs, Rhs::Symbols(s) if s.iter().all(|sym| crate::scanner::whitespace_alphabet(sym, &mut chars)));
             let body = self.lexical_body(p)?;
             if is_class {
                 arms.push(format!(
                     "        if let Ok(()) = run(({body}).void(), i) {{ progressed = true; continue; }}"
                 ));
             } else {
-                comment_n += 1;
-                let name = if comment_n == 1 {
-                    "comment".to_string()
-                } else {
-                    format!("comment_{comment_n}")
+                let name = match &p.constructor {
+                    Some(c) => snake(c),
+                    None => {
+                        comment_n += 1;
+                        if comment_n == 1 {
+                            "comment".to_string()
+                        } else {
+                            format!("comment_{comment_n}")
+                        }
+                    }
                 };
                 arms.push(format!(
                     "        {{ let s = pos(i); if let Ok(()) = run(({body}).void(), i) {{ let e = pos(i); i.state.comments.insert(s, (e, {})); progressed = true; continue; }} }}",
@@ -282,12 +374,47 @@ impl<'m> Cx<'m> {
                 ));
             }
         }
-        if comment_n > 0 {
+        if prods.iter().any(|p| { let mut ch = Vec::new(); p.constructor.is_some() || !matches!(&p.rhs, Rhs::Symbols(s) if s.iter().all(|sym| crate::scanner::whitespace_alphabet(sym, &mut ch))) }) {
             self.findings.push(Finding {
                 kind: Kind::Mapped,
                 what: format!("{comment_n} comment LAYOUT production(s) are recorded as extras when the layout skipper consumes them, and attached after the parse to the innermost node whose span holds them; tree-sitter attaches an extra to the node being reduced, which differs when a hidden token follows the comment"),
             });
         }
+        // The same skipper minus the productions whose text a layout-like
+        // sort claims, for use before such a sort.
+        let claimed: Vec<char> = {
+            let mut b = crate::nfa::Builder::new(self.module);
+            let mut out = Vec::new();
+            for s in &self.layout_like {
+                if let Ok(start) = b.token(s, None) {
+                    for c in ['\n', '\r', ' ', '\t', '\u{c}'] {
+                        if b.can_start(start, c) {
+                            out.push(c);
+                        }
+                    }
+                }
+            }
+            out
+        };
+        let mut nl_arms = Vec::new();
+        for (a, p) in arms.iter().zip(&prods) {
+            let mut chars = Vec::new();
+            let ws = matches!(&p.rhs, Rhs::Symbols(s) if s.iter().all(|sym| crate::scanner::whitespace_alphabet(sym, &mut chars)));
+            if ws && chars.iter().any(|c| claimed.contains(c)) {
+                continue;
+            }
+            nl_arms.push(a.clone());
+        }
+        self.line("fn layout_nl(i: &mut In) -> ModalResult<()> {");
+        self.line("    loop {");
+        self.line("        let mut progressed = false;");
+        for a in &nl_arms {
+            self.line(a);
+        }
+        self.line("        if !progressed { break; }");
+        self.line("    }");
+        self.line("    Ok(())");
+        self.line("}");
         self.line("fn layout(i: &mut In) -> ModalResult<()> {");
         self.line("    let before = pos(i);");
         self.line("    loop {");
@@ -343,7 +470,14 @@ impl<'m> Cx<'m> {
                 if !self.lexical.contains_key(name.as_str()) {
                     bail!("lexical sort {name} referenced but not defined");
                 }
-                format!("lxb_{}", ident(name))
+                if self.cap_sort.as_deref() == Some(name.as_str()) {
+                    format!(
+                        "(|i: &mut In| -> ModalResult<()> {{ let s = pos(i); lxb_{}(i)?; i.state.cap = Some((s, pos(i))); Ok(()) }})",
+                        ident(name)
+                    )
+                } else {
+                    format!("lxb_{}", ident(name))
+                }
             }
             Symbol::Star(i) => format!("star({})", self.lexical_symbol(i)?),
             Symbol::Plus(i) => format!("plus({})", self.lexical_symbol(i)?),
@@ -399,36 +533,61 @@ impl<'m> Cx<'m> {
             if keep.is_empty() {
                 continue;
             }
+            self.cap_sort = self.delims.values().find_map(|(o, c, cap)| {
+                let prods: Vec<&Production> = self.module.productions(false).collect();
+                let _ = (o, c);
+                let mut hit = None;
+                for (pi, (oo, cc, _)) in &self.delims {
+                    let symbols = prods[*pi].symbols();
+                    for n in [*oo, *cc] {
+                        if let Some(SymRef::Sym(Symbol::Sort(s))) = symbols.get(n - 1) {
+                            if s == sort {
+                                hit = Some(cap.clone());
+                            }
+                        }
+                    }
+                }
+                hit
+            });
             let alts: Vec<String> = keep
                 .iter()
                 .map(|p| self.lexical_body(p))
                 .collect::<Result<_>>()?;
+            self.cap_sort = None;
             let body = if alts.len() == 1 {
                 alts[0].clone()
             } else {
                 format!("alt(({},))", alts.join(", "))
             };
             let id = ident(sort);
+            // The body carries the sort's follow restrictions, so they hold
+            // wherever the sort is used, inside another sort's text too:
+            // `_QSIGIL -/- [\{]` is what stops a template chunk at `${`.
+            let mut checks = String::new();
+            if let Some(classes) = self.follow.get(sort) {
+                for c in classes {
+                    checks.push_str(&format!("    run(not(one_of({})), i)?;\n", class_fn(c)));
+                    if c.contains(EOF_CHAR) {
+                        // `[\EOF]` in the lookahead: the end of input may not follow.
+                        checks.push_str("    run(not(eof), i)?;\n");
+                    }
+                }
+            }
             self.line(&format!(
-                "fn lxb_{id}(i: &mut In) -> ModalResult<()> {{ run({body}, i) }}"
+                "fn lxb_{id}(i: &mut In) -> ModalResult<()> {{\n    run({body}, i)?;\n{checks}    Ok(())\n}}"
             ));
-            // The token: body, restrictions, rejection, node.
+            // The token: body (restrictions inside), rejection, node.
             let kind = self
                 .names
                 .sort_rule
                 .get(sort)
                 .cloned()
                 .unwrap_or_else(|| format!("_{}", snake(sort)));
-            let mut checks = String::new();
-            if let Some(classes) = self.follow.get(sort) {
-                for c in classes {
-                    checks.push_str(&format!("    run(not(one_of({})), i)?;\n", class_fn(c)));
-                }
-            }
+            let checks = String::new();
             let reject_list: Vec<String> = rejects.iter().map(|w| rust_str(w)).collect();
             let cmp = if self.ci { "eq_ci" } else { "eq_cs" };
             self.line(&format!(
-                "fn lx_{id}(i: &mut In) -> ModalResult<Node> {{\n    let start = pos(i);\n    i.state.furthest = i.state.furthest.max(start);\n    lxb_{id}(i)?;\n{checks}    let end = pos(i);\n    let text = &i.state.src[start..end];\n    const REJECT: &[&str] = &[{}];\n    if REJECT.iter().any(|k| {cmp}(k, text)) {{ return Err(bt()); }}\n    token_end(i, end);\n    Ok(Node::leaf({}, start, end))\n}}",
+                "fn lx_{id}(i: &mut In) -> ModalResult<Node> {{\n    let start = pos(i);\n    i.state.furthest = i.state.furthest.max(start);\n    i.state.cap = None;\n    lxb_{id}(i)?;\n{checks}    let end = pos(i);\n    let text = &i.state.src[start..end];\n    const REJECT: &[&str] = &[{}];\n    if REJECT.iter().any(|k| {cmp}(k, text)) {{ return Err(bt()); }}\n    token_end(i, end);\n    Ok(Node::leaf({}, start, end))\n}}",
                 reject_list.join(", "),
                 rust_str(&kind)
             ));
@@ -470,10 +629,8 @@ impl<'m> Cx<'m> {
         }
     }
 
-    fn level(&self, p: &Production) -> (u32, Option<Attr>) {
-        p.reference()
-            .and_then(|r| self.levels.get(&r).cloned())
-            .unwrap_or((0, None))
+    fn level(&self, pi: usize) -> (u32, Option<Attr>) {
+        self.levels.get(&pi).cloned().unwrap_or((0, None))
     }
 
     /// `(label, symbol)` per symbol position, template layout dropped.
@@ -536,7 +693,7 @@ impl<'m> Cx<'m> {
                 .zip(&shapes)
                 .filter(|(_, s)| **s == Shape::Infix)
                 .map(|((pi, p), _)| {
-                    let (l, a) = self.level(p);
+                    let (l, a) = self.level(*pi);
                     (*pi, *p, l, a)
                 })
                 .collect();
@@ -556,7 +713,10 @@ impl<'m> Cx<'m> {
             self.line(&format!(
                 "fn r_{sid}_prec(i: &mut In, min: u32) -> ModalResult<Node> {{"
             ));
-            self.line("    layout(i)?;");
+            if !self.layout_free.contains(sort) {
+                let first = Symbol::Sort(sort.to_string());
+                self.line(&format!("    {}?;", self.layout_call(&first, false)));
+            }
             self.line("    let start = pos(i);");
             self.line("    let cp = save(i);");
             self.line("    // Longest match among the primaries: ordered choice would let an");
@@ -620,7 +780,10 @@ impl<'m> Cx<'m> {
             && !p.has(&Attr::Bracket)
             && syms.len() == 1
             && matches!(syms[0].1, Symbol::Sort(_));
-        let own_level = self.level(p).0;
+        let own_level = self.level(pi).0;
+        self.cur_kernel = p.is_kernel();
+        let sort_layout_free = self.layout_free.contains(&p.sort);
+        let delim = self.delims.get(&pi).cloned();
         let (name, signature) = match shape {
             Shape::Infix => (
                 format!("t_{pi}"),
@@ -635,12 +798,14 @@ impl<'m> Cx<'m> {
         // Wrapper that restores the offside stack on any exit.
         self.line(&format!("{signature} {{"));
         self.line("    let guard = i.state.offside.len();");
+        self.line("    let dguard = i.state.delim.len();");
         let call = match shape {
             Shape::Infix => format!("{}_body(i, left, start)", name),
             _ => format!("{}_body(i)", name),
         };
         self.line(&format!("    let r = {call};"));
         self.line("    i.state.offside.truncate(guard);");
+        self.line("    if r.is_err() { i.state.delim.truncate(dguard); }");
         self.line("    r");
         self.line("}");
         self.line(&format!("{} {{", signature.replace("(i:", "_body(i:")));
@@ -651,9 +816,14 @@ impl<'m> Cx<'m> {
         self.line("    #[allow(unused_mut)]");
         self.line("    let mut pr: Vec<bool> = Vec::new();");
         if shape != Shape::Infix {
-            self.line("    layout(i)?;");
+            if !self.cur_kernel && !sort_layout_free {
+                let first = Symbol::Sort(p.sort.clone());
+                self.line(&format!("    {}?;", self.layout_call(&first, false)));
+            }
             self.line("    let start = pos(i);");
         }
+        self.line("    #[allow(unused_mut)]");
+        self.line("    let mut open_word: String = String::new();");
         // Which symbols get an offside limit pushed before them, and which
         // constraints are checked after which symbol.
         let mut offside_at: BTreeSet<usize> = BTreeSet::new();
@@ -734,9 +904,24 @@ impl<'m> Cx<'m> {
                 self.line(&format!("    ch.push(({label_expr}, left.clone()));"));
                 continue;
             }
-            self.line("    layout(i)?;");
+            if crate::scanner::is_layout_symbol(SymRef::Sym(sym)) {
+                // `LAYOUT?` in kernel syntax: layout is admitted here.
+                self.line("    layout(i)?;");
+                self.line("    { let s = pos(i); sp.push((s, s)); pr.push(false); }");
+                continue;
+            }
+            let lay = self.layout_call(sym, k == 0 && sort_layout_free);
+            if !lay.is_empty() {
+                self.line(&format!("    {lay}?;"));
+            }
             if offside_at.contains(&position) {
                 self.line("    { let c = col(i, pos(i)); i.state.offside.push(c); }");
+            }
+            if let Some((_, c, _)) = &delim {
+                if position == *c {
+                    self.line("    i.state.delim.pop();");
+                    self.line("    if col(i, pos(i)) != 0 { return Err(bt()); }");
+                }
             }
             self.line("    { let s = pos(i);");
             // The operand of a prefix operator, or the right operand of an
@@ -765,8 +950,24 @@ impl<'m> Cx<'m> {
                     self.line(&format!("    {c}"));
                 }
             }
+            if let Some((o, c, _)) = &delim {
+                if position == *o {
+                    let syms2 = Self::labelled(p);
+                    let Symbol::Sort(closer) = &syms2[c - 1].1 else {
+                        bail!("{}: delimiter closer is not a sort", p.display());
+                    };
+                    self.line("    open_word = i.state.cap.map(|(s, e)| i.state.src[s..e].to_string()).unwrap_or_default();");
+                    self.line(&format!(
+                        "    i.state.delim.push((lx_{}, open_word.clone()));",
+                        ident(closer)
+                    ));
+                }
+                if position == *c {
+                    self.line("    if i.state.cap.map(|(s, e)| &i.state.src[s..e] != open_word.as_str()).unwrap_or(true) { return Err(bt()); }");
+                }
+            }
         }
-        self.line("    let _ = (&sp, &pr);");
+        self.line("    let _ = (&sp, &pr, &open_word);");
         if injection {
             self.line("    let (_, n) = ch.pop().unwrap();");
             self.line("    Ok(n)");
@@ -782,7 +983,65 @@ impl<'m> Cx<'m> {
             ));
         }
         self.line("}");
+        self.cur_kernel = false;
         Ok(())
+    }
+
+    /// The layout skipped before a symbol: none in kernel syntax and before
+    /// the first symbol of a layout-free sort's production, the partial
+    /// skipper before a layout-like sort, the full one otherwise.
+    fn layout_call(&self, sym: &Symbol, first_of_layout_free: bool) -> String {
+        fn inner(s: &Symbol) -> &Symbol {
+            match s {
+                Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => inner(i),
+                Symbol::SepList { elem, .. } => inner(elem),
+                // A group begins with its first alternative's first symbol;
+                // the alternatives' own layout calls follow inside.
+                Symbol::Group(alts) => match alts.first().and_then(|a| a.first()) {
+                    Some(f) => inner(f),
+                    None => s,
+                },
+                other => other,
+            }
+        }
+        if self.cur_kernel || first_of_layout_free {
+            return String::new();
+        }
+        let mut seen = BTreeSet::new();
+        if self.may_start_layout_like(inner(sym), &mut seen) {
+            "layout_nl(i)".into()
+        } else {
+            "layout(i)".into()
+        }
+    }
+
+    /// Whether a symbol's text may begin with a layout-like sort, through
+    /// the first symbols of context-free sorts and the alternatives of a
+    /// group.
+    fn may_start_layout_like(&self, sym: &Symbol, seen: &mut BTreeSet<String>) -> bool {
+        match sym {
+            Symbol::Sort(n) if self.layout_like.contains(n) => true,
+            Symbol::Sort(n) if self.lexical.contains_key(n.as_str()) => false,
+            Symbol::Sort(n) => {
+                if !seen.insert(n.clone()) {
+                    return false;
+                }
+                self.module
+                    .productions(false)
+                    .filter(|p| p.sort == *n)
+                    .any(|p| match p.symbols().first() {
+                        Some(SymRef::Sym(f)) => self.may_start_layout_like(f, seen),
+                        _ => false,
+                    })
+            }
+            Symbol::Star(i) | Symbol::Plus(i) | Symbol::Opt(i) => self.may_start_layout_like(i, seen),
+            Symbol::SepList { elem, .. } => self.may_start_layout_like(elem, seen),
+            Symbol::Group(alts) => alts
+                .iter()
+                .filter_map(|a| a.first())
+                .any(|f| self.may_start_layout_like(f, seen)),
+            Symbol::Lit(_) | Symbol::CharClass(_) => false,
+        }
     }
 
     /// The parse of one context-free symbol occurrence, as an expression
@@ -815,7 +1074,9 @@ impl<'m> Cx<'m> {
             }
             Symbol::Opt(inner) => {
                 let e = self.symbol_expr(inner, false)?;
-                format!("{{ let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> {{ layout(i)?; Ok({e}) }})(i) {{ Ok(v) => v, Err(_) => {{ restore(i, &cp); Vec::new() }} }} }}")
+                let lay = self.loop_layout(inner);
+                let guard = self.guard_expr();
+                format!("{{ let cp = save(i); match (|i: &mut In| -> ModalResult<Vec<Node>> {{ {guard} {lay}?; Ok({e}) }})(i) {{ Ok(v) => v, Err(_) => {{ restore(i, &cp); Vec::new() }} }} }}")
             }
             Symbol::Star(inner) | Symbol::Plus(inner) => {
                 let e = self.symbol_expr(inner, false)?;
@@ -825,8 +1086,10 @@ impl<'m> Cx<'m> {
                 } else {
                     ""
                 };
+                let lay = self.loop_layout(inner);
+                let guard = self.guard_break();
                 format!(
-                    "{{ let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; loop {{ let cp = save(i); if layout(i).is_err() {{ restore(i, &cp); break; }} {col_check} match (|i: &mut In| -> ModalResult<Vec<Node>> {{ Ok({e}) }})(i) {{ Ok(ns) => v.extend(ns), Err(_) => {{ restore(i, &cp); break; }} }} }} if v.len() < {min} {{ return Err(bt()); }} v }}"
+                    "{{ let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; loop {{ let cp = save(i); {guard} if {lay}.is_err() {{ restore(i, &cp); break; }} {col_check} match (|i: &mut In| -> ModalResult<Vec<Node>> {{ Ok({e}) }})(i) {{ Ok(ns) => v.extend(ns), Err(_) => {{ restore(i, &cp); break; }} }} }} if v.len() < {min} {{ return Err(bt()); }} v }}"
                 )
             }
             Symbol::SepList { elem, sep, min } => {
@@ -837,8 +1100,11 @@ impl<'m> Cx<'m> {
                 } else {
                     ""
                 };
+                let lay_e = self.loop_layout(elem);
+                let lay_s = self.loop_layout(sep);
+                let guard = self.guard_break();
                 format!(
-                    "{{ let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; let mut first = true; loop {{ let cp = save(i); if !first {{ if layout(i).is_err() {{ restore(i, &cp); break; }} if (|i: &mut In| -> ModalResult<Vec<Node>> {{ Ok({s}) }})(i).is_err() {{ restore(i, &cp); break; }} }} if layout(i).is_err() {{ restore(i, &cp); break; }} {col_check} match (|i: &mut In| -> ModalResult<Vec<Node>> {{ Ok({e}) }})(i) {{ Ok(ns) => {{ v.extend(ns); first = false; }} Err(_) => {{ restore(i, &cp); break; }} }} }} if v.len() < {min} {{ return Err(bt()); }} v }}"
+                    "{{ let mut v: Vec<Node> = Vec::new(); #[allow(unused_mut, unused_variables)] let mut col0: Option<usize> = None; let mut first = true; loop {{ let cp = save(i); {guard} if !first {{ if {lay_s}.is_err() {{ restore(i, &cp); break; }} if (|i: &mut In| -> ModalResult<Vec<Node>> {{ Ok({s}) }})(i).is_err() {{ restore(i, &cp); break; }} }} if {lay_e}.is_err() {{ restore(i, &cp); break; }} {col_check} match (|i: &mut In| -> ModalResult<Vec<Node>> {{ Ok({e}) }})(i) {{ Ok(ns) => {{ v.extend(ns); first = false; }} Err(_) => {{ restore(i, &cp); break; }} }} }} if v.len() < {min} {{ return Err(bt()); }} v }}"
                 )
             }
             Symbol::Group(alts) => {
@@ -847,7 +1113,8 @@ impl<'m> Cx<'m> {
                     let mut body = String::from("{ let mut v: Vec<Node> = Vec::new();");
                     for s in a {
                         let e = self.symbol_expr(s, false)?;
-                        body.push_str(&format!(" layout(i)?; v.extend({e});"));
+                        let lay = self.loop_layout(s);
+                        body.push_str(&format!(" {lay}?; v.extend({e});"));
                     }
                     body.push_str(" Ok(v) }");
                     arms.push(format!("(|i: &mut In| -> ModalResult<Vec<Node>> {body})"));
@@ -865,6 +1132,33 @@ impl<'m> Cx<'m> {
                 bail!("a character class in context-free syntax is unsupported")
             }
         })
+    }
+
+    /// The layout call inside a list or option: none in kernel syntax.
+    fn loop_layout(&self, sym: &Symbol) -> String {
+        let call = self.layout_call(sym, false);
+        if call.is_empty() {
+            "no_layout(i)".into()
+        } else {
+            call
+        }
+    }
+
+    /// Every list stops where an open delimiter's closer begins a line,
+    /// whatever sort the list belongs to: the closer is a fact about the
+    /// input the grammar's own loops cannot see.
+    fn guard_break(&self) -> String {
+        if self.delims.is_empty() {
+            return String::new();
+        }
+        "if closer_here(i) { restore(i, &cp); break; }".into()
+    }
+
+    fn guard_expr(&self) -> String {
+        if self.delims.is_empty() {
+            return String::new();
+        }
+        "if closer_here(i) { return Err(bt()); }".into()
     }
 
     fn driver(&mut self) -> Result<()> {
@@ -916,6 +1210,10 @@ struct St<'a> {
     offside: Vec<usize>,
     last_end: usize,
     furthest: usize,
+    /// The span of the captured sort inside the last lexical token.
+    cap: Option<(usize, usize)>,
+    /// Open delimiters: the closer's parser and the word it must carry.
+    delim: Vec<(fn(&mut In<'a>) -> ModalResult<Node>, String)>,
 }
 
 impl<'a> St<'a> {
@@ -924,7 +1222,7 @@ impl<'a> St<'a> {
         for (k, c) in src.char_indices() {
             if c == '\n' { line_starts.push(k + 1); }
         }
-        St { src, line_starts, comments: BTreeMap::new(), offside: Vec::new(), last_end: 0, furthest: 0 }
+        St { src, line_starts, comments: BTreeMap::new(), offside: Vec::new(), last_end: 0, furthest: 0, cap: None, delim: Vec::new() }
     }
 }
 
@@ -950,6 +1248,16 @@ fn line_end(i: &In, p: usize) -> usize {
 }
 
 fn bt() -> ErrMode<ContextError> { ErrMode::Backtrack(ContextError::new()) }
+fn no_layout(_i: &mut In) -> ModalResult<()> { Ok(()) }
+/// Is the innermost open delimiter's closer here, at the start of a line?
+fn closer_here(i: &mut In) -> bool {
+    let Some((f, w)) = i.state.delim.last().cloned() else { return false };
+    if col(i, pos(i)) != 0 { return false; }
+    let cp = save(i);
+    let hit = f(i).is_ok() && i.state.cap.map(|(s, e)| i.state.src[s..e] == *w).unwrap_or(false);
+    restore(i, &cp);
+    hit
+}
 type Cp<'a> = (<In<'a> as Stream>::Checkpoint, usize);
 /// A checkpoint that also remembers the last token end, which winnow's
 /// reset would not restore.
