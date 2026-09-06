@@ -50,7 +50,8 @@ def parse_with(root, t, f):
     """(accepted, tree with positions stripped)."""
     code, out = sh(["tree-sitter", "parse", str(f)], cwd=target_dir(root, t))
     tree = re.sub(r" \[\d+, \d+\] - \[\d+, \d+\]", "", out)
-    tree = "\n".join(l for l in tree.splitlines() if not l.startswith("\x1b") and "parser directories" not in l and not l.startswith("Please run") and not l.startswith("configuration file"))
+    # Keep the S-expression only: the CLI prints a config warning around it.
+    tree = "\n".join(l for l in tree.splitlines() if l.startswith("(") or l.startswith(" "))
     ok = code == 0 and "(ERROR" not in out and "MISSING" not in out and "(UNEXPECTED" not in out
     return ok, tree.strip()
 

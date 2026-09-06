@@ -54,7 +54,6 @@ postgres/9.4, postgres/9.5, postgres/12, postgres/15, postgres/16:
       from: (from
         table: (ident_name
           (name))))))
-language grammars.
 ```
 
 mysql/5.6, mysql/5.7, mysql/8.0, mariadb/10.11:
@@ -72,6 +71,5 @@ mysql/5.6, mysql/5.7, mysql/8.0, mariadb/10.11:
       from: (from
         table: (ident_name
           (name))))))
-language grammars.
 ```
 
