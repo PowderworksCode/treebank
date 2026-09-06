@@ -1,0 +1,13 @@
+// MERGE: PostgreSQL 15 (release notes, "Add SQL MERGE command").
+module postgres/merge
+
+sorts
+  When
+
+context-free syntax
+  Stmt.Merge = <MERGE INTO <target:Ident> USING <source:Ident> ON <Exp> <When+>;>
+  When.Matched    = <WHEN MATCHED THEN UPDATE SET <{Assign ","}+>>
+  When.NotMatched = <WHEN NOT MATCHED THEN INSERT (<columns:{Ident ","}+>) VALUES (<values:{Exp ","}+>)>
+
+vocabulary
+  _clause = When

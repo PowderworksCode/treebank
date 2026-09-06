@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "mariadb_10_11",
+      "camelcase": "Mariadb1011",
+      "scope": "source.mariadb_10_11",
+      "file-types": [
+        "mariadb_10_11"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target mariadb/10.11 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

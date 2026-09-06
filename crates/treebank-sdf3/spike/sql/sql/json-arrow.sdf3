@@ -1,0 +1,9 @@
+// `->` and `->>` on JSON: PostgreSQL since 9.3, MySQL since 5.7. Not MariaDB.
+module sql/json-arrow
+
+context-free syntax
+  Exp.Arrow     = [[left:Exp] -> [right:Exp]] {left}
+  Exp.ArrowText = [[left:Exp] ->> [right:Exp]] {left}
+
+context-free priorities
+  {left: Exp.Arrow Exp.ArrowText} > {Exp.Neg}

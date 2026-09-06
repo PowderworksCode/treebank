@@ -123,7 +123,11 @@ impl<'m> Printer<'m> {
                     b = collapse(b, width as usize);
                 }
                 if let Some(c) = trailing {
-                    let gap = if self.comment_open.as_deref() == Some("#") { "  " } else { " " };
+                    let gap = if self.comment_open.as_deref() == Some("#") {
+                        "  "
+                    } else {
+                        " "
+                    };
                     b = append_text(b, format!("{gap}{c}"));
                 }
                 if !leading.is_empty() {
@@ -169,7 +173,11 @@ impl<'m> Printer<'m> {
                     }
                 }
                 TemplatePart::Lit(s) => {
-                    lines.last_mut().unwrap().items.push((space, Item::Lit(s.clone())));
+                    lines
+                        .last_mut()
+                        .unwrap()
+                        .items
+                        .push((space, Item::Lit(s.clone())));
                     space = false;
                 }
                 TemplatePart::Placeholder { symbol, .. } => {
@@ -195,13 +203,19 @@ impl<'m> Printer<'m> {
                 let b = match item {
                     Item::Lit(s) => Box_::Text(s.clone()),
                     Item::Arg(i, symbol) => {
-                        let arg = args.get(*i).ok_or_else(|| anyhow!("missing argument {i}"))?;
+                        let arg = args
+                            .get(*i)
+                            .ok_or_else(|| anyhow!("missing argument {i}"))?;
                         self.argument(arg, symbol, alone)?
                     }
                 };
                 items.push((*sp, b));
             }
-            let line_box = if items.len() == 1 { items.pop().unwrap().1 } else { Box_::H(items) };
+            let line_box = if items.len() == 1 {
+                items.pop().unwrap().1
+            } else {
+                Box_::H(items)
+            };
             if matches!(line_box, Box_::Empty) {
                 continue; // an absent optional or empty list alone on its line
             }
@@ -236,7 +250,13 @@ impl<'m> Printer<'m> {
         let mut lines: Vec<(usize, Box_)> = Vec::new();
         for (i, item) in items.iter().enumerate() {
             if i > 0 {
-                let kept = matches!(item, Term::App { blank_before: true, .. }) as u32;
+                let kept = matches!(
+                    item,
+                    Term::App {
+                        blank_before: true,
+                        ..
+                    }
+                ) as u32;
                 let asked = self.separation(item).max(self.separation(&items[i - 1]));
                 for _ in 0..kept.max(asked) {
                     lines.push((0, Box_::Blank));
@@ -256,8 +276,15 @@ impl<'m> Printer<'m> {
                 if alone {
                     self.vertical(items)
                 } else {
-                    let boxes: Vec<Box_> = items.iter().map(|i| self.boxed(i)).collect::<Result<_>>()?;
-                    Ok(Box_::H(boxes.into_iter().enumerate().map(|(i, b)| (i > 0, b)).collect()))
+                    let boxes: Vec<Box_> =
+                        items.iter().map(|i| self.boxed(i)).collect::<Result<_>>()?;
+                    Ok(Box_::H(
+                        boxes
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, b)| (i > 0, b))
+                            .collect(),
+                    ))
                 }
             }
             (Term::List(items), Symbol::SepList { sep, .. }) => {
@@ -272,7 +299,11 @@ impl<'m> Printer<'m> {
                     }
                     h.push((i > 0, self.boxed(item)?));
                 }
-                Ok(if h.is_empty() { Box_::Empty } else { Box_::H(h) })
+                Ok(if h.is_empty() {
+                    Box_::Empty
+                } else {
+                    Box_::H(h)
+                })
             }
             (Term::Opt(None), _) => Ok(Box_::Empty),
             (Term::Opt(Some(inner)), sym) => self.in_context(inner, sym),

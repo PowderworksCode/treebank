@@ -95,15 +95,19 @@ pub fn apply(
     while !pending.is_empty() {
         let before = pending.len();
         let done: BTreeSet<&str> = order.iter().map(|t| t.term.as_str()).collect();
-        let (ready, rest): (Vec<&VocabTerm>, Vec<&VocabTerm>) = pending.into_iter().partition(|t| {
-            t.members
-                .iter()
-                .all(|m| !m.starts_with('_') || done.contains(m.as_str()))
-        });
+        let (ready, rest): (Vec<&VocabTerm>, Vec<&VocabTerm>) =
+            pending.into_iter().partition(|t| {
+                t.members
+                    .iter()
+                    .all(|m| !m.starts_with('_') || done.contains(m.as_str()))
+            });
         order.extend(ready);
         pending = rest;
         if pending.len() == before {
-            bail!("vocabulary terms refer to each other in a cycle or to an undeclared term: {:?}", pending.iter().map(|t| &t.term).collect::<Vec<_>>());
+            bail!(
+                "vocabulary terms refer to each other in a cycle or to an undeclared term: {:?}",
+                pending.iter().map(|t| &t.term).collect::<Vec<_>>()
+            );
         }
     }
 
@@ -155,11 +159,34 @@ pub fn apply(
                 .iter()
                 .flat_map(|m| closure_of(grammar, m))
                 .collect();
-            facets.entry(term.to_string()).or_default().extend(nodes.clone());
+            facets
+                .entry(term.to_string())
+                .or_default()
+                .extend(nodes.clone());
             coverage.insert(term.to_string(), nodes.clone());
+            // A member that is a sort's own alternation (`_upsert` over
+            // `upsert_nothing`, `upsert_update`) stays a hidden rule but
+            // leaves the supertypes list: the checker holds every
+            // supertype to the table tier, and this one is facet-only.
+            let mut unlisted = Vec::new();
+            if let Some(s) = grammar["supertypes"].as_array_mut() {
+                for m in &members {
+                    if m.starts_with('_')
+                        && !table.contains(m.as_str())
+                        && s.iter().any(|v| v.as_str() == Some(m))
+                    {
+                        s.retain(|v| v.as_str() != Some(m));
+                        unlisted.push(m.clone());
+                    }
+                }
+            }
             findings.push(Finding {
                 kind: Kind::Mapped,
-                what: format!("`{term}` is a facet: [{}] listed in roles.json", nodes.iter().cloned().collect::<Vec<_>>().join(", ")),
+                what: format!(
+                    "`{term}` is a facet: [{}] listed in roles.json{}",
+                    nodes.iter().cloned().collect::<Vec<_>>().join(", "),
+                    if unlisted.is_empty() { String::new() } else { format!("; [{}] left the supertypes list (hidden rules still), since a supertype must be a table-tier term", unlisted.join(", ")) }
+                ),
             });
             continue;
         }
@@ -168,18 +195,31 @@ pub fn apply(
         // nests in it; that is the point. A conflict is a member that
         // another *threaded* term already claims, with neither term
         // nesting the other: the node would have two derivations.
-        let member_nodes: BTreeSet<String> = members.iter().flat_map(|m| closure_of(grammar, m)).collect();
-        let nested_terms: BTreeSet<String> = members.iter().filter(|m| m.starts_with('_')).cloned().collect();
-        let conflict = member_nodes
+        let member_nodes: BTreeSet<String> = members
             .iter()
-            .find_map(|n| claimed.get(n).filter(|c| !nested_terms.contains(*c)).map(|c| (n.clone(), c.clone())));
+            .flat_map(|m| closure_of(grammar, m))
+            .collect();
+        let nested_terms: BTreeSet<String> = members
+            .iter()
+            .filter(|m| m.starts_with('_'))
+            .cloned()
+            .collect();
+        let conflict = member_nodes.iter().find_map(|n| {
+            claimed
+                .get(n)
+                .filter(|c| !nested_terms.contains(*c))
+                .map(|c| (n.clone(), c.clone()))
+        });
         if let Some((node, other)) = conflict {
             if either.contains(term) {
                 let reason = format!(
                     "`{node}` is also a member of `{other}`, and neither term nests in the other, so the two cannot share one derivation; every member of `{term}` is a concrete node type, so facet membership selects the same nodes"
                 );
                 demoted.insert(term.to_string(), reason.clone());
-                facets.entry(term.to_string()).or_default().extend(member_nodes.clone());
+                facets
+                    .entry(term.to_string())
+                    .or_default()
+                    .extend(member_nodes.clone());
                 coverage.insert(term.to_string(), member_nodes.clone());
                 findings.push(Finding {
                     kind: Kind::Deviation,
@@ -198,15 +238,30 @@ pub fn apply(
             rename(grammar, names, &old, term);
             findings.push(Finding {
                 kind: Kind::Mapped,
-                what: format!("`{term}` is the sort {}: its supertype `{old}` is named `{term}`", t.members[0]),
+                what: format!(
+                    "`{term}` is the sort {}: its supertype `{old}` is named `{term}`",
+                    t.members[0]
+                ),
             });
         } else {
-            thread(grammar, term, &members);
+            // A member that is a sort's own hidden alternation, not a
+            // term, is flattened into the threaded term: the checker wants
+            // every supertype to be a table-tier term, and `_dir` inside
+            // `_modifier` would be one that is not.
+            let flatten: BTreeSet<String> = members
+                .iter()
+                .filter(|m| {
+                    m.starts_with('_') && !table.contains(m.as_str()) && !facet.contains(m.as_str())
+                })
+                .cloned()
+                .collect();
+            thread(grammar, term, &members, &flatten);
             findings.push(Finding {
                 kind: Kind::Mapped,
                 what: format!(
-                    "`{term}` threaded as a supertype over [{}]; every reference to a member now goes through it, and the tree is unchanged",
-                    members.join(", ")
+                    "`{term}` threaded as a supertype over [{}]; every reference to a member now goes through it, and the tree is unchanged{}",
+                    members.join(", "),
+                    if flatten.is_empty() { String::new() } else { format!("; [{}] are sorts, not terms, and were flattened into it", flatten.iter().cloned().collect::<Vec<_>>().join(", ")) }
                 ),
             });
         }
@@ -229,7 +284,11 @@ pub fn apply(
     // what is outside and the finding says so too.
     let supertypes: Vec<String> = grammar["supertypes"]
         .as_array()
-        .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+        .map(|a| {
+            a.iter()
+                .filter_map(|v| v.as_str().map(String::from))
+                .collect()
+        })
         .unwrap_or_default();
     let table_covered: BTreeSet<String> = supertypes
         .iter()
@@ -252,10 +311,15 @@ pub fn apply(
             let reason = if !parents.is_empty() && covered_parents.len() == parents.len() {
                 format!(
                     "a piece of [{}], which carry the roles; no term names it on its own",
-                    covered_parents.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+                    covered_parents
+                        .iter()
+                        .map(|s| s.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ")
                 )
             } else {
-                "no vocabulary term names it: the module's `vocabulary` section leaves it out".to_string()
+                "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+                    .to_string()
             };
             uncategorised.push(json!({"node": n, "reason": reason}));
         }
@@ -266,7 +330,11 @@ pub fn apply(
             what: format!(
                 "{} named node(s) outside the vocabulary, ledgered as uncategorised: [{}]",
                 uncategorised.len(),
-                uncategorised.iter().map(|u| u["node"].as_str().unwrap_or("").to_string()).collect::<Vec<_>>().join(", ")
+                uncategorised
+                    .iter()
+                    .map(|u| u["node"].as_str().unwrap_or("").to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
         });
     }
@@ -351,11 +419,30 @@ fn referencing_rules(grammar: &Value, node: &str) -> Vec<String> {
 }
 
 /// Every visible rule: a named node type of the generated grammar.
+/// Every named rule the start rule reaches, plus the externals. A rule
+/// nothing reaches -- a lexical sort only ever inlined into another's
+/// regex -- is no node of the grammar, and node-types.json will not list
+/// it, so the ledger must not either.
 fn named_nodes(grammar: &Value) -> Vec<String> {
-    let mut v: Vec<String> = grammar["rules"]
-        .as_object()
-        .map(|r| r.keys().filter(|k| !k.starts_with('_')).cloned().collect())
-        .unwrap_or_default();
+    let rules = grammar["rules"].as_object().cloned().unwrap_or_default();
+    let mut reached: BTreeSet<String> = BTreeSet::new();
+    let mut todo: Vec<String> = rules.keys().take(1).cloned().collect();
+    // Extras are roots too: a named comment is reached by no rule.
+    symbols_in(&grammar["extras"], &mut todo);
+    while let Some(r) = todo.pop() {
+        if !reached.insert(r.clone()) {
+            continue;
+        }
+        if let Some(body) = rules.get(&r) {
+            let mut refs = Vec::new();
+            symbols_in(body, &mut refs);
+            todo.extend(refs);
+        }
+    }
+    let mut v: Vec<String> = reached
+        .into_iter()
+        .filter(|k| !k.starts_with('_'))
+        .collect();
     if let Some(ext) = grammar["externals"].as_array() {
         for e in ext {
             if let Some(n) = e["name"].as_str() {
@@ -368,6 +455,23 @@ fn named_nodes(grammar: &Value) -> Vec<String> {
     v.sort();
     v.dedup();
     v
+}
+
+fn symbols_in(v: &Value, out: &mut Vec<String>) {
+    match v {
+        Value::Object(o) => {
+            if o.get("type").and_then(Value::as_str) == Some("SYMBOL") {
+                if let Some(n) = o.get("name").and_then(Value::as_str) {
+                    out.push(n.to_string());
+                }
+            }
+            for x in o.values() {
+                symbols_in(x, out);
+            }
+        }
+        Value::Array(a) => a.iter().for_each(|x| symbols_in(x, out)),
+        _ => {}
+    }
 }
 
 fn rename(grammar: &mut Value, names: &mut Names, old: &str, new: &str) {
@@ -432,7 +536,7 @@ fn replace_symbol(v: &mut Value, old: &str, new: &str) {
 
 /// Insert `term` as a supertype over `members`, after the last member's
 /// rule, and route every reference to a member through it.
-fn thread(grammar: &mut Value, term: &str, members: &[String]) {
+fn thread(grammar: &mut Value, term: &str, members: &[String], flatten: &BTreeSet<String>) {
     let rules = grammar["rules"].as_object().cloned().unwrap_or_default();
     let mut out: Map<String, Value> = Map::new();
     let last = rules
@@ -441,10 +545,17 @@ fn thread(grammar: &mut Value, term: &str, members: &[String]) {
         .filter(|(_, k)| members.contains(k))
         .map(|(i, _)| i)
         .max();
-    let choice = json!({
-        "type": "CHOICE",
-        "members": members.iter().map(|m| json!({"type": "SYMBOL", "name": m})).collect::<Vec<_>>()
-    });
+    let mut alternatives: Vec<Value> = Vec::new();
+    for m in members {
+        if flatten.contains(m) {
+            if let Some(inner) = rules.get(m).and_then(|r| r["members"].as_array()) {
+                alternatives.extend(inner.iter().cloned());
+                continue;
+            }
+        }
+        alternatives.push(json!({"type": "SYMBOL", "name": m}));
+    }
+    let choice = json!({"type": "CHOICE", "members": alternatives});
     for (i, (k, v)) in rules.into_iter().enumerate() {
         let mut v = v;
         if k != term {
@@ -452,7 +563,9 @@ fn thread(grammar: &mut Value, term: &str, members: &[String]) {
                 replace_symbol(&mut v, m, term);
             }
         }
-        out.insert(k, v);
+        if !flatten.contains(&k) {
+            out.insert(k, v);
+        }
         if Some(i) == last {
             out.insert(term.to_string(), choice.clone());
         }
@@ -462,6 +575,7 @@ fn thread(grammar: &mut Value, term: &str, members: &[String]) {
     }
     grammar["rules"] = Value::Object(out);
     if let Some(s) = grammar["supertypes"].as_array_mut() {
+        s.retain(|v| v.as_str().is_none_or(|n| !flatten.contains(n)));
         s.push(json!(term));
     }
 }

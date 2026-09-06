@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "rust_2018",
+      "camelcase": "Rust2018",
+      "scope": "source.rust_2018",
+      "file-types": [
+        "rust_2018"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target rust/2018 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

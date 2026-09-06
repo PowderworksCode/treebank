@@ -57,7 +57,7 @@ pub fn emit(
 ) -> Result<Emitted> {
     let mut findings = Vec::new();
     let (plan, _) = scanner::plan(module)?;
-    let grammar_name = capitalize(&module.name);
+    let grammar_name = capitalize(&module.symbol_name());
     let mut out = String::new();
     out.push_str(&format!(
         "// GENERATED from {}.sdf3 by treebank-sdf3's ANTLR backend. Python3 target.\ngrammar {grammar_name};\n\n",
@@ -66,7 +66,9 @@ pub fn emit(
 
     let mut members: Vec<String> = Vec::new();
     if let Some(ind) = &plan.indent {
-        out.push_str("// H_ tokens are hidden in the tree, as tree-sitter's `_` externals are.\n\n");
+        out.push_str(
+            "// H_ tokens are hidden in the tree, as tree-sitter's `_` externals are.\n\n",
+        );
         let openers: Vec<String> = ind.openers.iter().map(|l| literal(l)).collect();
         let comment_open = plan.comment_open.map(|c| c as u32).unwrap_or(0);
         members.push(format!(
@@ -171,7 +173,10 @@ def on_newline(self):
     }
 
     if !members.is_empty() {
-        out.push_str(&format!("@lexer::members {{\n{}\n}}\n\n", members.join("\n")));
+        out.push_str(&format!(
+            "@lexer::members {{\n{}\n}}\n\n",
+            members.join("\n")
+        ));
     }
 
     // Parser rules, start symbol first.
@@ -311,7 +316,9 @@ def on_newline(self):
                 let is_class = matches!(&p.rhs, Rhs::Symbols(s) if s.len() == 1 && matches!(s[0], Symbol::CharClass(_)));
                 let body = match &p.rhs {
                     Rhs::Symbols(s) if is_class && plan.indent.is_some() => {
-                        let Symbol::CharClass(c) = &s[0] else { unreachable!() };
+                        let Symbol::CharClass(c) = &s[0] else {
+                            unreachable!()
+                        };
                         class(&without(c, &['\n', '\r']))
                     }
                     _ => lexical_body(p, &lexical)?,
@@ -426,7 +433,11 @@ fn elements(p: &Production, pi: usize, names: &Names, plan: &scanner::Plan) -> R
             }
         }
     }
-    if plan.indent.as_ref().is_some_and(|ind| ind.terminated.contains(&pi)) {
+    if plan
+        .indent
+        .as_ref()
+        .is_some_and(|ind| ind.terminated.contains(&pi))
+    {
         parts.push("H_NEWLINE".into());
     }
     Ok(parts.join(" "))
@@ -450,7 +461,11 @@ fn symbol_text(
     // ANTLR refuses an element label spelled like a rule; suffix it, and the
     // driver strips the suffix when it prints the field.
     let owned: Option<String> = label.map(|l| {
-        if names.sort_rule.keys().any(|sort| rule_for(names, sort) == l) {
+        if names
+            .sort_rule
+            .keys()
+            .any(|sort| rule_for(names, sort) == l)
+        {
             format!("{l}_")
         } else {
             l.to_string()

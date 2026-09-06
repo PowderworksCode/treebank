@@ -51,7 +51,10 @@ pub fn emit(module: &Module, names: &Names) -> Result<Option<Emitted>> {
                 Attr::Scope(kind) => {
                     any = true;
                     let Some(node) = &node else {
-                        bail!("{}: `scope` on a production with no node of its own", p.display());
+                        bail!(
+                            "{}: `scope` on a production with no node of its own",
+                            p.display()
+                        );
                     };
                     let kind = kind.clone().unwrap_or_else(|| "block".into());
                     scopes.push(json!({"node": node, "kind": kind, "from": p.display()}));
@@ -59,16 +62,26 @@ pub fn emit(module: &Module, names: &Names) -> Result<Option<Emitted>> {
                     scm_scopes.push(format!("({node})"));
                     findings.push(Finding {
                         kind: Kind::Extension,
-                        what: format!("{}: `scope({kind})` (not SDF3): `{node}` delimits a lexical scope", p.display()),
+                        what: format!(
+                            "{}: `scope({kind})` (not SDF3): `{node}` delimits a lexical scope",
+                            p.display()
+                        ),
                     });
                 }
                 Attr::Binds(b) => {
                     any = true;
                     let Some(node) = &node else {
-                        bail!("{}: `binds` on a production with no node of its own", p.display());
+                        bail!(
+                            "{}: `binds` on a production with no node of its own",
+                            p.display()
+                        );
                     };
                     let Some(sym) = labelled(p, &b.label) else {
-                        bail!("{}: `binds({} -> ..)` names no placeholder label of the production", p.display(), b.label);
+                        bail!(
+                            "{}: `binds({} -> ..)` names no placeholder label of the production",
+                            p.display(),
+                            b.label
+                        );
                     };
                     let Some(token) = name_token(sym, names) else {
                         findings.push(Finding {
@@ -96,7 +109,8 @@ pub fn emit(module: &Module, names: &Names) -> Result<Option<Emitted>> {
                     }));
                     facet_binding.insert(node.clone());
                     let is_scope = p.attrs.iter().any(|a| matches!(a, Attr::Scope(_)));
-                    let mut pat = format!("({node} {}: ({token}) @local.definition.{kind}", b.label);
+                    let mut pat =
+                        format!("({node} {}: ({token}) @local.definition.{kind}", b.label);
                     if b.effect == BindEffect::Whole && !is_scope && !whole_noted {
                         whole_noted = true;
                         findings.push(Finding {
@@ -149,12 +163,18 @@ pub fn emit(module: &Module, names: &Names) -> Result<Option<Emitted>> {
                         Err(_) => labelled(p, r),
                     };
                     let Some(sym) = sym else {
-                        bail!("{}: `refers({r})` names no symbol of the production", p.display());
+                        bail!(
+                            "{}: `refers({r})` names no symbol of the production",
+                            p.display()
+                        );
                     };
                     let Some(token) = name_token(sym, names) else {
                         findings.push(Finding {
                             kind: Kind::Unsupported,
-                            what: format!("{}: `refers({r})` on {sym:?}, not a name token; ignored", p.display()),
+                            what: format!(
+                                "{}: `refers({r})` on {sym:?}, not a name token; ignored",
+                                p.display()
+                            ),
                         });
                         continue;
                     };

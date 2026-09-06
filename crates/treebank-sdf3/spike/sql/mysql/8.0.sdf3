@@ -1,0 +1,3 @@
+module mysql/8.0
+imports mysql/5.7 sql/cte sql/window
+hiding mysql/query-cache

@@ -1,0 +1,6 @@
+// INSERT ... ON CONFLICT: PostgreSQL 9.5 (release notes, "Add INSERT ... ON CONFLICT").
+module postgres/on-conflict
+
+context-free syntax
+  Upsert.Nothing = <ON CONFLICT DO NOTHING>
+  Upsert.Update  = <ON CONFLICT (<{Ident ","}+>) DO UPDATE SET <{Assign ","}+>>

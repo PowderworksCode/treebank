@@ -1,0 +1,9 @@
+// WITH OIDS / WITHOUT OIDS on CREATE TABLE. PostgreSQL 12 removed WITH OIDS
+// (release notes, "Remove the special behavior of oid columns") and kept
+// WITHOUT OIDS as a no-op for compatibility; postgres/12 hides the one
+// constructor.
+module postgres/oids
+
+context-free syntax
+  CreateTail.WithOids    = <WITH OIDS>
+  CreateTail.WithoutOids = <WITHOUT OIDS>

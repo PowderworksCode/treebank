@@ -57,7 +57,10 @@ fn the_binding_attributes_lower_to_the_committed_data_and_query() {
     let committed = std::fs::read_to_string(spike().join("bindings.json")).unwrap();
     assert_eq!(produced, committed, "spike/pyish/bindings.json is stale");
     let committed = std::fs::read_to_string(spike().join("queries/locals.scm")).unwrap();
-    assert_eq!(b.locals, committed, "spike/pyish/queries/locals.scm is stale");
+    assert_eq!(
+        b.locals, committed,
+        "spike/pyish/queries/locals.scm is stale"
+    );
     let committed = std::fs::read_to_string(spike().join("bindings-findings.md")).unwrap();
     assert_eq!(
         treebank_sdf3::report(&b.findings),
@@ -65,7 +68,10 @@ fn the_binding_attributes_lower_to_the_committed_data_and_query() {
         "spike/pyish/bindings-findings.md is stale"
     );
     // The facets treebank's roles.json would carry, derived.
-    assert_eq!(b.json["facets"]["_scope"], serde_json::json!(["def", "program"]));
+    assert_eq!(
+        b.json["facets"]["_scope"],
+        serde_json::json!(["def", "program"])
+    );
     assert_eq!(
         b.json["facets"]["_binding"],
         serde_json::json!(["assign", "def", "global", "param"])
@@ -73,7 +79,10 @@ fn the_binding_attributes_lower_to_the_committed_data_and_query() {
     // Only the def name gets the parent-scope property; the module-directed
     // binding is a deviation the query cannot express.
     assert_eq!(b.locals.matches("#set!").count(), 1);
-    assert!(b.findings.iter().any(|f| f.what.contains("cannot name a scope by kind")));
+    assert!(b
+        .findings
+        .iter()
+        .any(|f| f.what.contains("cannot name a scope by kind")));
 }
 
 #[test]
@@ -93,7 +102,10 @@ fn the_declarative_constraints_become_three_externals_and_a_stack() {
     );
     // `indent 1 4` on Stmt.If: the block is wrapped.
     let if_rule = serde_json::to_string(&g["rules"]["if"]).unwrap();
-    assert!(if_rule.contains(r#"{"type":"SYMBOL","name":"_indent"}"#), "{if_rule}");
+    assert!(
+        if_rule.contains(r#"{"type":"SYMBOL","name":"_indent"}"#),
+        "{if_rule}"
+    );
     assert!(if_rule.contains(r#"{"type":"SYMBOL","name":"_dedent"}"#));
     // ...and it ends with the block or the else clause, never `_newline`.
     assert!(!if_rule.contains("_newline"), "{if_rule}");
@@ -101,8 +113,14 @@ fn the_declarative_constraints_become_three_externals_and_a_stack() {
     let pass = serde_json::to_string(&g["rules"]["pass"]).unwrap();
     assert!(pass.contains("_newline"), "{pass}");
     let scanner = lowered.scanner.unwrap();
-    assert!(scanner.contains("cols[MAX_DEPTH]"), "the scanner keeps a column stack");
-    assert!(scanner.contains("external_scanner_serialize(void *payload, char *buffer) {\n  Indent *s"), "and serializes it");
+    assert!(
+        scanner.contains("cols[MAX_DEPTH]"),
+        "the scanner keeps a column stack"
+    );
+    assert!(
+        scanner.contains("external_scanner_serialize(void *payload, char *buffer) {\n  Indent *s"),
+        "and serializes it"
+    );
 }
 
 #[test]

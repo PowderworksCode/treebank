@@ -39,18 +39,35 @@ fn pyish() -> (treebank_sdf3::ast::Module, treebank_sdf3::lower::Names) {
 fn the_tree_implodes_to_the_signature_term() {
     let (module, names) = pyish();
     let cst = parse_sexp(SEXP).unwrap();
-    let term = Imploder::new(&module, &names).implode(&cst, SOURCE).unwrap();
+    let term = Imploder::new(&module, &names)
+        .implode(&cst, SOURCE)
+        .unwrap();
     assert_eq!(
         term.aterm(),
         r#"Program([Assign("x", Int("1")), Def("f", [Param("a")], Block([Return(Add("a", "x"))])), Print(Call("f", [Int("2")]))])"#
     );
     // The trailing comment survived as an annotation on the return.
-    let Term::App { args, .. } = &term else { panic!() };
-    let Term::List(stmts) = &args[0] else { panic!() };
-    let Term::App { args: def_args, .. } = &stmts[1] else { panic!() };
-    let Term::App { args: block_args, .. } = &def_args[2] else { panic!() };
-    let Term::List(body) = &block_args[0] else { panic!() };
-    let Term::App { trailing, .. } = &body[0] else { panic!() };
+    let Term::App { args, .. } = &term else {
+        panic!()
+    };
+    let Term::List(stmts) = &args[0] else {
+        panic!()
+    };
+    let Term::App { args: def_args, .. } = &stmts[1] else {
+        panic!()
+    };
+    let Term::App {
+        args: block_args, ..
+    } = &def_args[2]
+    else {
+        panic!()
+    };
+    let Term::List(body) = &block_args[0] else {
+        panic!()
+    };
+    let Term::App { trailing, .. } = &body[0] else {
+        panic!()
+    };
     assert_eq!(trailing.as_deref(), Some("# trailing"));
 }
 
@@ -58,8 +75,12 @@ fn the_tree_implodes_to_the_signature_term() {
 fn the_templates_print_the_term_in_blacks_style() {
     let (module, names) = pyish();
     let cst = parse_sexp(SEXP).unwrap();
-    let term = Imploder::new(&module, &names).implode(&cst, SOURCE).unwrap();
-    let out = treebank_sdf3::print::Printer::new(&module).print(&term).unwrap();
+    let term = Imploder::new(&module, &names)
+        .implode(&cst, SOURCE)
+        .unwrap();
+    let out = treebank_sdf3::print::Printer::new(&module)
+        .print(&term)
+        .unwrap();
     // Two blank lines around the def (`separate(2)`), a four-space body
     // (the template's indentation), two spaces before the comment.
     assert_eq!(
@@ -80,5 +101,10 @@ fn a_productive_production_prints_like_a_template() {
         trailing: None,
         blank_before: false,
     };
-    assert_eq!(treebank_sdf3::print::Printer::new(&module).print(&t).unwrap(), "42\n");
+    assert_eq!(
+        treebank_sdf3::print::Printer::new(&module)
+            .print(&t)
+            .unwrap(),
+        "42\n"
+    );
 }

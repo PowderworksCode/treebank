@@ -1,0 +1,3 @@
+// 5.7 added the JSON type and its `->` operators (5.7.9, `->>` in 5.7.13).
+module mysql/5.7
+imports mysql/5.6 sql/json-arrow

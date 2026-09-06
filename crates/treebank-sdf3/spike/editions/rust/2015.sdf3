@@ -1,0 +1,6 @@
+// Rust editions as targets. The language is spike/rustish, unchanged; an
+// edition is a module that imports the previous one and reserves the words
+// that edition took (the reference's "Keywords" appendix, per edition).
+// Every one of the four has an exact oracle: `rustc --edition`.
+module rust/2015
+imports ../rustish/rustish

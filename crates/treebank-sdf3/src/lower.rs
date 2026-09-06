@@ -120,6 +120,28 @@ pub fn lower(module: &Module) -> Result<Lowered> {
             ),
         });
     }
+    for h in &module.holes {
+        let mut what = format!(
+            "sort {} has no production in this composition (a dialect point this target leaves empty)",
+            h.sort
+        );
+        if !h.blanked.is_empty() {
+            what.push_str(&format!(
+                "; its optional occurrence was removed from [{}]",
+                h.blanked.join(", ")
+            ));
+        }
+        if !h.dropped.is_empty() {
+            what.push_str(&format!(
+                "; [{}] needed it and were dropped",
+                h.dropped.join(", ")
+            ));
+        }
+        cx.findings.push(Finding {
+            kind: Kind::Mapped,
+            what,
+        });
+    }
     let (plan, mut plan_findings) = crate::scanner::plan(module)?;
     cx.findings.append(&mut plan_findings);
     cx.plan = plan;
@@ -407,9 +429,44 @@ pub fn lower(module: &Module) -> Result<Lowered> {
         "$schema".into(),
         json!("https://tree-sitter.github.io/tree-sitter/assets/schemas/grammar.schema.json"),
     );
-    grammar.insert("name".into(), json!(module.name));
+    grammar.insert("name".into(), json!(module.symbol_name()));
     if let Some(w) = &word {
         grammar.insert("word".into(), json!(w));
+    }
+    // A rejected word that no production uses (`ID = "async" {reject}` in
+    // an edition module) is a word tree-sitter cannot reserve, since only
+    // a token can be reserved and a token is a literal some rule reaches.
+    // So the words are reached: from the start rule, behind a pattern
+    // that matches nothing. The lexer then knows them as keywords, the
+    // reserved set refuses them as identifiers, and no parse can shift
+    // them. The effect is SDF3's: the word is a syntax error anywhere.
+    let orphans: Vec<&String> = reserved
+        .iter()
+        .filter(|w| !cx.keywords.contains(*w))
+        .collect();
+    if !orphans.is_empty() {
+        let words: Vec<Value> = orphans
+            .iter()
+            .map(|w| json!({"type": "STRING", "value": w}))
+            .collect();
+        rules.insert(
+            "_reserved_word".into(),
+            json!({"type": "SEQ", "members": [
+                {"type": "PATTERN", "value": "[^\\s\\S]"},
+                {"type": "CHOICE", "members": words}
+            ]}),
+        );
+        if let Some(body) = rules.get_mut(&cx.sort_rule[&start]) {
+            let orig = body.take();
+            *body = json!({"type": "SEQ", "members": [orig, optional(json!({"type": "SYMBOL", "name": "_reserved_word"}))]});
+        }
+        cx.findings.push(Finding {
+            kind: Kind::Mapped,
+            what: format!(
+                "rejected words used by no production [{}]: reserved, and made tokens by a hidden `_reserved_word` rule the start rule reaches only behind a pattern matching nothing, so each is a syntax error wherever it appears",
+                orphans.iter().map(|s| s.as_str()).collect::<Vec<_>>().join(", ")
+            ),
+        });
     }
     grammar.insert("rules".into(), Value::Object(rules));
     grammar.insert("extras".into(), Value::Array(extras));
@@ -437,7 +494,7 @@ pub fn lower(module: &Module) -> Result<Lowered> {
     let scanner = if cx.plan.is_empty() {
         None
     } else {
-        Some(crate::scanner::c_source(&cx.plan, &module.name))
+        Some(crate::scanner::c_source(&cx.plan, &module.symbol_name()))
     };
     let names = Names {
         sort_rule: cx.sort_rule.clone(),

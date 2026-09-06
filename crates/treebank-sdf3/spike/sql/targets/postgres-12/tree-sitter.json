@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "postgres_12",
+      "camelcase": "Postgres12",
+      "scope": "source.postgres_12",
+      "file-types": [
+        "postgres_12"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target postgres/12 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

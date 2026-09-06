@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "rust_2024",
+      "camelcase": "Rust2024",
+      "scope": "source.rust_2024",
+      "file-types": [
+        "rust_2024"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target rust/2024 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

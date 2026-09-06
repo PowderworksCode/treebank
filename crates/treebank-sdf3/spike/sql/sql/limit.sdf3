@@ -1,0 +1,6 @@
+// LIMIT and OFFSET: not in the standard, in every dialect here.
+module sql/limit
+
+context-free syntax
+  Limit.Limit   = <LIMIT <count:INT>>
+  Offset.Offset = <OFFSET <start:INT>>

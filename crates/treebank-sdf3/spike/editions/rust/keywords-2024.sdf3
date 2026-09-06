@@ -1,0 +1,5 @@
+// The 2024 edition reserved gen.
+module rust/keywords-2024
+
+lexical syntax
+  ID = "gen" {reject}

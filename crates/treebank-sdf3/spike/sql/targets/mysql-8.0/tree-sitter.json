@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "mysql_8_0",
+      "camelcase": "Mysql80",
+      "scope": "source.mysql_8_0",
+      "file-types": [
+        "mysql_8_0"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target mysql/8.0 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

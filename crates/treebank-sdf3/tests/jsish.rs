@@ -9,7 +9,10 @@ fn spike() -> &'static Path {
 
 fn same(name: &str, produced: &str) {
     let committed = std::fs::read_to_string(spike().join(name)).unwrap();
-    assert_eq!(produced, committed, "spike/jsish/{name} is stale; regenerate it");
+    assert_eq!(
+        produced, committed,
+        "spike/jsish/{name} is stale; regenerate it"
+    );
 }
 
 #[test]
@@ -22,10 +25,18 @@ fn jsish_reads_and_lowers_to_the_committed_output() {
         .unwrap()
         .unwrap_or_default();
     findings.extend(treebank_sdf3::apply_conflicts(&mut grammar, &conflicts));
-    same("grammar.json", &(serde_json::to_string_pretty(&grammar).unwrap() + "\n"));
+    same(
+        "grammar.json",
+        &(serde_json::to_string_pretty(&grammar).unwrap() + "\n"),
+    );
     same("findings.md", &treebank_sdf3::report(&findings));
-    let b = treebank_sdf3::bindings::emit(&module, &lowered.names).unwrap().unwrap();
-    same("bindings.json", &(serde_json::to_string_pretty(&b.json).unwrap() + "\n"));
+    let b = treebank_sdf3::bindings::emit(&module, &lowered.names)
+        .unwrap()
+        .unwrap();
+    same(
+        "bindings.json",
+        &(serde_json::to_string_pretty(&b.json).unwrap() + "\n"),
+    );
     same("queries/locals.scm", &b.locals);
     same("bindings-findings.md", &treebank_sdf3::report(&b.findings));
     let antlr = treebank_sdf3::antlr::emit(&module, &lowered.names, &lowered.levels).unwrap();
@@ -36,7 +47,9 @@ fn jsish_reads_and_lowers_to_the_committed_output() {
 fn var_binds_in_the_function_and_let_in_the_block() {
     let module = treebank_sdf3::load_module(&spike().join("jsish.sdf3")).unwrap();
     let lowered = treebank_sdf3::lower_all(&module).unwrap().lowered;
-    let b = treebank_sdf3::bindings::emit(&module, &lowered.names).unwrap().unwrap();
+    let b = treebank_sdf3::bindings::emit(&module, &lowered.names)
+        .unwrap()
+        .unwrap();
     let defs = b.json["definitions"].as_array().unwrap();
     let scope = |node: &str| {
         defs.iter()
@@ -46,5 +59,8 @@ fn var_binds_in_the_function_and_let_in_the_block() {
     };
     assert_eq!(scope("var"), "function");
     assert_eq!(scope("let"), "enclosing");
-    assert!(b.findings.iter().any(|f| f.what.contains("cannot name a scope by kind")));
+    assert!(b
+        .findings
+        .iter()
+        .any(|f| f.what.contains("cannot name a scope by kind")));
 }

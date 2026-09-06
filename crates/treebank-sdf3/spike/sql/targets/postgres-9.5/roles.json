@@ -1,0 +1,68 @@
+{
+  "vocabulary": "0.1.0",
+  "demoted": {},
+  "facets": {
+    "_clause": [
+      "as",
+      "bare",
+      "from",
+      "limit",
+      "nothing",
+      "offset",
+      "order_by",
+      "returning",
+      "upsert_update",
+      "where",
+      "with"
+    ],
+    "_comment": [
+      "comment"
+    ]
+  },
+  "uncategorised": [
+    {
+      "node": "col_def",
+      "reason": "a piece of [create_table], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "cte",
+      "reason": "a piece of [with], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "dquoted",
+      "reason": "a piece of [quoted], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "int",
+      "reason": "a piece of [varchar, exp_int, limit, offset], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "item",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "name",
+      "reason": "a piece of [ident_name, call], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "order",
+      "reason": "a piece of [order_by], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "partition",
+      "reason": "a piece of [over], which carry the roles; no term names it on its own"
+    },
+    {
+      "node": "script",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "select",
+      "reason": "no vocabulary term names it: the module's `vocabulary` section leaves it out"
+    },
+    {
+      "node": "string",
+      "reason": "a piece of [str], which carry the roles; no term names it on its own"
+    }
+  ]
+}

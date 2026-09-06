@@ -1229,3 +1229,137 @@ arbitrary boxes rather than one production, and comments inside
 expressions, which the annotation model attaches to the nearest
 statement; both are the next things a real formatter would need.
 
+
+## 22. The ninth spike: dialects and versions as modules, one exact parser per target
+
+§4.2 of DESIGN.md puts a language family in one grammar source and, within
+a version line, one parse table that accepts the union of every version's
+syntax, with `version_policy.toml` and "the latest wins" arbitrating where
+readings collide; across siblings it forbids the union outright, having
+measured what SQLite ∪ PostgreSQL ∪ MySQL did to the instruments. This
+spike keeps the first half and drops the second: the family still has one
+source, and it lowers to **one exact parser per target**, where a target
+is a dialect at a version. There is no union table, no policy file, and
+nothing to arbitrate, because no parser ever holds two versions' readings
+at once. `spike/sql/` is the family; `spike/editions/` is the same idea
+over Rust's editions, where every target has an oracle.
+
+**A target is a module.** SDF3's composition already says most of it:
+imports are additive, a sort gains productions from every module that
+declares any, and a module can be nothing but imports. So a version is a
+module that imports the previous version and the features it added:
+
+```
+module postgres/15
+imports postgres/12 postgres/merge
+
+module mysql/8.0
+imports mysql/5.7 sql/cte sql/window
+hiding mysql/query-cache
+
+module mariadb/10.11
+imports mysql/5.7 sql/cte sql/window
+hiding sql/json-arrow
+```
+
+Three kinds of module fall out. `sql/core` is the intersection, and only
+that: SELECT, INSERT, UPDATE, DELETE, CREATE TABLE, the expressions, and
+deliberate lexical gaps where the dialects disagree most (no quoted
+identifier, no `#` comment). A **feature module** holds one syntactic
+feature with its constructors, priorities, template and vocabulary line
+together, so it travels: `sql/cte` is imported by every PostgreSQL version,
+by MySQL from 8.0, and by MariaDB. A **target module** is an import list
+and, sometimes, a `hiding` clause. Siblings share only what they share:
+PostgreSQL and MySQL meet at `sql/core`, which is §4.2's "across siblings,
+never" restated as a module graph rather than a prohibition. A fork is an
+import from a point in another line: MariaDB continues from `mysql/5.7`,
+adds what it took on its own schedule, and hides what it never took.
+
+**Two extensions to SDF3, both small.** Imports in SDF3 cannot remove, and
+versions remove things: PostgreSQL 12 dropped `WITH OIDS`, MySQL 8.0
+dropped `SQL_CACHE`. `hiding` (`src/lib.rs`) subtracts after the imports
+compose, by constructor (`hiding CreateTail.WithOids`) or by module
+(`hiding mysql/query-cache`, everything that module declares itself); the
+priority and vocabulary lines that named a removed production lose that
+member, and a `hiding` that removes nothing is an error, so it cannot go
+stale silently. The second is the **hole**. Core puts each dialect's clause
+where it goes, `<limit:Limit?>` at the end of a SELECT and
+`<upsert:Upsert?>` after an INSERT's VALUES, and declares the sort without
+giving it a production. A target that imports `sql/limit` fills it. A
+target that does not has a declared sort with no productions, which SDF3
+says matches nothing, and the loader rewrites the composition to say so
+directly: an optional or starred occurrence of the hole is removed from its
+production, a production that needs the hole is dropped, and the lowering
+reports each closure as a finding. Every backend then sees an ordinary
+module. The lowering itself learned only two things: a module named
+`mysql/5.7` is the grammar `mysql_5_7`, and imports resolve against the
+family root (the path with the module's own name stripped), so
+`postgres/15.sdf3` reaches `sql/core` by name from anywhere in the tree.
+
+**The matrix.** `tools/targets_check.py` reads `targets.json`, lowers
+nothing itself (`verify.sh` does, one directory per target), and holds each
+generated parser to a corpus in which every file's first line names the
+targets that accept it; every other target must reject it. Where a server
+of exactly that version is available, the header's claim is itself checked
+against the server: a syntax error from `psql` or `mariadb` is a rejection,
+success is acceptance, and any other error fails the run, because the
+oracle then cannot speak to syntax. PostgreSQL 16 and MariaDB 10.11 are
+those servers here; the other seven columns are claims cited to the release
+notes in the module that adds or hides the feature, held to the parser
+only.
+
+| | postgres 9.4 · 9.5 · 12 · 15 · 16 | mysql 5.6 · 5.7 · 8.0 | mariadb 10.11 |
+|---|---|---|---|
+| `ON CONFLICT` | ✗ ✓ ✓ ✓ ✓• | ✗ ✗ ✗ | ✗• |
+| `WITH OIDS` | ✓ ✓ ✗ ✗ ✗• | ✗ ✗ ✗ | ✗• |
+| `MERGE` | ✗ ✗ ✗ ✓ ✓• | ✗ ✗ ✗ | ✗• |
+| `SQL_CACHE` | ✗ ✗ ✗ ✗ ✗• | ✓ ✓ ✗ | ✓• |
+| `->>` | ✓ ✓ ✓ ✓ ✓• | ✗ ✓ ✓ | ✗• |
+| `WITH x AS (SELECT)` | ✓ ✓ ✓ ✓ ✓• | ✗ ✗ ✓ | ✓• |
+| `# comment` | ✗ ✗ ✗ ✗ ✗• | ✓ ✓ ✓ | ✓• |
+
+Twenty-five files by nine targets, 225 cells, every parser where its header
+says, and the two oracles agreeing with every header they can judge (`•`).
+The full table is `spike/sql/targets-results.md`. One row of it is the
+point of the whole design: `SELECT "name" FROM t;` is accepted by all nine
+targets and the trees disagree, a quoted identifier in PostgreSQL and a
+string literal in MySQL, because the text is legal in both and means
+different things. A union table has to pick one. Nine tables pick nine
+times, each correctly, and the results file prints both trees.
+
+The editions family is the same shape with total oracle coverage. Four
+targets, `rust/2015` through `rust/2024`, import `spike/rustish` unchanged
+and add the keywords each edition reserved (`ID = "async" {reject}` in
+`rust/keywords-2018`, `gen` in 2024). Six programs by four targets is 24
+cells, all checked against `rustc --edition`, all agreeing. This found the
+one lowering gap of the spike: tree-sitter can reserve only a token, and a
+word no production uses is not one, so `let async = 1` had no way to be an
+error. The lowering now makes such words tokens by a hidden rule the start
+rule reaches only behind a pattern that matches nothing, which puts them in
+the lexicon and nowhere in the language; the effect is SDF3's, a syntax
+error wherever the word appears.
+
+**What this changes in treebank, if adopted.** Rows become targets: a
+family is a set of generated tables, each exact, rather than one table and
+a policy. `version_policy.toml` and the three "latest wins" cases go away,
+since nothing collides inside one parser. Detection moves outside the
+parser and becomes explicit: something has to name the target, a project
+setting, a connection string, or a probe that parses against the family's
+candidates and keeps what succeeds. The union table hid that question; it
+did not answer it. The costs are real and mechanical: N tables per
+family, N corpora and oracle runs in CI, and build time that scales with
+N. Source cost stays flat, because a version module is three lines. What
+the spike did not need and so did not test: a version that changes a
+shared production in place rather than adding or removing one, which
+would be a `hiding` followed by a restatement; case-insensitive keywords,
+which SQL wants and this core ignores by writing them upper; and layout
+constraints on a production a hole is closed in, whose symbol positions
+would shift.
+
+Two changes to the vocabulary lowering came out of the roles gate running
+over nine targets. A threaded term whose members are sorts rather than
+terms (`_modifier` over `Dir`, `SelectHint`, `CreateTail`) now flattens
+them, since the checker holds every supertype to the table tier and `_dir`
+inside `_modifier` was one that was not. And a facet-only term's
+multi-constructor sort (`Upsert` under `_clause`) leaves the supertypes
+list, for the same rule; it remains a hidden rule and the tree is unchanged.

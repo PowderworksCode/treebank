@@ -68,8 +68,12 @@ impl Term {
     pub fn same_shape(&self, other: &Term) -> bool {
         match (self, other) {
             (
-                Term::App { cons: a, args: x, .. },
-                Term::App { cons: b, args: y, .. },
+                Term::App {
+                    cons: a, args: x, ..
+                },
+                Term::App {
+                    cons: b, args: y, ..
+                },
             ) => a == b && x.len() == y.len() && x.iter().zip(y).all(|(p, q)| p.same_shape(q)),
             (Term::Str(a), Term::Str(b)) => a == b,
             (Term::List(x), Term::List(y)) => {
@@ -131,7 +135,9 @@ pub fn parse_sexp(text: &str) -> Result<Cst> {
                 });
             }
             ')' => {
-                let node = stack.pop().ok_or_else(|| anyhow!("unbalanced parse output"))?;
+                let node = stack
+                    .pop()
+                    .ok_or_else(|| anyhow!("unbalanced parse output"))?;
                 if let Some(parent) = stack.last_mut() {
                     parent.children.push(node);
                 } else {
@@ -302,7 +308,9 @@ impl<'m> Imploder<'m> {
             if self.comment_nodes.contains(&c.kind) {
                 let text = self.text(c, lines);
                 match kids.last_mut() {
-                    Some((prev, _, trailing)) if prev.end.0 == c.start.0 && is_element(prev) && trailing.is_none() => {
+                    Some((prev, _, trailing))
+                        if prev.end.0 == c.start.0 && is_element(prev) && trailing.is_none() =>
+                    {
                         *trailing = Some(text);
                     }
                     Some((prev, _, _)) if prev.end.0 == c.start.0 && own_trailing.is_none() => {
@@ -330,9 +338,16 @@ impl<'m> Imploder<'m> {
         let mut trailing = own_trailing;
         for (label, symbol) in &placeholders {
             let mine: Vec<&(Cst, Vec<String>, Option<String>)> = match label {
-                Some(l) => kids.iter().filter(|(c, _, _)| c.field.as_deref() == Some(l.as_str())).collect(),
+                Some(l) => kids
+                    .iter()
+                    .filter(|(c, _, _)| c.field.as_deref() == Some(l.as_str()))
+                    .collect(),
                 None => {
-                    let take = if is_list(symbol) { unlabelled.len() } else { usize::from(!unlabelled.is_empty()) };
+                    let take = if is_list(symbol) {
+                        unlabelled.len()
+                    } else {
+                        usize::from(!unlabelled.is_empty())
+                    };
                     unlabelled.drain(..take.min(unlabelled.len())).collect()
                 }
             };
@@ -362,22 +377,29 @@ impl<'m> Imploder<'m> {
         kids: &[&(Cst, Vec<String>, Option<String>)],
         lines: &[&str],
     ) -> Result<Term> {
-        let one = |k: &(Cst, Vec<String>, Option<String>), prev_end: Option<usize>| -> Result<Term> {
-            let mut t = self.node(&k.0, lines)?;
-            if let Term::App { leading, trailing, blank_before, .. } = &mut t {
-                let mut l = k.1.clone();
-                l.append(leading);
-                *leading = l;
-                if k.2.is_some() {
-                    *trailing = k.2.clone();
+        let one =
+            |k: &(Cst, Vec<String>, Option<String>), prev_end: Option<usize>| -> Result<Term> {
+                let mut t = self.node(&k.0, lines)?;
+                if let Term::App {
+                    leading,
+                    trailing,
+                    blank_before,
+                    ..
+                } = &mut t
+                {
+                    let mut l = k.1.clone();
+                    l.append(leading);
+                    *leading = l;
+                    if k.2.is_some() {
+                        *trailing = k.2.clone();
+                    }
+                    // A blank line between the previous element and this one's
+                    // first line (or its first leading comment).
+                    let first_row = k.0.start.0.saturating_sub(k.1.len());
+                    *blank_before = prev_end.is_some_and(|e| first_row > e + 1);
                 }
-                // A blank line between the previous element and this one's
-                // first line (or its first leading comment).
-                let first_row = k.0.start.0.saturating_sub(k.1.len());
-                *blank_before = prev_end.is_some_and(|e| first_row > e + 1);
-            }
-            Ok(t)
-        };
+                Ok(t)
+            };
         match symbol {
             Symbol::Star(_) | Symbol::Plus(_) | Symbol::SepList { .. } => {
                 let mut items = Vec::new();
@@ -426,7 +448,10 @@ pub fn parts_of(p: &Production) -> Vec<TemplatePart> {
 }
 
 fn is_list(s: &Symbol) -> bool {
-    matches!(s, Symbol::Star(_) | Symbol::Plus(_) | Symbol::SepList { .. })
+    matches!(
+        s,
+        Symbol::Star(_) | Symbol::Plus(_) | Symbol::SepList { .. }
+    )
 }
 
 fn slice(line: &str, a: usize, b: usize) -> String {

@@ -11,7 +11,31 @@
 pub struct Module {
     pub name: String,
     pub imports: Vec<String>,
+    /// treebank extension: `hiding a/module Sort.Cons ...` after `imports`
+    /// subtracts from the composition -- every production a named module
+    /// declares itself, or the production a `Sort.Cons` reference names.
+    /// SDF3's own imports are additive only.
+    pub hiding: Vec<String>,
     pub sections: Vec<Section>,
+    /// Sorts declared but left without productions in this composition,
+    /// closed by the loader: see [`Hole`].
+    pub holes: Vec<Hole>,
+}
+
+/// A declared sort no module in the composition gave a production. It is a
+/// dialect point that this target does not fill: `<limit:Limit?>` in a
+/// core `Select` where the target imports no `sql/limit`. SDF3 semantics
+/// make such a sort match nothing, so the loader rewrites the composition
+/// to say so: an optional or starred occurrence becomes nothing, and a
+/// production that needs the sort is dropped.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Hole {
+    pub sort: String,
+    /// `Sort.Cons` (or `Sort`) of productions whose optional occurrence of
+    /// the hole was removed.
+    pub blanked: Vec<String>,
+    /// Productions dropped because they needed the hole.
+    pub dropped: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -335,6 +359,28 @@ pub struct VocabTerm {
 }
 
 impl Module {
+    /// The module name as an identifier: `mysql/5.7` is `mysql_5_7`, the
+    /// name the generated parser, scanner and ANTLR grammar go by.
+    pub fn symbol_name(&self) -> String {
+        self.name
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+            .collect()
+    }
+
+    /// Every sort named in a `sorts` or `context-free sorts` section.
+    pub fn declared_sorts(&self) -> Vec<&str> {
+        self.sections
+            .iter()
+            .flat_map(|s| match s {
+                Section::Sorts(v) | Section::ContextFreeSorts(v) => {
+                    v.iter().map(String::as_str).collect::<Vec<_>>()
+                }
+                _ => Vec::new(),
+            })
+            .collect()
+    }
+
     pub fn vocabulary(&self) -> impl Iterator<Item = &VocabTerm> {
         self.sections.iter().flat_map(|s| match s {
             Section::Vocabulary(v) => v.iter(),

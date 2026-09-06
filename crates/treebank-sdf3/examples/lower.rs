@@ -1,8 +1,11 @@
-//! `cargo run -p treebank-sdf3 --example lower -- spike/mini/mini.sdf3 [--generate]`
+//! `cargo run -p treebank-sdf3 --example lower -- spike/mini/mini.sdf3 [--generate] [--out DIR]`
 //!
 //! Reads the module and its imports, lowers it, and writes `grammar.json`,
 //! `grammar.js` and `findings.md` beside it -- and `src/scanner.c` when the
-//! module's layout constraints call for a scanner.
+//! module's layout constraints call for a scanner. With `--out DIR` they go
+//! to DIR instead, with a `tree-sitter.json` naming the grammar, which is
+//! how one family source lowers to one directory per target
+//! (`postgres/15.sdf3` to `targets/postgres-15/`).
 //!
 //! With `--generate`, runs `tree-sitter generate` and, while it reports an
 //! unresolved conflict, declares the conflict it names and tries again. The
@@ -16,15 +19,59 @@ use std::process::Command;
 fn main() -> anyhow::Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let generate = args.iter().any(|a| a == "--generate");
+    let out: Option<PathBuf> = args
+        .iter()
+        .position(|a| a == "--out")
+        .and_then(|i| args.get(i + 1))
+        .map(PathBuf::from);
     let path: PathBuf = args
         .iter()
-        .find(|a| !a.starts_with("--"))
-        .ok_or_else(|| anyhow::anyhow!("usage: lower <module.sdf3> [--generate]"))?
+        .enumerate()
+        .find(|(i, a)| {
+            !a.starts_with("--") && args.get(i.wrapping_sub(1)).map(String::as_str) != Some("--out")
+        })
+        .map(|(_, a)| a)
+        .ok_or_else(|| anyhow::anyhow!("usage: lower <module.sdf3> [--generate] [--out DIR]"))?
         .into();
     let module = treebank_sdf3::load_module(&path)?;
     let everything = treebank_sdf3::lower_all(&module)?;
     let lowered = everything.lowered;
-    let dir = path.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let beside = path
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .to_path_buf();
+    let dir: &std::path::Path = out.as_deref().unwrap_or(&beside);
+    if out.is_some() {
+        std::fs::create_dir_all(dir)?;
+        let name = module.symbol_name();
+        let camel: String = name
+            .split('_')
+            .filter(|s| !s.is_empty())
+            .map(|s| {
+                let mut c = s.chars();
+                c.next()
+                    .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
+                    .unwrap_or_default()
+            })
+            .collect();
+        let manifest = serde_json::json!({
+            "grammars": [{
+                "name": name,
+                "camelcase": camel,
+                "scope": format!("source.{name}"),
+                "file-types": [name],
+            }],
+            "metadata": {
+                "version": "0.0.0",
+                "license": "MIT",
+                "description": format!("target {} of an SDF3 family; generated, not a shipped grammar", module.name),
+            }
+        });
+        std::fs::write(
+            dir.join("tree-sitter.json"),
+            serde_json::to_string_pretty(&manifest)? + "\n",
+        )?;
+    }
     let sidecar = dir.join("tree-sitter.conflicts.json");
 
     let mut grammar = lowered.grammar;
@@ -88,7 +135,8 @@ fn main() -> anyhow::Result<()> {
     // The second backend, from the same module and the same names.
     let antlr = treebank_sdf3::antlr::emit(&module, &lowered.names, &lowered.levels)?;
     let gname = {
-        let mut c = module.name.chars();
+        let symbol = module.symbol_name();
+        let mut c = symbol.chars();
         c.next()
             .map(|f| f.to_uppercase().collect::<String>() + c.as_str())
             .unwrap_or_default()

@@ -1,0 +1,17 @@
+{
+  "grammars": [
+    {
+      "name": "postgres_9_4",
+      "camelcase": "Postgres94",
+      "scope": "source.postgres_9_4",
+      "file-types": [
+        "postgres_9_4"
+      ]
+    }
+  ],
+  "metadata": {
+    "version": "0.0.0",
+    "license": "MIT",
+    "description": "target postgres/9.4 of an SDF3 family; generated, not a shipped grammar"
+  }
+}

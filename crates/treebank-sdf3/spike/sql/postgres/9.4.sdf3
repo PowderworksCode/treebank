@@ -1,0 +1,2 @@
+module postgres/9.4
+imports postgres/base postgres/oids

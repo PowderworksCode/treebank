@@ -474,10 +474,12 @@ fn plan_decl(
     findings: &mut Vec<Finding>,
 ) -> Result<()> {
     let at = |n: usize| -> Result<SymRef<'_>> {
-        symbols
-            .get(n.wrapping_sub(1))
-            .copied()
-            .ok_or_else(|| anyhow::anyhow!("{}: layout constraint refers to symbol {n}, which the production does not have", p.display()))
+        symbols.get(n.wrapping_sub(1)).copied().ok_or_else(|| {
+            anyhow::anyhow!(
+                "{}: layout constraint refers to symbol {n}, which the production does not have",
+                p.display()
+            )
+        })
     };
     let shown = render(&LayoutConstraint::Decl(d.clone()));
     match d.kind {
@@ -491,7 +493,10 @@ fn plan_decl(
                 _ => {
                     findings.push(Finding {
                         kind: Kind::Unsupported,
-                        what: format!("{}: `{shown}` on a symbol that is not a list; ignored", p.display()),
+                        what: format!(
+                            "{}: `{shown}` on a symbol that is not a list; ignored",
+                            p.display()
+                        ),
                     });
                     return Ok(());
                 }
@@ -499,7 +504,10 @@ fn plan_decl(
             let Symbol::Sort(sort) = elem else {
                 findings.push(Finding {
                     kind: Kind::Unsupported,
-                    what: format!("{}: `{shown}` on a list whose element is not a sort; ignored", p.display()),
+                    what: format!(
+                        "{}: `{shown}` on a list whose element is not a sort; ignored",
+                        p.display()
+                    ),
                 });
                 return Ok(());
             };
@@ -549,7 +557,9 @@ fn plan_decl(
             at(*a)?;
             for b in rest {
                 at(*b)?;
-                if b.checked_sub(1).is_some_and(|prev| indent.blocks.contains(&(pi, prev))) {
+                if b.checked_sub(1)
+                    .is_some_and(|prev| indent.blocks.contains(&(pi, prev)))
+                {
                     findings.push(Finding {
                         kind: Kind::Mapped,
                         what: format!(
@@ -629,7 +639,8 @@ fn finish_indent(
     });
     findings.push(Finding {
         kind: Kind::Deviation,
-        what: "a tab is one column, as tree-sitter's lexer counts; CPython uses tab stops of eight".into(),
+        what: "a tab is one column, as tree-sitter's lexer counts; CPython uses tab stops of eight"
+            .into(),
     });
 }
 

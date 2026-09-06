@@ -1,0 +1,19 @@
+{
+  "note": "One exact parser per target, all lowered from the modules in this directory. A target is a module; its imports are the dialect and version lattice. verify.sh lowers each, and tools/targets_check.py holds every parser to the corpus and, where a real server of that exact version is available, holds the corpus to the server.",
+  "targets": [
+    "postgres/9.4", "postgres/9.5", "postgres/12", "postgres/15", "postgres/16",
+    "mysql/5.6", "mysql/5.7", "mysql/8.0",
+    "mariadb/10.11"
+  ],
+  "corpus": "corpus",
+  "suffix": ".sql",
+  "comment": "--",
+  "oracle": {
+    "kind": "sql",
+    "schema": "schema.sql",
+    "servers": {
+      "postgres/16": "TREEBANK_PSQL",
+      "mariadb/10.11": "TREEBANK_MARIADB"
+    }
+  }
+}

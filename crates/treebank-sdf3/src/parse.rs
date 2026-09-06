@@ -157,6 +157,7 @@ const SECTION_WORDS: &[&str] = &[
     "start-symbols",
     "options",
     "vocabulary",
+    "hiding",
 ];
 
 fn sort_name(i: &mut In) -> R<String> {
@@ -474,7 +475,8 @@ fn layout_decl(i: &mut In) -> R<LayoutDecl> {
         "single-line".value(LayoutDeclKind::SingleLine),
     ))
     .parse_next(i)?;
-    let refs: Vec<usize> = repeat(1.., preceded(multispace1, dec_uint::<_, usize, _>)).parse_next(i)?;
+    let refs: Vec<usize> =
+        repeat(1.., preceded(multispace1, dec_uint::<_, usize, _>)).parse_next(i)?;
     Ok(LayoutDecl { kind, refs })
 }
 
@@ -588,10 +590,12 @@ fn priority_group(i: &mut In) -> R<PriorityGroup> {
             (opt(terminated(lex(attr), sym(":"))), prod_refs),
             sym("}"),
         )
-        .map(|(assoc, members): (Option<Vec<Attr>>, Vec<String>)| PriorityGroup {
-            assoc: assoc.and_then(|mut a| a.pop()),
-            members,
-        }),
+        .map(
+            |(assoc, members): (Option<Vec<Attr>>, Vec<String>)| PriorityGroup {
+                assoc: assoc.and_then(|mut a| a.pop()),
+                members,
+            },
+        ),
         lex(prod_ref).map(|m| PriorityGroup {
             assoc: None,
             members: vec![m],
@@ -633,6 +637,19 @@ fn template_option(i: &mut In) -> R<TemplateOption> {
 
 fn names(i: &mut In) -> R<Vec<String>> {
     repeat(0.., lex(sort_name)).parse_next(i)
+}
+
+/// What `imports` and `hiding` list: module names, which may carry `/`
+/// and `.` (`mysql/5.7`), and for `hiding` also `Sort.Cons` references.
+/// A section keyword ends the list.
+fn module_refs(i: &mut In) -> R<Vec<String>> {
+    repeat(
+        0..,
+        lex(take_while(1.., |c: char| !c.is_whitespace())
+            .verify(|s: &str| !SECTION_WORDS.contains(&s) && s != "hiding")
+            .map(str::to_string)),
+    )
+    .parse_next(i)
 }
 
 fn sec_start_symbols(i: &mut In) -> R<Section> {
@@ -720,9 +737,11 @@ fn vocab_name(i: &mut In) -> R<String> {
 /// `_term =`, which is told apart by the `=` that follows it.
 fn vocab_member(i: &mut In) -> R<String> {
     (
-        take_while(1.., |c: char| c.is_ascii_alphanumeric() || c == '_' || c == '.')
-            .map(str::to_string)
-            .verify(|s: &String| !SECTION_WORDS.contains(&s.as_str())),
+        take_while(1.., |c: char| {
+            c.is_ascii_alphanumeric() || c == '_' || c == '.'
+        })
+        .map(str::to_string)
+        .verify(|s: &String| !SECTION_WORDS.contains(&s.as_str())),
         winnow::combinator::not((ws, '=')),
     )
         .map(|(m, _)| m)
@@ -761,7 +780,10 @@ fn module(i: &mut In) -> R<Module> {
     kw("module").parse_next(i)?;
     let name =
         lex(take_while(1.., |c: char| !c.is_whitespace()).map(str::to_string)).parse_next(i)?;
-    let imports: Vec<String> = opt(preceded(kw("imports"), names))
+    let imports: Vec<String> = opt(preceded(kw("imports"), module_refs))
+        .map(Option::unwrap_or_default)
+        .parse_next(i)?;
+    let hiding: Vec<String> = opt(preceded(kw("hiding"), module_refs))
         .map(Option::unwrap_or_default)
         .parse_next(i)?;
     let sections: Vec<Section> = repeat(0.., section).parse_next(i)?;
@@ -770,7 +792,9 @@ fn module(i: &mut In) -> R<Module> {
     Ok(Module {
         name,
         imports,
+        hiding,
         sections,
+        holes: Vec::new(),
     })
 }
 

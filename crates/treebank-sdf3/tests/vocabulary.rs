@@ -21,12 +21,18 @@ fn roles_json_is_what_the_lowering_produces() {
         let v = e.vocab.expect("declares a vocabulary");
         let produced = serde_json::to_string_pretty(&v.roles).unwrap() + "\n";
         let committed = std::fs::read_to_string(spike(name).join("roles.json")).unwrap();
-        assert_eq!(produced, committed, "spike/{name}/roles.json is stale; regenerate it");
+        assert_eq!(
+            produced, committed,
+            "spike/{name}/roles.json is stale; regenerate it"
+        );
         let produced = serde_json::to_string_pretty(&e.lowered.grammar).unwrap() + "\n";
         let committed = std::fs::read_to_string(spike(name).join("grammar.json")).unwrap();
         // rustish's committed grammar also carries its pinned conflict.
         if name != "rustish" {
-            assert_eq!(produced, committed, "spike/{name}/grammar.json is stale; regenerate it");
+            assert_eq!(
+                produced, committed,
+                "spike/{name}/grammar.json is stale; regenerate it"
+            );
         }
     }
 }
@@ -35,25 +41,46 @@ fn roles_json_is_what_the_lowering_produces() {
 fn a_whole_sort_term_renames_and_a_constructor_term_threads() {
     let e = everything("pyish");
     let g = &e.lowered.grammar;
-    let sup: Vec<&str> = g["supertypes"].as_array().unwrap().iter().map(|v| v.as_str().unwrap()).collect();
+    let sup: Vec<&str> = g["supertypes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap())
+        .collect();
     // `_statement = Stmt`: the sort's own supertype, renamed; `_stmt` is gone.
-    assert!(sup.contains(&"_statement") && !sup.contains(&"_stmt"), "{sup:?}");
+    assert!(
+        sup.contains(&"_statement") && !sup.contains(&"_stmt"),
+        "{sup:?}"
+    );
     assert!(g["rules"].get("_stmt").is_none());
     // `_branch = Stmt.If`: a new supertype over `if`, and `_statement` now
     // reaches `if` through `_control_flow` and `_branch`, not directly.
     let branch = serde_json::to_string(&g["rules"]["_branch"]).unwrap();
-    assert!(branch.contains(r#"{"type":"SYMBOL","name":"if"}"#), "{branch}");
+    assert!(
+        branch.contains(r#"{"type":"SYMBOL","name":"if"}"#),
+        "{branch}"
+    );
     let stmt = serde_json::to_string(&g["rules"]["_statement"]).unwrap();
-    assert!(stmt.contains("_control_flow") && !stmt.contains(r#""name":"if""#), "{stmt}");
+    assert!(
+        stmt.contains("_control_flow") && !stmt.contains(r#""name":"if""#),
+        "{stmt}"
+    );
     // `_body = Block`: every field that held `block` holds `_body`.
     let if_rule = serde_json::to_string(&g["rules"]["if"]).unwrap();
-    assert!(if_rule.contains(r#""name":"_body""#) && !if_rule.contains(r#""name":"block""#), "{if_rule}");
+    assert!(
+        if_rule.contains(r#""name":"_body""#) && !if_rule.contains(r#""name":"block""#),
+        "{if_rule}"
+    );
     // Names followed the rename, so the ANTLR backend and bindings agree.
     assert_eq!(e.lowered.names.sort_rule["Stmt"], "_statement");
     // Facets: two derived from bindings, one from LAYOUT, one declared.
     let roles = e.vocab.unwrap().roles;
     for f in ["_scope", "_binding", "_callable", "_comment", "_clause"] {
-        assert!(roles["facets"].get(f).is_some(), "missing facet {f}: {}", roles["facets"]);
+        assert!(
+            roles["facets"].get(f).is_some(),
+            "missing facet {f}: {}",
+            roles["facets"]
+        );
     }
     assert_eq!(roles["facets"]["_callable"], serde_json::json!(["def"]));
 }

@@ -308,6 +308,28 @@ pip install antlr4-python3-runtime==4.13.2   # the tool jar is fetched on first 
 python3 crates/treebank-sdf3/tools/antlr_check.py crates/treebank-sdf3/spike/rubyish
 ```
 
+## Dialects and versions: one exact parser per target
+
+`spike/sql/` is a family: `sql/core` is the intersection, feature modules
+hold one syntactic feature each, and a target such as `postgres/15` or
+`mysql/8.0` is a module that imports the previous version and the features
+it added, with a `hiding` clause for what it dropped. Every target lowers to
+its own parser under `spike/sql/targets/`; there is no union table.
+`tools/targets_check.py` holds all nine parsers to one corpus whose files
+say which targets accept them, and holds the corpus itself to a real
+PostgreSQL 16 and MariaDB 10.11 where those can judge. `spike/editions/`
+does the same for Rust's four editions over `spike/rustish`, with `rustc
+--edition` as the oracle for every cell. §22 of `notes/metagrammar.md` has
+the design and the results.
+
+```sh
+# PostgreSQL 16 and MariaDB 10.11 running locally; see verify.sh for the flags
+TREEBANK_PSQL="psql -h /tmp/pg -p 54329 -U postgres -d postgres" \
+TREEBANK_MARIADB="mariadb -S /tmp/my/sock -u root" \
+crates/treebank-sdf3/spike/sql/verify.sh --require-oracles
+crates/treebank-sdf3/spike/editions/verify.sh
+```
+
 ## What it is not
 
 Not a grammar crate. There is deliberately no `grammar.js` at this crate's
